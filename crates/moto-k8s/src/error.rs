@@ -32,6 +32,18 @@ pub enum Error {
     /// Failed to list namespaces.
     #[error("failed to list namespaces: {0}")]
     NamespaceList(#[source] kube::Error),
+
+    /// Failed to list pods.
+    #[error("failed to list pods: {0}")]
+    PodList(#[source] kube::Error),
+
+    /// Pod not found.
+    #[error("pod not found: {0}")]
+    PodNotFound(String),
+
+    /// Failed to get pod logs.
+    #[error("failed to get pod logs: {0}")]
+    PodLogs(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.

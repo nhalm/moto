@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use moto_club_types::{GarageId, GarageInfo, GarageState};
-use moto_k8s::{K8sClient, Labels, NamespaceOps};
+use moto_k8s::{K8sClient, Labels, NamespaceOps, PodLogOptions, PodOps};
 use tracing::{debug, instrument};
 
 use crate::{Error, GarageMode, Result};
@@ -100,6 +100,30 @@ impl GarageClient {
         }
     }
 
+    /// Gets logs from a garage.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Name of the garage to get logs from.
+    /// * `tail_lines` - Number of lines to show from the end (None = all).
+    /// * `since_seconds` - Only return logs from last N seconds (None = all).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the garage doesn't exist or logs cannot be fetched.
+    #[instrument(skip(self), fields(garage.name = %name))]
+    pub async fn logs(
+        &self,
+        name: &str,
+        tail_lines: Option<i64>,
+        since_seconds: Option<i64>,
+    ) -> Result<String> {
+        match &self.mode {
+            GarageMode::Local => self.logs_local(name, tail_lines, since_seconds).await,
+            GarageMode::Remote { .. } => Err(Error::RemoteNotImplemented),
+        }
+    }
+
     /// Lists garages in local mode.
     async fn list_local(&self) -> Result<Vec<GarageInfo>> {
         let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
@@ -164,6 +188,36 @@ impl GarageClient {
         k8s.delete_namespace(&garage.namespace).await?;
 
         Ok(())
+    }
+
+    /// Gets logs from a garage in local mode.
+    async fn logs_local(
+        &self,
+        name: &str,
+        tail_lines: Option<i64>,
+        since_seconds: Option<i64>,
+    ) -> Result<String> {
+        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
+
+        // Find the garage by name
+        let garages = self.list_local().await?;
+        let garage = garages
+            .iter()
+            .find(|g| g.name == name)
+            .ok_or_else(|| Error::GarageNotFound(name.to_string()))?;
+
+        let options = PodLogOptions {
+            tail_lines,
+            since_seconds,
+            follow: false,
+        };
+
+        debug!(namespace = %garage.namespace, "fetching garage logs");
+        let logs = k8s
+            .get_pod_logs(&garage.namespace, None, &options)
+            .await?;
+
+        Ok(logs)
     }
 }
 

@@ -4,6 +4,24 @@
 
 ## Log
 
+### 2026-01-21: Garage Logs Command
+
+**Spec:** moto-cli.md v0.1
+
+**Implemented:**
+- Added `moto garage logs <name>` command
+- Options: `--tail/-n <lines>` (default 100), `--since <duration>` (e.g., 5m, 1h)
+- Added `PodOps` trait to `moto-k8s` with `list_pods()` and `get_pod_logs()` methods
+- Added `PodLogOptions` struct for configuring log retrieval
+- Added `logs()` method to `GarageClient` to fetch logs from garage pods
+- Duration parsing supports `s`, `m`, `h`, `d` units
+- JSON output support via `--json` flag
+
+**Validated:** `cargo test --workspace` passes (19 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+
+---
+
 ### 2026-01-20: Workspace Foundation
 
 **Spec:** project-structure.md v1.0

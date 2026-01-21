@@ -1,4 +1,4 @@
-//! Garage subcommands: list, open, close.
+//! Garage subcommands: list, open, close, logs.
 
 use clap::{Args, Subcommand};
 use moto_club_types::GarageId;
@@ -35,6 +35,20 @@ pub enum GarageAction {
         /// ID of the garage to close (full UUID or short prefix)
         id: String,
     },
+
+    /// View logs from a garage
+    Logs {
+        /// Name of the garage
+        name: String,
+
+        /// Show last n lines (default: 100)
+        #[arg(long, short = 'n', default_value = "100")]
+        tail: i64,
+
+        /// Show logs from last duration (e.g., 5m, 1h)
+        #[arg(long)]
+        since: Option<String>,
+    },
 }
 
 /// JSON output for garage list
@@ -66,6 +80,13 @@ struct GarageOpenJson {
 struct GarageCloseJson {
     name: String,
     status: String,
+}
+
+/// JSON output for garage logs
+#[derive(Serialize)]
+struct GarageLogsJson {
+    name: String,
+    logs: String,
 }
 
 /// Run the garage command
@@ -150,6 +171,27 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                 println!("Garage closed.");
             }
         }
+        GarageAction::Logs { name, tail, since } => {
+            let since_seconds = since.as_deref().map(parse_duration).transpose()?;
+            let logs = client.logs(&name, Some(tail), since_seconds).await?;
+
+            if flags.json {
+                let json = GarageLogsJson {
+                    name: name.clone(),
+                    logs: logs.clone(),
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if logs.is_empty() {
+                if !flags.quiet {
+                    println!("No logs found for garage '{name}'.");
+                }
+            } else {
+                print!("{logs}");
+                if !logs.ends_with('\n') {
+                    println!();
+                }
+            }
+        }
     }
 
     Ok(())
@@ -162,6 +204,29 @@ fn truncate(s: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &s[..max_len - 3])
     }
+}
+
+/// Parse a duration string like "5m", "1h", "2d" into seconds.
+fn parse_duration(s: &str) -> Result<i64, Box<dyn std::error::Error>> {
+    let s = s.trim();
+    if s.is_empty() {
+        return Err("empty duration".into());
+    }
+
+    let (num_str, unit) = s.split_at(s.len() - 1);
+    let num: i64 = num_str
+        .parse()
+        .map_err(|_| format!("invalid duration number: {num_str}"))?;
+
+    let multiplier = match unit {
+        "s" => 1,
+        "m" => 60,
+        "h" => 3600,
+        "d" => 86400,
+        _ => return Err(format!("invalid duration unit: {unit} (use s, m, h, or d)").into()),
+    };
+
+    Ok(num * multiplier)
 }
 
 /// Resolve a garage ID from a full UUID or short prefix
