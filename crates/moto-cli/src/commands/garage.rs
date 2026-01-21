@@ -23,9 +23,6 @@ pub enum GarageAction {
 
     /// Open a new garage
     Open {
-        /// Name for the garage (human-friendly identifier)
-        name: String,
-
         /// Owner of the garage (defaults to current user)
         #[arg(short, long)]
         owner: Option<String>,
@@ -35,7 +32,7 @@ pub enum GarageAction {
         #[arg(long)]
         ttl: Option<String>,
 
-        /// Engine to work on (what this garage is for)
+        /// Engine to work on (default: current directory name)
         #[arg(short, long)]
         engine: Option<String>,
     },
@@ -87,15 +84,14 @@ struct GarageJson {
     engine: Option<String>,
 }
 
-/// JSON output for garage open
+/// JSON output for garage open (matches spec)
 #[derive(Serialize)]
 struct GarageOpenJson {
     name: String,
-    id: String,
-    status: String,
-    namespace: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     engine: Option<String>,
+    ttl_seconds: i64,
+    status: String,
 }
 
 /// JSON output for garage close
@@ -175,7 +171,8 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                 }
             }
         }
-        GarageAction::Open { name, owner, ttl, engine } => {
+        GarageAction::Open { owner, ttl, engine } => {
+            let name = crate::names::generate();
             let owner_ref = owner.as_deref();
             let engine_ref = engine.as_deref();
             // Use CLI flag, then config default, then hardcoded default
@@ -185,30 +182,25 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                 .unwrap_or("4h");
             let ttl_seconds = parse_ttl(ttl_str)?;
             if !flags.quiet && !flags.json {
-                println!("Opening garage '{name}'...");
+                println!("Opening garage...");
             }
             let garage = client.open(&name, owner_ref, Some(ttl_seconds), engine_ref).await?;
             if flags.json {
                 let json = GarageOpenJson {
                     name: garage.name.clone(),
-                    id: garage.id.to_string(),
-                    status: garage.state.to_string(),
-                    namespace: garage.namespace.clone(),
                     engine: garage.engine.clone(),
+                    ttl_seconds,
+                    status: garage.state.to_string(),
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
             } else {
-                println!("Garage opened:");
-                println!("  ID:        {}", garage.id);
-                println!("  Name:      {}", garage.name);
-                println!("  Namespace: {}", garage.namespace);
-                println!("  State:     {}", garage.state);
+                println!("Created garage: {}", garage.name);
                 if let Some(engine) = &garage.engine {
-                    println!("  Engine:    {}", engine);
+                    println!("  Engine: {engine}");
                 }
-                if let Some(expires) = garage.expires_at {
-                    println!("  Expires:   {}", expires.format("%Y-%m-%d %H:%M:%S UTC"));
-                }
+                println!("  TTL: {ttl_str}");
+                println!();
+                println!("To connect: moto garage enter {}", garage.name);
             }
         }
         GarageAction::Close { name, force } => {

@@ -8,6 +8,7 @@ use tracing_subscriber::EnvFilter;
 mod cli;
 mod commands;
 mod config;
+mod names;
 
 use cli::{Cli, Command};
 use config::Config;

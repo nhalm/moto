@@ -4,6 +4,23 @@
 
 ## Log
 
+### 2026-01-21: Auto-Generated Garage Names
+
+**Spec:** moto-cli.md v0.1
+
+**Implemented:**
+- `moto garage open` now auto-generates names (e.g., `bold-mongoose`, `quiet-falcon`)
+- Removed required `name` argument from `moto garage open` (matches spec)
+- Added `names.rs` module with adjective-animal name generator (46 adjectives × 75 animals = 3450 combinations)
+- Added `rand` dependency to workspace for random name selection
+- Updated output format to match spec: "Created garage: <name>" with Engine, TTL, and connect hint
+- Updated JSON output to match spec: `name`, `engine`, `ttl_seconds`, `status` fields
+
+**Validated:** `cargo test --workspace` passes (33 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+
+---
+
 ### 2026-01-21: Garage Close Improvements
 
 **Spec:** moto-cli.md v0.1
