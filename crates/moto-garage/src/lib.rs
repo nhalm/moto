@@ -41,3 +41,4 @@ mod mode;
 pub use client::GarageClient;
 pub use error::{Error, Result};
 pub use mode::GarageMode;
+pub use moto_k8s::LogStream;

@@ -44,6 +44,10 @@ pub enum Error {
     /// Failed to get pod logs.
     #[error("failed to get pod logs: {0}")]
     PodLogs(#[source] kube::Error),
+
+    /// I/O error while streaming logs.
+    #[error("I/O error: {0}")]
+    IoError(#[source] std::io::Error),
 }
 
 /// Result type alias for K8s operations.

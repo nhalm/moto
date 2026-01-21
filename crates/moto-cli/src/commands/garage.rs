@@ -1,9 +1,11 @@
 //! Garage subcommands: list, open, close, logs.
 
 use clap::{Args, Subcommand};
+use futures_util::StreamExt;
 use moto_club_types::GarageId;
 use moto_garage::GarageClient;
 use serde::Serialize;
+use std::io::{self, Write};
 
 use crate::cli::GlobalFlags;
 
@@ -40,6 +42,10 @@ pub enum GarageAction {
     Logs {
         /// Name of the garage
         name: String,
+
+        /// Stream logs continuously (Ctrl+C to stop)
+        #[arg(long, short = 'f')]
+        follow: bool,
 
         /// Show last n lines (default: 100)
         #[arg(long, short = 'n', default_value = "100")]
@@ -171,24 +177,59 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                 println!("Garage closed.");
             }
         }
-        GarageAction::Logs { name, tail, since } => {
+        GarageAction::Logs {
+            name,
+            follow,
+            tail,
+            since,
+        } => {
             let since_seconds = since.as_deref().map(parse_duration).transpose()?;
-            let logs = client.logs(&name, Some(tail), since_seconds).await?;
 
-            if flags.json {
-                let json = GarageLogsJson {
-                    name: name.clone(),
-                    logs: logs.clone(),
-                };
-                println!("{}", serde_json::to_string_pretty(&json)?);
-            } else if logs.is_empty() {
+            if follow {
+                // Streaming mode - --json is not supported with --follow
+                if flags.json {
+                    return Err("JSON output is not supported with --follow".into());
+                }
+
                 if !flags.quiet {
-                    println!("No logs found for garage '{name}'.");
+                    eprintln!("Streaming logs from '{name}'... (Ctrl+C to stop)");
+                }
+
+                let mut stream = client.logs_stream(&name, Some(tail), since_seconds).await?;
+                let stdout = io::stdout();
+                let mut handle = stdout.lock();
+
+                while let Some(result) = stream.next().await {
+                    match result {
+                        Ok(line) => {
+                            write!(handle, "{line}")?;
+                            handle.flush()?;
+                        }
+                        Err(e) => {
+                            eprintln!("Error reading logs: {e}");
+                            break;
+                        }
+                    }
                 }
             } else {
-                print!("{logs}");
-                if !logs.ends_with('\n') {
-                    println!();
+                // Non-streaming mode
+                let logs = client.logs(&name, Some(tail), since_seconds).await?;
+
+                if flags.json {
+                    let json = GarageLogsJson {
+                        name: name.clone(),
+                        logs: logs.clone(),
+                    };
+                    println!("{}", serde_json::to_string_pretty(&json)?);
+                } else if logs.is_empty() {
+                    if !flags.quiet {
+                        println!("No logs found for garage '{name}'.");
+                    }
+                } else {
+                    print!("{logs}");
+                    if !logs.ends_with('\n') {
+                        println!();
+                    }
                 }
             }
         }

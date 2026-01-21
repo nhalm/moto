@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use moto_club_types::{GarageId, GarageInfo, GarageState};
-use moto_k8s::{K8sClient, Labels, NamespaceOps, PodLogOptions, PodOps};
+use moto_k8s::{K8sClient, Labels, LogStream, NamespaceOps, PodLogOptions, PodOps};
 use tracing::{debug, instrument};
 
 use crate::{Error, GarageMode, Result};
@@ -124,6 +124,30 @@ impl GarageClient {
         }
     }
 
+    /// Streams logs from a garage continuously.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Name of the garage to stream logs from.
+    /// * `tail_lines` - Number of lines to show from the end before streaming.
+    /// * `since_seconds` - Only return logs from last N seconds initially.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the garage doesn't exist or stream cannot be started.
+    #[instrument(skip(self), fields(garage.name = %name))]
+    pub async fn logs_stream(
+        &self,
+        name: &str,
+        tail_lines: Option<i64>,
+        since_seconds: Option<i64>,
+    ) -> Result<LogStream> {
+        match &self.mode {
+            GarageMode::Local => self.logs_stream_local(name, tail_lines, since_seconds).await,
+            GarageMode::Remote { .. } => Err(Error::RemoteNotImplemented),
+        }
+    }
+
     /// Lists garages in local mode.
     async fn list_local(&self) -> Result<Vec<GarageInfo>> {
         let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
@@ -218,6 +242,36 @@ impl GarageClient {
             .await?;
 
         Ok(logs)
+    }
+
+    /// Streams logs from a garage in local mode.
+    async fn logs_stream_local(
+        &self,
+        name: &str,
+        tail_lines: Option<i64>,
+        since_seconds: Option<i64>,
+    ) -> Result<LogStream> {
+        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
+
+        // Find the garage by name
+        let garages = self.list_local().await?;
+        let garage = garages
+            .iter()
+            .find(|g| g.name == name)
+            .ok_or_else(|| Error::GarageNotFound(name.to_string()))?;
+
+        let options = PodLogOptions {
+            tail_lines,
+            since_seconds,
+            follow: true,
+        };
+
+        debug!(namespace = %garage.namespace, "starting garage log stream");
+        let stream = k8s
+            .stream_pod_logs(&garage.namespace, None, &options)
+            .await?;
+
+        Ok(stream)
     }
 }
 

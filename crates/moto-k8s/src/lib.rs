@@ -16,4 +16,4 @@ pub use client::K8sClient;
 pub use error::{Error, Result};
 pub use labels::Labels;
 pub use namespace::NamespaceOps;
-pub use pod::{PodLogOptions, PodOps};
+pub use pod::{LogStream, PodLogOptions, PodOps};

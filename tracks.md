@@ -4,6 +4,25 @@
 
 ## Log
 
+### 2026-01-21: Garage Logs Streaming
+
+**Spec:** moto-cli.md v0.1
+
+**Implemented:**
+- Added `--follow/-f` flag to `moto garage logs` command
+- Streams logs continuously until Ctrl+C
+- Added `stream_pod_logs()` method to `PodOps` trait in `moto-k8s`
+- Added `LogStream` type (pinned boxed async stream of log lines)
+- Added `logs_stream()` method to `GarageClient`
+- Uses `AsyncBufReadExt::lines()` for line-by-line streaming from K8s pods
+- Added `IoError` variant to `moto_k8s::Error` for stream I/O errors
+- Error: `--json` not supported with `--follow` (streaming incompatible with JSON output)
+
+**Validated:** `cargo test --workspace` passes (19 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+
+---
+
 ### 2026-01-21: Garage Logs Command
 
 **Spec:** moto-cli.md v0.1
