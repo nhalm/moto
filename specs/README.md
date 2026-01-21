@@ -15,6 +15,8 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 **Changelog:** When a spec returns to "Ready to Rip" after being "Ripping", check the **Changelog** section at the bottom of the spec. It documents what changed between versions. Implement the delta, not the entire spec.
 
+**Version tracking:** tracks.md entries include spec versions (e.g., `project-structure.md v1.0`). Compare the version in tracks.md against the current spec version. If the spec version is higher, check the changelog and implement the delta.
+
 **Future items:** Items marked with `(future)` are for reference only. Do not implement them - they belong to a later phase or another spec.
 
 ## Status Legend

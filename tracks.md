@@ -4,7 +4,7 @@
 
 ### 2026-01-20: Workspace Foundation
 
-**Spec:** project-structure.md
+**Spec:** project-structure.md v1.0
 
 **Implemented:**
 - Created Cargo workspace (`Cargo.toml`) with workspace dependencies
@@ -23,7 +23,7 @@
 
 ### 2026-01-20: Club Types
 
-**Spec:** project-structure.md
+**Spec:** project-structure.md v1.0
 
 **Implemented:**
 - Created `moto-club-types` crate with:
@@ -40,7 +40,7 @@
 
 ### 2026-01-20: K3s Client
 
-**Spec:** project-structure.md
+**Spec:** project-structure.md v1.0
 
 **Implemented:**
 - Created `moto-k3s` crate with:
@@ -58,7 +58,7 @@
 
 ### 2026-01-20: Garage Client
 
-**Spec:** project-structure.md
+**Spec:** project-structure.md v1.0
 
 **Implemented:**
 - Created `moto-garage` crate with:
@@ -76,7 +76,7 @@
 
 ### 2026-01-20: CLI Crate
 
-**Spec:** project-structure.md
+**Spec:** project-structure.md v1.0
 
 **Implemented:**
 - Created `moto-cli` crate with:

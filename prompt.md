@@ -4,7 +4,9 @@ Study tracks.md and pick the most important thing to do next.
 Your task is to implement ONE thing, then validate it works.
 
 IMPORTANT:
+
 - Update tracks.md when done
+- Code is the source of TRUTH
 - Commit and push your changes
 - Do NOT use TodoWrite - just do the work
 - Do NOT do multiple things - ONE thing per iteration
