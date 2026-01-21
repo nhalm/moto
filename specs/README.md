@@ -21,6 +21,8 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 **Future items:** Items marked with `(future)` are for reference only. Do not implement them - they belong to a later phase or another spec.
 
+**Dependencies:** If a feature in a Ready to Rip spec references another spec (e.g., "see wgtunnel.md"), check that spec's status. Only implement the feature if the dependency is also Ready to Rip or Ripping. Skip features whose dependencies are Bare Frame or Wrenching.
+
 ## Status Legend
 
 | Status | Meaning |
