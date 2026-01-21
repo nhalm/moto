@@ -103,6 +103,8 @@ pub struct GarageInfo {
     pub expires_at: Option<DateTime<Utc>>,
     /// Owner identifier (user or team).
     pub owner: Option<String>,
+    /// Engine name (what the garage is working on).
+    pub engine: Option<String>,
 }
 
 impl GarageInfo {
@@ -121,6 +123,7 @@ impl GarageInfo {
             created_at: Utc::now(),
             expires_at: None,
             owner: None,
+            engine: None,
         }
     }
 
@@ -135,6 +138,13 @@ impl GarageInfo {
     #[must_use]
     pub fn with_expires_at(mut self, expires_at: DateTime<Utc>) -> Self {
         self.expires_at = Some(expires_at);
+        self
+    }
+
+    /// Sets the engine (what this garage is working on).
+    #[must_use]
+    pub fn with_engine(mut self, engine: impl Into<String>) -> Self {
+        self.engine = Some(engine.into());
         self
     }
 }
@@ -200,6 +210,13 @@ mod tests {
         assert_eq!(info.state, GarageState::Pending);
         assert!(info.expires_at.is_none());
         assert!(info.owner.is_none());
+        assert!(info.engine.is_none());
+    }
+
+    #[test]
+    fn garage_info_with_engine() {
+        let info = GarageInfo::new("my-project").with_engine("moto-club");
+        assert_eq!(info.engine, Some("moto-club".to_string()));
     }
 
     #[test]

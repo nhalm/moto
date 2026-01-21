@@ -25,7 +25,7 @@
 //! }
 //!
 //! // Open a new garage with 4h TTL
-//! let garage = client.open("my-project", Some("alice"), Some(4 * 3600)).await?;
+//! let garage = client.open("my-project", Some("alice"), Some(4 * 3600), None).await?;
 //! println!("Created garage: {}", garage.namespace);
 //!
 //! // Close the garage

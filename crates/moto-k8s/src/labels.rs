@@ -23,6 +23,9 @@ impl Labels {
     /// Label key for expiration timestamp (RFC 3339 format).
     pub const EXPIRES_AT: &'static str = "moto.dev/expires-at";
 
+    /// Label key for engine (what the garage is working on).
+    pub const ENGINE: &'static str = "moto.dev/engine";
+
     /// Value for garage type.
     pub const TYPE_GARAGE: &'static str = "garage";
 
@@ -48,6 +51,7 @@ impl Labels {
         name: &str,
         owner: Option<&str>,
         expires_at: Option<&str>,
+        engine: Option<&str>,
     ) -> BTreeMap<String, String> {
         let mut labels = BTreeMap::new();
         labels.insert(Self::TYPE.to_string(), Self::TYPE_GARAGE.to_string());
@@ -58,6 +62,9 @@ impl Labels {
         }
         if let Some(expires_at) = expires_at {
             labels.insert(Self::EXPIRES_AT.to_string(), expires_at.to_string());
+        }
+        if let Some(engine) = engine {
+            labels.insert(Self::ENGINE.to_string(), engine.to_string());
         }
         labels
     }
@@ -92,27 +99,34 @@ mod tests {
 
     #[test]
     fn for_garage_without_owner() {
-        let labels = Labels::for_garage("abc-123", "my-project", None, None);
+        let labels = Labels::for_garage("abc-123", "my-project", None, None, None);
         assert_eq!(labels.get(Labels::TYPE), Some(&"garage".to_string()));
         assert_eq!(labels.get(Labels::ID), Some(&"abc-123".to_string()));
         assert_eq!(labels.get(Labels::NAME), Some(&"my-project".to_string()));
         assert!(labels.get(Labels::OWNER).is_none());
         assert!(labels.get(Labels::EXPIRES_AT).is_none());
+        assert!(labels.get(Labels::ENGINE).is_none());
     }
 
     #[test]
     fn for_garage_with_owner() {
-        let labels = Labels::for_garage("abc-123", "my-project", Some("alice"), None);
+        let labels = Labels::for_garage("abc-123", "my-project", Some("alice"), None, None);
         assert_eq!(labels.get(Labels::OWNER), Some(&"alice".to_string()));
     }
 
     #[test]
     fn for_garage_with_expires_at() {
-        let labels = Labels::for_garage("abc-123", "my-project", None, Some("2026-01-21T14:00:00Z"));
+        let labels = Labels::for_garage("abc-123", "my-project", None, Some("2026-01-21T14:00:00Z"), None);
         assert_eq!(
             labels.get(Labels::EXPIRES_AT),
             Some(&"2026-01-21T14:00:00Z".to_string())
         );
+    }
+
+    #[test]
+    fn for_garage_with_engine() {
+        let labels = Labels::for_garage("abc-123", "my-project", None, None, Some("moto-club"));
+        assert_eq!(labels.get(Labels::ENGINE), Some(&"moto-club".to_string()));
     }
 
     #[test]

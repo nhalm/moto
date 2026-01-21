@@ -76,6 +76,7 @@ impl GarageClient {
     /// * `name` - Human-friendly name for the garage.
     /// * `owner` - Optional owner identifier.
     /// * `ttl_seconds` - Optional time-to-live in seconds.
+    /// * `engine` - Optional engine name (what the garage is working on).
     ///
     /// # Errors
     ///
@@ -86,9 +87,10 @@ impl GarageClient {
         name: &str,
         owner: Option<&str>,
         ttl_seconds: Option<i64>,
+        engine: Option<&str>,
     ) -> Result<GarageInfo> {
         match &self.mode {
-            GarageMode::Local => self.open_local(name, owner, ttl_seconds).await,
+            GarageMode::Local => self.open_local(name, owner, ttl_seconds, engine).await,
             GarageMode::Remote { .. } => Err(Error::RemoteNotImplemented),
         }
     }
@@ -180,6 +182,7 @@ impl GarageClient {
         name: &str,
         owner: Option<&str>,
         ttl_seconds: Option<i64>,
+        engine: Option<&str>,
     ) -> Result<GarageInfo> {
         let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
 
@@ -193,6 +196,9 @@ impl GarageClient {
         let mut info = GarageInfo::new(name);
         if let Some(owner) = owner {
             info = info.with_owner(owner);
+        }
+        if let Some(engine) = engine {
+            info = info.with_engine(engine);
         }
 
         // Calculate expiration time if TTL provided
@@ -212,6 +218,7 @@ impl GarageClient {
             &info.name,
             info.owner.as_deref(),
             expires_at_str.as_deref(),
+            info.engine.as_deref(),
         );
 
         debug!(namespace = %info.namespace, "creating garage namespace");
@@ -315,6 +322,9 @@ fn namespace_to_garage_info(ns: &k8s_openapi::api::core::v1::Namespace) -> Optio
     // Optional owner
     let owner = labels.get(Labels::OWNER).cloned();
 
+    // Optional engine
+    let engine = labels.get(Labels::ENGINE).cloned();
+
     // Optional expiration time (RFC 3339 format)
     let expires_at = labels
         .get(Labels::EXPIRES_AT)
@@ -346,6 +356,7 @@ fn namespace_to_garage_info(ns: &k8s_openapi::api::core::v1::Namespace) -> Optio
         created_at,
         expires_at,
         owner,
+        engine,
     })
 }
 

@@ -4,6 +4,25 @@
 
 ## Log
 
+### 2026-01-21: Garage Open Engine Flag
+
+**Spec:** moto-cli.md v0.1
+
+**Implemented:**
+- Added `--engine/-e` flag to `moto garage open`
+- Added `ENGINE` label constant (`moto.dev/engine`) to `Labels` in `moto-k8s`
+- Added `engine` field to `GarageInfo` struct in `moto-club-types`
+- Added `with_engine()` builder method to `GarageInfo`
+- Updated `Labels::for_garage()` to accept optional `engine` parameter
+- Updated `GarageClient::open()` to accept optional `engine` parameter
+- Updated `namespace_to_garage_info()` to parse engine label
+- CLI shows engine in open output (both text and JSON)
+
+**Validated:** `cargo test --workspace` passes (22 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+
+---
+
 ### 2026-01-21: Garage Open TTL Flag
 
 **Spec:** moto-cli.md v0.1

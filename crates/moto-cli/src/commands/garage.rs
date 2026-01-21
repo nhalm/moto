@@ -34,6 +34,10 @@ pub enum GarageAction {
         /// Time-to-live (default: 4h, max: 48h). Format: <number><unit> where unit is m, h, or d.
         #[arg(long, default_value = "4h")]
         ttl: String,
+
+        /// Engine to work on (what this garage is for)
+        #[arg(short, long)]
+        engine: Option<String>,
     },
 
     /// Close an existing garage
@@ -83,6 +87,8 @@ struct GarageOpenJson {
     id: String,
     status: String,
     namespace: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    engine: Option<String>,
 }
 
 /// JSON output for garage close
@@ -137,19 +143,21 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                 }
             }
         }
-        GarageAction::Open { name, owner, ttl } => {
+        GarageAction::Open { name, owner, ttl, engine } => {
             let owner_ref = owner.as_deref();
+            let engine_ref = engine.as_deref();
             let ttl_seconds = parse_ttl(&ttl)?;
             if !flags.quiet && !flags.json {
                 println!("Opening garage '{name}'...");
             }
-            let garage = client.open(&name, owner_ref, Some(ttl_seconds)).await?;
+            let garage = client.open(&name, owner_ref, Some(ttl_seconds), engine_ref).await?;
             if flags.json {
                 let json = GarageOpenJson {
                     name: garage.name.clone(),
                     id: garage.id.to_string(),
                     status: garage.state.to_string(),
                     namespace: garage.namespace.clone(),
+                    engine: garage.engine.clone(),
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
             } else {
@@ -158,6 +166,9 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                 println!("  Name:      {}", garage.name);
                 println!("  Namespace: {}", garage.namespace);
                 println!("  State:     {}", garage.state);
+                if let Some(engine) = &garage.engine {
+                    println!("  Engine:    {}", engine);
+                }
                 if let Some(expires) = garage.expires_at {
                     println!("  Expires:   {}", expires.format("%Y-%m-%d %H:%M:%S UTC"));
                 }
