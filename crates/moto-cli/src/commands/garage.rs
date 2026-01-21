@@ -72,13 +72,16 @@ struct GarageListJson {
     garages: Vec<GarageJson>,
 }
 
-/// JSON representation of a garage
+/// JSON representation of a garage (matches spec)
 #[derive(Serialize)]
 struct GarageJson {
     name: String,
-    id: String,
     status: String,
-    namespace: String,
+    age_seconds: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ttl_remaining_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    engine: Option<String>,
 }
 
 /// JSON output for garage open
@@ -113,15 +116,24 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
     match cmd.action {
         GarageAction::List => {
             let garages = client.list().await?;
+            let now = chrono::Utc::now();
             if flags.json {
                 let json = GarageListJson {
                     garages: garages
                         .iter()
-                        .map(|g| GarageJson {
-                            name: g.name.clone(),
-                            id: g.id.to_string(),
-                            status: g.state.to_string(),
-                            namespace: g.namespace.clone(),
+                        .map(|g| {
+                            let age_seconds = (now - g.created_at).num_seconds();
+                            let ttl_remaining_seconds = g.expires_at.map(|exp| {
+                                let remaining = (exp - now).num_seconds();
+                                remaining.max(0)
+                            });
+                            GarageJson {
+                                name: g.name.clone(),
+                                status: g.state.to_string(),
+                                age_seconds,
+                                ttl_remaining_seconds,
+                                engine: g.engine.clone(),
+                            }
                         })
                         .collect(),
                 };
@@ -131,15 +143,31 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                     println!("No garages found.");
                 }
             } else {
-                println!("{:<12} {:<20} {:<12} {}", "ID", "NAME", "STATE", "NAMESPACE");
-                println!("{}", "-".repeat(60));
+                println!(
+                    "{:<16} {:<10} {:<8} {:<10} {}",
+                    "NAME", "STATUS", "AGE", "TTL", "ENGINE"
+                );
                 for g in garages {
+                    let age = format_duration((now - g.created_at).num_seconds());
+                    let ttl = g
+                        .expires_at
+                        .map(|exp| {
+                            let remaining = (exp - now).num_seconds();
+                            if remaining <= 0 {
+                                "expired".to_string()
+                            } else {
+                                format_duration(remaining)
+                            }
+                        })
+                        .unwrap_or_else(|| "-".to_string());
+                    let engine = g.engine.as_deref().unwrap_or("-");
                     println!(
-                        "{:<12} {:<20} {:<12} {}",
-                        g.id.short(),
-                        truncate(&g.name, 20),
+                        "{:<16} {:<10} {:<8} {:<10} {}",
+                        truncate(&g.name, 16),
                         g.state,
-                        g.namespace
+                        age,
+                        ttl,
+                        engine
                     );
                 }
             }
@@ -272,6 +300,35 @@ fn truncate(s: &str, max_len: usize) -> String {
     }
 }
 
+/// Format a duration in seconds as a human-readable string (e.g., "2h15m", "45m", "3d").
+fn format_duration(seconds: i64) -> String {
+    if seconds < 0 {
+        return "0s".to_string();
+    }
+
+    let days = seconds / 86400;
+    let hours = (seconds % 86400) / 3600;
+    let minutes = (seconds % 3600) / 60;
+
+    if days > 0 {
+        if hours > 0 {
+            format!("{days}d{hours}h")
+        } else {
+            format!("{days}d")
+        }
+    } else if hours > 0 {
+        if minutes > 0 {
+            format!("{hours}h{minutes}m")
+        } else {
+            format!("{hours}h")
+        }
+    } else if minutes > 0 {
+        format!("{minutes}m")
+    } else {
+        format!("{seconds}s")
+    }
+}
+
 /// Parse a duration string like "5m", "1h", "2d" into seconds.
 fn parse_duration(s: &str) -> Result<i64, Box<dyn std::error::Error>> {
     let s = s.trim();
@@ -334,5 +391,44 @@ async fn resolve_garage_id(
             let ids: Vec<_> = matches.iter().map(|g| g.id.short()).collect();
             Err(format!("Ambiguous ID '{id_str}', matches: {}", ids.join(", ")).into())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_duration_seconds() {
+        assert_eq!(format_duration(0), "0s");
+        assert_eq!(format_duration(30), "30s");
+        assert_eq!(format_duration(59), "59s");
+    }
+
+    #[test]
+    fn test_format_duration_minutes() {
+        assert_eq!(format_duration(60), "1m");
+        assert_eq!(format_duration(90), "1m");
+        assert_eq!(format_duration(3540), "59m");
+    }
+
+    #[test]
+    fn test_format_duration_hours() {
+        assert_eq!(format_duration(3600), "1h");
+        assert_eq!(format_duration(3660), "1h1m");
+        assert_eq!(format_duration(8100), "2h15m");
+        assert_eq!(format_duration(7200), "2h");
+    }
+
+    #[test]
+    fn test_format_duration_days() {
+        assert_eq!(format_duration(86400), "1d");
+        assert_eq!(format_duration(90000), "1d1h");
+        assert_eq!(format_duration(172800), "2d");
+    }
+
+    #[test]
+    fn test_format_duration_negative() {
+        assert_eq!(format_duration(-100), "0s");
     }
 }

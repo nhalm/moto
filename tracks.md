@@ -4,6 +4,23 @@
 
 ## Log
 
+### 2026-01-21: Garage List Output Format
+
+**Spec:** moto-cli.md v0.1
+
+**Implemented:**
+- Updated `moto garage list` output to match spec format: NAME, STATUS, AGE, TTL, ENGINE
+- JSON output now includes `age_seconds`, `ttl_remaining_seconds`, and `engine` fields
+- Removed `id` and `namespace` from list output (not in spec)
+- Added `format_duration()` function for human-readable durations (e.g., "2h15m", "1d3h")
+- TTL shows "expired" when TTL has passed, "-" when no TTL set
+- Added 5 unit tests for `format_duration()`
+
+**Validated:** `cargo test --workspace` passes (31 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+
+---
+
 ### 2026-01-21: CLI Configuration File Support
 
 **Spec:** moto-cli.md v0.1
