@@ -9,19 +9,17 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 **Workflow:**
 1. **Spec phase** - We work through a spec until it's right
 2. **Loop phase** - `loop.sh` runs agents that implement the spec
-3. **Tracks** - [tracks.md](../tracks.md) logs what's been implemented
+3. **Tracks** - [tracks.md](../tracks.md) tracks Implemented vs Remaining for each spec
 
 **Agents have autonomy** on implementation. The spec steers direction, the agent decides the code.
 
 **Status is human-controlled.** Agents NEVER change spec status. Only humans move specs between states (Bare Frame → Wrenching → Ready to Rip → Ripping).
 
-**Changelog:** When a spec returns to "Ready to Rip" after being "Ripping", check the **Changelog** section at the bottom of the spec. It documents what changed between versions. Implement the delta, not the entire spec.
-
-**Version tracking:** tracks.md entries include spec versions (e.g., `project-structure.md v1.0`). Compare the version in tracks.md against the current spec version. If the spec version is higher, check the changelog and implement the delta.
+**tracks.md:** Tracks what's Implemented vs Remaining for each spec. See instructions in that file.
 
 **Future items:** Items marked with `(future)` are for reference only. Do not implement them - they belong to a later phase or another spec.
 
-**Dependencies:** If a feature in a Ready to Rip spec references another spec (e.g., "see wgtunnel.md"), check that spec's status. Only implement the feature if the dependency is also Ready to Rip or Ripping. Skip features whose dependencies are Bare Frame or Wrenching.
+**Dependencies:** If a feature references another spec (e.g., "see wgtunnel.md"), check that spec's status. Only implement if the dependency is Ready to Rip or Ripping. Mark blocked features in Remaining with "(blocked: specname.md)".
 
 ## Status Legend
 
