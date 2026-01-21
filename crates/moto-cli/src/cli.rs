@@ -3,7 +3,7 @@
 use clap::{Parser, Subcommand};
 
 use crate::commands::garage::GarageCommand;
-use crate::config::Config;
+use crate::config::{ColorMode, Config};
 
 /// Global flags that apply to all commands.
 #[derive(Clone, Debug, Default)]
@@ -16,6 +16,8 @@ pub struct GlobalFlags {
     pub quiet: bool,
     /// Kubectl context to use
     pub context: Option<String>,
+    /// Effective color mode (considers MOTO_NO_COLOR env var and config)
+    pub color: ColorMode,
     /// Loaded configuration
     pub config: Config,
 }
@@ -49,11 +51,13 @@ pub struct Cli {
 impl Cli {
     /// Extract global flags from the CLI arguments with loaded config.
     pub fn global_flags(&self, config: Config) -> GlobalFlags {
+        let color = ColorMode::effective(config.output.color);
         GlobalFlags {
             json: self.json || std::env::var("MOTO_JSON").is_ok(),
             verbose: self.verbose,
             quiet: self.quiet,
             context: self.context.clone(),
+            color,
             config,
         }
     }

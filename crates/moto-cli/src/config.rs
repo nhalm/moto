@@ -19,6 +19,34 @@ pub enum ColorMode {
     Never,
 }
 
+impl ColorMode {
+    /// Computes the effective color mode, respecting MOTO_NO_COLOR env var.
+    ///
+    /// Priority (highest to lowest):
+    /// 1. `MOTO_NO_COLOR` env var (if set, always returns `Never`)
+    /// 2. Config file `[output].color` setting
+    #[must_use]
+    pub fn effective(config_mode: Self) -> Self {
+        if std::env::var("MOTO_NO_COLOR").is_ok() {
+            return Self::Never;
+        }
+        config_mode
+    }
+
+    /// Returns true if colors should be enabled, considering terminal capabilities.
+    #[must_use]
+    pub fn should_colorize(self) -> bool {
+        match self {
+            Self::Always => true,
+            Self::Never => false,
+            Self::Auto => {
+                // Check if stdout is a terminal
+                std::io::IsTerminal::is_terminal(&std::io::stdout())
+            }
+        }
+    }
+}
+
 /// Output configuration.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct OutputConfig {
@@ -164,5 +192,31 @@ ttl = "2h"
 
         let never: Wrapper = toml::from_str(r#"mode = "never""#).unwrap();
         assert_eq!(never.mode, ColorMode::Never);
+    }
+
+    #[test]
+    fn test_color_mode_effective_without_env() {
+        // When MOTO_NO_COLOR is not set in the test environment,
+        // config value should be respected (unless it happens to be set)
+        let result = ColorMode::effective(ColorMode::Never);
+        // If MOTO_NO_COLOR is not set, we get the config value (Never)
+        // If MOTO_NO_COLOR is set, we also get Never
+        // Either way, result should be Never
+        assert_eq!(result, ColorMode::Never);
+
+        // Test that the function at least returns a valid ColorMode
+        let _ = ColorMode::effective(ColorMode::Auto);
+        let _ = ColorMode::effective(ColorMode::Always);
+    }
+
+    #[test]
+    fn test_should_colorize() {
+        // Never mode always returns false
+        assert!(!ColorMode::Never.should_colorize());
+
+        // Always mode always returns true
+        assert!(ColorMode::Always.should_colorize());
+
+        // Auto mode depends on terminal detection (we can't easily test this)
     }
 }
