@@ -1,4 +1,4 @@
-//! K3s/Kubernetes client wrapper.
+//! Kubernetes client wrapper.
 
 use std::collections::BTreeMap;
 
@@ -18,11 +18,11 @@ use crate::{Error, NamespaceOps, Result};
 /// - Pod CRUD operations (future)
 /// - Label-based filtering for moto resources
 #[derive(Clone)]
-pub struct K3sClient {
+pub struct K8sClient {
     client: Client,
 }
 
-impl K3sClient {
+impl K8sClient {
     /// Creates a new client from the default kubeconfig.
     ///
     /// This uses the standard kubeconfig discovery:
@@ -55,7 +55,7 @@ impl K3sClient {
     }
 }
 
-impl NamespaceOps for K3sClient {
+impl NamespaceOps for K8sClient {
     #[instrument(skip(self, labels), fields(namespace = %name))]
     async fn create_namespace(
         &self,
@@ -161,19 +161,19 @@ mod tests {
 
     // Note: These tests require a running K8s cluster.
     // They are marked #[ignore] by default and can be run with:
-    // cargo test --package moto-k3s -- --ignored
+    // cargo test --package moto-k8s -- --ignored
 
     #[tokio::test]
     #[ignore = "requires running K8s cluster"]
     async fn client_creation() {
-        let client = K3sClient::new().await;
+        let client = K8sClient::new().await;
         assert!(client.is_ok(), "Failed to create client: {:?}", client.err());
     }
 
     #[tokio::test]
     #[ignore = "requires running K8s cluster"]
     async fn list_namespaces() {
-        let client = K3sClient::new().await.expect("client creation failed");
+        let client = K8sClient::new().await.expect("client creation failed");
         let namespaces = client.list_namespaces(None).await;
         assert!(namespaces.is_ok(), "Failed to list namespaces: {:?}", namespaces.err());
         // Should at least have 'default' and 'kube-system'

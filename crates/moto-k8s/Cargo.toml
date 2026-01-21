@@ -1,5 +1,5 @@
 [package]
-name = "moto-k3s"
+name = "moto-k8s"
 description = "Low-level Kubernetes operations: namespace CRUD, pod CRUD, label helpers"
 version.workspace = true
 edition.workspace = true

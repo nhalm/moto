@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use moto_club_types::{GarageId, GarageInfo, GarageState};
-use moto_k3s::{K3sClient, Labels, NamespaceOps};
+use moto_k8s::{K8sClient, Labels, NamespaceOps};
 use tracing::{debug, instrument};
 
 use crate::{Error, GarageMode, Result};
@@ -13,7 +13,7 @@ use crate::{Error, GarageMode, Result};
 /// modes, providing the same interface for both.
 pub struct GarageClient {
     mode: GarageMode,
-    k3s: Option<K3sClient>,
+    k8s: Option<K8sClient>,
 }
 
 impl GarageClient {
@@ -23,10 +23,10 @@ impl GarageClient {
     ///
     /// Returns an error if the K8s client cannot be created.
     pub async fn local() -> Result<Self> {
-        let k3s = K3sClient::new().await?;
+        let k8s = K8sClient::new().await?;
         Ok(Self {
             mode: GarageMode::Local,
-            k3s: Some(k3s),
+            k8s: Some(k8s),
         })
     }
 
@@ -37,16 +37,16 @@ impl GarageClient {
     pub fn remote(endpoint: impl Into<String>) -> Self {
         Self {
             mode: GarageMode::remote(endpoint),
-            k3s: None,
+            k8s: None,
         }
     }
 
     /// Creates a garage client from an existing K8s client (for testing).
     #[must_use]
-    pub fn from_k3s(k3s: K3sClient) -> Self {
+    pub fn from_k8s(k8s: K8sClient) -> Self {
         Self {
             mode: GarageMode::Local,
-            k3s: Some(k3s),
+            k8s: Some(k8s),
         }
     }
 
@@ -102,10 +102,10 @@ impl GarageClient {
 
     /// Lists garages in local mode.
     async fn list_local(&self) -> Result<Vec<GarageInfo>> {
-        let k3s = self.k3s.as_ref().expect("k3s client required for local mode");
+        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
 
         debug!("listing garages from K8s");
-        let namespaces = k3s.list_namespaces(Some(&Labels::garage_selector())).await?;
+        let namespaces = k8s.list_namespaces(Some(&Labels::garage_selector())).await?;
 
         let mut garages = Vec::new();
         for ns in namespaces {
@@ -122,7 +122,7 @@ impl GarageClient {
 
     /// Opens a garage in local mode.
     async fn open_local(&self, name: &str, owner: Option<&str>) -> Result<GarageInfo> {
-        let k3s = self.k3s.as_ref().expect("k3s client required for local mode");
+        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
 
         // Check if garage with this name already exists
         let existing = self.list_local().await?;
@@ -144,14 +144,14 @@ impl GarageClient {
         );
 
         debug!(namespace = %info.namespace, "creating garage namespace");
-        k3s.create_namespace(&info.namespace, labels).await?;
+        k8s.create_namespace(&info.namespace, labels).await?;
 
         Ok(info)
     }
 
     /// Closes a garage in local mode.
     async fn close_local(&self, id: &GarageId) -> Result<()> {
-        let k3s = self.k3s.as_ref().expect("k3s client required for local mode");
+        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
 
         // Find the garage by ID
         let garages = self.list_local().await?;
@@ -161,7 +161,7 @@ impl GarageClient {
             .ok_or_else(|| Error::GarageNotFound(id.to_string()))?;
 
         debug!(namespace = %garage.namespace, "deleting garage namespace");
-        k3s.delete_namespace(&garage.namespace).await?;
+        k8s.delete_namespace(&garage.namespace).await?;
 
         Ok(())
     }

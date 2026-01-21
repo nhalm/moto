@@ -91,3 +91,20 @@
 **Validated:** `cargo test --workspace` passes (23 unit tests + 2 doctests, 4 ignored K8s integration tests)
 
 **Next:** project-structure.md is complete! Move to moto-club spec or define CLI spec further
+
+---
+
+### 2026-01-21: Rename moto-k3s to moto-k8s
+
+**Spec:** project-structure.md v1.1
+
+**Implemented:**
+- Renamed crate `moto-k3s` → `moto-k8s` (k3s is infrastructure, not code)
+- Renamed `K3sClient` → `K8sClient` throughout
+- Updated workspace `Cargo.toml` dependency
+- Updated `moto-garage` to use `moto-k8s` and `K8sClient`
+- Updated internal field names from `k3s` to `k8s` in `GarageClient`
+
+**Validated:** `cargo test --workspace` passes (19 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+**Next:** project-structure.md v1.1 complete! Next spec: moto-club (Wrenching status)

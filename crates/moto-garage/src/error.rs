@@ -15,7 +15,7 @@ pub enum Error {
 
     /// K8s operation failed.
     #[error("k8s error: {0}")]
-    K8s(#[from] moto_k3s::Error),
+    K8s(#[from] moto_k8s::Error),
 
     /// Remote mode is not yet implemented.
     #[error("remote mode not implemented")]
