@@ -45,9 +45,9 @@ HOW TO USE THIS FILE:
 - moto garage list: --context filter option (filter by kubectl context, "all" for all)
 - moto garage close: accepts name, --force flag, confirmation prompt
 - moto garage logs: --tail/-n, --since, --follow/-f streaming
+- MOTOCONFIG env var (override kubeconfig)
 
 **Remaining:**
-- MOTOCONFIG env var (override kubeconfig)
 - MOTO_NO_COLOR env var (disable colored output)
 - Exit codes: differentiate 1 (general), 2 (not found), 3 (invalid input)
 - garage enter (blocked: wgtunnel.md is Bare Frame)

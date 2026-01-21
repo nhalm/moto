@@ -27,21 +27,44 @@ impl K8sClient {
     /// Creates a new client from the default kubeconfig.
     ///
     /// This uses the standard kubeconfig discovery:
-    /// 1. `KUBECONFIG` environment variable
-    /// 2. `~/.kube/config`
-    /// 3. In-cluster config (when running inside K8s)
+    /// 1. `MOTOCONFIG` environment variable (moto-specific override)
+    /// 2. `KUBECONFIG` environment variable
+    /// 3. `~/.kube/config`
+    /// 4. In-cluster config (when running inside K8s)
     ///
     /// # Errors
     ///
     /// Returns an error if the kubeconfig cannot be loaded or is invalid.
     pub async fn new() -> Result<Self> {
+        // Check for MOTOCONFIG first, then fall back to standard discovery
+        if let Ok(path) = std::env::var("MOTOCONFIG") {
+            return Self::from_kubeconfig_path(&path).await;
+        }
+
         let client = Client::try_default()
             .await
             .map_err(Error::ClientCreate)?;
         Ok(Self { client })
     }
 
+    /// Creates a new client from a specific kubeconfig file path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the kubeconfig file cannot be read or is invalid.
+    pub async fn from_kubeconfig_path(path: &str) -> Result<Self> {
+        let kubeconfig =
+            Kubeconfig::read_from(path).map_err(Error::KubeconfigRead)?;
+        let config = Config::from_custom_kubeconfig(kubeconfig, &KubeConfigOptions::default())
+            .await
+            .map_err(Error::KubeconfigRead)?;
+        let client = Client::try_from(config).map_err(Error::ClientCreate)?;
+        Ok(Self { client })
+    }
+
     /// Creates a new client for a specific kubeconfig context.
+    ///
+    /// This respects the `MOTOCONFIG` environment variable for the kubeconfig path.
     ///
     /// # Errors
     ///
@@ -52,9 +75,20 @@ impl K8sClient {
             context: Some(context.to_string()),
             ..Default::default()
         };
-        let config = Config::from_kubeconfig(&options)
-            .await
-            .map_err(Error::KubeconfigRead)?;
+
+        // Check for MOTOCONFIG first
+        let config = if let Ok(path) = std::env::var("MOTOCONFIG") {
+            let kubeconfig =
+                Kubeconfig::read_from(path).map_err(Error::KubeconfigRead)?;
+            Config::from_custom_kubeconfig(kubeconfig, &options)
+                .await
+                .map_err(Error::KubeconfigRead)?
+        } else {
+            Config::from_kubeconfig(&options)
+                .await
+                .map_err(Error::KubeconfigRead)?
+        };
+
         let client = Client::try_from(config).map_err(Error::ClientCreate)?;
         Ok(Self { client })
     }
@@ -75,22 +109,35 @@ impl K8sClient {
 
     /// Returns a list of available kubeconfig context names.
     ///
+    /// This respects the `MOTOCONFIG` environment variable for the kubeconfig path.
+    ///
     /// # Errors
     ///
     /// Returns an error if the kubeconfig cannot be read.
     pub fn list_contexts() -> Result<Vec<String>> {
-        let kubeconfig = Kubeconfig::read().map_err(Error::KubeconfigRead)?;
+        let kubeconfig = Self::read_kubeconfig()?;
         Ok(kubeconfig.contexts.into_iter().map(|c| c.name).collect())
     }
 
     /// Returns the current kubeconfig context name.
     ///
+    /// This respects the `MOTOCONFIG` environment variable for the kubeconfig path.
+    ///
     /// # Errors
     ///
     /// Returns an error if the kubeconfig cannot be read.
     pub fn current_context() -> Result<Option<String>> {
-        let kubeconfig = Kubeconfig::read().map_err(Error::KubeconfigRead)?;
+        let kubeconfig = Self::read_kubeconfig()?;
         Ok(kubeconfig.current_context)
+    }
+
+    /// Reads the kubeconfig, respecting `MOTOCONFIG` env var.
+    fn read_kubeconfig() -> Result<Kubeconfig> {
+        if let Ok(path) = std::env::var("MOTOCONFIG") {
+            Kubeconfig::read_from(path).map_err(Error::KubeconfigRead)
+        } else {
+            Kubeconfig::read().map_err(Error::KubeconfigRead)
+        }
     }
 }
 
