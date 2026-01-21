@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.1 |
+| Version | 0.2 |
 | Status | Ready to Rip |
 | Last Updated | 2026-01-21 |
 
@@ -110,6 +110,7 @@ Usage: moto garage open [options]
 Options:
   --engine <name>   Engine to work on (default: current directory name)
   --ttl <duration>  Time-to-live (default: 4h, max: 48h)
+  --owner <name>    Owner of the garage (default: current user)
 ```
 
 **Duration format:** `<number><unit>` where unit is `m` (minutes), `h` (hours), or `d` (days).
@@ -168,7 +169,7 @@ Usage: moto garage logs <name> [options]
 
 Options:
   --follow, -f    Stream logs continuously
-  --tail <n>      Show last n lines (default: 100)
+  --tail, -n <n>  Show last n lines (default: 100)
   --since <dur>   Show logs from last duration (e.g., 5m, 1h)
 ```
 
@@ -523,3 +524,12 @@ Try: Create a bike.toml or cd to a directory containing one.
 - [garage-lifecycle.md](garage-lifecycle.md) - Garage state machine
 - [bike.md](bike.md) - Bike deployment model
 - [moto-club.md](moto-club.md) - Server API
+
+---
+
+## Changelog
+
+### v0.2
+- Added `--owner` flag to `garage open`
+- Added `-n` short flag for `--tail` in `garage logs`
+- Clarification: these were already implemented, spec updated to match
