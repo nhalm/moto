@@ -1,0 +1,27 @@
+[package]
+name = "moto-garage"
+description = "Garage client: abstracts local (direct K8s) vs remote (via club) mode"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+moto-common.workspace = true
+moto-club-types.workspace = true
+moto-k3s.workspace = true
+chrono.workspace = true
+k8s-openapi.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

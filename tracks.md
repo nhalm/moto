@@ -53,3 +53,21 @@
 **Validated:** `cargo test --workspace` passes (17 unit tests + 1 doctest, 2 ignored K8s integration tests)
 
 **Next:** Create `moto-garage` crate with GarageMode and GarageClient
+
+---
+
+### 2026-01-20: Garage Client
+
+**Spec:** project-structure.md
+
+**Implemented:**
+- Created `moto-garage` crate with:
+  - `GarageMode` - Enum: `Local` (direct K8s) or `Remote { endpoint }` (via club)
+  - `GarageClient` - Methods: `list()`, `open(name)`, `close(id)`
+  - Local mode implementation using `moto-k3s` for K8s operations
+  - Namespace-to-GarageInfo conversion with label extraction
+  - Error types: `GarageNotFound`, `GarageExists`, `K8s`, `RemoteNotImplemented`
+
+**Validated:** `cargo test --workspace` passes (23 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+**Next:** Create `moto-cli` crate with basic CLI structure and garage commands
