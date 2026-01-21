@@ -42,11 +42,11 @@ HOW TO USE THIS FILE:
 - Config: [output].color, [garage].ttl
 - moto garage open: auto-generated names, --engine/-e, --ttl, --owner
 - moto garage list: formatted output (NAME, STATUS, AGE, TTL, ENGINE)
+- moto garage list: --context filter option (filter by kubectl context, "all" for all)
 - moto garage close: accepts name, --force flag, confirmation prompt
 - moto garage logs: --tail/-n, --since, --follow/-f streaming
 
 **Remaining:**
-- garage list --context filter option (filter by kubectl context, "all" for all)
 - MOTOCONFIG env var (override kubeconfig)
 - MOTO_NO_COLOR env var (disable colored output)
 - Exit codes: differentiate 1 (general), 2 (not found), 3 (invalid input)

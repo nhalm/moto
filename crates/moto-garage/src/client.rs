@@ -30,6 +30,19 @@ impl GarageClient {
         })
     }
 
+    /// Creates a new garage client in local mode for a specific kubeconfig context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the K8s client cannot be created or the context doesn't exist.
+    pub async fn local_with_context(context: &str) -> Result<Self> {
+        let k8s = K8sClient::with_context(context).await?;
+        Ok(Self {
+            mode: GarageMode::Local,
+            k8s: Some(k8s),
+        })
+    }
+
     /// Creates a new garage client in remote mode.
     ///
     /// Note: Remote mode is not yet implemented.

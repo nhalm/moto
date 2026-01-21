@@ -48,6 +48,14 @@ pub enum Error {
     /// I/O error while streaming logs.
     #[error("I/O error: {0}")]
     IoError(#[source] std::io::Error),
+
+    /// Failed to read kubeconfig.
+    #[error("failed to read kubeconfig: {0}")]
+    KubeconfigRead(#[source] kube::config::KubeconfigError),
+
+    /// Context not found.
+    #[error("context not found: {0}")]
+    ContextNotFound(String),
 }
 
 /// Result type alias for K8s operations.

@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{
     api::{Api, ListParams, ObjectMeta, PostParams},
-    Client,
+    config::{KubeConfigOptions, Kubeconfig},
+    Client, Config,
 };
 use tracing::{debug, instrument};
 
@@ -40,6 +41,24 @@ impl K8sClient {
         Ok(Self { client })
     }
 
+    /// Creates a new client for a specific kubeconfig context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the kubeconfig cannot be loaded, the context doesn't
+    /// exist, or the client cannot be created.
+    pub async fn with_context(context: &str) -> Result<Self> {
+        let options = KubeConfigOptions {
+            context: Some(context.to_string()),
+            ..Default::default()
+        };
+        let config = Config::from_kubeconfig(&options)
+            .await
+            .map_err(Error::KubeconfigRead)?;
+        let client = Client::try_from(config).map_err(Error::ClientCreate)?;
+        Ok(Self { client })
+    }
+
     /// Creates a new client from an existing `kube::Client`.
     ///
     /// Useful for testing or when you already have a configured client.
@@ -52,6 +71,26 @@ impl K8sClient {
     #[must_use]
     pub fn inner(&self) -> &Client {
         &self.client
+    }
+
+    /// Returns a list of available kubeconfig context names.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the kubeconfig cannot be read.
+    pub fn list_contexts() -> Result<Vec<String>> {
+        let kubeconfig = Kubeconfig::read().map_err(Error::KubeconfigRead)?;
+        Ok(kubeconfig.contexts.into_iter().map(|c| c.name).collect())
+    }
+
+    /// Returns the current kubeconfig context name.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the kubeconfig cannot be read.
+    pub fn current_context() -> Result<Option<String>> {
+        let kubeconfig = Kubeconfig::read().map_err(Error::KubeconfigRead)?;
+        Ok(kubeconfig.current_context)
     }
 }
 

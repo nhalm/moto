@@ -3,6 +3,7 @@
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
 use moto_garage::GarageClient;
+use moto_k8s::K8sClient;
 use serde::Serialize;
 use std::io::{self, Write};
 
@@ -19,7 +20,11 @@ pub struct GarageCommand {
 #[derive(Subcommand)]
 pub enum GarageAction {
     /// List all garages
-    List,
+    List {
+        /// Filter by kubectl context (use "all" for all contexts)
+        #[arg(long)]
+        context: Option<String>,
+    },
 
     /// Open a new garage
     Open {
@@ -82,6 +87,8 @@ struct GarageJson {
     ttl_remaining_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     engine: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    context: Option<String>,
 }
 
 /// JSON output for garage open (matches spec)
@@ -108,19 +115,77 @@ struct GarageLogsJson {
     logs: String,
 }
 
+/// Garage info with context name for multi-context listing.
+struct GarageWithContext {
+    garage: moto_club_types::GarageInfo,
+    context: Option<String>,
+}
+
 /// Run the garage command
 pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn std::error::Error>> {
-    let client = GarageClient::local().await?;
-
     match cmd.action {
-        GarageAction::List => {
-            let garages = client.list().await?;
+        GarageAction::List { context } => {
             let now = chrono::Utc::now();
+            let show_context_column = context.as_deref() == Some("all");
+
+            // Collect garages from the appropriate context(s)
+            let garages_with_context: Vec<GarageWithContext> = if context.as_deref() == Some("all") {
+                // List from all contexts
+                let contexts = K8sClient::list_contexts()?;
+                let mut all_garages = Vec::new();
+                for ctx_name in contexts {
+                    match GarageClient::local_with_context(&ctx_name).await {
+                        Ok(client) => {
+                            if let Ok(garages) = client.list().await {
+                                for g in garages {
+                                    all_garages.push(GarageWithContext {
+                                        garage: g,
+                                        context: Some(ctx_name.clone()),
+                                    });
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            // Skip contexts that fail to connect (e.g., cluster not available)
+                            if flags.verbose > 0 {
+                                eprintln!("Warning: could not connect to context '{ctx_name}': {e}");
+                            }
+                        }
+                    }
+                }
+                all_garages
+            } else if let Some(ctx_name) = &context {
+                // List from specific context
+                let client = GarageClient::local_with_context(ctx_name).await?;
+                client
+                    .list()
+                    .await?
+                    .into_iter()
+                    .map(|g| GarageWithContext {
+                        garage: g,
+                        context: Some(ctx_name.clone()),
+                    })
+                    .collect()
+            } else {
+                // List from current/default context
+                let client = GarageClient::local().await?;
+                client
+                    .list()
+                    .await?
+                    .into_iter()
+                    .map(|g| GarageWithContext {
+                        garage: g,
+                        context: None,
+                    })
+                    .collect()
+            };
+
             if flags.json {
                 let json = GarageListJson {
-                    garages: garages
+                    garages: garages_with_context
                         .iter()
-                        .map(|g| {
+                        .map(|gwc| {
+                            let g = &gwc.garage;
                             let age_seconds = (now - g.created_at).num_seconds();
                             let ttl_remaining_seconds = g.expires_at.map(|exp| {
                                 let remaining = (exp - now).num_seconds();
@@ -132,21 +197,54 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                                 age_seconds,
                                 ttl_remaining_seconds,
                                 engine: g.engine.clone(),
+                                context: gwc.context.clone(),
                             }
                         })
                         .collect(),
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
-            } else if garages.is_empty() {
+            } else if garages_with_context.is_empty() {
                 if !flags.quiet {
                     println!("No garages found.");
+                }
+            } else if show_context_column {
+                println!(
+                    "{:<16} {:<10} {:<8} {:<10} {:<16} {}",
+                    "NAME", "STATUS", "AGE", "TTL", "CONTEXT", "ENGINE"
+                );
+                for gwc in garages_with_context {
+                    let g = &gwc.garage;
+                    let age = format_duration((now - g.created_at).num_seconds());
+                    let ttl = g
+                        .expires_at
+                        .map(|exp| {
+                            let remaining = (exp - now).num_seconds();
+                            if remaining <= 0 {
+                                "expired".to_string()
+                            } else {
+                                format_duration(remaining)
+                            }
+                        })
+                        .unwrap_or_else(|| "-".to_string());
+                    let engine = g.engine.as_deref().unwrap_or("-");
+                    let ctx = gwc.context.as_deref().unwrap_or("-");
+                    println!(
+                        "{:<16} {:<10} {:<8} {:<10} {:<16} {}",
+                        truncate(&g.name, 16),
+                        g.state,
+                        age,
+                        ttl,
+                        truncate(ctx, 16),
+                        engine
+                    );
                 }
             } else {
                 println!(
                     "{:<16} {:<10} {:<8} {:<10} {}",
                     "NAME", "STATUS", "AGE", "TTL", "ENGINE"
                 );
-                for g in garages {
+                for gwc in garages_with_context {
+                    let g = &gwc.garage;
                     let age = format_duration((now - g.created_at).num_seconds());
                     let ttl = g
                         .expires_at
@@ -172,6 +270,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
             }
         }
         GarageAction::Open { owner, ttl, engine } => {
+            let client = GarageClient::local().await?;
             let name = crate::names::generate();
             let owner_ref = owner.as_deref();
             let engine_ref = engine.as_deref();
@@ -204,6 +303,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
             }
         }
         GarageAction::Close { name, force } => {
+            let client = GarageClient::local().await?;
             // Check if garage exists first
             let garages = client.list().await?;
             if !garages.iter().any(|g| g.name == name) {
@@ -244,6 +344,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
             tail,
             since,
         } => {
+            let client = GarageClient::local().await?;
             let since_seconds = since.as_deref().map(parse_duration).transpose()?;
 
             if follow {
