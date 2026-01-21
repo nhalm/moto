@@ -13,6 +13,10 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 **Agents have autonomy** on implementation. The spec steers direction, the agent decides the code.
 
+**Changelog:** When a spec returns to "Ready to Rip" after being "Ripping", check the **Changelog** section at the bottom of the spec. It documents what changed between versions. Implement the delta, not the entire spec.
+
+**Future items:** Items marked with `(future)` are for reference only. Do not implement them - they belong to a later phase or another spec.
+
 ## Status Legend
 
 | Status | Meaning |

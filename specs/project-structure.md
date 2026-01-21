@@ -1,8 +1,8 @@
 # Project Structure Specification
 
 **Status:** Ready to Rip
-**Version:** 1.0
-**Last Updated:** 2026-01-20
+**Version:** 1.1
+**Last Updated:** 2026-01-21
 
 ---
 
@@ -78,7 +78,7 @@ This specification defines the directory layout, crate organization, and structu
                     ┌──────────────────┼──────────────────┐
                     │                  │                  │
                     ▼                  ▼                  ▼
-             moto-club-types    moto-garage       moto-k3s
+             moto-club-types    moto-garage       moto-k8s
                     │                  │                  │
                     └──────────┬───────┴──────────────────┘
                                │
@@ -114,7 +114,7 @@ moto/
 │   │── moto-common/                  # Shared utilities (errors, config, Secret<T>)
 │   │── moto-cli/                     # Binary: CLI (the Bars)
 │   │── moto-garage/                  # Library: garage client logic
-│   │── moto-k3s/                     # Library: k3s/Kubernetes operations
+│   │── moto-k8s/                     # Library: Kubernetes operations
 │   │
 │   │── moto-club/                    # Binary: central server
 │   │── moto-club-api/                # Library: REST handlers
@@ -183,7 +183,7 @@ moto/
 |-------|------|---------|
 | `moto-common` | lib | Shared utilities: error types, config loading, `Secret<T>` wrapper |
 | `moto-club-types` | lib | Types shared between CLI and server: `GarageId`, `GarageInfo`, `GarageState`, API request/response types |
-| `moto-k3s` | lib | Low-level K8s operations: namespace CRUD, pod CRUD, label helpers |
+| `moto-k8s` | lib | Low-level K8s operations: namespace CRUD, pod CRUD, label helpers |
 | `moto-garage` | lib | Garage client: abstracts local (direct K8s) vs remote (via club) mode |
 | `moto-cli` | bin | CLI commands: `moto garage {list,open,close}`, `moto bike {...}` |
 
@@ -196,7 +196,7 @@ moto/
 | `moto-club-ws` | lib | WebSocket for terminal attach, real-time updates |
 | `moto-club-garage` | lib | Garage service: lifecycle state machine, TTL |
 | `moto-club-bike` | lib | Bike service: deployment, scaling |
-| `moto-club-k8s` | lib | K8s operations specific to club (wraps moto-k3s) |
+| `moto-club-k8s` | lib | K8s operations specific to club (wraps moto-k8s) |
 | `moto-club-db` | lib | Database: migrations, repositories |
 
 ### Infrastructure Crates (Future)
@@ -232,13 +232,13 @@ moto/
 - `expires_at: Option<DateTime<Utc>>`
 - `owner: Option<String>`
 
-**BikeId**, **BikeState**, **BikeInfo** - Similar pattern for bikes
+**BikeId**, **BikeState**, **BikeInfo** (future) - Similar pattern for bikes
 
-**API Types** - `CreateGarageRequest`, `CreateGarageResponse`, `ListGaragesRequest`, etc.
+**API Types** (future) - `CreateGarageRequest`, `CreateGarageResponse`, `ListGaragesRequest`, etc.
 
-### moto-k3s
+### moto-k8s
 
-**K3sClient** - Wraps `kube::Client`, provides namespace/pod operations
+**K8sClient** - Wraps `kube::Client`, provides namespace/pod operations
 
 **NamespaceOps** - Trait: `create_namespace()`, `delete_namespace()`, `list_namespaces()`, `get_namespace()`
 
@@ -337,7 +337,7 @@ Both CLI and server need the same types (GarageInfo, etc). Put them in `moto-clu
 | Garage | Dev environment | moto-garage |
 | Bike | Production deployment | moto-club-bike |
 | Bars | CLI/control | moto-cli |
-| Frame | K8s infrastructure | moto-k3s |
+| Frame | K8s infrastructure | moto-k8s |
 | Tank | Encrypted storage | moto-tank |
 | Transmission | Proxy | moto-transmission |
 | Exhaust | Logging/audit | moto-exhaust |
@@ -347,3 +347,15 @@ Both CLI and server need the same types (GarageInfo, etc). Put them in `moto-clu
 | Switches | Feature flags | moto-switches |
 | Keybox | Secrets | moto-keybox |
 | Engine | Business services | moto-tokenization, etc. |
+
+---
+
+## Changelog
+
+### v1.1 (2026-01-21)
+
+Renamed `moto-k3s` → `moto-k8s`. The crate is K8s-agnostic; k3s is an infrastructure choice, not a code dependency.
+
+### v1.0 (2026-01-20)
+
+Initial spec.
