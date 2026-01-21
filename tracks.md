@@ -4,6 +4,26 @@
 
 ## Log
 
+### 2026-01-21: Garage Open TTL Flag
+
+**Spec:** moto-cli.md v0.1
+
+**Implemented:**
+- Added `--ttl` flag to `moto garage open` (default: 4h, max: 48h)
+- Duration format: `<number><unit>` where unit is m, h, or d
+- Added `parse_ttl()` function with max validation
+- Added `EXPIRES_AT` label constant to `Labels` in `moto-k8s`
+- Updated `Labels::for_garage()` to accept optional `expires_at` parameter
+- Updated `GarageClient::open()` to accept optional `ttl_seconds` parameter
+- TTL is stored as RFC 3339 timestamp in `moto.dev/expires-at` label
+- Updated `namespace_to_garage_info()` to parse expires_at label
+- Garage open output shows expiration time when TTL is set
+
+**Validated:** `cargo test --workspace` passes (20 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+
+---
+
 ### 2026-01-21: Garage Logs Streaming
 
 **Spec:** moto-cli.md v0.1

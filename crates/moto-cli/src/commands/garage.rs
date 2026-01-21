@@ -30,6 +30,10 @@ pub enum GarageAction {
         /// Owner of the garage (defaults to current user)
         #[arg(short, long)]
         owner: Option<String>,
+
+        /// Time-to-live (default: 4h, max: 48h). Format: <number><unit> where unit is m, h, or d.
+        #[arg(long, default_value = "4h")]
+        ttl: String,
     },
 
     /// Close an existing garage
@@ -133,12 +137,13 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                 }
             }
         }
-        GarageAction::Open { name, owner } => {
+        GarageAction::Open { name, owner, ttl } => {
             let owner_ref = owner.as_deref();
+            let ttl_seconds = parse_ttl(&ttl)?;
             if !flags.quiet && !flags.json {
                 println!("Opening garage '{name}'...");
             }
-            let garage = client.open(&name, owner_ref).await?;
+            let garage = client.open(&name, owner_ref, Some(ttl_seconds)).await?;
             if flags.json {
                 let json = GarageOpenJson {
                     name: garage.name.clone(),
@@ -153,6 +158,9 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                 println!("  Name:      {}", garage.name);
                 println!("  Namespace: {}", garage.namespace);
                 println!("  State:     {}", garage.state);
+                if let Some(expires) = garage.expires_at {
+                    println!("  Expires:   {}", expires.format("%Y-%m-%d %H:%M:%S UTC"));
+                }
             }
         }
         GarageAction::Close { id } => {
@@ -268,6 +276,21 @@ fn parse_duration(s: &str) -> Result<i64, Box<dyn std::error::Error>> {
     };
 
     Ok(num * multiplier)
+}
+
+/// Parse a TTL duration string with validation (max 48h).
+fn parse_ttl(s: &str) -> Result<i64, Box<dyn std::error::Error>> {
+    let seconds = parse_duration(s)?;
+    const MAX_TTL_SECONDS: i64 = 48 * 3600; // 48 hours
+
+    if seconds <= 0 {
+        return Err("TTL must be positive".into());
+    }
+    if seconds > MAX_TTL_SECONDS {
+        return Err(format!("TTL exceeds maximum of 48h (got {s})").into());
+    }
+
+    Ok(seconds)
 }
 
 /// Resolve a garage ID from a full UUID or short prefix

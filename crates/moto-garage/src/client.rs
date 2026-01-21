@@ -1,6 +1,6 @@
 //! Garage client for managing dev environments.
 
-use chrono::Utc;
+use chrono::{DateTime, Duration, Utc};
 use moto_club_types::{GarageId, GarageInfo, GarageState};
 use moto_k8s::{K8sClient, Labels, LogStream, NamespaceOps, PodLogOptions, PodOps};
 use tracing::{debug, instrument};
@@ -75,14 +75,20 @@ impl GarageClient {
     ///
     /// * `name` - Human-friendly name for the garage.
     /// * `owner` - Optional owner identifier.
+    /// * `ttl_seconds` - Optional time-to-live in seconds.
     ///
     /// # Errors
     ///
     /// Returns an error if a garage with this name already exists or creation fails.
     #[instrument(skip(self, name), fields(garage.name = %name))]
-    pub async fn open(&self, name: &str, owner: Option<&str>) -> Result<GarageInfo> {
+    pub async fn open(
+        &self,
+        name: &str,
+        owner: Option<&str>,
+        ttl_seconds: Option<i64>,
+    ) -> Result<GarageInfo> {
         match &self.mode {
-            GarageMode::Local => self.open_local(name, owner).await,
+            GarageMode::Local => self.open_local(name, owner, ttl_seconds).await,
             GarageMode::Remote { .. } => Err(Error::RemoteNotImplemented),
         }
     }
@@ -169,7 +175,12 @@ impl GarageClient {
     }
 
     /// Opens a garage in local mode.
-    async fn open_local(&self, name: &str, owner: Option<&str>) -> Result<GarageInfo> {
+    async fn open_local(
+        &self,
+        name: &str,
+        owner: Option<&str>,
+        ttl_seconds: Option<i64>,
+    ) -> Result<GarageInfo> {
         let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
 
         // Check if garage with this name already exists
@@ -184,11 +195,23 @@ impl GarageClient {
             info = info.with_owner(owner);
         }
 
+        // Calculate expiration time if TTL provided
+        let expires_at = ttl_seconds.and_then(|secs| {
+            Duration::try_seconds(secs).map(|d| Utc::now() + d)
+        });
+        if let Some(expires) = expires_at {
+            info = info.with_expires_at(expires);
+        }
+
+        // Format expires_at as RFC 3339 for label
+        let expires_at_str = expires_at.map(|dt| dt.to_rfc3339());
+
         // Create namespace with labels
         let labels = Labels::for_garage(
             &info.id.to_string(),
             &info.name,
             info.owner.as_deref(),
+            expires_at_str.as_deref(),
         );
 
         debug!(namespace = %info.namespace, "creating garage namespace");
@@ -292,6 +315,12 @@ fn namespace_to_garage_info(ns: &k8s_openapi::api::core::v1::Namespace) -> Optio
     // Optional owner
     let owner = labels.get(Labels::OWNER).cloned();
 
+    // Optional expiration time (RFC 3339 format)
+    let expires_at = labels
+        .get(Labels::EXPIRES_AT)
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc));
+
     // Creation time from K8s metadata
     let created_at = metadata
         .creation_timestamp
@@ -315,7 +344,7 @@ fn namespace_to_garage_info(ns: &k8s_openapi::api::core::v1::Namespace) -> Optio
         namespace,
         state,
         created_at,
-        expires_at: None, // TTL not implemented yet
+        expires_at,
         owner,
     })
 }
