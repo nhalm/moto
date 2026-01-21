@@ -103,3 +103,20 @@
 **Validated:** `cargo test --workspace` passes (19 unit tests + 2 doctests, 4 ignored K8s integration tests)
 
 
+---
+
+### 2026-01-21: CLI Global Flags
+
+**Spec:** moto-cli.md v0.1
+
+**Implemented:**
+- Added global flags to CLI (`--json/-j`, `--verbose/-v`, `--quiet/-q`, `--context/-c`)
+- `GlobalFlags` struct with env var support (`MOTO_JSON`)
+- Verbosity levels: 0=warn, 1=info, 2=debug, 3+=trace
+- JSON output for all garage commands (list, open, close)
+- Quiet mode suppresses progress messages
+- Error output respects JSON flag
+
+**Validated:** `cargo test --workspace` passes (19 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+

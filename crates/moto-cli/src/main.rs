@@ -12,21 +12,34 @@ use cli::{Cli, Command};
 
 #[tokio::main]
 async fn main() {
-    // Initialize tracing
+    let cli = Cli::parse();
+    let flags = cli.global_flags();
+
+    // Initialize tracing based on verbosity
+    let filter = if flags.verbose > 0 {
+        match flags.verbose {
+            1 => "info",
+            2 => "debug",
+            _ => "trace",
+        }
+    } else {
+        "warn"
+    };
+
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
-        )
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
         .init();
 
-    let cli = Cli::parse();
-
     let result = match cli.command {
-        Command::Garage(cmd) => commands::garage::run(cmd).await,
+        Command::Garage(cmd) => commands::garage::run(cmd, &flags).await,
     };
 
     if let Err(e) = result {
-        eprintln!("Error: {e}");
+        if flags.json {
+            eprintln!(r#"{{"error": "{}"}}"#, e.to_string().replace('"', "\\\""));
+        } else {
+            eprintln!("Error: {e}");
+        }
         std::process::exit(1);
     }
 }

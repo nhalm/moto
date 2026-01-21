@@ -3,6 +3,9 @@
 use clap::{Args, Subcommand};
 use moto_club_types::GarageId;
 use moto_garage::GarageClient;
+use serde::Serialize;
+
+use crate::cli::GlobalFlags;
 
 /// Garage command and subcommands
 #[derive(Args)]
@@ -34,15 +37,61 @@ pub enum GarageAction {
     },
 }
 
+/// JSON output for garage list
+#[derive(Serialize)]
+struct GarageListJson {
+    garages: Vec<GarageJson>,
+}
+
+/// JSON representation of a garage
+#[derive(Serialize)]
+struct GarageJson {
+    name: String,
+    id: String,
+    status: String,
+    namespace: String,
+}
+
+/// JSON output for garage open
+#[derive(Serialize)]
+struct GarageOpenJson {
+    name: String,
+    id: String,
+    status: String,
+    namespace: String,
+}
+
+/// JSON output for garage close
+#[derive(Serialize)]
+struct GarageCloseJson {
+    name: String,
+    status: String,
+}
+
 /// Run the garage command
-pub async fn run(cmd: GarageCommand) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn std::error::Error>> {
     let client = GarageClient::local().await?;
 
     match cmd.action {
         GarageAction::List => {
             let garages = client.list().await?;
-            if garages.is_empty() {
-                println!("No garages found.");
+            if flags.json {
+                let json = GarageListJson {
+                    garages: garages
+                        .iter()
+                        .map(|g| GarageJson {
+                            name: g.name.clone(),
+                            id: g.id.to_string(),
+                            status: g.state.to_string(),
+                            namespace: g.namespace.clone(),
+                        })
+                        .collect(),
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if garages.is_empty() {
+                if !flags.quiet {
+                    println!("No garages found.");
+                }
             } else {
                 println!("{:<12} {:<20} {:<12} {}", "ID", "NAME", "STATE", "NAMESPACE");
                 println!("{}", "-".repeat(60));
@@ -59,19 +108,47 @@ pub async fn run(cmd: GarageCommand) -> Result<(), Box<dyn std::error::Error>> {
         }
         GarageAction::Open { name, owner } => {
             let owner_ref = owner.as_deref();
-            println!("Opening garage '{name}'...");
+            if !flags.quiet && !flags.json {
+                println!("Opening garage '{name}'...");
+            }
             let garage = client.open(&name, owner_ref).await?;
-            println!("Garage opened:");
-            println!("  ID:        {}", garage.id);
-            println!("  Name:      {}", garage.name);
-            println!("  Namespace: {}", garage.namespace);
-            println!("  State:     {}", garage.state);
+            if flags.json {
+                let json = GarageOpenJson {
+                    name: garage.name.clone(),
+                    id: garage.id.to_string(),
+                    status: garage.state.to_string(),
+                    namespace: garage.namespace.clone(),
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else {
+                println!("Garage opened:");
+                println!("  ID:        {}", garage.id);
+                println!("  Name:      {}", garage.name);
+                println!("  Namespace: {}", garage.namespace);
+                println!("  State:     {}", garage.state);
+            }
         }
         GarageAction::Close { id } => {
             let garage_id = resolve_garage_id(&client, &id).await?;
-            println!("Closing garage {}...", garage_id.short());
+            let garages = client.list().await?;
+            let name = garages
+                .iter()
+                .find(|g| g.id == garage_id)
+                .map(|g| g.name.clone())
+                .unwrap_or_else(|| garage_id.short());
+            if !flags.quiet && !flags.json {
+                println!("Closing garage {}...", garage_id.short());
+            }
             client.close(&garage_id).await?;
-            println!("Garage closed.");
+            if flags.json {
+                let json = GarageCloseJson {
+                    name,
+                    status: "closed".to_string(),
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if !flags.quiet {
+                println!("Garage closed.");
+            }
         }
     }
 
