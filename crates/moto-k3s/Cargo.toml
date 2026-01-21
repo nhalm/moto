@@ -1,0 +1,22 @@
+[package]
+name = "moto-k3s"
+description = "Low-level Kubernetes operations: namespace CRUD, pod CRUD, label helpers"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kube.workspace = true
+k8s-openapi.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

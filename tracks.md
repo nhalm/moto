@@ -35,3 +35,21 @@
 **Validated:** `cargo test --workspace` passes (12 unit tests + 1 doctest)
 
 **Next:** Create `moto-k3s` crate with K3sClient and namespace operations
+
+---
+
+### 2026-01-20: K3s Client
+
+**Spec:** project-structure.md
+
+**Implemented:**
+- Created `moto-k3s` crate with:
+  - `K3sClient` - wraps `kube::Client`, provides moto-specific operations
+  - `NamespaceOps` trait - `create_namespace()`, `delete_namespace()`, `get_namespace()`, `list_namespaces()`, `namespace_exists()`
+  - `Labels` - constants for moto K8s labels (`moto.dev/type`, `moto.dev/id`, `moto.dev/name`, `moto.dev/owner`)
+  - Helper methods: `Labels::garage_selector()`, `Labels::for_garage()`, `Labels::for_bike()`
+  - Error types: `NamespaceExists`, `NamespaceNotFound`, `NamespaceCreate`, etc.
+
+**Validated:** `cargo test --workspace` passes (17 unit tests + 1 doctest, 2 ignored K8s integration tests)
+
+**Next:** Create `moto-garage` crate with GarageMode and GarageClient
