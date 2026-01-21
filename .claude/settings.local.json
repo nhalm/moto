@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(/opt/homebrew/bin/cargo build --workspace)",
+      "Bash(/opt/homebrew/bin/cargo clippy --workspace --all-targets)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(nix flake show:*)"
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+
+# Nix
+result
+result-*
+.direnv/
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+*.pem
+*.key
+.env
+.env.*
+secrets.yaml
+*.secret
+
+# Docker
+.docker/
+
+# Misc
+*.log
+tmp/
+.cache/
+node_modules/
