@@ -51,7 +51,6 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [ai-proxy](ai-proxy.md) | Bare Frame | AI provider gateway, injects secrets |
 | [dev-container](dev-container.md) | Wrenching | Tooling, environment, volumes |
 | [container-system](container-system.md) | Wrenching | Build pipeline, registry |
-| [k3s-cluster](k3s-cluster.md) | Bare Frame | Local cluster setup, persistence |
 | [garage-isolation](garage-isolation.md) | Bare Frame | Network policies, resource limits |
 | [garage-local](garage-local.md) | Wrenching | Local K8s operations (no server) |
 | [garage-lifecycle](garage-lifecycle.md) | Wrenching | Full lifecycle with WebSocket, TTL |
