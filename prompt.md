@@ -1,5 +1,5 @@
-Study specs/README.md to find the current spec being implemented.
-Study tracks.md and pick the most important thing to do next.
+Study specs/README.md to find specs with status "Ready to Rip".
+Study tracks.md to see what version was last implemented.
 
 Your task is to implement ONE thing, then validate it works.
 
