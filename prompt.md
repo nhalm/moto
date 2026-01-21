@@ -9,7 +9,7 @@ IMPORTANT:
 - NEVER change spec status in specs/README.md or individual spec files
 - Only log work in tracks.md if you actually wrote code
 - Update tracks.md when done
-- Code is the source of TRUTH
+- Code is the source of TRUTH: compare each spec feature against actual code to find what's missing. Changelogs and tracks.md are hints, not definitive.
 - Commit your changes
 - Do NOT use TodoWrite - just do the work
 - Do NOT do multiple things - ONE thing per iteration
