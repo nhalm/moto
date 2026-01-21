@@ -4,6 +4,24 @@
 
 ## Log
 
+### 2026-01-21: CLI Configuration File Support
+
+**Spec:** moto-cli.md v0.1
+
+**Implemented:**
+- Added `Config` struct for loading `$XDG_CONFIG_HOME/moto/config.toml` (falls back to `~/.config/moto/config.toml`)
+- Config supports `[output].color` (auto/always/never) and `[garage].ttl` (default TTL)
+- Added `toml` and `dirs` dependencies to workspace
+- Config is loaded at startup and included in `GlobalFlags`
+- `moto garage open --ttl` now has precedence: CLI flag → config file → hardcoded default (4h)
+- Config gracefully handles missing files (returns defaults)
+- Created `config.rs` module with `Config`, `OutputConfig`, `GarageConfig`, `ColorMode` types
+
+**Validated:** `cargo test --workspace` passes (26 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+
+---
+
 ### 2026-01-21: Garage Open Engine Flag
 
 **Spec:** moto-cli.md v0.1

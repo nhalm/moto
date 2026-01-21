@@ -7,13 +7,16 @@ use tracing_subscriber::EnvFilter;
 
 mod cli;
 mod commands;
+mod config;
 
 use cli::{Cli, Command};
+use config::Config;
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    let flags = cli.global_flags();
+    let config = Config::load();
+    let flags = cli.global_flags(config);
 
     // Initialize tracing based on verbosity
     let filter = if flags.verbose > 0 {

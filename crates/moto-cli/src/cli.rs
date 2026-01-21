@@ -3,6 +3,7 @@
 use clap::{Parser, Subcommand};
 
 use crate::commands::garage::GarageCommand;
+use crate::config::Config;
 
 /// Global flags that apply to all commands.
 #[derive(Clone, Debug, Default)]
@@ -15,6 +16,8 @@ pub struct GlobalFlags {
     pub quiet: bool,
     /// Kubectl context to use
     pub context: Option<String>,
+    /// Loaded configuration
+    pub config: Config,
 }
 
 /// Moto - fintech motorcycle for tokenization, proxy, payments, and lending.
@@ -44,13 +47,14 @@ pub struct Cli {
 }
 
 impl Cli {
-    /// Extract global flags from the CLI arguments.
-    pub fn global_flags(&self) -> GlobalFlags {
+    /// Extract global flags from the CLI arguments with loaded config.
+    pub fn global_flags(&self, config: Config) -> GlobalFlags {
         GlobalFlags {
             json: self.json || std::env::var("MOTO_JSON").is_ok(),
             verbose: self.verbose,
             quiet: self.quiet,
             context: self.context.clone(),
+            config,
         }
     }
 }

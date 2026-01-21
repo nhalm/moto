@@ -31,9 +31,10 @@ pub enum GarageAction {
         #[arg(short, long)]
         owner: Option<String>,
 
-        /// Time-to-live (default: 4h, max: 48h). Format: <number><unit> where unit is m, h, or d.
-        #[arg(long, default_value = "4h")]
-        ttl: String,
+        /// Time-to-live (max: 48h). Format: <number><unit> where unit is m, h, or d.
+        /// Default: 4h or config file setting.
+        #[arg(long)]
+        ttl: Option<String>,
 
         /// Engine to work on (what this garage is for)
         #[arg(short, long)]
@@ -146,7 +147,12 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
         GarageAction::Open { name, owner, ttl, engine } => {
             let owner_ref = owner.as_deref();
             let engine_ref = engine.as_deref();
-            let ttl_seconds = parse_ttl(&ttl)?;
+            // Use CLI flag, then config default, then hardcoded default
+            let ttl_str = ttl
+                .as_deref()
+                .or(flags.config.garage.ttl.as_deref())
+                .unwrap_or("4h");
+            let ttl_seconds = parse_ttl(ttl_str)?;
             if !flags.quiet && !flags.json {
                 println!("Opening garage '{name}'...");
             }
