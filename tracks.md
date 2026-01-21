@@ -17,7 +17,6 @@
 
 **Validated:** `cargo check` and `cargo test` pass (4 unit tests + 1 doctest)
 
-**Next:** Create `moto-club-types` crate with GarageId, GarageState, GarageInfo types
 
 ---
 
@@ -34,7 +33,6 @@
 
 **Validated:** `cargo test --workspace` passes (12 unit tests + 1 doctest)
 
-**Next:** Create `moto-k3s` crate with K3sClient and namespace operations
 
 ---
 
@@ -52,7 +50,6 @@
 
 **Validated:** `cargo test --workspace` passes (17 unit tests + 1 doctest, 2 ignored K8s integration tests)
 
-**Next:** Create `moto-garage` crate with GarageMode and GarageClient
 
 ---
 
@@ -70,7 +67,6 @@
 
 **Validated:** `cargo test --workspace` passes (23 unit tests + 2 doctests, 4 ignored K8s integration tests)
 
-**Next:** Create `moto-cli` crate with basic CLI structure and garage commands
 
 ---
 
@@ -90,7 +86,6 @@
 
 **Validated:** `cargo test --workspace` passes (23 unit tests + 2 doctests, 4 ignored K8s integration tests)
 
-**Next:** project-structure.md is complete! Move to moto-club spec or define CLI spec further
 
 ---
 
@@ -107,5 +102,4 @@
 
 **Validated:** `cargo test --workspace` passes (19 unit tests + 2 doctests, 4 ignored K8s integration tests)
 
-**Next:** project-structure.md v1.1 complete! Next spec: garage-local.md
 
