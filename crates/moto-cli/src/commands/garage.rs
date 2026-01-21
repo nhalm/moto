@@ -8,6 +8,7 @@ use serde::Serialize;
 use std::io::{self, Write};
 
 use crate::cli::GlobalFlags;
+use crate::error::{CliError, Result};
 
 /// Garage command and subcommands
 #[derive(Args)]
@@ -122,7 +123,7 @@ struct GarageWithContext {
 }
 
 /// Run the garage command
-pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
         GarageAction::List { context } => {
             let now = chrono::Utc::now();
@@ -303,11 +304,14 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
             }
         }
         GarageAction::Close { name, force } => {
-            let client = GarageClient::local().await?;
+            let client = GarageClient::local().await.map_err(CliError::from)?;
             // Check if garage exists first
-            let garages = client.list().await?;
+            let garages = client.list().await.map_err(CliError::from)?;
             if !garages.iter().any(|g| g.name == name) {
-                return Err(format!("Garage '{}' not found.\n\nTry: moto garage list", name).into());
+                return Err(CliError::not_found(format!(
+                    "Garage '{}' not found.\n\nTry: moto garage list",
+                    name
+                )));
             }
 
             // Prompt for confirmation unless --force is used
@@ -350,7 +354,9 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
             if follow {
                 // Streaming mode - --json is not supported with --follow
                 if flags.json {
-                    return Err("JSON output is not supported with --follow".into());
+                    return Err(CliError::invalid_input(
+                        "JSON output is not supported with --follow",
+                    ));
                 }
 
                 if !flags.quiet {
@@ -439,38 +445,44 @@ fn format_duration(seconds: i64) -> String {
 }
 
 /// Parse a duration string like "5m", "1h", "2d" into seconds.
-fn parse_duration(s: &str) -> Result<i64, Box<dyn std::error::Error>> {
+fn parse_duration(s: &str) -> Result<i64> {
     let s = s.trim();
     if s.is_empty() {
-        return Err("empty duration".into());
+        return Err(CliError::invalid_input("empty duration"));
     }
 
     let (num_str, unit) = s.split_at(s.len() - 1);
     let num: i64 = num_str
         .parse()
-        .map_err(|_| format!("invalid duration number: {num_str}"))?;
+        .map_err(|_| CliError::invalid_input(format!("invalid duration number: {num_str}")))?;
 
     let multiplier = match unit {
         "s" => 1,
         "m" => 60,
         "h" => 3600,
         "d" => 86400,
-        _ => return Err(format!("invalid duration unit: {unit} (use s, m, h, or d)").into()),
+        _ => {
+            return Err(CliError::invalid_input(format!(
+                "invalid duration unit: {unit} (use s, m, h, or d)"
+            )))
+        }
     };
 
     Ok(num * multiplier)
 }
 
 /// Parse a TTL duration string with validation (max 48h).
-fn parse_ttl(s: &str) -> Result<i64, Box<dyn std::error::Error>> {
+fn parse_ttl(s: &str) -> Result<i64> {
     let seconds = parse_duration(s)?;
     const MAX_TTL_SECONDS: i64 = 48 * 3600; // 48 hours
 
     if seconds <= 0 {
-        return Err("TTL must be positive".into());
+        return Err(CliError::invalid_input("TTL must be positive"));
     }
     if seconds > MAX_TTL_SECONDS {
-        return Err(format!("TTL exceeds maximum of 48h (got {s})").into());
+        return Err(CliError::invalid_input(format!(
+            "TTL exceeds maximum of 48h (got {s})"
+        )));
     }
 
     Ok(seconds)

@@ -8,6 +8,7 @@ use tracing_subscriber::EnvFilter;
 mod cli;
 mod commands;
 mod config;
+mod error;
 mod names;
 
 use cli::{Cli, Command};
@@ -44,6 +45,6 @@ async fn main() {
         } else {
             eprintln!("Error: {e}");
         }
-        std::process::exit(1);
+        std::process::exit(i32::from(e.exit_code));
     }
 }
