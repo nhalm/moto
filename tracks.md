@@ -71,3 +71,23 @@
 **Validated:** `cargo test --workspace` passes (23 unit tests + 2 doctests, 4 ignored K8s integration tests)
 
 **Next:** Create `moto-cli` crate with basic CLI structure and garage commands
+
+---
+
+### 2026-01-20: CLI Crate
+
+**Spec:** project-structure.md
+
+**Implemented:**
+- Created `moto-cli` crate with:
+  - Binary named `moto` with clap-based CLI parsing
+  - Top-level command structure: `moto <command>`
+  - `moto garage list` - lists all garages in table format
+  - `moto garage open <name> [--owner <owner>]` - opens a new garage
+  - `moto garage close <id>` - closes a garage (supports short ID prefix)
+  - ID prefix resolution for close command (matches by UUID prefix)
+  - Tracing-subscriber for logging with RUST_LOG env filter
+
+**Validated:** `cargo test --workspace` passes (23 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+**Next:** project-structure.md is complete! Move to moto-club spec or define CLI spec further

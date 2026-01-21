@@ -1,0 +1,27 @@
+[package]
+name = "moto-cli"
+description = "CLI for moto - the Bars (handlebars)"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "moto"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+moto-common.workspace = true
+moto-club-types.workspace = true
+moto-garage.workspace = true
+clap.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+thiserror.workspace = true

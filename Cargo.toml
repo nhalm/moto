@@ -52,6 +52,7 @@ moto-common = { path = "crates/moto-common" }
 moto-club-types = { path = "crates/moto-club-types" }
 moto-k3s = { path = "crates/moto-k3s" }
 moto-garage = { path = "crates/moto-garage" }
+moto-cli = { path = "crates/moto-cli" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
