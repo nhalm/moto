@@ -9,13 +9,6 @@
 
 Defines the Makefile structure, target naming conventions, and groupings for the moto project.
 
-## Jobs to Be Done
-
-- [ ] Define target naming conventions
-- [ ] Define target groupings
-- [ ] Define help output format
-- [ ] List all initial targets
-
 ## Specification
 
 _To be written_

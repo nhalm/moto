@@ -35,7 +35,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | Spec | Status | Description |
 |------|--------|-------------|
 | [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
-| [moto-cli](moto-cli.md) | Bare Frame | CLI commands, args, UX |
+| [moto-cli](moto-cli.md) | Ready to Rip | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Bare Frame | How code flows via jj from garage to main |
 
 ## Phase 1: Infrastructure (The Garage)
@@ -53,6 +53,8 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [garage-lifecycle](garage-lifecycle.md) | Wrenching | Full lifecycle with WebSocket, TTL |
 | [bike](bike.md) | Wrenching | Runtime/deployment model |
 | [supporting-services](supporting-services.md) | Bare Frame | Postgres, Redis deployment |
+| [moto-cron](moto-cron.md) | Bare Frame | Scheduled tasks (TTL cleanup), K8s CronJobs |
+| [wgtunnel](wgtunnel.md) | Bare Frame | WireGuard tunnels for terminal/SSH access |
 
 ## Phase 2: Tokenization (The Vault)
 

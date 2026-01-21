@@ -14,18 +14,6 @@ A bike is a running instance - the motorcycle on the road. While a garage is whe
 - Bike = motorcycle (production)
 - Engine = the service running inside (club, vault, proxy, etc.)
 
-## Jobs to Be Done
-
-- [x] Define bike lifecycle (build, deploy, stop)
-- [x] Define bike configuration
-- [x] Define relationship between garage and bike
-- [x] Define how engines run inside bikes
-- [x] Define scaling model (multiple bikes)
-- [x] Define health checks and monitoring
-- [x] Define logging and observability
-- [ ] Define K8s deployment manifests
-- [ ] Define Helm chart structure
-
 ## Specification
 
 ### Bike vs Garage

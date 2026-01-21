@@ -7,19 +7,19 @@
 
 ## Overview
 
-The motorcycle club - central orchestration service for the moto platform. Where the riders gather, garages are managed, and bikes get dispatched. Handles garage and bike lifecycles, WebSocket relay for remote execution, TTL enforcement, and K8s coordination.
+The motorcycle club - central orchestration service for the moto platform. Where the riders gather, garages are managed, and bikes get dispatched. Handles garage and bike lifecycles, WireGuard coordination for remote access, TTL enforcement, and K8s coordination.
 
-## Jobs to Be Done
-
-- [x] Define server responsibilities
-- [x] Define architecture
-- [x] Define API endpoints
-- [x] Define WebSocket protocol
-- [x] Define garage management
-- [x] Define bike management
-- [ ] Define authentication/authorization
-- [ ] Define database schema
-- [ ] Define configuration
+> **TODO: Connectivity Architecture**
+>
+> Two transports for different purposes:
+> 1. **WireGuard** - Terminal/SSH access to garages (replaces kubectl exec proxy)
+> 2. **WebSocket/SSE** - Streaming logs, TTL warnings, real-time events
+>
+> Changes needed:
+> - Remove WebSocket terminal proxy (stdin/stdout relay)
+> - Add WireGuard coordination API (peer registration, IP allocation)
+> - Keep WebSocket/SSE for streaming (logs, events)
+> - See [wgtunnel.md](wgtunnel.md) for WireGuard system spec
 
 ## Specification
 
@@ -83,12 +83,18 @@ crates/
 │       ├── bikes.rs          # Bike endpoints
 │       └── health.rs         # Health/info endpoints
 │
-├── moto-club-ws/             # Library: WebSocket handlers
+├── moto-club-wg/             # Library: WireGuard coordination
 │   └── src/
 │       ├── lib.rs
-│       ├── attach.rs         # Terminal attachment
-│       ├── logs.rs           # Log streaming
-│       └── protocol.rs       # Frame types, encoding
+│       ├── peers.rs          # Peer registration
+│       ├── ipam.rs           # IP address allocation
+│       └── derp.rs           # DERP relay coordination
+│
+├── moto-club-stream/         # Library: Streaming (SSE/WebSocket for logs, events)
+│   └── src/
+│       ├── lib.rs
+│       ├── logs.rs           # Log streaming (SSE)
+│       └── events.rs         # Real-time events (WebSocket)
 │
 ├── moto-club-garage/         # Library: Garage service logic
 │   └── src/
@@ -191,34 +197,38 @@ GET    /health                      Health check
 GET    /api/v1/info                 Server info, version
 ```
 
-### WebSocket Endpoints
+### WireGuard Coordination API
 
-**Garage attachment:**
+> **TODO: Add WireGuard for terminal access**
+>
+> Terminal access (NEW - WireGuard):
+> ```
+> CLI → WireGuard tunnel → SSH → garage pod
+> moto-club only coordinates (peer registration, IP allocation)
+> ```
+
+**Endpoints (to be defined):**
 ```
-/ws/v1/garages/{id}/attach
-```
-
-Bidirectional stream for terminal I/O.
-
-**Protocol:**
-
-```
-Frame types:
-- 0x01: stdin (binary)      CLI → Server → Pod
-- 0x02: stdout (binary)     Pod → Server → CLI
-- 0x03: stderr (binary)     Pod → Server → CLI
-- 0x10: resize (JSON)       {"cols": 80, "rows": 24}
-- 0x11: heartbeat           Both directions, every 30s
-- 0x12: detach              CLI → Server (graceful disconnect)
-- 0xFF: error (JSON)        {"code": "...", "message": "..."}
+POST   /api/v1/wg/register          Register peer (garage or client)
+GET    /api/v1/wg/peers/{id}        Get peer info (public key, endpoints)
+DELETE /api/v1/wg/peers/{id}        Deregister peer
+POST   /api/v1/wg/allocate-ip       Allocate IP from pool
 ```
 
-**Bike logs:**
+### WebSocket/SSE Endpoints
+
+> **Keep WebSocket/SSE for streaming and real-time events**
+
+**Streaming logs:**
 ```
-/ws/v1/bikes/{id}/logs?follow=true&tail=100
+GET /api/v1/bikes/{id}/logs?follow=true&tail=100   (SSE)
+GET /api/v1/garages/{id}/logs?follow=true          (SSE)
 ```
 
-Streams log output, similar to `kubectl logs -f`.
+**Real-time events (WebSocket):**
+```
+/ws/v1/events    Subscribe to events (TTL warnings, status changes, etc.)
+```
 
 ### Garage Service
 

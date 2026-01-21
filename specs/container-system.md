@@ -11,21 +11,6 @@ The container system defines how Moto builds, distributes, and runs OCI containe
 
 This spec covers the build pipeline, registry strategy, and lifecycle that connects these two container types.
 
-## Jobs to Be Done
-
-- [x] Define container philosophy and types
-- [x] Define build pipeline architecture
-- [x] Define Nix-based image building
-- [x] Define registry and tagging strategy
-- [x] Define CI/CD pipeline
-- [x] Define reproducibility guarantees
-- [x] Define multi-arch build strategy
-- [x] Define cache strategy
-- [x] Define image signing and verification (cosign)
-- [x] Define vulnerability scanning integration (trivy)
-- [x] Define SBOM generation
-- [x] Add complete flake.nix with crane integration
-
 ## Specification
 
 ### Philosophy

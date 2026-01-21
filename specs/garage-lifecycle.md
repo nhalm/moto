@@ -7,21 +7,15 @@
 
 ## Overview
 
-Defines the lifecycle operations for garages (wrenching environments). Covers creation, attachment, detachment, syncing, and cleanup. Supports multiple concurrent garages and remote execution via WebSocket.
+Defines the lifecycle operations for garages (wrenching environments). Covers creation, attachment, detachment, and cleanup. Supports multiple concurrent garages and remote execution via WireGuard.
 
-## Jobs to Be Done
-
-- [x] Define garage states
-- [x] Define `moto garage open` behavior
-- [x] Define `moto garage enter` behavior
-- [x] Define `moto garage detach` behavior
-- [x] Define `moto garage sync` behavior
-- [x] Define `moto garage list` behavior
-- [x] Define `moto garage close` behavior
-- [x] Define TTL and auto-cleanup
-- [x] Define WebSocket model for remote
-- [ ] Define error handling and recovery
-- [ ] Define resource limits per garage
+> **TODO: Update connectivity model**
+>
+> Two transports:
+> 1. **WireGuard** - Terminal/SSH access (replaces WebSocket kubectl exec proxy)
+> 2. **WebSocket/SSE** - Streaming logs, TTL warnings, events
+>
+> See [wgtunnel.md](wgtunnel.md) for WireGuard spec
 
 ## Specification
 
@@ -195,27 +189,31 @@ Garages have a time-to-live to prevent resource leaks.
 moto garage extend <id> --ttl 2h
 ```
 
-### WebSocket Model
+### Connectivity Model
 
-For remote garage execution, use WebSocket for stdin/stdout relay.
+> **TODO: Replace with WireGuard + WebSocket/SSE**
 
+**Terminal access (WireGuard):**
 ```
-┌──────────────┐     WebSocket      ┌──────────────┐      exec      ┌──────────────┐
-│   moto CLI   │ ◀───────────────▶ │  moto-server │ ◀────────────▶ │  Garage Pod  │
-│   (local)    │     /ws/garage    │   (remote)   │    K8s exec    │   (remote)   │
-└──────────────┘                    └──────────────┘                └──────────────┘
+┌──────────────┐     WireGuard      ┌──────────────┐
+│   moto CLI   │ ◀────────────────▶ │  Garage Pod  │
+│   (local)    │   tunnel + SSH     │   (remote)   │
+└──────────────┘                    └──────────────┘
+        │
+        │  coordinate
+        ▼
+┌──────────────┐
+│  moto-club   │  (peer registration, IP allocation only)
+└──────────────┘
 ```
 
-**WebSocket endpoints:**
+**Streaming (WebSocket/SSE):**
 ```
-/ws/garage/{id}/attach    Attach to garage (bidirectional)
-/ws/garage/{id}/logs      Stream garage logs
+/api/v1/garages/{id}/logs    Stream garage logs (SSE)
+/ws/v1/events                TTL warnings, status changes (WebSocket)
 ```
 
-**Protocol:**
-- Binary frames for stdin/stdout
-- JSON frames for control messages (resize, detach, etc.)
-- Heartbeat every 30s to detect disconnection
+See [wgtunnel.md](wgtunnel.md) for WireGuard details.
 
 ### Multiple Garages
 

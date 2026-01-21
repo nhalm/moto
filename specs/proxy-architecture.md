@@ -9,15 +9,6 @@
 
 Defines the proxy layer that sits between customers and their upstream services. Handles tokenization on inbound, detokenization on outbound.
 
-## Jobs to Be Done
-
-- [ ] Define inbound proxy flow (data comes in, gets tokenized)
-- [ ] Define outbound proxy flow (tokens go out, get detokenized)
-- [ ] Define proxy deployment model
-- [ ] Define TLS termination strategy
-- [ ] Define performance requirements
-- [ ] Define high availability approach
-
 ## Specification
 
 _To be written_

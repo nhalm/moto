@@ -9,19 +9,6 @@
 
 Secrets manager for moto. Provides credentials to garages (wrenching) and bikes (ripping) without baking secrets into containers or code. Uses SPIFFE-inspired identity for authentication and ABAC for authorization.
 
-## Jobs to Be Done
-
-- [x] Define architecture and components
-- [x] Define SPIFFE integration model
-- [x] Define secret scoping
-- [x] Define authentication flow
-- [x] Define secret retrieval flow
-- [x] Define encryption model
-- [x] Define access control model
-- [ ] Define secret rotation
-- [ ] Define CLI commands for secret management
-- [ ] Define audit logging specifics
-
 ## Specification
 
 ### Architecture

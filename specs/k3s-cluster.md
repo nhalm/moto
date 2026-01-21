@@ -9,14 +9,6 @@
 
 Defines the local k3s cluster setup used to run the garage environment. Covers installation, persistence, and resource allocation.
 
-## Jobs to Be Done
-
-- [ ] Define k3s installation process
-- [ ] Define cluster persistence (survive reboots?)
-- [ ] Define resource allocation (CPU, memory limits)
-- [ ] Define cluster networking
-- [ ] Define upgrade/maintenance process
-
 ## Specification
 
 _To be written_

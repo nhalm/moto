@@ -9,14 +9,6 @@
 
 Defines the isolation model for the garage environment. Network policies, resource limits, secrets handling - everything that keeps Claude Code safe to run in YOLO mode.
 
-## Jobs to Be Done
-
-- [ ] Define network policies (egress allowed for packages/docs)
-- [ ] Define resource limits (CPU, memory, disk)
-- [ ] Define filesystem isolation (only mounted code directory)
-- [ ] Define secrets handling (fake/dev credentials only)
-- [ ] Define what "safe" means concretely
-
 ## Specification
 
 _To be written_

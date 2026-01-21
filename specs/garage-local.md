@@ -9,13 +9,6 @@
 
 Local garage operations using K8s directly. No server, no WebSocket - just CLI talking to K8s. This is the foundation before adding remote/server capabilities.
 
-## Jobs to Be Done
-
-- [x] Define scope (local only, no moto-club dependency)
-- [x] Define types needed
-- [x] Define K8s operations needed
-- [x] Define CLI commands
-
 ## Specification
 
 ### Scope

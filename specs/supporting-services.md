@@ -9,14 +9,6 @@
 
 Defines the supporting services (Postgres, Redis, etc.) that run inside the garage to support development and testing.
 
-## Jobs to Be Done
-
-- [ ] Define which services are included
-- [ ] Define how services are deployed (helm charts, raw manifests)
-- [ ] Define service configuration
-- [ ] Define data persistence (ephemeral vs persistent)
-- [ ] Define how to add new services
-
 ## Specification
 
 _To be written_

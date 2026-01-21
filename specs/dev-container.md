@@ -9,17 +9,6 @@
 
 The dev container is the garage environment - where Claude Code wrenches on the codebase. This spec defines **what's inside** the garage container. For how it's built, see [container-system.md](container-system.md).
 
-## Jobs to Be Done
-
-- [x] Define container philosophy
-- [x] Define included tooling
-- [x] Define Claude Code setup
-- [x] Define network configuration
-- [x] Define volume mounts
-- [x] Define environment variables
-- [x] Define security model
-- [x] Define resource limits
-
 ## Specification
 
 ### Philosophy
@@ -108,6 +97,19 @@ The dev container is the garage environment - where Claude Code wrenches on the 
 | Tool | Purpose |
 |------|---------|
 | claude-code | Claude CLI for wrenching |
+
+**Connectivity (TODO - WireGuard):**
+
+| Tool | Purpose |
+|------|---------|
+| wireguard-tools | WireGuard client for tunnel |
+| openssh-server | SSH server for terminal access |
+
+> **TODO: Add WireGuard + SSH for terminal access**
+> - Garage pod runs WireGuard daemon (registers with moto-club)
+> - SSH server listens on WireGuard interface
+> - CLI connects via WireGuard tunnel → SSH
+> - See [wgtunnel.md](wgtunnel.md) for details
 
 ### Claude Code Configuration
 

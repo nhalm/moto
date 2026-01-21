@@ -9,14 +9,6 @@
 
 Defines how Jujutsu (jj) is used to manage code flow between the garage environment and the main repository.
 
-## Jobs to Be Done
-
-- [ ] Define jj setup inside garage
-- [ ] Define branching/change strategy
-- [ ] Define sync workflow (garage to main)
-- [ ] Define conflict resolution approach
-- [ ] Define integration with git remote
-
 ## Specification
 
 _To be written_
