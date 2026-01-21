@@ -109,21 +109,3 @@
 
 **Next:** project-structure.md v1.1 complete! Next spec: garage-local.md
 
----
-
-### 2026-01-21: Garage Local Operations
-
-**Spec:** garage-local.md v0.1
-
-**Implemented:** (previously built as part of project-structure work)
-- `moto garage list` - queries K8s namespaces with `moto.dev/type=garage` label
-- `moto garage open [--name NAME] [--owner OWNER]` - creates namespace with moto labels
-- `moto garage close <id>` - deletes garage namespace (supports short ID prefix)
-- `GarageState` enum: `Pending`, `Running`, `Ready`, `Terminating`, `Terminated`
-- `GarageInfo` struct with id, name, namespace, state, created_at
-- K8s labels: `moto.dev/type`, `moto.dev/id`, `moto.dev/name`, `moto.dev/owner`
-- `GarageMode::Local` for direct K8s access via kubeconfig
-
-**Validated:** `cargo test --workspace` passes (19 unit tests + 2 doctests, 4 ignored K8s integration tests)
-
-**Next:** garage-local.md v0.1 complete! Next specs: moto-club or garage-lifecycle (both Wrenching)
