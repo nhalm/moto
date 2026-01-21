@@ -1,5 +1,7 @@
 # Moto Implementation Log
 
+<!-- PREPEND new entries here, right after this comment. Newest entries at top. -->
+
 ## Log
 
 ### 2026-01-20: Workspace Foundation

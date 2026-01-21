@@ -6,7 +6,7 @@ Your task is to implement ONE thing, then validate it works.
 IMPORTANT:
 
 - Only implement specs with status "Ready to Rip"
-- Never change spec status except "Ready to Rip" → "Ripping" (after implementation)
+- NEVER change spec status in specs/README.md or individual spec files
 - Only log work in tracks.md if you actually wrote code
 - Update tracks.md when done
 - Code is the source of TRUTH

@@ -13,6 +13,8 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 **Agents have autonomy** on implementation. The spec steers direction, the agent decides the code.
 
+**Status is human-controlled.** Agents NEVER change spec status. Only humans move specs between states (Bare Frame → Wrenching → Ready to Rip → Ripping).
+
 **Changelog:** When a spec returns to "Ready to Rip" after being "Ripping", check the **Changelog** section at the bottom of the spec. It documents what changed between versions. Implement the delta, not the entire spec.
 
 **Version tracking:** tracks.md entries include spec versions (e.g., `project-structure.md v1.0`). Compare the version in tracks.md against the current spec version. If the spec version is higher, check the changelog and implement the delta.
@@ -35,7 +37,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | Spec | Status | Description |
 |------|--------|-------------|
 | [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
-| [moto-cli](moto-cli.md) | Ripping | CLI commands, args, UX |
+| [moto-cli](moto-cli.md) | Ready to Rip | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Bare Frame | How code flows via jj from garage to main |
 
 ## Phase 1: Infrastructure (The Garage)
