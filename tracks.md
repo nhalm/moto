@@ -4,6 +4,20 @@
 
 ## Log
 
+### 2026-01-21: CLI Spec v0.2 Verification
+
+**Spec:** moto-cli.md v0.2
+
+**Verified:**
+- `--owner` flag already present on `moto garage open` (implemented in prior work)
+- `-n` short flag for `--tail` already present on `moto garage logs` (implemented in prior work)
+- Spec v0.2 changelog confirms these were already implemented; spec updated to match code
+
+**Validated:** `cargo test --workspace` passes (37 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+
+---
+
 ### 2026-01-21: Auto-Generated Garage Names
 
 **Spec:** moto-cli.md v0.1
