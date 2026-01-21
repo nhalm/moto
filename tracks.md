@@ -4,6 +4,23 @@
 
 ## Log
 
+### 2026-01-21: Garage Close Improvements
+
+**Spec:** moto-cli.md v0.1
+
+**Implemented:**
+- Changed `moto garage close` to accept garage name instead of ID (matches spec)
+- Added `--force` flag to skip confirmation prompt
+- Added confirmation prompt before closing (unless --force or --json)
+- Added `close_by_name()` method to `GarageClient` in `moto-garage`
+- Error message now includes suggestion `Try: moto garage list` for not-found errors
+- Removed `resolve_garage_id()` function (no longer needed)
+
+**Validated:** `cargo test --workspace` passes (31 unit tests + 2 doctests, 4 ignored K8s integration tests)
+
+
+---
+
 ### 2026-01-21: Garage List Output Format
 
 **Spec:** moto-cli.md v0.1

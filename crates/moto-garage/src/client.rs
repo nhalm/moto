@@ -108,6 +108,19 @@ impl GarageClient {
         }
     }
 
+    /// Closes (deletes) a garage by name.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the garage doesn't exist or deletion fails.
+    #[instrument(skip(self), fields(garage.name = %name))]
+    pub async fn close_by_name(&self, name: &str) -> Result<()> {
+        match &self.mode {
+            GarageMode::Local => self.close_by_name_local(name).await,
+            GarageMode::Remote { .. } => Err(Error::RemoteNotImplemented),
+        }
+    }
+
     /// Gets logs from a garage.
     ///
     /// # Arguments
@@ -237,6 +250,23 @@ impl GarageClient {
             .iter()
             .find(|g| &g.id == id)
             .ok_or_else(|| Error::GarageNotFound(id.to_string()))?;
+
+        debug!(namespace = %garage.namespace, "deleting garage namespace");
+        k8s.delete_namespace(&garage.namespace).await?;
+
+        Ok(())
+    }
+
+    /// Closes a garage by name in local mode.
+    async fn close_by_name_local(&self, name: &str) -> Result<()> {
+        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
+
+        // Find the garage by name
+        let garages = self.list_local().await?;
+        let garage = garages
+            .iter()
+            .find(|g| g.name == name)
+            .ok_or_else(|| Error::GarageNotFound(name.to_string()))?;
 
         debug!(namespace = %garage.namespace, "deleting garage namespace");
         k8s.delete_namespace(&garage.namespace).await?;

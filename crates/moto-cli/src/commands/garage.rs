@@ -2,7 +2,6 @@
 
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
-use moto_club_types::GarageId;
 use moto_garage::GarageClient;
 use serde::Serialize;
 use std::io::{self, Write};
@@ -43,8 +42,12 @@ pub enum GarageAction {
 
     /// Close an existing garage
     Close {
-        /// ID of the garage to close (full UUID or short prefix)
-        id: String,
+        /// Name of the garage to close
+        name: String,
+
+        /// Skip confirmation prompt
+        #[arg(long)]
+        force: bool,
     },
 
     /// View logs from a garage
@@ -208,18 +211,31 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<(), Box<dyn 
                 }
             }
         }
-        GarageAction::Close { id } => {
-            let garage_id = resolve_garage_id(&client, &id).await?;
+        GarageAction::Close { name, force } => {
+            // Check if garage exists first
             let garages = client.list().await?;
-            let name = garages
-                .iter()
-                .find(|g| g.id == garage_id)
-                .map(|g| g.name.clone())
-                .unwrap_or_else(|| garage_id.short());
-            if !flags.quiet && !flags.json {
-                println!("Closing garage {}...", garage_id.short());
+            if !garages.iter().any(|g| g.name == name) {
+                return Err(format!("Garage '{}' not found.\n\nTry: moto garage list", name).into());
             }
-            client.close(&garage_id).await?;
+
+            // Prompt for confirmation unless --force is used
+            if !force && !flags.json {
+                eprint!("Close garage '{name}'? [y/N] ");
+                io::stderr().flush()?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                if !input.trim().eq_ignore_ascii_case("y") {
+                    if !flags.quiet {
+                        eprintln!("Aborted.");
+                    }
+                    return Ok(());
+                }
+            }
+
+            if !flags.quiet && !flags.json {
+                println!("Closing garage '{name}'...");
+            }
+            client.close_by_name(&name).await?;
             if flags.json {
                 let json = GarageCloseJson {
                     name,
@@ -365,33 +381,6 @@ fn parse_ttl(s: &str) -> Result<i64, Box<dyn std::error::Error>> {
     }
 
     Ok(seconds)
-}
-
-/// Resolve a garage ID from a full UUID or short prefix
-async fn resolve_garage_id(
-    client: &GarageClient,
-    id_str: &str,
-) -> Result<GarageId, Box<dyn std::error::Error>> {
-    // Try parsing as full UUID first
-    if let Ok(id) = id_str.parse::<GarageId>() {
-        return Ok(id);
-    }
-
-    // Otherwise, treat as a prefix and search
-    let garages = client.list().await?;
-    let matches: Vec<_> = garages
-        .iter()
-        .filter(|g| g.id.to_string().starts_with(id_str) || g.id.short().starts_with(id_str))
-        .collect();
-
-    match matches.len() {
-        0 => Err(format!("No garage found matching '{id_str}'").into()),
-        1 => Ok(matches[0].id.clone()),
-        _ => {
-            let ids: Vec<_> = matches.iter().map(|g| g.id.short()).collect();
-            Err(format!("Ambiguous ID '{id_str}', matches: {}", ids.join(", ")).into())
-        }
-    }
 }
 
 #[cfg(test)]
