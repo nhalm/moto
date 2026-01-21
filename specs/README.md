@@ -26,6 +26,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | Bare Frame | Placeholder - needs spec work |
 | Wrenching | Actively being specified |
 | Ready to Rip | Spec complete, ready for implementation |
+| Ripping | Fully implemented |
 
 ---
 
@@ -33,7 +34,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [project-structure](project-structure.md) | Ready to Rip | Directory layout, crate organization, workspace |
+| [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
 | [moto-cli](moto-cli.md) | Bare Frame | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Bare Frame | How code flows via jj from garage to main |
 
@@ -48,7 +49,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [container-system](container-system.md) | Wrenching | Build pipeline, registry |
 | [k3s-cluster](k3s-cluster.md) | Bare Frame | Local cluster setup, persistence |
 | [garage-isolation](garage-isolation.md) | Bare Frame | Network policies, resource limits |
-| [garage-local](garage-local.md) | Ready to Rip | Local K8s operations (no server) |
+| [garage-local](garage-local.md) | Wrenching | Local K8s operations (no server) |
 | [garage-lifecycle](garage-lifecycle.md) | Wrenching | Full lifecycle with WebSocket, TTL |
 | [bike](bike.md) | Wrenching | Runtime/deployment model |
 | [supporting-services](supporting-services.md) | Bare Frame | Postgres, Redis deployment |

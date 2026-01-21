@@ -6,7 +6,8 @@
       "Bash(/opt/homebrew/bin/cargo clippy --workspace --all-targets)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(nix flake show:*)"
+      "Bash(nix flake show:*)",
+      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && head -10 {}')"
     ]
   }
 }
