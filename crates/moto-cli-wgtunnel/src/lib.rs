@@ -83,5 +83,9 @@ pub use enter::{
 pub use status::{TunnelStatusInfo, TunnelStatusResponse, format_status_table, get_tunnel_status};
 pub use tunnel::{
     DeviceIdentity, ENV_WG_KEY_FILE, KEY_DIR_PERMISSIONS, KEY_FILE_PERMISSIONS, TunnelError,
-    TunnelManager, TunnelSession, TunnelStatus,
+    TunnelManager, TunnelSession, TunnelStatus, DEFAULT_KEEPALIVE_SECS,
+};
+// Re-export WireGuard engine types for convenience
+pub use moto_wgtunnel_engine::tunnel::{
+    TunnelEvent as WgTunnelEvent, TunnelState as WgTunnelState,
 };

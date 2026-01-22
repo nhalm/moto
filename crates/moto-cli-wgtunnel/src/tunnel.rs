@@ -38,6 +38,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use moto_wgtunnel_conn::PathType;
+use moto_wgtunnel_engine::tunnel::{
+    Tunnel as WgTunnel, TunnelBuilder as WgTunnelBuilder, TunnelError as WgTunnelError,
+    TunnelEvent as WgTunnelEvent, TunnelState as WgTunnelState,
+};
 use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPrivateKey, WgPublicKey};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -103,6 +107,10 @@ pub enum TunnelError {
     /// Invalid device ID.
     #[error("invalid device ID: {0}")]
     InvalidDeviceId(String),
+
+    /// WireGuard tunnel error.
+    #[error("WireGuard tunnel error: {0}")]
+    WireGuard(#[from] WgTunnelError),
 }
 
 /// Device identity for WireGuard connections.
@@ -180,7 +188,6 @@ impl std::fmt::Display for TunnelStatus {
 ///
 /// Each session represents an active or pending connection to a garage.
 /// Sessions are managed by [`TunnelManager`].
-#[derive(Debug)]
 pub struct TunnelSession {
     /// Session ID (from moto-club).
     session_id: String,
@@ -205,7 +212,31 @@ pub struct TunnelSession {
 
     /// Current connection status.
     status: TunnelStatus,
+
+    /// WireGuard tunnel instance (boringtun-backed).
+    ///
+    /// This is `None` until the tunnel is configured, then holds the
+    /// active WireGuard state machine for packet encryption/decryption.
+    wg_tunnel: Option<WgTunnel>,
 }
+
+impl std::fmt::Debug for TunnelSession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TunnelSession")
+            .field("session_id", &self.session_id)
+            .field("garage_id", &self.garage_id)
+            .field("garage_name", &self.garage_name)
+            .field("client_ip", &self.client_ip)
+            .field("garage_ip", &self.garage_ip)
+            .field("garage_public_key", &self.garage_public_key)
+            .field("status", &self.status)
+            .field("wg_tunnel", &self.wg_tunnel.as_ref().map(|t| t.state()))
+            .finish_non_exhaustive()
+    }
+}
+
+/// Default WireGuard keepalive interval (25 seconds).
+pub const DEFAULT_KEEPALIVE_SECS: u64 = 25;
 
 impl TunnelSession {
     /// Create a new tunnel session.
@@ -228,6 +259,7 @@ impl TunnelSession {
             garage_public_key,
             derp_map,
             status: TunnelStatus::Initializing,
+            wg_tunnel: None,
         }
     }
 
@@ -300,6 +332,177 @@ impl TunnelSession {
     #[must_use]
     pub fn is_error(&self) -> bool {
         matches!(self.status, TunnelStatus::Error { .. })
+    }
+
+    /// Check if the WireGuard tunnel is configured.
+    #[must_use]
+    pub fn is_wg_configured(&self) -> bool {
+        self.wg_tunnel.is_some()
+    }
+
+    /// Get the WireGuard tunnel state, if configured.
+    #[must_use]
+    pub fn wg_state(&self) -> Option<WgTunnelState> {
+        self.wg_tunnel.as_ref().map(|t| t.state())
+    }
+
+    /// Check if the WireGuard handshake is complete.
+    #[must_use]
+    pub fn is_wg_established(&self) -> bool {
+        self.wg_tunnel
+            .as_ref()
+            .map(|t| t.is_established())
+            .unwrap_or(false)
+    }
+
+    /// Configure the WireGuard tunnel with the given private key.
+    ///
+    /// This creates the boringtun tunnel instance that handles packet
+    /// encryption/decryption. The tunnel is configured with:
+    /// - Our device's private key
+    /// - The garage's public key
+    /// - Default keepalive interval (25 seconds)
+    ///
+    /// # Arguments
+    ///
+    /// * `private_key` - Our device's WireGuard private key
+    ///
+    /// # Errors
+    ///
+    /// Returns error if tunnel creation fails.
+    pub fn configure_wg_tunnel(&mut self, private_key: &WgPrivateKey) -> Result<(), TunnelError> {
+        self.configure_wg_tunnel_with_keepalive(
+            private_key,
+            std::time::Duration::from_secs(DEFAULT_KEEPALIVE_SECS),
+        )
+    }
+
+    /// Configure the WireGuard tunnel with custom keepalive.
+    ///
+    /// # Arguments
+    ///
+    /// * `private_key` - Our device's WireGuard private key
+    /// * `keepalive` - Keepalive interval for NAT traversal
+    ///
+    /// # Errors
+    ///
+    /// Returns error if tunnel creation fails.
+    pub fn configure_wg_tunnel_with_keepalive(
+        &mut self,
+        private_key: &WgPrivateKey,
+        keepalive: std::time::Duration,
+    ) -> Result<(), TunnelError> {
+        // Create a copy of the private key by converting to/from bytes
+        // (WgPrivateKey doesn't implement Clone to prevent accidental exposure)
+        let private_key_copy = WgPrivateKey::from_bytes(&private_key.as_bytes())
+            .map_err(|e| TunnelError::ConnectionFailed(format!("invalid private key: {e}")))?;
+
+        let tunnel = WgTunnelBuilder::new(private_key_copy, self.garage_public_key.clone())
+            .keepalive(keepalive)
+            .build()?;
+
+        debug!(
+            session_id = %self.session_id,
+            garage = %self.garage_name,
+            tunnel_index = tunnel.index(),
+            "WireGuard tunnel configured"
+        );
+
+        self.wg_tunnel = Some(tunnel);
+        Ok(())
+    }
+
+    /// Initiate the WireGuard handshake.
+    ///
+    /// Returns the handshake initiation packet that should be sent to the peer
+    /// (via MagicConn). The tunnel transitions to `Handshaking` state.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - Tunnel is not configured
+    /// - Handshake initiation fails
+    pub fn initiate_handshake(&mut self) -> Result<Vec<WgTunnelEvent>, TunnelError> {
+        let tunnel = self
+            .wg_tunnel
+            .as_mut()
+            .ok_or_else(|| TunnelError::ConnectionFailed("WireGuard tunnel not configured".into()))?;
+
+        let events = tunnel.force_handshake()?;
+
+        debug!(
+            session_id = %self.session_id,
+            events_count = events.len(),
+            "handshake initiated"
+        );
+
+        Ok(events)
+    }
+
+    /// Encapsulate an IP packet for sending over the WireGuard tunnel.
+    ///
+    /// Takes a plaintext IP packet and returns encrypted WireGuard packets
+    /// to send to the peer via MagicConn.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip_packet` - The IP packet to encapsulate
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - Tunnel is not configured
+    /// - Encapsulation fails
+    pub fn encapsulate(&mut self, ip_packet: &[u8]) -> Result<Vec<WgTunnelEvent>, TunnelError> {
+        let tunnel = self
+            .wg_tunnel
+            .as_mut()
+            .ok_or_else(|| TunnelError::ConnectionFailed("WireGuard tunnel not configured".into()))?;
+
+        let events = tunnel.encapsulate(ip_packet)?;
+        Ok(events)
+    }
+
+    /// Decapsulate a received WireGuard packet.
+    ///
+    /// Takes an encrypted WireGuard packet from the peer and returns
+    /// decrypted IP packets for processing.
+    ///
+    /// # Arguments
+    ///
+    /// * `wg_packet` - The encrypted WireGuard packet
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - Tunnel is not configured
+    /// - Decapsulation fails
+    pub fn decapsulate(&mut self, wg_packet: &[u8]) -> Result<Vec<WgTunnelEvent>, TunnelError> {
+        let tunnel = self
+            .wg_tunnel
+            .as_mut()
+            .ok_or_else(|| TunnelError::ConnectionFailed("WireGuard tunnel not configured".into()))?;
+
+        let events = tunnel.decapsulate(wg_packet)?;
+        Ok(events)
+    }
+
+    /// Check for pending timer actions.
+    ///
+    /// Should be called periodically to handle keepalives and timeouts.
+    /// Returns any packets that need to be sent.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if timer processing fails.
+    pub fn update_timers(&mut self) -> Result<Vec<WgTunnelEvent>, TunnelError> {
+        let tunnel = self
+            .wg_tunnel
+            .as_mut()
+            .ok_or_else(|| TunnelError::ConnectionFailed("WireGuard tunnel not configured".into()))?;
+
+        let events = tunnel.update_timers()?;
+        Ok(events)
     }
 }
 
@@ -425,10 +628,7 @@ impl TunnelManager {
         let mut sessions = self.sessions.write().await;
 
         // Check if session already exists for this garage
-        if sessions
-            .values()
-            .any(|s| s.garage_id == session.garage_id)
-        {
+        if sessions.values().any(|s| s.garage_id == session.garage_id) {
             return Err(TunnelError::SessionExists(session.garage_id));
         }
 
@@ -474,6 +674,72 @@ impl TunnelManager {
         Ok(())
     }
 
+    /// Configure the WireGuard tunnel for a session.
+    ///
+    /// Creates the boringtun tunnel instance using the device's private key
+    /// and the garage's public key from the session.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - Session is not found
+    /// - Tunnel configuration fails
+    pub async fn configure_wg_tunnel(&self, session_id: &str) -> Result<(), TunnelError> {
+        let mut sessions = self.sessions.write().await;
+
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| TunnelError::SessionNotFound(session_id.to_string()))?;
+
+        session.configure_wg_tunnel(&self.private_key)?;
+        Ok(())
+    }
+
+    /// Configure the WireGuard tunnel with custom keepalive.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - Session is not found
+    /// - Tunnel configuration fails
+    pub async fn configure_wg_tunnel_with_keepalive(
+        &self,
+        session_id: &str,
+        keepalive: std::time::Duration,
+    ) -> Result<(), TunnelError> {
+        let mut sessions = self.sessions.write().await;
+
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| TunnelError::SessionNotFound(session_id.to_string()))?;
+
+        session.configure_wg_tunnel_with_keepalive(&self.private_key, keepalive)?;
+        Ok(())
+    }
+
+    /// Initiate the WireGuard handshake for a session.
+    ///
+    /// Returns the handshake initiation packets that should be sent to the peer.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - Session is not found
+    /// - Tunnel is not configured
+    /// - Handshake initiation fails
+    pub async fn initiate_handshake(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<WgTunnelEvent>, TunnelError> {
+        let mut sessions = self.sessions.write().await;
+
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| TunnelError::SessionNotFound(session_id.to_string()))?;
+
+        session.initiate_handshake()
+    }
+
     /// Remove a session by ID.
     ///
     /// Returns the removed session, if it existed.
@@ -513,6 +779,11 @@ impl TunnelManager {
 }
 
 impl Clone for TunnelSession {
+    /// Clone the session metadata without the WireGuard tunnel.
+    ///
+    /// Note: The WireGuard tunnel (`wg_tunnel`) is NOT cloned and will be
+    /// `None` in the cloned session. This is intentional - the tunnel state
+    /// machine should not be duplicated.
     fn clone(&self) -> Self {
         Self {
             session_id: self.session_id.clone(),
@@ -523,6 +794,8 @@ impl Clone for TunnelSession {
             garage_public_key: self.garage_public_key.clone(),
             derp_map: self.derp_map.clone(),
             status: self.status.clone(),
+            // WireGuard tunnel is not cloned - the state machine is unique per session
+            wg_tunnel: None,
         }
     }
 }
@@ -712,9 +985,7 @@ mod tests {
         let public_key1 = manager1.public_key().clone();
 
         // Create second manager with same directory
-        let manager2 = TunnelManager::with_config_dir(config_dir)
-            .await
-            .unwrap();
+        let manager2 = TunnelManager::with_config_dir(config_dir).await.unwrap();
 
         // Should have same identity
         assert_eq!(device_id1, manager2.device_id());
@@ -840,7 +1111,10 @@ mod tests {
     #[test]
     fn tunnel_status_display() {
         assert_eq!(TunnelStatus::Initializing.to_string(), "initializing");
-        assert_eq!(TunnelStatus::ConnectingDirect.to_string(), "connecting (direct)");
+        assert_eq!(
+            TunnelStatus::ConnectingDirect.to_string(),
+            "connecting (direct)"
+        );
         assert_eq!(
             TunnelStatus::ConnectingDerp {
                 region: "us-west".to_string()
@@ -907,5 +1181,147 @@ mod tests {
         });
         assert!(!session.is_connected());
         assert!(session.is_error());
+    }
+
+    #[test]
+    fn session_wg_tunnel_configuration() {
+        let device_private_key = WgPrivateKey::generate();
+        let garage_key = WgPrivateKey::generate().public_key();
+
+        let mut session = TunnelSession::new(
+            "sess_123".to_string(),
+            "garage_abc".to_string(),
+            "test-garage".to_string(),
+            OverlayIp::client(1),
+            OverlayIp::garage(1),
+            garage_key,
+            DerpMap::new(),
+        );
+
+        // Initially no WG tunnel configured
+        assert!(!session.is_wg_configured());
+        assert!(session.wg_state().is_none());
+        assert!(!session.is_wg_established());
+
+        // Configure the WG tunnel
+        session.configure_wg_tunnel(&device_private_key).unwrap();
+
+        // Now WG tunnel should be configured but not yet established
+        assert!(session.is_wg_configured());
+        assert!(session.wg_state().is_some());
+        assert_eq!(session.wg_state(), Some(WgTunnelState::Init));
+        assert!(!session.is_wg_established());
+    }
+
+    #[test]
+    fn session_wg_handshake_initiation() {
+        let device_private_key = WgPrivateKey::generate();
+        let garage_key = WgPrivateKey::generate().public_key();
+
+        let mut session = TunnelSession::new(
+            "sess_123".to_string(),
+            "garage_abc".to_string(),
+            "test-garage".to_string(),
+            OverlayIp::client(1),
+            OverlayIp::garage(1),
+            garage_key,
+            DerpMap::new(),
+        );
+
+        // Configure the WG tunnel
+        session.configure_wg_tunnel(&device_private_key).unwrap();
+
+        // Initiate handshake
+        let events = session.initiate_handshake().unwrap();
+
+        // Should produce handshake initiation packet
+        assert!(!events.is_empty());
+        assert!(events[0].is_network());
+
+        // Tunnel state should be handshaking
+        assert_eq!(session.wg_state(), Some(WgTunnelState::Handshaking));
+    }
+
+    #[test]
+    fn session_wg_tunnel_not_configured_error() {
+        let garage_key = WgPrivateKey::generate().public_key();
+
+        let mut session = TunnelSession::new(
+            "sess_123".to_string(),
+            "garage_abc".to_string(),
+            "test-garage".to_string(),
+            OverlayIp::client(1),
+            OverlayIp::garage(1),
+            garage_key,
+            DerpMap::new(),
+        );
+
+        // Trying to initiate handshake without configuring tunnel should fail
+        let result = session.initiate_handshake();
+        assert!(result.is_err());
+        assert!(matches!(result, Err(TunnelError::ConnectionFailed(_))));
+    }
+
+    #[tokio::test]
+    async fn manager_configure_wg_tunnel() {
+        let (manager, _temp) = test_manager().await;
+
+        let garage_key = WgPrivateKey::generate().public_key();
+        let session = TunnelSession::new(
+            "sess_123".to_string(),
+            "garage_abc".to_string(),
+            "test-garage".to_string(),
+            OverlayIp::client(1),
+            OverlayIp::garage(1),
+            garage_key,
+            DerpMap::new(),
+        );
+
+        manager.add_session(session).await.unwrap();
+
+        // Configure WG tunnel through manager
+        manager.configure_wg_tunnel("sess_123").await.unwrap();
+
+        // Initiate handshake through manager
+        let events = manager.initiate_handshake("sess_123").await.unwrap();
+        assert!(!events.is_empty());
+    }
+
+    #[tokio::test]
+    async fn manager_configure_wg_tunnel_session_not_found() {
+        let (manager, _temp) = test_manager().await;
+
+        // Trying to configure tunnel for non-existent session should fail
+        let result = manager.configure_wg_tunnel("nonexistent").await;
+        assert!(matches!(result, Err(TunnelError::SessionNotFound(_))));
+    }
+
+    #[test]
+    fn session_clone_does_not_clone_wg_tunnel() {
+        let device_private_key = WgPrivateKey::generate();
+        let garage_key = WgPrivateKey::generate().public_key();
+
+        let mut session = TunnelSession::new(
+            "sess_123".to_string(),
+            "garage_abc".to_string(),
+            "test-garage".to_string(),
+            OverlayIp::client(1),
+            OverlayIp::garage(1),
+            garage_key,
+            DerpMap::new(),
+        );
+
+        // Configure the WG tunnel
+        session.configure_wg_tunnel(&device_private_key).unwrap();
+        assert!(session.is_wg_configured());
+
+        // Clone the session
+        let cloned = session.clone();
+
+        // Cloned session should NOT have WG tunnel configured
+        assert!(!cloned.is_wg_configured());
+        // But should have same metadata
+        assert_eq!(cloned.session_id(), session.session_id());
+        assert_eq!(cloned.garage_name(), session.garage_name());
     }
 }

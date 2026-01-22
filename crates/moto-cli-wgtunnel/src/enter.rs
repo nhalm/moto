@@ -405,8 +405,21 @@ pub async fn enter_garage(
 
     // Step 4: Configure WireGuard tunnel
     progress.step_start("Configuring tunnel");
-    // TODO: Actually configure WireGuard when engine integration is complete
+    manager
+        .configure_wg_tunnel(&session_response.session_id)
+        .await
+        .map_err(EnterError::Tunnel)?;
     progress.step_done("Configuring tunnel");
+
+    // Step 4b: Initiate WireGuard handshake
+    let handshake_packets = manager
+        .initiate_handshake(&session_response.session_id)
+        .await
+        .map_err(EnterError::Tunnel)?;
+    debug!(
+        packet_count = handshake_packets.len(),
+        "WireGuard handshake initiated"
+    );
 
     // Step 5: Establish connection
     let connection_result = establish_connection(

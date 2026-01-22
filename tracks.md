@@ -56,9 +56,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-wgtunnel.md v0.3
+## moto-wgtunnel.md v0.4
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - moto-wgtunnel-types crate: lib.rs, keys.rs (WgPrivateKey, WgPublicKey)
@@ -77,7 +77,8 @@ HOW TO USE THIS FILE:
 - moto-wgtunnel-engine crate: platform/mod.rs, platform/linux.rs, platform/macos.rs (TUN abstractions)
 - moto-cli-wgtunnel crate: lib.rs, tunnel.rs (tunnel management)
 - moto-cli-wgtunnel crate: status.rs (connection status command)
-- moto-cli-wgtunnel crate: enter.rs (garage enter command)
+- moto-cli-wgtunnel crate: enter.rs (garage enter command - types only)
+- enter.rs: Wire up moto-wgtunnel-engine to configure WireGuard tunnel
 - moto-club-wg crate: lib.rs, ipam.rs (IP address allocation)
 - moto-club-wg crate: peers.rs (peer registration)
 - moto-club-wg crate: sessions.rs (tunnel session management)
@@ -89,4 +90,9 @@ HOW TO USE THIS FILE:
 - moto-garage-wgtunnel crate: ssh.rs (SSH server integration)
 
 **Remaining:**
-(none)
+- enter.rs: Wire up MagicConn for direct UDP connection attempts
+- enter.rs: Wire up DerpClient for DERP relay fallback
+- enter.rs: Spawn SSH session to garage overlay IP after tunnel established
+- enter.rs: Device registration via moto-club API (blocked: moto-club.md)
+- enter.rs: Session creation via moto-club API (blocked: moto-club.md)
+- enter.rs: Get garage peer info via moto-club API (blocked: moto-club.md)
