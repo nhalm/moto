@@ -5,7 +5,7 @@
 //!
 //! - [`stun`]: STUN client for NAT discovery
 //! - [`endpoint`]: Endpoint selection logic
-//! - `path` (future): Path status (Direct/DERP)
+//! - [`path`]: Path status tracking (Direct/DERP)
 //! - `magic` (future): `MagicConn` UDP + DERP multiplexer
 //!
 //! # Architecture
@@ -75,9 +75,11 @@
 //! 3. No upgrade attempts once on DERP (simplicity for v1)
 
 pub mod endpoint;
+pub mod path;
 pub mod stun;
 
 pub use endpoint::{
     DEFAULT_DERP_TIMEOUT, DEFAULT_DIRECT_TIMEOUT, Endpoint, EndpointConfig, EndpointSelector,
 };
+pub use path::{PathQuality, PathState, PathType};
 pub use stun::{StunClient, StunError, StunResult};

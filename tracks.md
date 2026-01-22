@@ -70,9 +70,9 @@ HOW TO USE THIS FILE:
 - moto-wgtunnel-derp crate: map.rs (DERP server map)
 - moto-wgtunnel-conn crate: lib.rs, stun.rs (STUN for NAT discovery)
 - moto-wgtunnel-conn crate: endpoint.rs (endpoint selection logic)
+- moto-wgtunnel-conn crate: path.rs (PathType: Direct/Derp)
 
 **Remaining:**
-- moto-wgtunnel-conn crate: path.rs (PathType: Direct/Derp)
 - moto-wgtunnel-conn crate: magic.rs (MagicConn: UDP + DERP multiplexer)
 - moto-wgtunnel-engine crate: lib.rs, config.rs (WireGuard configuration)
 - moto-wgtunnel-engine crate: tunnel.rs (tunnel management with boringtun)
