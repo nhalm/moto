@@ -4,6 +4,7 @@
 //! - [`keys`]: `WireGuard` keypair types ([`WgPrivateKey`], [`WgPublicKey`])
 //! - [`ip`]: Overlay network IP types ([`OverlayIp`], [`GARAGE_SUBNET`], [`CLIENT_SUBNET`])
 //! - [`peer`]: Peer information types ([`PeerInfo`], [`PeerAction`])
+//! - [`derp`]: DERP relay map types ([`DerpMap`], [`DerpRegion`], [`DerpNode`])
 //!
 //! # Example
 //!
@@ -29,11 +30,26 @@
 //! assert!(garage_ip.is_garage());
 //! assert!(client_ip.is_client());
 //! ```
+//!
+//! ```
+//! use moto_wgtunnel_types::derp::{DerpMap, DerpRegion, DerpNode};
+//!
+//! // Create a DERP map for relay fallback
+//! let derp_map = DerpMap::new()
+//!     .with_region(
+//!         DerpRegion::new(1, "primary")
+//!             .with_node(DerpNode::with_defaults("derp.example.com"))
+//!     );
+//!
+//! assert_eq!(derp_map.len(), 1);
+//! ```
 
+pub mod derp;
 pub mod ip;
 pub mod keys;
 pub mod peer;
 
+pub use derp::{DerpMap, DerpNode, DerpRegion, DEFAULT_DERP_PORT, DEFAULT_STUN_PORT};
 pub use ip::{IpError, OverlayIp, Subnet, CLIENT_SUBNET, GARAGE_SUBNET};
 pub use keys::{KeyError, WgPrivateKey, WgPublicKey};
 pub use peer::{PeerAction, PeerInfo};
