@@ -3,6 +3,7 @@
 //! This crate provides the coordination layer for `WireGuard` tunnels in moto-club:
 //!
 //! - [`ipam`]: IP address allocation for garages and client devices
+//! - [`peers`]: Peer registration for devices and garages
 //!
 //! # Architecture
 //!
@@ -16,7 +17,7 @@
 //! │  ┌───────────────────────────────────────────────────────────────┐  │
 //! │  │  Coordination APIs                                             │  │
 //! │  │  ├── IP Allocator (fd00:moto::/48)  ← this crate              │  │
-//! │  │  ├── Peer Registration                                        │  │
+//! │  │  ├── Peer Registration              ← this crate              │  │
 //! │  │  ├── Session Management                                       │  │
 //! │  │  └── DERP Map Provider                                        │  │
 //! │  └───────────────────────────────────────────────────────────────┘  │
@@ -27,24 +28,37 @@
 //!
 //! ```
 //! use moto_club_wg::ipam::{Ipam, InMemoryStore};
+//! use moto_club_wg::peers::{PeerRegistry, InMemoryPeerStore, DeviceRegistration};
+//! use moto_wgtunnel_types::keys::WgPrivateKey;
 //! use uuid::Uuid;
 //!
 //! # tokio_test::block_on(async {
-//! // Create IPAM with in-memory store (use PostgreSQL in production)
-//! let store = InMemoryStore::new();
-//! let ipam = Ipam::new(store);
+//! // Create IPAM and peer registry
+//! let ipam_store = InMemoryStore::new();
+//! let peer_store = InMemoryPeerStore::new();
+//! let ipam = Ipam::new(ipam_store);
+//! let registry = PeerRegistry::new(peer_store, ipam);
 //!
-//! // Allocate garage IP (deterministic from garage ID)
-//! let garage_ip = ipam.allocate_garage("my-garage").await.unwrap();
-//! assert!(garage_ip.is_garage());
-//!
-//! // Allocate client IP (sequential, persisted per device)
+//! // Register a device
 //! let device_id = Uuid::now_v7();
-//! let client_ip = ipam.allocate_client(device_id).await.unwrap();
-//! assert!(client_ip.is_client());
+//! let private_key = WgPrivateKey::generate();
+//!
+//! let registration = DeviceRegistration {
+//!     device_id,
+//!     public_key: private_key.public_key(),
+//!     device_name: Some("my-laptop".to_string()),
+//! };
+//!
+//! let device = registry.register_device(registration).await.unwrap();
+//! assert!(device.overlay_ip.is_client());
 //! # });
 //! ```
 
 pub mod ipam;
+pub mod peers;
 
 pub use ipam::{Ipam, IpamError, IpamStore, InMemoryStore};
+pub use peers::{
+    DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerError, PeerRegistry,
+    PeerStore, RegisteredDevice, RegisteredGarage,
+};
