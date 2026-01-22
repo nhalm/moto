@@ -1,0 +1,22 @@
+[package]
+name = "moto-wgtunnel-conn"
+description = "Connection multiplexer for WireGuard tunnels (STUN, UDP, DERP)"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+moto-wgtunnel-types.workspace = true
+moto-wgtunnel-derp.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

@@ -68,9 +68,9 @@ HOW TO USE THIS FILE:
 - moto-wgtunnel-derp crate: lib.rs, protocol.rs (frame encoding/decoding)
 - moto-wgtunnel-derp crate: client.rs (DERP client)
 - moto-wgtunnel-derp crate: map.rs (DERP server map)
+- moto-wgtunnel-conn crate: lib.rs, stun.rs (STUN for NAT discovery)
 
 **Remaining:**
-- moto-wgtunnel-conn crate: lib.rs, stun.rs (STUN for NAT discovery)
 - moto-wgtunnel-conn crate: endpoint.rs (endpoint selection logic)
 - moto-wgtunnel-conn crate: path.rs (PathType: Direct/Derp)
 - moto-wgtunnel-conn crate: magic.rs (MagicConn: UDP + DERP multiplexer)
