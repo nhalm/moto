@@ -1,0 +1,19 @@
+[package]
+name = "moto-wgtunnel-derp"
+description = "DERP protocol implementation for WireGuard relay"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+moto-wgtunnel-types.workspace = true
+thiserror.workspace = true
+bytes = "1"
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
