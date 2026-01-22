@@ -89,9 +89,9 @@ HOW TO USE THIS FILE:
 - moto-garage-wgtunnel crate: daemon.rs (main daemon loop)
 - moto-garage-wgtunnel crate: ssh.rs (SSH server integration)
 - enter.rs: Wire up MagicConn for direct UDP connection attempts
+- enter.rs: Wire up DerpClient for DERP relay fallback
 
 **Remaining:**
-- enter.rs: Wire up DerpClient for DERP relay fallback
 - enter.rs: Spawn SSH session to garage overlay IP after tunnel established
 - enter.rs: Device registration via moto-club API (blocked: moto-club.md)
 - enter.rs: Session creation via moto-club API (blocked: moto-club.md)

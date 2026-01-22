@@ -720,9 +720,12 @@ async fn attempt_direct_connection(
 /// Tries each DERP region in order until one succeeds.
 /// Returns the connected region name on success.
 ///
-/// Note: This function will be fully implemented in a subsequent task
-/// ("Wire up `DerpClient` for DERP relay fallback"). For now it uses
-/// `MagicConn`'s connect which handles DERP fallback internally.
+/// This function uses `MagicConn`'s connect which internally manages
+/// `DerpClient` connections for relay fallback. The `DerpClient` handles:
+/// - WebSocket connection to DERP server
+/// - DERP protocol handshake (`ServerKey` -> `ClientInfo` -> `ServerInfo`)
+/// - Packet relay through the DERP server
+/// - Keepalive management
 #[allow(clippy::significant_drop_tightening)] // Lock held during connect is intentional
 async fn attempt_derp_connection(
     _session_id: &str,
@@ -731,7 +734,7 @@ async fn attempt_derp_connection(
 ) -> Result<String, EnterError> {
     debug!(timeout = ?config.derp_timeout, "attempting DERP connection");
 
-    // Check if already connected via DERP from the direct attempt
+    // Check if already connected via DERP from a previous attempt
     {
         let state = conn_state.read().await;
         let garage_key = &state.garage_public_key;
@@ -744,40 +747,55 @@ async fn attempt_derp_connection(
         }
     }
 
-    // Try to connect via MagicConn (will use DERP since direct failed)
+    // Try to connect via MagicConn - it will use DerpClient internally
+    // MagicConn::connect tries direct endpoints first, then falls back to DERP regions
+    // in order. For each DERP region, it creates a DerpClient connection.
     let state = conn_state.read().await;
     let garage_key = state.garage_public_key.clone();
     let connect_result = state.magic_conn.connect(&garage_key).await;
 
     match connect_result {
         Ok(()) => {
-            // Check the path type
+            // Connection succeeded - check which path we got
             if let Some(path) = state.magic_conn.current_path(&garage_key).await {
                 match path {
                     moto_wgtunnel_conn::PathType::Derp { region_name, .. } => {
-                        info!(region = %region_name, "DERP connection established");
+                        info!(region = %region_name, "DERP relay connection established via DerpClient");
                         return Ok(region_name);
                     }
                     moto_wgtunnel_conn::PathType::Direct { endpoint } => {
-                        // Got a direct connection - still success
+                        // Got a direct connection - this can happen if NAT traversal
+                        // succeeded after DERP helped with hole punching
                         info!(%endpoint, "direct connection established during DERP attempt");
                         return Ok(format!("direct:{endpoint}"));
                     }
                 }
             }
-            // Simulate success for now while DERP is being fully wired up
-            warn!("DERP connection - using mock success (full implementation pending)");
-            Ok("primary".to_string())
+            // Connection succeeded but no path info - this shouldn't happen normally
+            // but indicates the connection is established
+            debug!("DERP connection succeeded but no path info available");
+            Err(EnterError::ConnectionFailed(
+                "connection succeeded but path info unavailable".to_string(),
+            ))
         }
         Err(MagicConnError::AllAttemptsFailed) => {
+            // All direct endpoints timed out and all DERP regions failed
             Err(EnterError::ConnectionFailed(
                 "all connection attempts failed (direct and DERP)".to_string(),
             ))
         }
         Err(MagicConnError::NoDerpRegions) => {
+            // No DERP regions were configured in the DerpMap
             Err(EnterError::ConnectionFailed(
-                "no DERP regions configured".to_string(),
+                "no DERP regions configured - cannot establish relay connection".to_string(),
             ))
+        }
+        Err(MagicConnError::DerpFailed(derp_err)) => {
+            // DerpClient connection failed (handshake error, timeout, etc.)
+            debug!(error = %derp_err, "DerpClient connection failed");
+            Err(EnterError::ConnectionFailed(format!(
+                "DERP relay connection failed: {derp_err}"
+            )))
         }
         Err(e) => {
             debug!(error = %e, "DERP connection failed");
