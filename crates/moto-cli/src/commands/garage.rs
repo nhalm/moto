@@ -1,7 +1,8 @@
-//! Garage subcommands: list, open, close, logs.
+//! Garage subcommands: list, open, close, logs, enter.
 
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
+use moto_cli_wgtunnel::{ConsoleProgress, EnterConfig, EnterError, TunnelManager, enter_garage};
 use moto_garage::GarageClient;
 use moto_k8s::K8sClient;
 use serde::Serialize;
@@ -41,6 +42,12 @@ pub enum GarageAction {
         /// Engine to work on (default: current directory name)
         #[arg(short, long)]
         engine: Option<String>,
+    },
+
+    /// Connect to a garage terminal session
+    Enter {
+        /// Name of the garage to enter
+        name: String,
     },
 
     /// Close an existing garage
@@ -114,6 +121,17 @@ struct GarageCloseJson {
 struct GarageLogsJson {
     name: String,
     logs: String,
+}
+
+/// JSON output for garage enter
+#[derive(Serialize)]
+struct GarageEnterJson {
+    name: String,
+    session_id: String,
+    client_ip: String,
+    garage_ip: String,
+    path_type: String,
+    path_detail: String,
 }
 
 /// Garage info with context name for multi-context listing.
@@ -302,6 +320,67 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 println!();
                 println!("To connect: moto garage enter {}", garage.name);
             }
+        }
+        GarageAction::Enter { name } => {
+            // Check if garage exists first
+            let client = GarageClient::local().await?;
+            let garages = client.list().await?;
+            if !garages.iter().any(|g| g.name == name) {
+                return Err(CliError::not_found(format!(
+                    "Garage '{}' not found.\n\nTry: moto garage list",
+                    name
+                )));
+            }
+
+            if !flags.quiet && !flags.json {
+                eprintln!("Connecting to garage {name}...");
+            }
+
+            // Initialize tunnel manager
+            let manager = TunnelManager::new()
+                .await
+                .map_err(|e| CliError::general(format!("failed to initialize tunnel: {e}")))?;
+
+            // Configure enter
+            let config = EnterConfig::default();
+            let progress = ConsoleProgress::new(flags.quiet);
+
+            // Enter the garage
+            let session = enter_garage(&manager, &name, config, &progress)
+                .await
+                .map_err(|e| match e {
+                    EnterError::GarageNotFound(_) => CliError::not_found(format!(
+                        "Garage '{}' not found.\n\nTry: moto garage list",
+                        name
+                    )),
+                    EnterError::NotAuthorized(_) => CliError::general(format!(
+                        "Not authorized to access garage '{}'.\n\nCheck your permissions.",
+                        name
+                    )),
+                    EnterError::ConnectionFailed(msg) => CliError::general(format!(
+                        "Connection failed: {msg}\n\nTry: moto garage logs {name}"
+                    )),
+                    _ => CliError::general(e.to_string()),
+                })?;
+
+            if flags.json {
+                let json = GarageEnterJson {
+                    name: session.garage_name().to_string(),
+                    session_id: session.session_id().to_string(),
+                    client_ip: "".to_string(), // Not exposed on session handle
+                    garage_ip: session.garage_ip().to_string(),
+                    path_type: "derp".to_string(), // Default for now
+                    path_detail: "primary".to_string(),
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if !flags.quiet {
+                eprintln!();
+                eprintln!("[garage: {}] $", session.garage_name());
+            }
+
+            // The SSH session would be started here
+            // For now, we just establish the tunnel
+            // TODO: Actually spawn SSH process when ready
         }
         GarageAction::Close { name, force } => {
             let client = GarageClient::local().await.map_err(CliError::from)?;

@@ -48,9 +48,9 @@ HOW TO USE THIS FILE:
 - MOTOCONFIG env var (override kubeconfig)
 - MOTO_NO_COLOR env var (disable colored output)
 - Exit codes: differentiate 1 (general), 2 (not found), 3 (invalid input)
+- moto garage enter: WireGuard tunnel to garage (uses moto-cli-wgtunnel)
 
 **Remaining:**
-- garage enter (blocked: moto-wgtunnel.md crates not implemented yet)
 - bike commands (blocked: bike.md is Wrenching)
 - cluster commands (blocked: no spec)
 

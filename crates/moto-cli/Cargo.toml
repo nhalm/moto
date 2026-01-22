@@ -20,6 +20,7 @@ moto-common.workspace = true
 moto-club-types.workspace = true
 moto-garage.workspace = true
 moto-k8s.workspace = true
+moto-cli-wgtunnel.workspace = true
 clap.workspace = true
 chrono.workspace = true
 tokio.workspace = true
