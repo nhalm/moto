@@ -18,9 +18,21 @@ tracing.workspace = true
 # WireGuard implementation
 boringtun = "0.7"
 
+# Platform-specific TUN support
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 serde_json.workspace = true
 
-[lints]
-workspace = true
+# Override workspace lints - this crate requires unsafe for platform TUN code.
+# TUN device operations require system calls (ioctl) that cannot be done in safe Rust.
+[lints.rust]
+unsafe_code = "warn"  # Allow unsafe for platform-specific TUN ioctls
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"

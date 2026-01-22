@@ -8,7 +8,7 @@
 //!
 //! - [`config`]: Tunnel configuration (keys, peers, timing)
 //! - [`tunnel`]: Tunnel management with boringtun
-//! - `platform`: Platform-specific TUN abstractions (future)
+//! - [`platform`]: Platform-specific TUN abstractions (Linux, macOS)
 //!
 //! # Architecture
 //!
@@ -116,6 +116,7 @@
 //! - [`moto_wgtunnel_conn`]: Connection multiplexer (UDP + DERP)
 
 pub mod config;
+pub mod platform;
 pub mod tunnel;
 
 pub use config::{
@@ -123,4 +124,5 @@ pub use config::{
     TunnelConfigBuilder, DEFAULT_DERP_TIMEOUT_SECS, DEFAULT_DIRECT_TIMEOUT_SECS,
     DEFAULT_KEEPALIVE_SECS, DEFAULT_MTU, ENV_DERP_ONLY, ENV_LOG_LEVEL,
 };
+pub use platform::{TunConfig, TunDevice, TunError, TunInfo, VirtualTun};
 pub use tunnel::{Tunnel, TunnelBuilder, TunnelError, TunnelEvent, TunnelState, TunnelStats};
