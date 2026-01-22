@@ -1,0 +1,27 @@
+[package]
+name = "moto-cli-wgtunnel"
+description = "CLI WireGuard tunnel integration for moto"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+moto-wgtunnel-types.workspace = true
+moto-wgtunnel-engine.workspace = true
+moto-wgtunnel-conn.workspace = true
+moto-common.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+dirs.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tempfile = "3"
+
+[lints]
+workspace = true
