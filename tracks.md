@@ -76,9 +76,9 @@ HOW TO USE THIS FILE:
 - moto-wgtunnel-engine crate: tunnel.rs (tunnel management with boringtun)
 - moto-wgtunnel-engine crate: platform/mod.rs, platform/linux.rs, platform/macos.rs (TUN abstractions)
 - moto-cli-wgtunnel crate: lib.rs, tunnel.rs (tunnel management)
+- moto-cli-wgtunnel crate: status.rs (connection status command)
 
 **Remaining:**
-- moto-cli-wgtunnel crate: status.rs (connection status command)
 - moto-cli-wgtunnel crate: enter.rs (garage enter command)
 - moto-club-wg crate: lib.rs, ipam.rs (IP address allocation)
 - moto-club-wg crate: peers.rs (peer registration)

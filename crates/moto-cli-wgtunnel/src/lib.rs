@@ -4,6 +4,7 @@
 //! `WireGuard`-based connectivity to garages. It handles:
 //!
 //! - [`tunnel`]: Tunnel lifecycle management (create, connect, close)
+//! - [`status`]: Connection status display
 //! - Key management (device keypair, device ID)
 //! - Configuration file handling
 //!
@@ -66,9 +67,11 @@
 //! keepalive_secs = 25
 //! ```
 
+pub mod status;
 pub mod tunnel;
 
+pub use status::{TunnelStatusInfo, TunnelStatusResponse, format_status_table, get_tunnel_status};
 pub use tunnel::{
-    DeviceIdentity, TunnelError, TunnelManager, TunnelSession, TunnelStatus,
-    ENV_WG_KEY_FILE, KEY_DIR_PERMISSIONS, KEY_FILE_PERMISSIONS,
+    DeviceIdentity, ENV_WG_KEY_FILE, KEY_DIR_PERMISSIONS, KEY_FILE_PERMISSIONS, TunnelError,
+    TunnelManager, TunnelSession, TunnelStatus,
 };
