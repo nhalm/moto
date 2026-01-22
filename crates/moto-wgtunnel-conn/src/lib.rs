@@ -4,7 +4,7 @@
 //! system. It handles:
 //!
 //! - [`stun`]: STUN client for NAT discovery
-//! - `endpoint` (future): Endpoint selection logic
+//! - [`endpoint`]: Endpoint selection logic
 //! - `path` (future): Path status (Direct/DERP)
 //! - `magic` (future): `MagicConn` UDP + DERP multiplexer
 //!
@@ -44,6 +44,29 @@
 //! # }
 //! ```
 //!
+//! # Endpoint Selection
+//!
+//! The [`endpoint`] module provides [`EndpointSelector`] for choosing the best
+//! endpoint to connect to a peer:
+//!
+//! ```
+//! use moto_wgtunnel_conn::endpoint::{Endpoint, EndpointSelector, EndpointConfig};
+//! use std::net::SocketAddr;
+//!
+//! let mut selector = EndpointSelector::with_defaults();
+//!
+//! // Add direct endpoint from peer info
+//! selector.add_direct("203.0.113.5:51820".parse().unwrap());
+//!
+//! // Add DERP regions as fallback
+//! selector.add_derp(1, "primary");
+//!
+//! // Get endpoints in priority order (direct first, then DERP)
+//! while let Some(endpoint) = selector.next_endpoint() {
+//!     println!("Trying: {}", endpoint);
+//! }
+//! ```
+//!
 //! # Path Selection (Future)
 //!
 //! The connection multiplexer will automatically select the best path:
@@ -51,6 +74,10 @@
 //! 2. If direct fails, use DERP relay
 //! 3. No upgrade attempts once on DERP (simplicity for v1)
 
+pub mod endpoint;
 pub mod stun;
 
+pub use endpoint::{
+    DEFAULT_DERP_TIMEOUT, DEFAULT_DIRECT_TIMEOUT, Endpoint, EndpointConfig, EndpointSelector,
+};
 pub use stun::{StunClient, StunError, StunResult};
