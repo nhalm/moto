@@ -55,6 +55,7 @@ rand = "0.9"
 
 # Testing
 proptest = "1"
+tokio-test = "0.4"
 
 # Internal crates
 moto-common = { path = "crates/moto-common" }
@@ -67,6 +68,7 @@ moto-wgtunnel-derp = { path = "crates/moto-wgtunnel-derp" }
 moto-wgtunnel-conn = { path = "crates/moto-wgtunnel-conn" }
 moto-wgtunnel-engine = { path = "crates/moto-wgtunnel-engine" }
 moto-cli-wgtunnel = { path = "crates/moto-cli-wgtunnel" }
+moto-club-wg = { path = "crates/moto-club-wg" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

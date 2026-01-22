@@ -78,9 +78,9 @@ HOW TO USE THIS FILE:
 - moto-cli-wgtunnel crate: lib.rs, tunnel.rs (tunnel management)
 - moto-cli-wgtunnel crate: status.rs (connection status command)
 - moto-cli-wgtunnel crate: enter.rs (garage enter command)
+- moto-club-wg crate: lib.rs, ipam.rs (IP address allocation)
 
 **Remaining:**
-- moto-club-wg crate: lib.rs, ipam.rs (IP address allocation)
 - moto-club-wg crate: peers.rs (peer registration)
 - moto-club-wg crate: sessions.rs (tunnel session management)
 - moto-club-wg crate: ssh_keys.rs (user SSH key management)
