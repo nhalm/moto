@@ -6,7 +6,7 @@
 //! - [`stun`]: STUN client for NAT discovery
 //! - [`endpoint`]: Endpoint selection logic
 //! - [`path`]: Path status tracking (Direct/DERP)
-//! - `magic` (future): `MagicConn` UDP + DERP multiplexer
+//! - [`magic`]: `MagicConn` UDP + DERP multiplexer
 //!
 //! # Architecture
 //!
@@ -19,6 +19,39 @@
 //! │  │  - 3 second timeout         │  │  - Self-hosted DERP servers     │   │
 //! │  └─────────────────────────────┘  └─────────────────────────────────┘   │
 //! └─────────────────────────────────────────────────────────────────────────┘
+//! ```
+//!
+//! # `MagicConn` - Connection Multiplexer
+//!
+//! `MagicConn` handles direct UDP vs DERP relay connections transparently.
+//! It attempts direct connections first, falling back to DERP when NAT blocks
+//! direct communication.
+//!
+//! ```ignore
+//! use moto_wgtunnel_conn::magic::{MagicConn, MagicConnConfig};
+//! use moto_wgtunnel_types::{WgPrivateKey, DerpMap};
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let private_key = WgPrivateKey::generate();
+//! let derp_map = DerpMap::new();
+//!
+//! let config = MagicConnConfig::new(private_key, derp_map);
+//! let conn = MagicConn::new(config).await?;
+//!
+//! // Add a peer
+//! let peer_key = WgPrivateKey::generate().public_key();
+//! conn.add_peer(&peer_key, vec!["192.0.2.1:51820".parse()?]).await;
+//!
+//! // Connect to peer (tries direct first, falls back to DERP)
+//! conn.connect(&peer_key).await?;
+//!
+//! // Send packets
+//! conn.send(&peer_key, b"encrypted wireguard packet").await?;
+//!
+//! // Receive packets
+//! let packet = conn.recv().await?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! # STUN for NAT Discovery
@@ -67,19 +100,21 @@
 //! }
 //! ```
 //!
-//! # Path Selection (Future)
+//! # Path Selection
 //!
-//! The connection multiplexer will automatically select the best path:
+//! The connection multiplexer automatically selects the best path:
 //! 1. Try direct UDP connection (3 second timeout)
 //! 2. If direct fails, use DERP relay
 //! 3. No upgrade attempts once on DERP (simplicity for v1)
 
 pub mod endpoint;
+pub mod magic;
 pub mod path;
 pub mod stun;
 
 pub use endpoint::{
     DEFAULT_DERP_TIMEOUT, DEFAULT_DIRECT_TIMEOUT, Endpoint, EndpointConfig, EndpointSelector,
 };
+pub use magic::{MagicConn, MagicConnConfig, MagicConnError, ReceivedPacket};
 pub use path::{PathQuality, PathState, PathType};
 pub use stun::{StunClient, StunError, StunResult};
