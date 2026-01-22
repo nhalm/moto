@@ -58,7 +58,7 @@ HOW TO USE THIS FILE:
 
 ## moto-wgtunnel.md v0.3
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - moto-wgtunnel-types crate: lib.rs, keys.rs (WgPrivateKey, WgPublicKey)
@@ -86,6 +86,7 @@ HOW TO USE THIS FILE:
 - moto-garage-wgtunnel crate: lib.rs, register.rs (register with moto-club)
 - moto-garage-wgtunnel crate: health.rs (health endpoint)
 - moto-garage-wgtunnel crate: daemon.rs (main daemon loop)
+- moto-garage-wgtunnel crate: ssh.rs (SSH server integration)
 
 **Remaining:**
-- moto-garage-wgtunnel crate: ssh.rs (SSH server integration)
+(none)

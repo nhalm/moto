@@ -24,13 +24,16 @@
 //! - [`daemon`]: Main daemon loop coordinating all components
 //! - [`register`]: Registration with moto-club coordination server
 //! - [`health`]: Health endpoint for Kubernetes probes and monitoring
+//! - [`ssh`]: SSH server configuration and authorized key management
 
 pub mod daemon;
 pub mod health;
 pub mod register;
+pub mod ssh;
 
 pub use daemon::{Daemon, DaemonConfig, DaemonError, PeerState};
 pub use health::{HealthCheck, HealthStatus, OverallStatus, WireGuardState};
 pub use register::{
     GarageRegistrar, RegistrationConfig, RegistrationError, RegistrationResponse,
 };
+pub use ssh::{AuthorizedKeys, KeyType, SshConfig, SshConfigBuilder, SshError, SshPublicKey};
