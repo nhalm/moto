@@ -19,7 +19,7 @@ The motorcycle club - central orchestration service for the moto platform. Where
 > - Remove WebSocket terminal proxy (stdin/stdout relay)
 > - Add WireGuard coordination API (peer registration, IP allocation)
 > - Keep WebSocket/SSE for streaming (logs, events)
-> - See [wgtunnel.md](wgtunnel.md) for WireGuard system spec
+> - See [moto-wgtunnel.md](moto-wgtunnel.md) for WireGuard system spec
 
 ## Specification
 

@@ -516,11 +516,11 @@ Try: Create a bike.toml or cd to a directory containing one.
 - CLI written in Rust using `clap`
 - Communicates with moto-club REST API
 - K8s operations via `kube` crate
-- Garage connectivity via WireGuard (see wgtunnel.md)
+- Garage connectivity via WireGuard
 
 ## References
 
-- [wgtunnel.md](wgtunnel.md) - WireGuard connectivity
+- [moto-wgtunnel.md](moto-wgtunnel.md) - WireGuard connectivity
 - [garage-lifecycle.md](garage-lifecycle.md) - Garage state machine
 - [bike.md](bike.md) - Bike deployment model
 - [moto-club.md](moto-club.md) - Server API

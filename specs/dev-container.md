@@ -109,7 +109,7 @@ The dev container is the garage environment - where Claude Code wrenches on the 
 > - Garage pod runs WireGuard daemon (registers with moto-club)
 > - SSH server listens on WireGuard interface
 > - CLI connects via WireGuard tunnel → SSH
-> - See [wgtunnel.md](wgtunnel.md) for details
+> - See [moto-wgtunnel.md](moto-wgtunnel.md) for details
 
 ### Claude Code Configuration
 

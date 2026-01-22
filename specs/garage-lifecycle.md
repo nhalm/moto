@@ -15,7 +15,7 @@ Defines the lifecycle operations for garages (wrenching environments). Covers cr
 > 1. **WireGuard** - Terminal/SSH access (replaces WebSocket kubectl exec proxy)
 > 2. **WebSocket/SSE** - Streaming logs, TTL warnings, events
 >
-> See [wgtunnel.md](wgtunnel.md) for WireGuard spec
+> See [moto-wgtunnel.md](moto-wgtunnel.md) for WireGuard spec
 
 ## Specification
 
@@ -213,7 +213,7 @@ moto garage extend <id> --ttl 2h
 /ws/v1/events                TTL warnings, status changes (WebSocket)
 ```
 
-See [wgtunnel.md](wgtunnel.md) for WireGuard details.
+See [moto-wgtunnel.md](moto-wgtunnel.md) for WireGuard details.
 
 ### Multiple Garages
 

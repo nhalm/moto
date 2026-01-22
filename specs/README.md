@@ -19,7 +19,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 **Future items:** Items marked with `(future)` are for reference only. Do not implement them - they belong to a later phase or another spec.
 
-**Dependencies:** If a feature references another spec (e.g., "see wgtunnel.md"), check that spec's status. Only implement if the dependency is Ready to Rip or Ripping. Mark blocked features in Remaining with "(blocked: specname.md)".
+**Dependencies:** If a feature depends on another spec, check that spec's status. Only implement if the dependency is Ready to Rip or Ripping. Mark blocked features in Remaining with "(blocked: specname.md)".
 
 ## Status Legend
 
@@ -55,7 +55,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [bike](bike.md) | Wrenching | Runtime/deployment model |
 | [supporting-services](supporting-services.md) | Bare Frame | Postgres, Redis deployment |
 | [moto-cron](moto-cron.md) | Bare Frame | Scheduled tasks (TTL cleanup), K8s CronJobs |
-| [wgtunnel](wgtunnel.md) | Bare Frame | WireGuard tunnels for terminal/SSH access |
+| [moto-wgtunnel](moto-wgtunnel.md) | Ready to Rip | WireGuard tunnels for terminal/SSH access |
 
 ## Phase 2: Tokenization (The Vault)
 
