@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
-| Last Updated | 2026-01-21 |
+| Version | 0.4 |
+| Last Updated | 2026-01-22 |
 
 ## Overview
 
@@ -720,6 +720,39 @@ Response 200:
 - Unit tests with mock DERP
 - Integration tests with local WireGuard
 - E2E tests require K8s cluster
+
+### Implementation Status
+
+**Complete (standalone crates):**
+
+| Crate | Status | Notes |
+|-------|--------|-------|
+| moto-wgtunnel-types | ✓ Complete | Keys, IPs, peers, DERP types |
+| moto-wgtunnel-derp | ✓ Complete | Protocol, client, map |
+| moto-wgtunnel-conn | ✓ Complete | MagicConn, STUN, endpoint selection |
+| moto-wgtunnel-engine | ✓ Complete | Tunnel management, platform TUN |
+| moto-club-wg | ✓ Complete | IPAM, peers, sessions, SSH keys, DERP |
+| moto-garage-wgtunnel | ✓ Complete | Daemon, registration, health, SSH |
+| moto-cli-wgtunnel | Partial | Types complete, integration pending |
+
+**Remaining integration (can implement now):**
+
+| Task | Location | Description |
+|------|----------|-------------|
+| Wire up WireGuard engine | `enter.rs` | Connect `moto-wgtunnel-engine` to configure tunnel |
+| Wire up direct UDP | `enter.rs` | Use `MagicConn` for direct connection attempts |
+| Wire up DERP relay | `enter.rs` | Use `DerpClient` for relay fallback |
+| SSH session spawning | `enter.rs` | Exec SSH to garage overlay IP after tunnel up |
+
+**Blocked on moto-club.md:**
+
+| Task | Blocked By | Description |
+|------|------------|-------------|
+| Device registration | `POST /api/v1/wg/devices` | moto-club must expose endpoint |
+| Session creation | `POST /api/v1/wg/sessions` | moto-club must expose endpoint |
+| Garage peer info | `POST /api/v1/wg/garages` | moto-club must expose endpoint |
+
+The types and logic for these APIs exist in `moto-club-wg`. The moto-club server needs to wire up HTTP handlers that use these crates. See moto-club.md TODO (lines 12-22) for the coordination API work.
 
 ## References
 
