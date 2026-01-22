@@ -4,6 +4,7 @@
 //!
 //! - [`ipam`]: IP address allocation for garages and client devices
 //! - [`peers`]: Peer registration for devices and garages
+//! - [`sessions`]: Tunnel session management
 //!
 //! # Architecture
 //!
@@ -18,7 +19,7 @@
 //! │  │  Coordination APIs                                             │  │
 //! │  │  ├── IP Allocator (fd00:moto::/48)  ← this crate              │  │
 //! │  │  ├── Peer Registration              ← this crate              │  │
-//! │  │  ├── Session Management                                       │  │
+//! │  │  ├── Session Management             ← this crate              │  │
 //! │  │  └── DERP Map Provider                                        │  │
 //! │  └───────────────────────────────────────────────────────────────┘  │
 //! └─────────────────────────────────────────────────────────────────────┘
@@ -56,9 +57,15 @@
 
 pub mod ipam;
 pub mod peers;
+pub mod sessions;
 
 pub use ipam::{Ipam, IpamError, IpamStore, InMemoryStore};
 pub use peers::{
     DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerError, PeerRegistry,
     PeerStore, RegisteredDevice, RegisteredGarage,
+};
+pub use sessions::{
+    CreateSessionRequest, CreateSessionResponse, GarageConnectionInfo, InMemorySessionStore,
+    Session, SessionError, SessionManager, SessionStore, DEFAULT_SESSION_TTL_SECS,
+    DISCONNECT_GRACE_PERIOD_SECS,
 };
