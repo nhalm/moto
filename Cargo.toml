@@ -62,6 +62,7 @@ moto-club-types = { path = "crates/moto-club-types" }
 moto-k8s = { path = "crates/moto-k8s" }
 moto-garage = { path = "crates/moto-garage" }
 moto-cli = { path = "crates/moto-cli" }
+moto-wgtunnel-types = { path = "crates/moto-wgtunnel-types" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

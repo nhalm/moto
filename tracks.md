@@ -50,6 +50,42 @@ HOW TO USE THIS FILE:
 - Exit codes: differentiate 1 (general), 2 (not found), 3 (invalid input)
 
 **Remaining:**
-- garage enter (blocked: wgtunnel.md is Bare Frame)
+- garage enter (blocked: moto-wgtunnel.md crates not implemented yet)
 - bike commands (blocked: bike.md is Wrenching)
 - cluster commands (blocked: no spec)
+
+---
+
+## moto-wgtunnel.md v0.3
+
+**Status:** In Progress
+
+**Implemented:**
+- moto-wgtunnel-types crate: lib.rs, keys.rs (WgPrivateKey, WgPublicKey)
+
+**Remaining:**
+- moto-wgtunnel-types crate: ip.rs (OverlayIp, GARAGE_SUBNET, CLIENT_SUBNET)
+- moto-wgtunnel-types crate: peer.rs (PeerInfo)
+- moto-wgtunnel-types crate: derp.rs (DerpMap, DerpRegion, DerpNode)
+- moto-wgtunnel-derp crate: lib.rs, protocol.rs (frame encoding/decoding)
+- moto-wgtunnel-derp crate: client.rs (DERP client)
+- moto-wgtunnel-derp crate: map.rs (DERP server map)
+- moto-wgtunnel-conn crate: lib.rs, stun.rs (STUN for NAT discovery)
+- moto-wgtunnel-conn crate: endpoint.rs (endpoint selection logic)
+- moto-wgtunnel-conn crate: path.rs (PathType: Direct/Derp)
+- moto-wgtunnel-conn crate: magic.rs (MagicConn: UDP + DERP multiplexer)
+- moto-wgtunnel-engine crate: lib.rs, config.rs (WireGuard configuration)
+- moto-wgtunnel-engine crate: tunnel.rs (tunnel management with boringtun)
+- moto-wgtunnel-engine crate: platform/mod.rs, platform/linux.rs, platform/macos.rs (TUN abstractions)
+- moto-cli-wgtunnel crate: lib.rs, tunnel.rs (tunnel management)
+- moto-cli-wgtunnel crate: status.rs (connection status command)
+- moto-cli-wgtunnel crate: enter.rs (garage enter command)
+- moto-club-wg crate: lib.rs, ipam.rs (IP address allocation)
+- moto-club-wg crate: peers.rs (peer registration)
+- moto-club-wg crate: sessions.rs (tunnel session management)
+- moto-club-wg crate: ssh_keys.rs (user SSH key management)
+- moto-club-wg crate: derp.rs (DERP map management)
+- moto-garage-wgtunnel crate: lib.rs, register.rs (register with moto-club)
+- moto-garage-wgtunnel crate: health.rs (health endpoint)
+- moto-garage-wgtunnel crate: daemon.rs (main daemon loop)
+- moto-garage-wgtunnel crate: ssh.rs (SSH server integration)

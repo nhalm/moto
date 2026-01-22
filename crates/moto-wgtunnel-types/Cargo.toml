@@ -1,0 +1,25 @@
+[package]
+name = "moto-wgtunnel-types"
+description = "Shared types for WireGuard tunnels: keys, IPs, peers, DERP maps"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+# WireGuard key generation
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+base64 = "0.22"
+zeroize = { version = "1", features = ["derive"] }
+getrandom = "0.3"
+
+[dev-dependencies]
+proptest.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
