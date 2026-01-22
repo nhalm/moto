@@ -73,9 +73,9 @@ HOW TO USE THIS FILE:
 - moto-wgtunnel-conn crate: path.rs (PathType: Direct/Derp)
 - moto-wgtunnel-conn crate: magic.rs (MagicConn: UDP + DERP multiplexer)
 - moto-wgtunnel-engine crate: lib.rs, config.rs (WireGuard configuration)
+- moto-wgtunnel-engine crate: tunnel.rs (tunnel management with boringtun)
 
 **Remaining:**
-- moto-wgtunnel-engine crate: tunnel.rs (tunnel management with boringtun)
 - moto-wgtunnel-engine crate: platform/mod.rs, platform/linux.rs, platform/macos.rs (TUN abstractions)
 - moto-cli-wgtunnel crate: lib.rs, tunnel.rs (tunnel management)
 - moto-cli-wgtunnel crate: status.rs (connection status command)

@@ -7,7 +7,7 @@
 //! (a userspace `WireGuard` implementation). It handles:
 //!
 //! - [`config`]: Tunnel configuration (keys, peers, timing)
-//! - `tunnel`: Tunnel management with boringtun (future)
+//! - [`tunnel`]: Tunnel management with boringtun
 //! - `platform`: Platform-specific TUN abstractions (future)
 //!
 //! # Architecture
@@ -25,7 +25,7 @@
 //! │                                  │                                           │
 //! │                                  ▼                                           │
 //! │  ┌─────────────────────────────────────────────────────────────────────┐    │
-//! │  │                       Tunnel (future)                                │    │
+//! │  │                          Tunnel                                      │    │
 //! │  │  - boringtun WireGuard state machine                                │    │
 //! │  │  - Packet encryption/decryption                                     │    │
 //! │  │  - Handshake management                                             │    │
@@ -44,7 +44,7 @@
 //! # Connection Flow
 //!
 //! 1. Create [`TunnelConfig`] with interface and peer settings
-//! 2. Create `Tunnel` (future) with the config
+//! 2. Create [`Tunnel`] with the config
 //! 3. Tunnel uses [`MagicConn`](moto_wgtunnel_conn::MagicConn) for transport
 //! 4. Packets are encrypted/decrypted by boringtun
 //! 5. Platform TUN handles IP packet routing
@@ -90,9 +90,15 @@
 //!     .connection_mode(ConnectionMode::PreferDirect)
 //!     .build();
 //!
-//! // Tunnel creation will be added in future:
-//! // let tunnel = Tunnel::new(config).await?;
-//! // tunnel.connect(&peer_public_key).await?;
+//! // Create tunnel for a peer (uses separate keys from TunnelConfig)
+//! use moto_wgtunnel_engine::tunnel::{Tunnel, TunnelBuilder};
+//!
+//! let tunnel_private_key = WgPrivateKey::generate();
+//! let tunnel_peer_public_key = WgPrivateKey::generate().public_key();
+//! let tunnel = TunnelBuilder::new(tunnel_private_key, tunnel_peer_public_key)
+//!     .keepalive(std::time::Duration::from_secs(25))
+//!     .build()
+//!     .unwrap();
 //! ```
 //!
 //! # Platform Support
@@ -110,9 +116,11 @@
 //! - [`moto_wgtunnel_conn`]: Connection multiplexer (UDP + DERP)
 
 pub mod config;
+pub mod tunnel;
 
 pub use config::{
     ConfigError, ConnectionMode, InterfaceConfig, PeerConfig, TimingConfig, TunnelConfig,
     TunnelConfigBuilder, DEFAULT_DERP_TIMEOUT_SECS, DEFAULT_DIRECT_TIMEOUT_SECS,
     DEFAULT_KEEPALIVE_SECS, DEFAULT_MTU, ENV_DERP_ONLY, ENV_LOG_LEVEL,
 };
+pub use tunnel::{Tunnel, TunnelBuilder, TunnelError, TunnelEvent, TunnelState, TunnelStats};
