@@ -82,9 +82,9 @@ HOW TO USE THIS FILE:
 - moto-club-wg crate: peers.rs (peer registration)
 - moto-club-wg crate: sessions.rs (tunnel session management)
 - moto-club-wg crate: ssh_keys.rs (user SSH key management)
+- moto-club-wg crate: derp.rs (DERP map management)
 
 **Remaining:**
-- moto-club-wg crate: derp.rs (DERP map management)
 - moto-garage-wgtunnel crate: lib.rs, register.rs (register with moto-club)
 - moto-garage-wgtunnel crate: health.rs (health endpoint)
 - moto-garage-wgtunnel crate: daemon.rs (main daemon loop)

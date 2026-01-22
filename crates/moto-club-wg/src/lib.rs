@@ -6,6 +6,7 @@
 //! - [`peers`]: Peer registration for devices and garages
 //! - [`sessions`]: Tunnel session management
 //! - [`ssh_keys`]: User SSH key management for garage access
+//! - [`derp`]: DERP relay map management
 //!
 //! # Architecture
 //!
@@ -22,7 +23,7 @@
 //! │  │  ├── Peer Registration              ← this crate              │  │
 //! │  │  ├── Session Management             ← this crate              │  │
 //! │  │  ├── SSH Key Management             ← this crate              │  │
-//! │  │  └── DERP Map Provider                                        │  │
+//! │  │  └── DERP Map Provider              ← this crate              │  │
 //! │  └───────────────────────────────────────────────────────────────┘  │
 //! └─────────────────────────────────────────────────────────────────────┘
 //! ```
@@ -57,11 +58,13 @@
 //! # });
 //! ```
 
+pub mod derp;
 pub mod ipam;
 pub mod peers;
 pub mod sessions;
 pub mod ssh_keys;
 
+pub use derp::{DerpError, DerpMapManager, DerpStore, InMemoryDerpStore};
 pub use ipam::{InMemoryStore, Ipam, IpamError, IpamStore};
 pub use peers::{
     DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerError, PeerRegistry, PeerStore,
