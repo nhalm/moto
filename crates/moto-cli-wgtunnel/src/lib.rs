@@ -3,6 +3,7 @@
 //! This crate provides the client-side tunnel management for moto's
 //! `WireGuard`-based connectivity to garages. It handles:
 //!
+//! - [`enter`]: Garage enter command (establish tunnel and SSH session)
 //! - [`tunnel`]: Tunnel lifecycle management (create, connect, close)
 //! - [`status`]: Connection status display
 //! - Key management (device keypair, device ID)
@@ -42,21 +43,25 @@
 //! # Example
 //!
 //! ```ignore
-//! use moto_cli_wgtunnel::tunnel::TunnelManager;
+//! use moto_cli_wgtunnel::{TunnelManager, enter::{enter_garage, EnterConfig, ConsoleProgress}};
 //!
 //! // Initialize tunnel manager (loads or generates device keys)
 //! let manager = TunnelManager::new().await?;
 //!
-//! // Get device info for registration with moto-club
-//! let device_info = manager.device_info();
-//! println!("Device ID: {}", device_info.device_id);
-//! println!("Public Key: {}", device_info.public_key);
+//! // Enter a garage
+//! let config = EnterConfig::default();
+//! let progress = ConsoleProgress::new(false);
+//! let session = enter_garage(&manager, "my-garage", config, &progress).await?;
+//!
+//! // SSH target is available
+//! println!("SSH target: {}", session.ssh_target());
 //! ```
 //!
 //! # Configuration
 //!
 //! Environment variables:
 //! - `MOTO_WG_KEY_FILE`: Override `WireGuard` key location
+//! - `MOTO_WGTUNNEL_DERP_ONLY`: Force DERP-only mode (skip direct connection attempts)
 //!
 //! Config file (`~/.config/moto/config.toml`):
 //! ```toml
@@ -67,9 +72,14 @@
 //! keepalive_secs = 25
 //! ```
 
+pub mod enter;
 pub mod status;
 pub mod tunnel;
 
+pub use enter::{
+    ConsoleProgress, EnterConfig, EnterError, EnterProgress, EnterResult, GarageSession,
+    GarageWgInfo, SessionResponse, SilentProgress, enter_garage, get_existing_session,
+};
 pub use status::{TunnelStatusInfo, TunnelStatusResponse, format_status_table, get_tunnel_status};
 pub use tunnel::{
     DeviceIdentity, ENV_WG_KEY_FILE, KEY_DIR_PERMISSIONS, KEY_FILE_PERMISSIONS, TunnelError,
