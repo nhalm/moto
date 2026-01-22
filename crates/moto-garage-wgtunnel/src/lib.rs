@@ -21,12 +21,15 @@
 //!
 //! # Modules
 //!
+//! - [`daemon`]: Main daemon loop coordinating all components
 //! - [`register`]: Registration with moto-club coordination server
 //! - [`health`]: Health endpoint for Kubernetes probes and monitoring
 
+pub mod daemon;
 pub mod health;
 pub mod register;
 
+pub use daemon::{Daemon, DaemonConfig, DaemonError, PeerState};
 pub use health::{HealthCheck, HealthStatus, OverallStatus, WireGuardState};
 pub use register::{
     GarageRegistrar, RegistrationConfig, RegistrationError, RegistrationResponse,
