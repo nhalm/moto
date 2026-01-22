@@ -10,10 +10,18 @@ rust-version.workspace = true
 [dependencies]
 moto-wgtunnel-types.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+futures-util.workspace = true
+tracing.workspace = true
 bytes = "1"
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+crypto_box = "0.9"
+rand = "0.8"
+getrandom = "0.2"
 
 [dev-dependencies]
 proptest.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [lints]
 workspace = true

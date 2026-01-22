@@ -13,6 +13,11 @@
 //! └──────────┘                    └─────────────┘                    └──────────┘
 //! ```
 //!
+//! # Modules
+//!
+//! - [`protocol`]: Frame encoding/decoding
+//! - [`client`]: DERP client for connecting to relay servers
+//!
 //! # Protocol
 //!
 //! DERP uses a simple binary frame format over WebSocket:
@@ -66,8 +71,13 @@
 //! }
 //! ```
 
+pub mod client;
 pub mod protocol;
 
+pub use client::{
+    ClientError, DerpClient, DerpClientConfig, DerpClientHandle, DerpEvent, ReceivedPacket,
+    DEFAULT_CONNECT_TIMEOUT, DEFAULT_KEEPALIVE_INTERVAL,
+};
 pub use protocol::{
     check_frame_complete, decode_frame, Frame, FrameType, PeerGoneReason, ProtocolError,
     FRAME_HEADER_LEN, KEY_LEN, MAGIC, MAX_INFO_LEN, MAX_PACKET_SIZE, NONCE_LEN,

@@ -66,9 +66,9 @@ HOW TO USE THIS FILE:
 - moto-wgtunnel-types crate: peer.rs (PeerInfo, PeerAction)
 - moto-wgtunnel-types crate: derp.rs (DerpMap, DerpRegion, DerpNode)
 - moto-wgtunnel-derp crate: lib.rs, protocol.rs (frame encoding/decoding)
+- moto-wgtunnel-derp crate: client.rs (DERP client)
 
 **Remaining:**
-- moto-wgtunnel-derp crate: client.rs (DERP client)
 - moto-wgtunnel-derp crate: map.rs (DERP server map)
 - moto-wgtunnel-conn crate: lib.rs, stun.rs (STUN for NAT discovery)
 - moto-wgtunnel-conn crate: endpoint.rs (endpoint selection logic)
