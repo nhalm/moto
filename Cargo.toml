@@ -65,6 +65,7 @@ moto-cli = { path = "crates/moto-cli" }
 moto-wgtunnel-types = { path = "crates/moto-wgtunnel-types" }
 moto-wgtunnel-derp = { path = "crates/moto-wgtunnel-derp" }
 moto-wgtunnel-conn = { path = "crates/moto-wgtunnel-conn" }
+moto-wgtunnel-engine = { path = "crates/moto-wgtunnel-engine" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
