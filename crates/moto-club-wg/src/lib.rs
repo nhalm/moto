@@ -5,6 +5,7 @@
 //! - [`ipam`]: IP address allocation for garages and client devices
 //! - [`peers`]: Peer registration for devices and garages
 //! - [`sessions`]: Tunnel session management
+//! - [`ssh_keys`]: User SSH key management for garage access
 //!
 //! # Architecture
 //!
@@ -20,6 +21,7 @@
 //! │  │  ├── IP Allocator (fd00:moto::/48)  ← this crate              │  │
 //! │  │  ├── Peer Registration              ← this crate              │  │
 //! │  │  ├── Session Management             ← this crate              │  │
+//! │  │  ├── SSH Key Management             ← this crate              │  │
 //! │  │  └── DERP Map Provider                                        │  │
 //! │  └───────────────────────────────────────────────────────────────┘  │
 //! └─────────────────────────────────────────────────────────────────────┘
@@ -58,14 +60,19 @@
 pub mod ipam;
 pub mod peers;
 pub mod sessions;
+pub mod ssh_keys;
 
-pub use ipam::{Ipam, IpamError, IpamStore, InMemoryStore};
+pub use ipam::{InMemoryStore, Ipam, IpamError, IpamStore};
 pub use peers::{
-    DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerError, PeerRegistry,
-    PeerStore, RegisteredDevice, RegisteredGarage,
+    DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerError, PeerRegistry, PeerStore,
+    RegisteredDevice, RegisteredGarage,
 };
 pub use sessions::{
-    CreateSessionRequest, CreateSessionResponse, GarageConnectionInfo, InMemorySessionStore,
-    Session, SessionError, SessionManager, SessionStore, DEFAULT_SESSION_TTL_SECS,
-    DISCONNECT_GRACE_PERIOD_SECS,
+    CreateSessionRequest, CreateSessionResponse, DEFAULT_SESSION_TTL_SECS,
+    DISCONNECT_GRACE_PERIOD_SECS, GarageConnectionInfo, InMemorySessionStore, Session,
+    SessionError, SessionManager, SessionStore,
+};
+pub use ssh_keys::{
+    InMemorySshKeyStore, RegisteredSshKey, SshKeyError, SshKeyManager, SshKeyRegistration,
+    SshKeyResponse, SshKeyStore,
 };
