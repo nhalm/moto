@@ -9,7 +9,7 @@
 //! 2. Register device with moto-club (if not already registered)
 //! 3. Request tunnel session from moto-club
 //! 4. Configure `WireGuard` tunnel
-//! 5. Attempt direct UDP connection (3s timeout)
+//! 5. Attempt direct UDP connection (3s timeout) via `MagicConn`
 //! 6. Fall back to DERP relay if direct fails
 //! 7. Open SSH session over the tunnel
 //!
@@ -31,11 +31,15 @@
 // Allow similar names like garage_id and garage_ip which are distinct in context
 #![allow(clippy::similar_names)]
 
+use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
-use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
+use moto_wgtunnel_conn::{MagicConn, MagicConnConfig, MagicConnError};
+use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPrivateKey, WgPublicKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::{TunnelError, TunnelManager, TunnelSession, TunnelStatus};
@@ -275,6 +279,21 @@ pub struct EnterResult {
     pub path_detail: String,
 }
 
+/// Shared connection state for `MagicConn`.
+///
+/// This wrapper allows the `MagicConn` to be shared between the `enter_garage`
+/// function and the connection attempt functions.
+struct ConnectionState {
+    /// `MagicConn` instance for multiplexed UDP/DERP connections.
+    magic_conn: MagicConn,
+
+    /// Garage's `WireGuard` public key.
+    garage_public_key: WgPublicKey,
+
+    /// Garage's direct endpoints (if any).
+    garage_endpoints: Vec<SocketAddr>,
+}
+
 /// Handle for an active garage session.
 ///
 /// This handle represents an established tunnel to a garage.
@@ -391,6 +410,14 @@ pub async fn enter_garage(
     // Parse session response
     let (client_ip, garage_ip, garage_public_key) = parse_session_response(&session_response)?;
 
+    // Parse garage endpoints for direct connection attempts
+    let garage_endpoints: Vec<SocketAddr> = session_response
+        .garage
+        .endpoints
+        .iter()
+        .filter_map(|e| e.parse().ok())
+        .collect();
+
     // Step 3: Create tunnel session
     let tunnel_session = TunnelSession::new(
         session_response.session_id.clone(),
@@ -398,8 +425,8 @@ pub async fn enter_garage(
         garage_name.to_string(),
         client_ip,
         garage_ip,
-        garage_public_key,
-        session_response.derp_map,
+        garage_public_key.clone(),
+        session_response.derp_map.clone(),
     );
     manager.add_session(tunnel_session).await?;
 
@@ -421,11 +448,25 @@ pub async fn enter_garage(
         "WireGuard handshake initiated"
     );
 
+    // Step 4c: Create MagicConn for connection multiplexing
+    progress.step_start("Initializing connection");
+    let conn_state = create_connection_state(
+        manager.private_key(),
+        session_response.derp_map,
+        garage_public_key,
+        garage_endpoints,
+        &config,
+    )
+    .await?;
+    let conn_state = Arc::new(RwLock::new(conn_state));
+    progress.step_done("Initializing connection");
+
     // Step 5: Establish connection
     let connection_result = establish_connection(
         &session_response.session_id,
         &config,
         progress,
+        &conn_state,
     )
     .await;
 
@@ -461,6 +502,48 @@ pub async fn enter_garage(
         session_id: session_response.session_id,
         garage_name: garage_name.to_string(),
         garage_ip,
+    })
+}
+
+/// Create the `MagicConn` connection state.
+async fn create_connection_state(
+    private_key: &WgPrivateKey,
+    derp_map: DerpMap,
+    garage_public_key: WgPublicKey,
+    garage_endpoints: Vec<SocketAddr>,
+    config: &EnterConfig,
+) -> Result<ConnectionState, EnterError> {
+    // Create a copy of the private key by converting to/from bytes
+    let private_key_copy = WgPrivateKey::from_bytes(&private_key.as_bytes()).map_err(|e| {
+        EnterError::ConnectionFailed(format!("failed to copy private key: {e}"))
+    })?;
+
+    // Create MagicConn config
+    let magic_config = MagicConnConfig::new(private_key_copy, derp_map)
+        .with_direct_timeout(config.direct_timeout)
+        .with_derp_timeout(config.derp_timeout)
+        .with_prefer_direct(!config.derp_only);
+
+    // Create MagicConn
+    let magic_conn = MagicConn::new(magic_config)
+        .await
+        .map_err(|e| EnterError::ConnectionFailed(format!("failed to create MagicConn: {e}")))?;
+
+    // Add the garage as a peer with its known endpoints
+    magic_conn
+        .add_peer(&garage_public_key, garage_endpoints.clone())
+        .await;
+
+    debug!(
+        peer = %garage_public_key,
+        endpoints = ?garage_endpoints,
+        "added garage peer to MagicConn"
+    );
+
+    Ok(ConnectionState {
+        magic_conn,
+        garage_public_key,
+        garage_endpoints,
     })
 }
 
@@ -503,10 +586,11 @@ async fn establish_connection(
     session_id: &str,
     config: &EnterConfig,
     progress: &dyn EnterProgress,
+    conn_state: &Arc<RwLock<ConnectionState>>,
 ) -> Result<(String, String), EnterError> {
     if config.derp_only {
         progress.step_start("Connecting via DERP");
-        match attempt_derp_connection(session_id, config).await {
+        match attempt_derp_connection(session_id, config, conn_state).await {
             Ok(region) => {
                 progress.step_done("Connecting via DERP");
                 Ok(("derp".to_string(), region))
@@ -518,14 +602,19 @@ async fn establish_connection(
         }
     } else {
         progress.step_start("Attempting direct connection");
-        if let Ok(endpoint) = attempt_direct_connection(session_id, config).await {
-            progress.step_done("Attempting direct connection");
-            return Ok(("direct".to_string(), endpoint));
+        match attempt_direct_connection(session_id, config, conn_state).await {
+            Ok(endpoint) => {
+                progress.step_done("Attempting direct connection");
+                return Ok(("direct".to_string(), endpoint));
+            }
+            Err(e) => {
+                debug!(error = %e, "direct connection failed");
+                progress.step_failed("Attempting direct connection", "timeout");
+            }
         }
 
-        progress.step_failed("Attempting direct connection", "timeout");
         progress.step_start("Using DERP relay");
-        match attempt_derp_connection(session_id, config).await {
+        match attempt_derp_connection(session_id, config, conn_state).await {
             Ok(region) => {
                 progress.step_done("Using DERP relay");
                 Ok(("derp".to_string(), region))
@@ -554,39 +643,149 @@ fn create_path_type(path_type: &str, path_detail: &str) -> moto_wgtunnel_conn::P
 
 /// Attempt a direct UDP connection to the garage.
 ///
+/// Uses `MagicConn` to attempt direct UDP connection to the garage.
 /// Returns the connected endpoint on success.
+#[allow(clippy::significant_drop_tightening)] // Lock held during connect is intentional
 async fn attempt_direct_connection(
     _session_id: &str,
     config: &EnterConfig,
+    conn_state: &Arc<RwLock<ConnectionState>>,
 ) -> Result<String, EnterError> {
-    // TODO: Actually attempt direct connection when MagicConn is integrated
-    // For now, simulate a timeout
-    debug!(timeout = ?config.direct_timeout, "attempting direct connection");
-    tokio::time::sleep(config.direct_timeout).await;
+    // First, check if we have endpoints and get the garage key
+    let (garage_key, has_endpoints) = {
+        let state = conn_state.read().await;
+        let has_endpoints = !state.garage_endpoints.is_empty();
+        if has_endpoints {
+            debug!(
+                timeout = ?config.direct_timeout,
+                endpoints = ?state.garage_endpoints,
+                "attempting direct connection via MagicConn"
+            );
+        }
+        (state.garage_public_key.clone(), has_endpoints)
+    };
 
-    // In production, this would return Ok(endpoint) if direct connection succeeds
-    // For now, always fail to demonstrate DERP fallback
-    Err(EnterError::ConnectionFailed("direct connection timeout".to_string()))
+    if !has_endpoints {
+        debug!("no direct endpoints available, skipping direct connection attempt");
+        return Err(EnterError::ConnectionFailed(
+            "no direct endpoints available".to_string(),
+        ));
+    }
+
+    // Use MagicConn to connect to the peer
+    // MagicConn::connect will try direct endpoints first with the configured timeout
+    let state = conn_state.read().await;
+    let connect_result = state.magic_conn.connect(&garage_key).await;
+
+    match connect_result {
+        Ok(()) => {
+            // Check if we got a direct connection
+            if let Some(path) = state.magic_conn.current_path(&garage_key).await {
+                match path {
+                    moto_wgtunnel_conn::PathType::Direct { endpoint } => {
+                        info!(%endpoint, "direct connection established");
+                        return Ok(endpoint.to_string());
+                    }
+                    moto_wgtunnel_conn::PathType::Derp { region_name, .. } => {
+                        // Connected via DERP - this counts as "direct failed"
+                        debug!(region = %region_name, "MagicConn fell back to DERP");
+                        return Err(EnterError::ConnectionFailed(
+                            "direct connection timed out, fell back to DERP".to_string(),
+                        ));
+                    }
+                }
+            }
+            // No path info available - shouldn't happen after successful connect
+            Err(EnterError::ConnectionFailed(
+                "connection succeeded but no path info available".to_string(),
+            ))
+        }
+        Err(MagicConnError::DirectTimeout(duration)) => {
+            debug!(?duration, "direct connection timed out");
+            Err(EnterError::ConnectionFailed(format!(
+                "direct connection timed out after {duration:?}"
+            )))
+        }
+        Err(e) => {
+            debug!(error = %e, "direct connection failed");
+            Err(EnterError::ConnectionFailed(format!(
+                "direct connection failed: {e}"
+            )))
+        }
+    }
 }
 
 /// Attempt DERP relay connection to the garage.
 ///
 /// Tries each DERP region in order until one succeeds.
 /// Returns the connected region name on success.
+///
+/// Note: This function will be fully implemented in a subsequent task
+/// ("Wire up `DerpClient` for DERP relay fallback"). For now it uses
+/// `MagicConn`'s connect which handles DERP fallback internally.
+#[allow(clippy::significant_drop_tightening)] // Lock held during connect is intentional
 async fn attempt_derp_connection(
     _session_id: &str,
     config: &EnterConfig,
+    conn_state: &Arc<RwLock<ConnectionState>>,
 ) -> Result<String, EnterError> {
-    // TODO: Actually attempt DERP connection when MagicConn is integrated
-    // For now, simulate success after a short delay
     debug!(timeout = ?config.derp_timeout, "attempting DERP connection");
 
-    // Simulate connection time (much shorter than timeout for demo)
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Check if already connected via DERP from the direct attempt
+    {
+        let state = conn_state.read().await;
+        let garage_key = &state.garage_public_key;
 
-    // In production, this would try each DERP region
-    // For now, return a mock success
-    Ok("primary".to_string())
+        if let Some(moto_wgtunnel_conn::PathType::Derp { region_name, .. }) =
+            state.magic_conn.current_path(garage_key).await
+        {
+            info!(region = %region_name, "already connected via DERP");
+            return Ok(region_name);
+        }
+    }
+
+    // Try to connect via MagicConn (will use DERP since direct failed)
+    let state = conn_state.read().await;
+    let garage_key = state.garage_public_key.clone();
+    let connect_result = state.magic_conn.connect(&garage_key).await;
+
+    match connect_result {
+        Ok(()) => {
+            // Check the path type
+            if let Some(path) = state.magic_conn.current_path(&garage_key).await {
+                match path {
+                    moto_wgtunnel_conn::PathType::Derp { region_name, .. } => {
+                        info!(region = %region_name, "DERP connection established");
+                        return Ok(region_name);
+                    }
+                    moto_wgtunnel_conn::PathType::Direct { endpoint } => {
+                        // Got a direct connection - still success
+                        info!(%endpoint, "direct connection established during DERP attempt");
+                        return Ok(format!("direct:{endpoint}"));
+                    }
+                }
+            }
+            // Simulate success for now while DERP is being fully wired up
+            warn!("DERP connection - using mock success (full implementation pending)");
+            Ok("primary".to_string())
+        }
+        Err(MagicConnError::AllAttemptsFailed) => {
+            Err(EnterError::ConnectionFailed(
+                "all connection attempts failed (direct and DERP)".to_string(),
+            ))
+        }
+        Err(MagicConnError::NoDerpRegions) => {
+            Err(EnterError::ConnectionFailed(
+                "no DERP regions configured".to_string(),
+            ))
+        }
+        Err(e) => {
+            debug!(error = %e, "DERP connection failed");
+            Err(EnterError::ConnectionFailed(format!(
+                "DERP connection failed: {e}"
+            )))
+        }
+    }
 }
 
 /// Create a mock session response for testing.
