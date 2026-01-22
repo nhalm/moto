@@ -63,9 +63,9 @@ HOW TO USE THIS FILE:
 **Implemented:**
 - moto-wgtunnel-types crate: lib.rs, keys.rs (WgPrivateKey, WgPublicKey)
 - moto-wgtunnel-types crate: ip.rs (OverlayIp, GARAGE_SUBNET, CLIENT_SUBNET)
+- moto-wgtunnel-types crate: peer.rs (PeerInfo, PeerAction)
 
 **Remaining:**
-- moto-wgtunnel-types crate: peer.rs (PeerInfo)
 - moto-wgtunnel-types crate: derp.rs (DerpMap, DerpRegion, DerpNode)
 - moto-wgtunnel-derp crate: lib.rs, protocol.rs (frame encoding/decoding)
 - moto-wgtunnel-derp crate: client.rs (DERP client)

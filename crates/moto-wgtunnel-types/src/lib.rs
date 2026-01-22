@@ -3,6 +3,7 @@
 //! This crate provides common types used across all wgtunnel crates:
 //! - [`keys`]: `WireGuard` keypair types ([`WgPrivateKey`], [`WgPublicKey`])
 //! - [`ip`]: Overlay network IP types ([`OverlayIp`], [`GARAGE_SUBNET`], [`CLIENT_SUBNET`])
+//! - [`peer`]: Peer information types ([`PeerInfo`], [`PeerAction`])
 //!
 //! # Example
 //!
@@ -31,6 +32,8 @@
 
 pub mod ip;
 pub mod keys;
+pub mod peer;
 
 pub use ip::{IpError, OverlayIp, Subnet, CLIENT_SUBNET, GARAGE_SUBNET};
 pub use keys::{KeyError, WgPrivateKey, WgPublicKey};
+pub use peer::{PeerAction, PeerInfo};
