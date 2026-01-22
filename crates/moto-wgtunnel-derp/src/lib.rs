@@ -72,13 +72,15 @@
 //! ```
 
 pub mod client;
+pub mod map;
 pub mod protocol;
 
 pub use client::{
-    ClientError, DerpClient, DerpClientConfig, DerpClientHandle, DerpEvent, ReceivedPacket,
-    DEFAULT_CONNECT_TIMEOUT, DEFAULT_KEEPALIVE_INTERVAL,
+    ClientError, DEFAULT_CONNECT_TIMEOUT, DEFAULT_KEEPALIVE_INTERVAL, DerpClient, DerpClientConfig,
+    DerpClientHandle, DerpEvent, ReceivedPacket,
 };
+pub use map::{DEFAULT_RETRY_TIMEOUT, DerpMapManager, RegionStatus};
 pub use protocol::{
-    check_frame_complete, decode_frame, Frame, FrameType, PeerGoneReason, ProtocolError,
-    FRAME_HEADER_LEN, KEY_LEN, MAGIC, MAX_INFO_LEN, MAX_PACKET_SIZE, NONCE_LEN,
+    FRAME_HEADER_LEN, Frame, FrameType, KEY_LEN, MAGIC, MAX_INFO_LEN, MAX_PACKET_SIZE, NONCE_LEN,
+    PeerGoneReason, ProtocolError, check_frame_complete, decode_frame,
 };
