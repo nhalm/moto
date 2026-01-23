@@ -1,0 +1,30 @@
+[package]
+name = "moto-club-garage"
+description = "Garage service logic for moto-club"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+moto-club-types.workspace = true
+moto-club-db.workspace = true
+moto-club-k8s.workspace = true
+moto-k8s.workspace = true
+
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+tokio.workspace = true
+serde.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio-test.workspace = true
+
+[lints]
+workspace = true

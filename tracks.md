@@ -112,8 +112,8 @@ HOW TO USE THIS FILE:
 - moto-club-api crate: garages.rs (garage REST endpoints)
 - moto-club-api crate: wg.rs (WireGuard coordination endpoints)
 - moto-club-k8s crate: lib.rs, namespace.rs, pods.rs (K8s interactions)
+- moto-club-garage crate: lib.rs, service.rs, lifecycle.rs (garage service logic)
 
 **Remaining:**
-- moto-club-garage crate: lib.rs, service.rs, lifecycle.rs (garage service logic)
 - moto-club-reconcile crate: lib.rs, garage.rs (K8s → DB reconciliation)
 - moto-club binary: main.rs (compose and run server)
