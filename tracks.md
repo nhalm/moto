@@ -122,9 +122,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## dev-container.md v0.5
+## dev-container.md v0.6
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - Root flake.nix with devShells.default (Rust toolchain, build deps, version control, db clients, general tools, k8s tools, connectivity)
@@ -132,3 +132,8 @@ HOW TO USE THIS FILE:
 - infra/dev-container/configuration.nix (NixOS system configuration with SSH, WireGuard)
 - infra/dev-container/Dockerfile (builds the NixOS container image via Nix)
 - Claude Code installation via native binary shell script (systemd service on first boot)
+- infra/dev-container/smoke-test.sh (smoke test script with --keep option)
+
+**Remaining:**
+- Makefile targets: docker-build-garage, docker-test-garage, docker-shell-garage
+- Root flake.nix: packages.garage output for `nix build .#garage`
