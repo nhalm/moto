@@ -127,8 +127,8 @@ HOW TO USE THIS FILE:
 
 **Implemented:**
 - Root flake.nix with devShells.default (Rust toolchain, build deps, version control, db clients, general tools, k8s tools, connectivity)
+- infra/dev-container/flake.nix (container-specific flake that imports root)
 
 **Remaining:**
-- infra/dev-container/flake.nix (container-specific flake that imports root)
 - infra/dev-container/configuration.nix (NixOS system configuration with SSH, WireGuard)
 - infra/dev-container/Dockerfile (builds the NixOS container image)
