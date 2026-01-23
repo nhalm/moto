@@ -38,16 +38,16 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 |------|--------|-------------|
 | [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
 | [moto-cli](moto-cli.md) | Ready to Rip | CLI commands, args, UX |
-| [jj-workflow](jj-workflow.md) | Bare Frame | How code flows via jj from garage to main |
+| [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
 
 ## Phase 1: Infrastructure (The Garage)
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [moto-club](moto-club.md) | Wrenching | Central orchestration, garage/bike management |
+| [moto-club](moto-club.md) | Ready to Rip | Central orchestration, garage management |
 | [keybox](keybox.md) | Wrenching | Secrets manager, SPIFFE-based identity |
 | [ai-proxy](ai-proxy.md) | Bare Frame | AI provider gateway, injects secrets |
-| [dev-container](dev-container.md) | Wrenching | Tooling, environment, volumes |
+| [dev-container](dev-container.md) | Ready to Rip | NixOS container, tooling, environment |
 | [container-system](container-system.md) | Wrenching | Build pipeline, registry |
 | [garage-isolation](garage-isolation.md) | Bare Frame | Network policies, resource limits |
 | [garage-local](garage-local.md) | Wrenching | Local K8s operations (no server) |
@@ -56,6 +56,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [supporting-services](supporting-services.md) | Bare Frame | Postgres, Redis deployment |
 | [moto-cron](moto-cron.md) | Bare Frame | Scheduled tasks (TTL cleanup), K8s CronJobs |
 | [moto-wgtunnel](moto-wgtunnel.md) | Ready to Rip | WireGuard tunnels for terminal/SSH access |
+| [moto-club-websocket](moto-club-websocket.md) | Bare Frame | WebSocket streaming for logs/events |
 
 ## Phase 2: Tokenization (The Vault)
 

@@ -2,130 +2,192 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
-| Last Updated | 2026-01-20 |
+| Version | 0.4 |
+| Last Updated | 2026-01-23 |
 
 ## Overview
 
-The dev container is the garage environment - where Claude Code wrenches on the codebase. This spec defines **what's inside** the garage container. For how it's built, see [container-system.md](container-system.md).
+The dev container is the garage environment - where Claude Code wrenches on the codebase. This is a **NixOS container** that provides a fully reproducible, declarative development environment.
+
+**Key architecture decisions:**
+- **NixOS** as the container OS (not just Nix-on-Linux)
+- **Flakes** for reproducible builds and dependency management
+- **Root flake** at repo root (`moto/flake.nix`) provides devShell
+- **Container config** in `moto/infra/dev-container/`
 
 ## Specification
 
 ### Philosophy
 
-- **Reproducible**: Same container = same environment, always
+- **Reproducible**: NixOS = same system configuration every time
+- **Declarative**: Entire OS defined in Nix, version-controlled
 - **Complete**: Everything Claude Code needs to build, test, run
 - **Root access**: AI needs full control inside the sandbox
 - **Isolated**: Security comes from the container/namespace boundary
 
+### Why NixOS (not just Nix)
+
+| Approach | Description | Trade-off |
+|----------|-------------|-----------|
+| Nix on Alpine/Ubuntu | Nix package manager on top of another OS | Mixing package managers, less reproducible |
+| **NixOS container** | Entire OS is NixOS, everything from Nix | Fully declarative, larger image, steeper learning curve |
+
+We use NixOS because:
+- Everything (packages, services, users) is declared in Nix
+- Services (SSH, WireGuard daemon) are easy to configure
+- System upgrades are atomic and rollback-able
+- No mixing of package managers
+
+### Project Structure
+
+```
+moto/
+├── flake.nix                    # Root flake - devShell, workspace builds
+├── flake.lock                   # Pinned dependencies
+├── infra/
+│   └── dev-container/
+│       ├── flake.nix            # Container-specific flake (imports root)
+│       ├── configuration.nix    # NixOS system configuration
+│       └── Dockerfile           # Builds the NixOS container image
+```
+
+**Root flake (`moto/flake.nix`):**
+- Provides `devShells.default` with all development tools
+- Future: `packages.*` for built binaries
+- Future: `checks.*` for CI validation
+
+**Container flake (`moto/infra/dev-container/flake.nix`):**
+- Imports root flake
+- Builds the NixOS container image
+- Configures services (SSH, WireGuard daemon)
+
 ### Included Tooling
+
+All tools are installed via Nix in the devShell/container.
 
 **Languages:**
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Rust | 1.83.0 (pinned) | Primary language |
-| Node.js | 22.x LTS (pinned) | For tooling that needs it |
-| Python | 3.12 (pinned) | For scripts, tooling |
+| Rust | 1.85 stable | Primary language |
+| Node.js | 22.x LTS | For tooling (claude-code) |
+| Python | 3.12 | For scripts, tooling |
 
 **Rust toolchain:**
 
-| Tool | Purpose |
-|------|---------|
-| cargo | Build, run, test |
-| rustfmt | Code formatting |
-| clippy | Linting |
-| rust-analyzer | IDE support |
-| cargo-watch | Auto-rebuild on changes |
-| cargo-nextest | Modern test runner |
-| cargo-audit | Security vulnerability scanner |
-| cargo-deny | License/vulnerability auditing |
-| cargo-edit | Cargo.toml manipulation |
-| cargo-expand | Macro debugging |
-| cargo-llvm-cov | Code coverage |
-| mold | Fast linker |
-| sccache | Shared compilation cache |
-| sqlx-cli | Database migrations |
+| Tool | Nix Package | Purpose |
+|------|-------------|---------|
+| cargo | (bundled with rust) | Build, run, test |
+| rustfmt | (bundled with rust) | Code formatting |
+| clippy | (bundled with rust) | Linting |
+| rust-analyzer | `rust-analyzer` | IDE support |
+| cargo-watch | `cargo-watch` | Auto-rebuild on changes |
+| cargo-nextest | `cargo-nextest` | Modern test runner |
+| cargo-audit | `cargo-audit` | Security vulnerability scanner |
+| cargo-deny | `cargo-deny` | License/vulnerability auditing |
+| cargo-edit | `cargo-edit` | Cargo.toml manipulation |
+| cargo-expand | `cargo-expand` | Macro debugging |
+| mold | `mold` | Fast linker |
+| sccache | `sccache` | Shared compilation cache |
+| sqlx-cli | `sqlx-cli` | Database migrations |
 
 **System libraries:**
 
-| Library | Purpose |
-|---------|---------|
-| pkg-config | Build system helper |
-| openssl | TLS/crypto |
-| libpq | PostgreSQL client library |
-| clang | C compiler (required for mold linker) |
+| Library | Nix Package | Purpose |
+|---------|-------------|---------|
+| pkg-config | `pkg-config` | Build system helper |
+| openssl | `openssl` | TLS/crypto |
+| libpq | `postgresql.lib` | PostgreSQL client library |
+| clang | `clang` | C compiler (for mold linker) |
 
 **Version control:**
 
-| Tool | Purpose |
-|------|---------|
-| git | VCS |
-| jj (jujutsu) | Garage workflow - see [jj-workflow.md](jj-workflow.md) |
-| gh | GitHub CLI |
+| Tool | Nix Package | Purpose |
+|------|-------------|---------|
+| git | `git` | VCS |
+| jj (jujutsu) | `jujutsu` | Garage workflow - see [jj-workflow.md](jj-workflow.md) |
+| gh | `gh` | GitHub CLI |
 
 **Database clients:**
 
-| Tool | Purpose |
-|------|---------|
-| psql | PostgreSQL client |
-| redis-cli | Redis client |
+| Tool | Nix Package | Purpose |
+|------|-------------|---------|
+| psql | `postgresql` | PostgreSQL client |
+| redis-cli | `redis` | Redis client |
 
 **General tools:**
 
-| Tool | Purpose |
-|------|---------|
-| curl | HTTP client |
-| jq | JSON processing |
-| yq | YAML processing |
-| ripgrep (rg) | Fast search |
-| fd | Fast find |
-| bat | Better cat |
-| htop | Process monitoring |
-| tree | Directory visualization |
+| Tool | Nix Package | Purpose |
+|------|-------------|---------|
+| curl | `curl` | HTTP client |
+| jq | `jq` | JSON processing |
+| yq | `yq` | YAML processing |
+| ripgrep | `ripgrep` | Fast search |
+| fd | `fd` | Fast find |
+| bat | `bat` | Better cat |
+| htop | `htop` | Process monitoring |
+| tree | `tree` | Directory visualization |
 
 **Kubernetes:**
 
-| Tool | Purpose |
-|------|---------|
-| kubectl | K8s CLI |
-| k9s | K8s TUI |
-| helm | Package manager |
+| Tool | Nix Package | Purpose |
+|------|-------------|---------|
+| kubectl | `kubectl` | K8s CLI |
+| k9s | `k9s` | K8s TUI |
+| helm | `kubernetes-helm` | Package manager |
 
 **AI:**
 
-| Tool | Purpose |
-|------|---------|
-| claude-code | Claude CLI for wrenching |
+| Tool | Nix Package | Purpose |
+|------|-------------|---------|
+| claude-code | `claude-code` | Claude CLI for wrenching |
 
-**Connectivity (TODO - WireGuard):**
+**Connectivity:**
 
-| Tool | Purpose |
-|------|---------|
-| wireguard-tools | WireGuard client for tunnel |
-| openssh-server | SSH server for terminal access |
-
-> **TODO: Add WireGuard + SSH for terminal access**
-> - Garage pod runs WireGuard daemon (registers with moto-club)
-> - SSH server listens on WireGuard interface
-> - CLI connects via WireGuard tunnel → SSH
-> - See [moto-wgtunnel.md](moto-wgtunnel.md) for details
+| Tool | Nix Package | Purpose |
+|------|-------------|---------|
+| wireguard-tools | `wireguard-tools` | WireGuard client for tunnel |
+| openssh | `openssh` | SSH server for terminal access |
 
 ### Claude Code Configuration
 
-Claude Code connects to ai-proxy instead of direct API calls:
+**v1 (Local Dev):** User provides API key directly.
 
 ```bash
-# Environment variables (set in container)
-ANTHROPIC_BASE_URL="http://ai-proxy.moto-system.svc.cluster.local:8080"
-ANTHROPIC_API_KEY="garage-${GARAGE_ID}"  # Dummy, proxy handles real key
+# User sets this when creating garage or in their environment
+ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-The ai-proxy:
-- Recognizes garage identity from the request
-- Injects real API credentials
-- Tracks usage per garage
-- Enforces rate limits
+The API key can be:
+- Passed as env var when starting the garage
+- Stored in user's local config (not in container image)
+
+**Future (with ai-proxy):** Claude Code connects via ai-proxy:
+
+```bash
+ANTHROPIC_BASE_URL="http://ai-proxy.moto-system.svc.cluster.local:8080"
+ANTHROPIC_API_KEY="garage-${GARAGE_ID}"  # Proxy handles real key
+```
+
+### NixOS Services
+
+The container runs these NixOS services:
+
+**SSH Server:**
+```nix
+services.openssh = {
+  enable = true;
+  settings = {
+    PermitRootLogin = "yes";
+    PasswordAuthentication = false;
+  };
+};
+```
+
+**WireGuard (configured by moto-garage-wgtunnel daemon):**
+- Daemon registers with moto-club on startup
+- Configures WireGuard interface dynamically
+- See [moto-wgtunnel.md](moto-wgtunnel.md) for details
 
 ### Network Configuration
 
@@ -133,22 +195,21 @@ Garage needs access to:
 
 | Service | Endpoint | Purpose |
 |---------|----------|---------|
-| ai-proxy | `ai-proxy.moto-system:8080` | AI provider access |
-| keybox | `keybox.moto-system:8080` | Secrets (via SPIFFE) |
+| Anthropic API | `api.anthropic.com` | Claude Code (v1, direct) |
+| keybox | `keybox.moto-system:8080` | Secrets (future) |
 | postgres | `postgres.moto-garage-{id}:5432` | Local dev database |
 | redis | `redis.moto-garage-{id}:6379` | Local dev cache |
 | internet | (egress allowed) | Package downloads, docs |
 
 **Allowed egress:**
-- `ai-proxy.moto-system`
-- `keybox.moto-system`
+- `api.anthropic.com` (Claude API, v1)
 - `*.moto-garage-{id}` (own namespace)
 - `crates.io`, `github.com`, `npmjs.org` (package registries)
+- `cache.nixos.org` (Nix binary cache)
 
 **Denied:**
 - Other garage namespaces
 - Production bike namespaces
-- Direct cloud provider APIs
 - Cloud metadata service (`169.254.169.254`) - prevents credential theft
 
 ### Volume Mounts
@@ -158,12 +219,13 @@ Garage needs access to:
 | Code | `/workspace` | PVC | Repo checkout, persists across restarts |
 | Cargo cache | `/root/.cargo` | PVC | Rust build cache, shared across garages |
 | Target dir | `/workspace/target` | emptyDir | Build artifacts, ephemeral |
+| Nix store | `/nix` | PVC | Nix store, shared across garages |
 
 **Notes:**
 - `/workspace` is a PVC so uncommitted work survives pod restarts
 - Cargo cache is shared PVC to speed up builds across garages
 - Target directory is ephemeral (large, regenerable)
-- Nix store is baked into the image, not mounted
+- Nix store is shared to avoid re-downloading packages
 
 ### Environment Variables
 
@@ -190,23 +252,19 @@ RUST_LOG="info"
 RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=mold"
 RUSTC_WRAPPER="sccache"
 
-# AI Proxy
-ANTHROPIC_BASE_URL="http://ai-proxy.moto-system.svc.cluster.local:8080"
+# AI (v1 - user provides key)
+# ANTHROPIC_API_KEY set by user
 
-# Database (credentials from keybox, not hardcoded)
+# Database (credentials from env or keybox)
 DATABASE_HOST="postgres.moto-garage-${GARAGE_ID}.svc.cluster.local"
 DATABASE_PORT="5432"
 DATABASE_NAME="moto"
-# DATABASE_URL assembled at runtime from keybox secrets
 
 # Redis
 REDIS_URL="redis://redis.moto-garage-${GARAGE_ID}.svc.cluster.local:6379"
 
-# Keybox
-KEYBOX_URL="http://keybox.moto-system.svc.cluster.local:8080"
-
-# SPIFFE (for keybox auth)
-SPIFFE_ENDPOINT_SOCKET="unix:///run/spire/sockets/agent.sock"
+# Nix
+NIX_PATH="nixpkgs=flake:nixpkgs"
 
 # Telemetry
 DO_NOT_TRACK="1"
@@ -225,6 +283,7 @@ Inside the garage, Claude Code has full control. Isolation comes from the contai
 - Root access (can install packages, modify anything)
 - Full filesystem access
 - Can run any commands
+- Can use `nix-shell`, `nix build`, etc.
 - This is intentional - AI needs freedom to wrench
 
 **Isolation (at the boundary):**
@@ -235,8 +294,7 @@ Inside the garage, Claude Code has full control. Isolation comes from the contai
 
 **Secrets:**
 - No secrets baked into image
-- All credentials fetched from keybox at runtime
-- SPIFFE identity for authentication
+- API keys passed as env vars (v1) or fetched from keybox (future)
 - AI can't access production secrets (scoped to garage)
 
 **What garage CAN'T do:**
@@ -282,10 +340,140 @@ Can be overridden per-garage:
 moto garage open --cpu 8 --memory 16Gi
 ```
 
+### Building the Container
+
+**For local development (no registry):**
+
+```bash
+# Build the NixOS container image
+cd infra/dev-container
+nix build .#container
+
+# Load into Docker
+docker load < result
+
+# Image is now available as moto-dev:latest
+```
+
+**Future (with registry):**
+- Push to local registry (`localhost:5000`)
+- Or GitHub Container Registry (`ghcr.io/...`)
+
+### Example Root Flake
+
+```nix
+# moto/flake.nix
+{
+  description = "Moto - fintech infrastructure";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        overlays = [ (import rust-overlay) ];
+        pkgs = import nixpkgs { inherit system overlays; };
+
+        rustToolchain = pkgs.rust-bin.stable."1.85.0".default.override {
+          extensions = [ "rust-src" "rust-analyzer" ];
+        };
+      in {
+        devShells.default = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            # Rust
+            rustToolchain
+            cargo-watch
+            cargo-nextest
+            cargo-audit
+            cargo-deny
+            cargo-edit
+            cargo-expand
+            mold
+            sccache
+            sqlx-cli
+
+            # Build deps
+            pkg-config
+            openssl
+            postgresql.lib
+            clang
+
+            # Version control
+            git
+            jujutsu
+            gh
+
+            # Database clients
+            postgresql
+            redis
+
+            # General tools
+            curl
+            jq
+            yq
+            ripgrep
+            fd
+            bat
+            htop
+            tree
+
+            # Kubernetes
+            kubectl
+            k9s
+            kubernetes-helm
+
+            # AI
+            claude-code
+
+            # Connectivity
+            wireguard-tools
+            openssh
+          ];
+
+          shellHook = ''
+            export RUST_BACKTRACE=1
+            export RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=mold"
+          '';
+        };
+      }
+    );
+}
+```
+
+## Deferred Items
+
+### ai-proxy Integration (Future)
+
+When ai-proxy is implemented:
+- Claude Code connects via proxy instead of direct API
+- Proxy handles credentials, rate limiting, usage tracking
+- See [ai-proxy.md](ai-proxy.md)
+
+### Keybox Integration (Future)
+
+When keybox is implemented:
+- Secrets fetched at runtime via SPIFFE identity
+- No API keys in env vars
+- See [keybox.md](keybox.md)
+
+### SPIFFE Identity (Future)
+
+Each garage gets a SPIFFE identity:
+```
+spiffe://moto.local/garage/{garage-id}
+```
+
 ## References
 
-- [container-system.md](container-system.md) - How the container is built
+- [container-system.md](container-system.md) - Container build pipeline
 - [garage-lifecycle.md](garage-lifecycle.md) - How garages are managed
 - [garage-isolation.md](garage-isolation.md) - Network policies, quotas
-- [keybox.md](keybox.md) - How secrets are fetched
-- [ai-proxy.md](ai-proxy.md) - How Claude Code connects to AI
+- [moto-wgtunnel.md](moto-wgtunnel.md) - WireGuard tunnel system
+- [moto-club.md](moto-club.md) - Garage orchestration
