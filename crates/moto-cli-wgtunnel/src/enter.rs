@@ -42,8 +42,10 @@ use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPrivateKey, WgPublicKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
+use uuid::Uuid;
 
+use crate::client::{ClientError, MotoClubClient, MotoClubConfig};
 use crate::{TunnelError, TunnelManager, TunnelSession, TunnelStatus};
 
 /// Default timeout for direct UDP connection attempts (seconds).
@@ -119,6 +121,12 @@ pub struct EnterConfig {
 
     /// Force DERP only (skip direct connection attempts).
     pub derp_only: bool,
+
+    /// moto-club base URL (e.g., `http://localhost:8080`).
+    pub moto_club_url: String,
+
+    /// Owner/username for authentication.
+    pub owner: String,
 }
 
 impl Default for EnterConfig {
@@ -128,6 +136,9 @@ impl Default for EnterConfig {
             derp_timeout: Duration::from_secs(DEFAULT_DERP_TIMEOUT_SECS),
             session_ttl: None,
             derp_only: std::env::var("MOTO_WGTUNNEL_DERP_ONLY").is_ok(),
+            moto_club_url: std::env::var("MOTO_CLUB_URL")
+                .unwrap_or_else(|_| "http://localhost:8080".to_string()),
+            owner: std::env::var("MOTO_USER").unwrap_or_default(),
         }
     }
 }
@@ -168,6 +179,20 @@ impl EnterConfig {
     #[allow(clippy::missing_const_for_fn)]
     pub fn with_derp_only(mut self, derp_only: bool) -> Self {
         self.derp_only = derp_only;
+        self
+    }
+
+    /// Set the moto-club base URL.
+    #[must_use]
+    pub fn with_moto_club_url(mut self, url: impl Into<String>) -> Self {
+        self.moto_club_url = url.into();
+        self
+    }
+
+    /// Set the owner/username.
+    #[must_use]
+    pub fn with_owner(mut self, owner: impl Into<String>) -> Self {
+        self.owner = owner.into();
         self
     }
 }
@@ -667,13 +692,51 @@ pub async fn enter_garage(
 ) -> Result<GarageSession, EnterError> {
     info!(garage = %garage_name, "entering garage");
 
-    // Step 1: Ensure device is registered
-    register_device(manager, progress);
+    // Validate owner is configured
+    if config.owner.is_empty() {
+        return Err(EnterError::ClubUnreachable(
+            "MOTO_USER environment variable is required".to_string(),
+        ));
+    }
+
+    // Create moto-club client
+    let club_config = MotoClubConfig::new(&config.moto_club_url, &config.owner);
+    let client = MotoClubClient::new(club_config)
+        .map_err(|e| EnterError::ClubUnreachable(e.to_string()))?;
+
+    // Step 1: Register device with moto-club
+    progress.step_start("Registering device");
+    let device_id = register_device_with_club(manager, &client, progress).await?;
+    progress.step_done("Registering device");
 
     // Step 2: Create session with moto-club
     progress.step_start("Creating session");
-    let session_response = create_mock_session(garage_name, &config);
+    let ttl_seconds = config.session_ttl.map(|t| t as u32);
+    let api_response = client
+        .create_session(garage_name, device_id, ttl_seconds)
+        .await
+        .map_err(|e| match e {
+            ClientError::GarageNotFound(msg) => EnterError::GarageNotFound(msg),
+            ClientError::NotAuthorized(msg) => EnterError::NotAuthorized(msg),
+            ClientError::Unreachable { url, reason } => {
+                EnterError::ClubUnreachable(format!("{url}: {reason}"))
+            }
+            other => EnterError::SessionCreation(other.to_string()),
+        })?;
     progress.step_done("Creating session");
+
+    // Convert API response to internal SessionResponse type
+    let session_response = SessionResponse {
+        session_id: api_response.session_id,
+        garage: GarageWgInfo {
+            public_key: api_response.garage.public_key,
+            overlay_ip: api_response.garage.overlay_ip.to_string(),
+            endpoints: api_response.garage.endpoints,
+        },
+        client_ip: api_response.client_ip.to_string(),
+        derp_map: api_response.derp_map,
+        expires_at: api_response.expires_at,
+    };
 
     // Parse session response
     let (client_ip, garage_ip, garage_public_key) = parse_session_response(&session_response)?;
@@ -815,17 +878,45 @@ async fn create_connection_state(
     })
 }
 
-/// Register device with moto-club (or verify identity exists).
-fn register_device(manager: &TunnelManager, progress: &dyn EnterProgress) {
-    progress.step_start("Registering device");
+/// Register device with moto-club.
+///
+/// Registers the device's WireGuard public key with moto-club, which
+/// allocates an overlay IP address. If the device is already registered,
+/// moto-club returns the existing allocation.
+///
+/// # Returns
+///
+/// The device ID (UUID) to use for session creation.
+async fn register_device_with_club(
+    manager: &TunnelManager,
+    client: &MotoClubClient,
+    _progress: &dyn EnterProgress,
+) -> Result<Uuid, EnterError> {
     let device_info = manager.device_info();
     debug!(
         device_id = %device_info.device_id,
         public_key = %device_info.public_key,
-        "device identity ready"
+        "registering device with moto-club"
     );
-    // TODO: Actually register with moto-club when moto-club-wg is implemented
-    progress.step_done("Registering device");
+
+    // Register device with moto-club (retries with exponential backoff)
+    let response = client
+        .register_device(&device_info.public_key, Some("moto-cli"))
+        .await
+        .map_err(|e| match e {
+            ClientError::Unreachable { url, reason } => {
+                EnterError::ClubUnreachable(format!("{url}: {reason}"))
+            }
+            other => EnterError::DeviceRegistration(other.to_string()),
+        })?;
+
+    info!(
+        device_id = %response.device_id,
+        overlay_ip = %response.overlay_ip,
+        "device registered with moto-club"
+    );
+
+    Ok(response.device_id)
 }
 
 /// Parse the session response into typed values.
@@ -1074,52 +1165,6 @@ async fn attempt_derp_connection(
     }
 }
 
-/// Create a mock session response for testing.
-///
-/// TODO: Remove this when moto-club-wg is implemented.
-fn create_mock_session(garage_name: &str, _config: &EnterConfig) -> SessionResponse {
-    use moto_wgtunnel_types::WgPrivateKey;
-
-    // Generate deterministic-ish session ID from garage name
-    let session_id = format!(
-        "sess_{:x}",
-        garage_name
-            .as_bytes()
-            .iter()
-            .fold(0u64, |acc, &b| acc.wrapping_mul(31).wrapping_add(u64::from(b)))
-    );
-
-    // Generate a mock garage keypair
-    let garage_key = WgPrivateKey::generate();
-
-    // Create mock garage IP from name hash
-    let garage_index = garage_name
-        .as_bytes()
-        .iter()
-        .fold(0u64, |acc, &b| acc.wrapping_add(u64::from(b)));
-    let garage_ip = OverlayIp::garage(garage_index);
-
-    // Client gets a fixed IP for now
-    let client_ip = OverlayIp::client(1);
-
-    warn!(
-        garage = %garage_name,
-        "using mock session - moto-club integration not yet implemented"
-    );
-
-    SessionResponse {
-        session_id,
-        garage: GarageWgInfo {
-            public_key: garage_key.public_key().to_base64(),
-            overlay_ip: garage_ip.to_string(),
-            endpoints: vec![],
-        },
-        client_ip: client_ip.to_string(),
-        derp_map: DerpMap::new(),
-        expires_at: "2099-12-31T23:59:59Z".to_string(),
-    }
-}
-
 /// Check if there's an existing session for a garage.
 ///
 /// If a session exists and is still valid, returns it for reattachment.
@@ -1162,17 +1207,6 @@ mod tests {
         assert_eq!(config.derp_timeout, Duration::from_secs(15));
         assert_eq!(config.session_ttl, Some(7200));
         assert!(config.derp_only);
-    }
-
-    #[test]
-    fn mock_session_creation() {
-        let config = EnterConfig::default();
-        let response = create_mock_session("test-garage", &config);
-
-        assert!(!response.session_id.is_empty());
-        assert!(!response.garage.public_key.is_empty());
-        assert!(!response.garage.overlay_ip.is_empty());
-        assert!(!response.client_ip.is_empty());
     }
 
     #[test]

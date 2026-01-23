@@ -1,0 +1,588 @@
+//! moto-club API client.
+//!
+//! This module provides an HTTP client for communicating with the moto-club
+//! REST API. It handles:
+//!
+//! - Device registration (`POST /api/v1/wg/devices`)
+//! - Session creation (`POST /api/v1/wg/sessions`)
+//! - Session management (`GET/DELETE /api/v1/wg/sessions`)
+//!
+//! # Example
+//!
+//! ```ignore
+//! use moto_cli_wgtunnel::client::{MotoClubClient, MotoClubConfig};
+//!
+//! let config = MotoClubConfig::new("http://localhost:8080", "my-username");
+//! let client = MotoClubClient::new(config)?;
+//!
+//! // Register a device
+//! let device = client.register_device(&public_key, Some("my-laptop")).await?;
+//! println!("Device registered: {}", device.device_id);
+//!
+//! // Create a session
+//! let session = client.create_session("my-garage", device.device_id, None).await?;
+//! println!("Session created: {}", session.session_id);
+//! ```
+
+use std::time::Duration;
+
+use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tracing::{debug, warn};
+use uuid::Uuid;
+
+/// Default moto-club base URL for local development.
+pub const DEFAULT_MOTO_CLUB_URL: &str = "http://localhost:8080";
+
+/// Default request timeout in seconds.
+pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
+
+/// Retry configuration for device registration.
+pub const DEVICE_REGISTRATION_RETRIES: u32 = 3;
+
+/// Retry delays for device registration (exponential backoff).
+pub const DEVICE_REGISTRATION_DELAYS: [Duration; 3] = [
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+];
+
+/// Errors that can occur when communicating with moto-club.
+#[derive(Debug, Error)]
+pub enum ClientError {
+    /// HTTP request failed.
+    #[error("HTTP request failed: {0}")]
+    Request(#[from] reqwest::Error),
+
+    /// Server returned an error response.
+    #[error("server error: {code} - {message}")]
+    Server {
+        /// Error code from the server.
+        code: String,
+        /// Error message from the server.
+        message: String,
+    },
+
+    /// Failed to parse response.
+    #[error("failed to parse response: {0}")]
+    ParseError(String),
+
+    /// Device registration failed after retries.
+    #[error("device registration failed after {attempts} attempts: {last_error}")]
+    DeviceRegistrationFailed {
+        /// Number of attempts made.
+        attempts: u32,
+        /// Last error encountered.
+        last_error: String,
+    },
+
+    /// Session creation failed.
+    #[error("session creation failed: {0}")]
+    SessionCreationFailed(String),
+
+    /// Garage not found.
+    #[error("garage not found: {0}")]
+    GarageNotFound(String),
+
+    /// Not authorized to access garage.
+    #[error("not authorized to access garage: {0}")]
+    NotAuthorized(String),
+
+    /// moto-club is unreachable.
+    #[error("moto-club unreachable at {url}: {reason}")]
+    Unreachable {
+        /// The URL that was attempted.
+        url: String,
+        /// Why it's unreachable.
+        reason: String,
+    },
+}
+
+/// Configuration for the moto-club client.
+#[derive(Debug, Clone)]
+pub struct MotoClubConfig {
+    /// Base URL for moto-club (e.g., `http://localhost:8080`).
+    pub base_url: String,
+
+    /// Owner/username for authentication (used as Bearer token in local dev).
+    pub owner: String,
+
+    /// Request timeout.
+    pub timeout: Duration,
+}
+
+impl MotoClubConfig {
+    /// Create a new moto-club client configuration.
+    #[must_use]
+    pub fn new(base_url: impl Into<String>, owner: impl Into<String>) -> Self {
+        Self {
+            base_url: base_url.into(),
+            owner: owner.into(),
+            timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
+        }
+    }
+
+    /// Set the request timeout.
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Create configuration from environment variables.
+    ///
+    /// Uses:
+    /// - `MOTO_CLUB_URL` for base URL (default: `http://localhost:8080`)
+    /// - `MOTO_USER` for owner (required)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `MOTO_USER` is not set.
+    pub fn from_env() -> Result<Self, ClientError> {
+        let base_url =
+            std::env::var("MOTO_CLUB_URL").unwrap_or_else(|_| DEFAULT_MOTO_CLUB_URL.to_string());
+
+        let owner = std::env::var("MOTO_USER").map_err(|_| ClientError::Server {
+            code: "CONFIG_ERROR".to_string(),
+            message: "MOTO_USER environment variable is required".to_string(),
+        })?;
+
+        Ok(Self::new(base_url, owner))
+    }
+}
+
+/// Client for communicating with moto-club.
+pub struct MotoClubClient {
+    /// HTTP client.
+    client: Client,
+
+    /// Configuration.
+    config: MotoClubConfig,
+}
+
+impl MotoClubClient {
+    /// Create a new moto-club client.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client cannot be created.
+    pub fn new(config: MotoClubConfig) -> Result<Self, ClientError> {
+        let client = Client::builder()
+            .timeout(config.timeout)
+            .build()
+            .map_err(ClientError::Request)?;
+
+        Ok(Self { client, config })
+    }
+
+    /// Get the authorization header value.
+    fn auth_header(&self) -> String {
+        format!("Bearer {}", self.config.owner)
+    }
+
+    /// Register a device with moto-club.
+    ///
+    /// This registers the device's WireGuard public key with moto-club,
+    /// which allocates an overlay IP address for the device.
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - Device's WireGuard public key
+    /// * `device_name` - Optional human-readable device name
+    ///
+    /// # Returns
+    ///
+    /// Device registration response with assigned IP.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - moto-club is unreachable (after retries)
+    /// - Server returns an error
+    pub async fn register_device(
+        &self,
+        public_key: &WgPublicKey,
+        device_name: Option<&str>,
+    ) -> Result<DeviceResponse, ClientError> {
+        let url = format!("{}/api/v1/wg/devices", self.config.base_url);
+
+        let request = RegisterDeviceRequest {
+            public_key: public_key.to_base64(),
+            device_name: device_name.map(str::to_string),
+        };
+
+        debug!(url = %url, "registering device with moto-club");
+
+        // Retry with exponential backoff
+        let mut last_error = String::new();
+        for (attempt, delay) in DEVICE_REGISTRATION_DELAYS.iter().enumerate() {
+            let attempt = attempt as u32 + 1;
+
+            match self.post_json::<_, DeviceResponse>(&url, &request).await {
+                Ok(response) => {
+                    debug!(
+                        device_id = %response.device_id,
+                        overlay_ip = %response.overlay_ip,
+                        "device registered successfully"
+                    );
+                    return Ok(response);
+                }
+                Err(e) => {
+                    last_error = e.to_string();
+                    warn!(
+                        attempt = attempt,
+                        max_attempts = DEVICE_REGISTRATION_RETRIES,
+                        error = %last_error,
+                        "device registration failed, retrying"
+                    );
+
+                    if attempt < DEVICE_REGISTRATION_RETRIES {
+                        tokio::time::sleep(*delay).await;
+                    }
+                }
+            }
+        }
+
+        Err(ClientError::DeviceRegistrationFailed {
+            attempts: DEVICE_REGISTRATION_RETRIES,
+            last_error,
+        })
+    }
+
+    /// Create a tunnel session for connecting to a garage.
+    ///
+    /// # Arguments
+    ///
+    /// * `garage_id` - Garage name or ID
+    /// * `device_id` - Device UUID (from registration)
+    /// * `ttl_seconds` - Optional session TTL (defaults to garage TTL)
+    ///
+    /// # Returns
+    ///
+    /// Session response with garage connection info.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - moto-club is unreachable
+    /// - Garage is not found
+    /// - User is not authorized
+    pub async fn create_session(
+        &self,
+        garage_id: &str,
+        device_id: Uuid,
+        ttl_seconds: Option<u32>,
+    ) -> Result<SessionResponse, ClientError> {
+        let url = format!("{}/api/v1/wg/sessions", self.config.base_url);
+
+        let request = CreateSessionRequest {
+            garage_id: garage_id.to_string(),
+            device_id,
+            ttl_seconds,
+        };
+
+        debug!(url = %url, garage = %garage_id, "creating tunnel session");
+
+        self.post_json(&url, &request).await
+    }
+
+    /// List active sessions for the current user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if moto-club is unreachable.
+    pub async fn list_sessions(&self) -> Result<ListSessionsResponse, ClientError> {
+        let url = format!("{}/api/v1/wg/sessions", self.config.base_url);
+
+        debug!(url = %url, "listing sessions");
+
+        self.get_json(&url).await
+    }
+
+    /// Close a tunnel session.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - Session ID to close
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - moto-club is unreachable
+    /// - Session is not found
+    pub async fn close_session(&self, session_id: &str) -> Result<(), ClientError> {
+        let url = format!("{}/api/v1/wg/sessions/{}", self.config.base_url, session_id);
+
+        debug!(url = %url, session_id = %session_id, "closing session");
+
+        let response = self
+            .client
+            .delete(&url)
+            .header("Authorization", self.auth_header())
+            .send()
+            .await
+            .map_err(|e| self.connection_error(e))?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            self.handle_error_response(response).await
+        }
+    }
+
+    /// Send a POST request with JSON body and parse JSON response.
+    async fn post_json<Req, Resp>(&self, url: &str, body: &Req) -> Result<Resp, ClientError>
+    where
+        Req: Serialize,
+        Resp: for<'de> Deserialize<'de>,
+    {
+        let response = self
+            .client
+            .post(url)
+            .header("Authorization", self.auth_header())
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| self.connection_error(e))?;
+
+        if response.status().is_success() {
+            response.json().await.map_err(|e| {
+                ClientError::ParseError(format!("failed to parse response: {e}"))
+            })
+        } else {
+            self.handle_error_response(response).await
+        }
+    }
+
+    /// Send a GET request and parse JSON response.
+    async fn get_json<Resp>(&self, url: &str) -> Result<Resp, ClientError>
+    where
+        Resp: for<'de> Deserialize<'de>,
+    {
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", self.auth_header())
+            .send()
+            .await
+            .map_err(|e| self.connection_error(e))?;
+
+        if response.status().is_success() {
+            response.json().await.map_err(|e| {
+                ClientError::ParseError(format!("failed to parse response: {e}"))
+            })
+        } else {
+            self.handle_error_response(response).await
+        }
+    }
+
+    /// Convert a reqwest error to a connection error if appropriate.
+    fn connection_error(&self, error: reqwest::Error) -> ClientError {
+        if error.is_connect() || error.is_timeout() {
+            ClientError::Unreachable {
+                url: self.config.base_url.clone(),
+                reason: error.to_string(),
+            }
+        } else {
+            ClientError::Request(error)
+        }
+    }
+
+    /// Handle an error response from the server.
+    async fn handle_error_response<T>(&self, response: reqwest::Response) -> Result<T, ClientError> {
+        let status = response.status();
+
+        // Try to parse error response
+        let error: ApiErrorResponse = match response.json().await {
+            Ok(e) => e,
+            Err(_) => {
+                return Err(ClientError::Server {
+                    code: "UNKNOWN".to_string(),
+                    message: format!("HTTP {status}"),
+                });
+            }
+        };
+
+        let code = error.error.code;
+        let message = error.error.message;
+
+        // Map known error codes to specific errors
+        match code.as_str() {
+            "GARAGE_NOT_FOUND" => Err(ClientError::GarageNotFound(message)),
+            "GARAGE_NOT_OWNED" => Err(ClientError::NotAuthorized(message)),
+            _ => Err(ClientError::Server { code, message }),
+        }
+    }
+}
+
+// ============================================================================
+// Request/Response types (matching moto-club-api)
+// ============================================================================
+
+/// Request to register a device.
+#[derive(Debug, Clone, Serialize)]
+struct RegisterDeviceRequest {
+    /// Device's WireGuard public key (base64).
+    public_key: String,
+    /// Optional human-readable device name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    device_name: Option<String>,
+}
+
+/// Response for device registration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeviceResponse {
+    /// Unique device identifier.
+    pub device_id: Uuid,
+    /// Assigned overlay IP address.
+    pub overlay_ip: OverlayIp,
+    /// Optional human-readable device name.
+    pub device_name: Option<String>,
+}
+
+/// Request to create a tunnel session.
+#[derive(Debug, Clone, Serialize)]
+struct CreateSessionRequest {
+    /// Garage to connect to (name or ID).
+    garage_id: String,
+    /// Device requesting the connection.
+    device_id: Uuid,
+    /// Optional session TTL in seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ttl_seconds: Option<u32>,
+}
+
+/// Response for session creation.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SessionResponse {
+    /// Session ID assigned by moto-club.
+    pub session_id: String,
+    /// Garage connection information.
+    pub garage: GarageInfo,
+    /// Client's assigned overlay IP.
+    pub client_ip: OverlayIp,
+    /// DERP map for relay fallback.
+    pub derp_map: DerpMap,
+    /// Session expiration time (ISO 8601).
+    pub expires_at: String,
+}
+
+/// Garage connection information from session response.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GarageInfo {
+    /// Garage's WireGuard public key (base64).
+    pub public_key: String,
+    /// Garage's overlay IP.
+    pub overlay_ip: OverlayIp,
+    /// Garage's direct endpoints (if known).
+    #[serde(default)]
+    pub endpoints: Vec<String>,
+}
+
+/// Response for listing sessions.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ListSessionsResponse {
+    /// Active sessions.
+    pub sessions: Vec<SessionInfo>,
+}
+
+/// Session info for listing.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SessionInfo {
+    /// Unique session identifier.
+    pub session_id: String,
+    /// Garage this session connects to.
+    pub garage_id: String,
+    /// Human-readable garage name.
+    pub garage_name: String,
+    /// When this session was created.
+    pub created_at: String,
+    /// When this session expires.
+    pub expires_at: String,
+}
+
+/// API error response format.
+#[derive(Debug, Clone, Deserialize)]
+struct ApiErrorResponse {
+    /// Error details.
+    error: ApiErrorDetail,
+}
+
+/// API error detail.
+#[derive(Debug, Clone, Deserialize)]
+struct ApiErrorDetail {
+    /// Error code.
+    code: String,
+    /// Error message.
+    message: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn moto_club_config_defaults() {
+        let config = MotoClubConfig::new("http://localhost:8080", "testuser");
+        assert_eq!(config.base_url, "http://localhost:8080");
+        assert_eq!(config.owner, "testuser");
+        assert_eq!(config.timeout, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn moto_club_config_with_timeout() {
+        let config = MotoClubConfig::new("http://localhost:8080", "testuser")
+            .with_timeout(Duration::from_secs(60));
+        assert_eq!(config.timeout, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn device_response_deserialize() {
+        let json = r#"{
+            "device_id": "01234567-89ab-cdef-0123-456789abcdef",
+            "overlay_ip": "fd00:6d6f:746f:2::1",
+            "device_name": "my-laptop"
+        }"#;
+        let response: DeviceResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.device_name, Some("my-laptop".to_string()));
+    }
+
+    #[test]
+    fn session_response_deserialize() {
+        let json = r#"{
+            "session_id": "sess_123",
+            "garage": {
+                "public_key": "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=",
+                "overlay_ip": "fd00:6d6f:746f:1::abc",
+                "endpoints": ["10.0.0.1:51820"]
+            },
+            "client_ip": "fd00:6d6f:746f:2::1",
+            "derp_map": { "regions": {} },
+            "expires_at": "2026-01-22T12:00:00Z"
+        }"#;
+        let response: SessionResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.session_id, "sess_123");
+        assert_eq!(response.garage.endpoints.len(), 1);
+    }
+
+    #[test]
+    fn list_sessions_response_deserialize() {
+        let json = r#"{
+            "sessions": [
+                {
+                    "session_id": "sess_123",
+                    "garage_id": "abc123",
+                    "garage_name": "my-garage",
+                    "created_at": "2026-01-22T10:00:00Z",
+                    "expires_at": "2026-01-22T14:00:00Z"
+                }
+            ]
+        }"#;
+        let response: ListSessionsResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.sessions.len(), 1);
+        assert_eq!(response.sessions[0].garage_name, "my-garage");
+    }
+}

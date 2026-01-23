@@ -72,10 +72,15 @@
 //! keepalive_secs = 25
 //! ```
 
+pub mod client;
 pub mod enter;
 pub mod status;
 pub mod tunnel;
 
+pub use client::{
+    ClientError, DeviceResponse, GarageInfo, ListSessionsResponse, MotoClubClient,
+    MotoClubConfig, SessionInfo, SessionResponse as ApiSessionResponse,
+};
 pub use enter::{
     ConsoleProgress, EnterConfig, EnterError, EnterProgress, EnterResult, GarageSession,
     GarageWgInfo, SessionResponse, SilentProgress, SshConfig, enter_garage, get_existing_session,

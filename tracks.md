@@ -91,11 +91,12 @@ HOW TO USE THIS FILE:
 - enter.rs: Wire up MagicConn for direct UDP connection attempts
 - enter.rs: Wire up DerpClient for DERP relay fallback
 - enter.rs: Spawn SSH session to garage overlay IP after tunnel established
+- moto-cli-wgtunnel crate: client.rs (MotoClubClient HTTP client for API calls)
+- enter.rs: Device registration via moto-club API
+- enter.rs: Session creation via moto-club API
 
 **Remaining:**
-- enter.rs: Device registration via moto-club API (blocked: moto-club.md)
-- enter.rs: Session creation via moto-club API (blocked: moto-club.md)
-- enter.rs: Get garage peer info via moto-club API (blocked: moto-club.md)
+- enter.rs: Get garage peer info via moto-club API (blocked: moto-club.md - needs full WireGuard peer registry implementation)
 
 ---
 

@@ -19,6 +19,9 @@ futures-util = "0.3"
 # Web framework
 axum = "0.8"
 
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
 # Kubernetes
 kube = { version = "0.99", features = ["runtime", "derive"] }
 k8s-openapi = { version = "0.24", features = ["latest"] }

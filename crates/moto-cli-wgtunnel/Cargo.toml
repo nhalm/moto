@@ -13,11 +13,13 @@ moto-wgtunnel-engine.workspace = true
 moto-wgtunnel-conn.workspace = true
 moto-common.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 dirs.workspace = true
 uuid.workspace = true
+reqwest.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
