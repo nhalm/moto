@@ -74,6 +74,7 @@ moto-club-api = { path = "crates/moto-club-api" }
 moto-club-k8s = { path = "crates/moto-club-k8s" }
 moto-garage-wgtunnel = { path = "crates/moto-garage-wgtunnel" }
 moto-club-garage = { path = "crates/moto-club-garage" }
+moto-club-reconcile = { path = "crates/moto-club-reconcile" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
