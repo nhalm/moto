@@ -136,7 +136,7 @@ impl GarageInfo {
 
     /// Sets the expiration time of this garage.
     #[must_use]
-    pub fn with_expires_at(mut self, expires_at: DateTime<Utc>) -> Self {
+    pub const fn with_expires_at(mut self, expires_at: DateTime<Utc>) -> Self {
         self.expires_at = Some(expires_at);
         self
     }

@@ -22,6 +22,7 @@
 
 pub mod garages;
 pub mod health;
+pub mod wg;
 
 use axum::Router;
 use moto_club_db::DbPool;
@@ -48,11 +49,12 @@ impl AppState {
 /// The router includes:
 /// - Health endpoints from [`health::router()`]
 /// - Garage endpoints from [`garages::router()`]
-/// - `WireGuard` endpoints (future)
+/// - `WireGuard` endpoints from [`wg::router()`]
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(health::router())
         .merge(garages::router())
+        .merge(wg::router())
         .with_state(state)
 }
 
