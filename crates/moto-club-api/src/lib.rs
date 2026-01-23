@@ -2,7 +2,7 @@
 //!
 //! This crate provides the HTTP API layer for moto-club, including:
 //! - Health check endpoints (`/health`, `/api/v1/info`)
-//! - Garage management endpoints (`/api/v1/garages/*`) - future
+//! - Garage management endpoints (`/api/v1/garages/*`)
 //! - `WireGuard` coordination endpoints (`/api/v1/wg/*`) - future
 //!
 //! # Example
@@ -20,6 +20,7 @@
 //! axum::serve(listener, app).await?;
 //! ```
 
+pub mod garages;
 pub mod health;
 
 use axum::Router;
@@ -46,11 +47,12 @@ impl AppState {
 ///
 /// The router includes:
 /// - Health endpoints from [`health::router()`]
-/// - Garage endpoints (future)
+/// - Garage endpoints from [`garages::router()`]
 /// - `WireGuard` endpoints (future)
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(health::router())
+        .merge(garages::router())
         .with_state(state)
 }
 

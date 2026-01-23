@@ -31,6 +31,15 @@ tracing = { workspace = true }
 # Database
 sqlx = { workspace = true }
 
+# Random name generation
+rand = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# UUID
+uuid = { workspace = true }
+
 # Internal crates
 moto-club-db = { workspace = true }
 

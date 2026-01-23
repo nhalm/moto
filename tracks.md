@@ -109,9 +109,9 @@ HOW TO USE THIS FILE:
 - moto-club-db crate: lib.rs, models.rs (database layer)
 - moto-club-db crate: garage_repo.rs (garage repository)
 - moto-club-api crate: lib.rs, health.rs (REST API scaffolding)
+- moto-club-api crate: garages.rs (garage REST endpoints)
 
 **Remaining:**
-- moto-club-api crate: garages.rs (garage REST endpoints)
 - moto-club-api crate: wg.rs (WireGuard coordination endpoints)
 - moto-club-k8s crate: lib.rs, namespace.rs, pods.rs (K8s interactions)
 - moto-club-garage crate: lib.rs, service.rs, lifecycle.rs (garage service logic)
