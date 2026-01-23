@@ -71,6 +71,7 @@ moto-cli-wgtunnel = { path = "crates/moto-cli-wgtunnel" }
 moto-club-wg = { path = "crates/moto-club-wg" }
 moto-club-db = { path = "crates/moto-club-db" }
 moto-club-api = { path = "crates/moto-club-api" }
+moto-club-k8s = { path = "crates/moto-club-k8s" }
 moto-garage-wgtunnel = { path = "crates/moto-garage-wgtunnel" }
 
 [workspace.lints.rust]
