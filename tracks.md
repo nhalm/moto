@@ -31,7 +31,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-cli.md v0.2
+## moto-cli.md v0.3
 
 **Status:** In Progress
 
@@ -124,14 +124,7 @@ HOW TO USE THIS FILE:
 
 ## dev-container.md v0.4
 
-**Status:** In Progress
-
-**Implemented:**
-- Root flake.nix with devShells.default (Rust toolchain, build deps, version control, db clients, general tools, k8s tools, connectivity)
-- infra/dev-container/flake.nix (container-specific flake that imports root)
-
-**Remaining:**
-(none)
+**Status:** Complete
 
 **Implemented:**
 - Root flake.nix with devShells.default (Rust toolchain, build deps, version control, db clients, general tools, k8s tools, connectivity)
