@@ -138,9 +138,15 @@ All tools are installed via Nix in the devShell/container.
 
 **AI:**
 
-| Tool | Nix Package | Purpose |
-|------|-------------|---------|
-| claude-code | `claude-code` | Claude CLI for wrenching |
+| Tool | Installation | Purpose |
+|------|--------------|---------|
+| claude-code | Native binary (shell script) | Claude CLI for wrenching |
+
+Claude Code is installed via the official shell script, not nixpkgs:
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+This is run during container build. The binary installs to `~/.local/bin/claude`.
 
 **Connectivity:**
 
@@ -429,8 +435,8 @@ docker load < result
             k9s
             kubernetes-helm
 
-            # AI
-            claude-code
+            # AI - claude-code installed via shell script, not nix
+            # See: curl -fsSL https://claude.ai/install.sh | bash
 
             # Connectivity
             wireguard-tools
