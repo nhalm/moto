@@ -1,0 +1,39 @@
+[package]
+name = "moto-club"
+description = "Central orchestration server for the moto platform"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "moto-club"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true }
+
+# Web framework
+axum = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["json"] }
+
+# Kubernetes
+kube = { workspace = true }
+
+# Internal crates
+moto-club-api = { workspace = true }
+moto-club-db = { workspace = true }
+moto-club-k8s = { workspace = true }
+moto-club-garage = { workspace = true }
+moto-club-reconcile = { workspace = true }
+moto-club-wg = { workspace = true }
+moto-k8s = { workspace = true }
+
+[lints]
+workspace = true

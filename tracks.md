@@ -114,6 +114,7 @@ HOW TO USE THIS FILE:
 - moto-club-k8s crate: lib.rs, namespace.rs, pods.rs (K8s interactions)
 - moto-club-garage crate: lib.rs, service.rs, lifecycle.rs (garage service logic)
 - moto-club-reconcile crate: lib.rs, garage.rs (K8s → DB reconciliation)
+- moto-club binary: main.rs (compose and run server)
 
 **Remaining:**
-- moto-club binary: main.rs (compose and run server)
+(none - all items complete or blocked)
