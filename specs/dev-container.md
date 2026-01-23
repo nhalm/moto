@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
+| Version | 0.5 |
 | Last Updated | 2026-01-23 |
 
 ## Overview
@@ -475,6 +475,23 @@ Each garage gets a SPIFFE identity:
 ```
 spiffe://moto.local/garage/{garage-id}
 ```
+
+## Changelog
+
+### v0.5 (2026-01-23)
+- Claude Code: Install via native binary shell script, not nixpkgs
+
+### v0.4 (2026-01-23)
+- NixOS as container base (not just Nix-on-Linux)
+- Rust 1.85 (synced with Cargo.toml)
+- Root flake at `moto/flake.nix`, container config in `infra/dev-container/`
+- Claude Code from nixpkgs, user provides API key for v1
+- SSH server and WireGuard tools included
+- Example flake provided
+
+### v0.3 (2026-01-20)
+- Initial tooling specification
+- Volume mounts, environment variables, security model
 
 ## References
 
