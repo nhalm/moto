@@ -133,7 +133,7 @@ HOW TO USE THIS FILE:
 - infra/dev-container/Dockerfile (builds the NixOS container image via Nix)
 - Claude Code installation via native binary shell script (systemd service on first boot)
 - infra/dev-container/smoke-test.sh (smoke test script with --keep option)
+- Makefile targets: docker-build-garage, docker-test-garage, docker-shell-garage
 
 **Remaining:**
-- Makefile targets: docker-build-garage, docker-test-garage, docker-shell-garage
 - Root flake.nix: packages.garage output for `nix build .#garage`
