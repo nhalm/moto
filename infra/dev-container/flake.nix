@@ -85,6 +85,7 @@
               "NIX_PATH=nixpkgs=flake:nixpkgs"
               "DO_NOT_TRACK=1"
               "SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
+              "PATH=/root/.local/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin"
             ];
             ExposedPorts = {
               "22/tcp" = {}; # SSH
@@ -99,11 +100,16 @@
           # Create necessary directories and files
           extraCommands = ''
             mkdir -p root
+            mkdir -p root/.local/bin
             mkdir -p workspace
             mkdir -p etc/ssh
             mkdir -p var/run
             mkdir -p tmp
             chmod 1777 tmp
+
+            # Claude Code is installed at runtime via the install script
+            # See configuration.nix for the systemd service that handles this
+            # The script installs to ~/.local/bin/claude
           '';
         };
 

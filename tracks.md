@@ -122,7 +122,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## dev-container.md v0.4
+## dev-container.md v0.5
 
 **Status:** Complete
 
@@ -131,3 +131,4 @@ HOW TO USE THIS FILE:
 - infra/dev-container/flake.nix (container-specific flake that imports root)
 - infra/dev-container/configuration.nix (NixOS system configuration with SSH, WireGuard)
 - infra/dev-container/Dockerfile (builds the NixOS container image via Nix)
+- Claude Code installation via native binary shell script (systemd service on first boot)

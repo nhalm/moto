@@ -56,6 +56,7 @@
       # Additional system utilities not in devShell
       cacert
       iana-etc
+      nodejs_22  # Required for Claude Code
     ]);
 
     # Global environment variables
@@ -71,6 +72,7 @@
       RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=mold";
       NIX_PATH = "nixpkgs=flake:nixpkgs";
       DO_NOT_TRACK = "1";
+      PATH = "/root/.local/bin:$PATH";
     };
 
     # Shell configuration
@@ -116,6 +118,46 @@
       if [ -f /etc/profile.local ]; then
         source /etc/profile.local
       fi
+
+      # Add Claude Code to PATH
+      export PATH="$HOME/.local/bin:$PATH"
     '';
+  };
+
+  # Claude Code installation service
+  # Installs Claude Code via the official shell script on first boot
+  systemd.services.install-claude-code = {
+    description = "Install Claude Code";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "root";
+      ExecStart = pkgs.writeShellScript "install-claude-code" ''
+        set -e
+
+        # Check if already installed
+        if [ -f /root/.local/bin/claude ]; then
+          echo "Claude Code already installed"
+          exit 0
+        fi
+
+        echo "Installing Claude Code..."
+        mkdir -p /root/.local/bin
+
+        # Install via official shell script
+        ${pkgs.curl}/bin/curl -fsSL https://claude.ai/install.sh | ${pkgs.bash}/bin/bash
+
+        # Verify installation
+        if [ -f /root/.local/bin/claude ]; then
+          echo "Claude Code installed successfully"
+        else
+          echo "Claude Code installation failed"
+          exit 1
+        fi
+      '';
+    };
   };
 }
