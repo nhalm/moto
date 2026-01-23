@@ -102,7 +102,7 @@ HOW TO USE THIS FILE:
 
 ## moto-club.md v0.3
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - moto-club-types crate: GarageId, GarageState, GarageInfo
