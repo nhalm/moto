@@ -23,6 +23,10 @@ while true; do
         exit 0
     fi
 
+    if grep -q "You've hit your limit" "$OUTPUT_FILE"; then
+        echo "=== API usage limit reached ==="
+        exit 0
+    fi
     echo "=== Task ${TASK_NUM} complete, sleeping 2s ==="
     sleep 2
 done

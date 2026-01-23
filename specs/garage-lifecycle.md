@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.1 |
-| Last Updated | 2026-01-19 |
+| Version | 0.2 |
+| Last Updated | 2026-01-22 |
 
 ## Overview
 
@@ -47,11 +47,12 @@ Defines the lifecycle operations for garages (wrenching environments). Covers cr
 moto garage open [OPTIONS]      Create a new garage
 moto garage enter <id>          Attach to a garage
 moto garage detach              Disconnect but keep garage alive (Ctrl+P, Ctrl+Q)
-moto garage sync <id>           Sync code changes out via jj
 moto garage list                List all garages with status
 moto garage close <id>          Terminate and cleanup garage
 moto garage logs <id>           View garage logs
 ```
+
+**Note:** Code sync and PR creation are handled by agents using `jj` and `gh` directly. See [jj-workflow.md](jj-workflow.md) for the workflow.
 
 ### `moto garage open`
 
@@ -115,25 +116,6 @@ Disconnect from garage without stopping it.
 - Garage continues running
 - TTL timer continues
 - Can reattach with `moto garage enter <id>`
-
-### `moto garage sync`
-
-Sync code changes from garage back to host.
-
-**Flow:**
-```
-1. Inside garage: jj status to see changes
-2. Squash/organize changes with jj
-3. Push changes to a sync branch
-4. On host: pull sync branch
-5. Review and merge to working branch
-```
-
-**Options:**
-```
---squash                Squash all changes into one commit
---message <msg>         Commit message for sync
-```
 
 ### `moto garage list`
 

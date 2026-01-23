@@ -252,9 +252,7 @@ impl StunClient {
         // Bind to appropriate address family
         let bind_addr: SocketAddr = match server {
             SocketAddr::V4(_) => SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)),
-            SocketAddr::V6(_) => {
-                SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0))
-            }
+            SocketAddr::V6(_) => SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0)),
         };
 
         let socket = UdpSocket::bind(bind_addr).await?;
@@ -348,7 +346,9 @@ fn parse_binding_response(
     // Check magic cookie
     let cookie = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
     if cookie != MAGIC_COOKIE {
-        return Err(StunError::InvalidMessage("Invalid magic cookie".to_string()));
+        return Err(StunError::InvalidMessage(
+            "Invalid magic cookie".to_string(),
+        ));
     }
 
     // Verify transaction ID
@@ -412,7 +412,10 @@ fn parse_mapped_address(mut attrs: &[u8], magic_cookie: &[u8]) -> Result<SocketA
 }
 
 /// Parse XOR-MAPPED-ADDRESS attribute value.
-fn parse_xor_mapped_address_value(value: &[u8], magic_cookie: &[u8]) -> Result<SocketAddr, StunError> {
+fn parse_xor_mapped_address_value(
+    value: &[u8],
+    magic_cookie: &[u8],
+) -> Result<SocketAddr, StunError> {
     if value.len() < 8 {
         return Err(StunError::InvalidMessage(
             "XOR-MAPPED-ADDRESS too short".to_string(),
@@ -438,7 +441,10 @@ fn parse_xor_mapped_address_value(value: &[u8], magic_cookie: &[u8]) -> Result<S
                 x_addr[2] ^ magic_cookie[2],
                 x_addr[3] ^ magic_cookie[3],
             ];
-            Ok(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from(addr), port)))
+            Ok(SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::from(addr),
+                port,
+            )))
         }
         0x02 => {
             // IPv6
@@ -585,10 +591,10 @@ mod tests {
 
         let result = parse_binding_response(&response, &transaction_id).unwrap();
 
-        assert_eq!(result, SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::new(192, 0, 2, 1),
-            12345,
-        )));
+        assert_eq!(
+            result,
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(192, 0, 2, 1), 12345,))
+        );
     }
 
     #[test]
@@ -614,10 +620,10 @@ mod tests {
 
         let result = parse_binding_response(&response, &transaction_id).unwrap();
 
-        assert_eq!(result, SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::new(192, 0, 2, 1),
-            12345,
-        )));
+        assert_eq!(
+            result,
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(192, 0, 2, 1), 12345,))
+        );
     }
 
     #[test]
@@ -716,8 +722,8 @@ mod tests {
             0x00, 0x09, // Attribute type
             0x00, 0x10, // Attribute length: 16 bytes
             0x00, 0x00, // Reserved
-            0x04,       // Class: 4
-            0x01,       // Number: 1 (401)
+            0x04, // Class: 4
+            0x01, // Number: 1 (401)
         ]);
         response.extend_from_slice(b"Unauthorized"); // 12 bytes
 

@@ -96,3 +96,24 @@ HOW TO USE THIS FILE:
 - enter.rs: Device registration via moto-club API (blocked: moto-club.md)
 - enter.rs: Session creation via moto-club API (blocked: moto-club.md)
 - enter.rs: Get garage peer info via moto-club API (blocked: moto-club.md)
+
+---
+
+## moto-club.md v0.3
+
+**Status:** In Progress
+
+**Implemented:**
+- moto-club-types crate: GarageId, GarageState, GarageInfo
+- moto-club-wg crate: lib.rs, ipam.rs, peers.rs, sessions.rs, ssh_keys.rs, derp.rs
+
+**Remaining:**
+- moto-club-db crate: lib.rs, models.rs (database layer)
+- moto-club-db crate: garage_repo.rs (garage repository)
+- moto-club-api crate: lib.rs, health.rs (REST API scaffolding)
+- moto-club-api crate: garages.rs (garage REST endpoints)
+- moto-club-api crate: wg.rs (WireGuard coordination endpoints)
+- moto-club-k8s crate: lib.rs, namespace.rs, pods.rs (K8s interactions)
+- moto-club-garage crate: lib.rs, service.rs, lifecycle.rs (garage service logic)
+- moto-club-reconcile crate: lib.rs, garage.rs (K8s → DB reconciliation)
+- moto-club binary: main.rs (compose and run server)

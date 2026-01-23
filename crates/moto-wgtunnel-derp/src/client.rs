@@ -39,10 +39,10 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::time::{interval, timeout};
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use tracing::{debug, trace, warn};
 
-use crate::protocol::{self, Frame, ProtocolError, NONCE_LEN};
+use crate::protocol::{self, Frame, NONCE_LEN, ProtocolError};
 use moto_wgtunnel_types::{WgPrivateKey, WgPublicKey};
 
 /// Default connection timeout.
@@ -320,9 +320,8 @@ impl DerpClient {
 
         // Generate a random nonce
         let mut nonce = [0u8; NONCE_LEN];
-        getrandom::getrandom(&mut nonce).map_err(|e| {
-            ClientError::EncryptionError(format!("failed to generate nonce: {e}"))
-        })?;
+        getrandom::getrandom(&mut nonce)
+            .map_err(|e| ClientError::EncryptionError(format!("failed to generate nonce: {e}")))?;
 
         // Create a simple encrypted info (just empty JSON for now)
         // In production, this would use NaCl box encryption with the server's key

@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
+| Version | 0.3 |
 | Status | Ready to Rip |
-| Last Updated | 2026-01-21 |
+| Last Updated | 2026-01-22 |
 
 ## Overview
 
@@ -154,7 +154,7 @@ Connecting to bold-mongoose...
 [garage: bold-mongoose] $
 ```
 
-Use `Ctrl+D` to disconnect. Garage keeps running.
+Use `Ctrl+P, Ctrl+Q` to detach. Garage keeps running.
 
 **Exit codes:** 0 normal exit, 1 connection failed, 2 not found
 
@@ -520,6 +520,7 @@ Try: Create a bike.toml or cd to a directory containing one.
 
 ## References
 
+- [jj-workflow.md](jj-workflow.md) - Code sync and PR workflow
 - [moto-wgtunnel.md](moto-wgtunnel.md) - WireGuard connectivity
 - [garage-lifecycle.md](garage-lifecycle.md) - Garage state machine
 - [bike.md](bike.md) - Bike deployment model
@@ -528,6 +529,10 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.3
+- Fixed detach key sequence: `Ctrl+P, Ctrl+Q` (was incorrectly `Ctrl+D`)
+- Removed `sync` and `rebase` commands (agents use jj/gh directly, see jj-workflow.md)
 
 ### v0.2
 - Added `--owner` flag to `garage open`

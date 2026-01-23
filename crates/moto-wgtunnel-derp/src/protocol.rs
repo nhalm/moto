@@ -819,11 +819,17 @@ mod tests {
 
         let encoded_ping = ping.encode_to_bytes();
         let mut buf = encoded_ping.clone();
-        assert_eq!(decode_frame(&mut buf).unwrap(), Frame::Ping { data: ping_data });
+        assert_eq!(
+            decode_frame(&mut buf).unwrap(),
+            Frame::Ping { data: ping_data }
+        );
 
         let encoded_pong = pong.encode_to_bytes();
         let mut buf = encoded_pong.clone();
-        assert_eq!(decode_frame(&mut buf).unwrap(), Frame::Pong { data: ping_data });
+        assert_eq!(
+            decode_frame(&mut buf).unwrap(),
+            Frame::Pong { data: ping_data }
+        );
     }
 
     #[test]
@@ -854,7 +860,13 @@ mod tests {
             let mut buf = encoded.clone();
             let decoded = decode_frame(&mut buf).unwrap();
 
-            assert_eq!(decoded, Frame::PeerGone { key: key.clone(), reason });
+            assert_eq!(
+                decoded,
+                Frame::PeerGone {
+                    key: key.clone(),
+                    reason
+                }
+            );
         }
     }
 
@@ -950,7 +962,13 @@ mod tests {
         let mut buf = encoded.clone();
         let decoded = decode_frame(&mut buf).unwrap();
 
-        assert_eq!(decoded, Frame::ServerInfo { nonce, encrypted_info });
+        assert_eq!(
+            decoded,
+            Frame::ServerInfo {
+                nonce,
+                encrypted_info
+            }
+        );
     }
 
     #[test]
@@ -992,7 +1010,10 @@ mod tests {
         assert_eq!(check_frame_complete(&[0x01, 0x00]), Err(3));
 
         // Header present but payload incomplete
-        assert_eq!(check_frame_complete(&[0x06, 0x00, 0x00, 0x00, 0x05, 0x00]), Err(4));
+        assert_eq!(
+            check_frame_complete(&[0x06, 0x00, 0x00, 0x00, 0x05, 0x00]),
+            Err(4)
+        );
 
         // Complete frame
         assert_eq!(check_frame_complete(&[0x06, 0x00, 0x00, 0x00, 0x00]), Ok(5));
@@ -1007,10 +1028,7 @@ mod tests {
     #[test]
     fn frame_type_returns_correct_value() {
         assert_eq!(Frame::KeepAlive.frame_type(), FrameType::KeepAlive);
-        assert_eq!(
-            Frame::Ping { data: [0; 8] }.frame_type(),
-            FrameType::Ping
-        );
+        assert_eq!(Frame::Ping { data: [0; 8] }.frame_type(), FrameType::Ping);
         assert_eq!(
             Frame::ServerKey { key: test_key() }.frame_type(),
             FrameType::ServerKey
