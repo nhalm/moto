@@ -118,3 +118,17 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 (none - all items complete or blocked)
+
+---
+
+## dev-container.md v0.4
+
+**Status:** In Progress
+
+**Implemented:**
+- Root flake.nix with devShells.default (Rust toolchain, build deps, version control, db clients, general tools, k8s tools, connectivity)
+
+**Remaining:**
+- infra/dev-container/flake.nix (container-specific flake that imports root)
+- infra/dev-container/configuration.nix (NixOS system configuration with SSH, WireGuard)
+- infra/dev-container/Dockerfile (builds the NixOS container image)
