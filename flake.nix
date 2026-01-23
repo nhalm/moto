@@ -66,7 +66,7 @@
             kubernetes-helm
 
             # AI
-            # claude-code  # Not available in nixpkgs yet
+            claude-code
 
             # Connectivity
             wireguard-tools
