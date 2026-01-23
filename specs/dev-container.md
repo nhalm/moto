@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
+| Version | 0.6 |
 | Last Updated | 2026-01-23 |
 
 ## Overview
@@ -348,22 +348,57 @@ moto garage open --cpu 8 --memory 16Gi
 
 ### Building the Container
 
-**For local development (no registry):**
+Container builds are defined in the root `flake.nix`. See [container-system.md](container-system.md) for the complete build pipeline.
+
+**Build commands:**
 
 ```bash
-# Build the NixOS container image
-cd infra/dev-container
-nix build .#container
-
-# Load into Docker
+# Build the garage (dev) container from repo root
+nix build .#garage
 docker load < result
-
 # Image is now available as moto-dev:latest
+
+# Or use Makefile targets
+make docker-build-garage
 ```
 
-**Future (with registry):**
-- Push to local registry (`localhost:5000`)
-- Or GitHub Container Registry (`ghcr.io/...`)
+**Registry (when needed):**
+- Local: `localhost:5000/moto-dev:latest`
+- Remote: `ghcr.io/<org>/moto-dev:latest`
+
+### Testing the Container
+
+Smoke tests verify the container builds correctly and contains expected tooling.
+
+**Makefile targets:**
+
+| Target | Purpose |
+|--------|---------|
+| `docker-build-garage` | Build moto-dev image |
+| `docker-test-garage` | Build + run smoke tests |
+| `docker-shell-garage` | Interactive shell for debugging |
+
+**Smoke tests verify:**
+
+| Category | Checks |
+|----------|--------|
+| Core tools | rustc, cargo, git, jj, kubectl present and executable |
+| Environment | RUST_BACKTRACE, CARGO_HOME, WORKSPACE set correctly |
+| Rust compilation | Can compile and run a simple Rust program |
+
+**Test script:** `infra/dev-container/smoke-test.sh`
+
+**Usage:**
+
+```bash
+make docker-test-garage
+
+# Or directly
+./infra/dev-container/smoke-test.sh
+
+# Keep container for debugging
+./infra/dev-container/smoke-test.sh --keep
+```
 
 ### Example Root Flake
 
@@ -477,6 +512,10 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.6 (2026-01-23)
+- Add "Testing the Container" section with smoke test specification
+- Update "Building the Container" to reference root flake.nix (`nix build .#garage`)
 
 ### v0.5 (2026-01-23)
 - Claude Code: Install via native binary shell script, not nixpkgs

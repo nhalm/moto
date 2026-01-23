@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.1 |
-| Last Updated | 2026-01-20 |
+| Version | 0.2 |
+| Last Updated | 2026-01-23 |
 
 ## Overview
 
@@ -424,7 +424,45 @@ docker-push-local: docker-build
 	docker push $(REGISTRY)/moto-dev:latest
 	docker push $(REGISTRY)/moto-dev:$(SHA)
 	@# Repeat for engines...
+
+docker-test-garage: docker-build-garage
+	./infra/dev-container/smoke-test.sh
+
+docker-shell-garage:
+	docker run -it --rm -v $(PWD):/workspace moto-dev:latest /bin/bash
 ```
+
+### Smoke Testing
+
+Smoke tests verify containers build correctly and contain expected tools/configuration.
+
+**Garage container tests** (`infra/dev-container/smoke-test.sh`):
+
+| Check | Verifies |
+|-------|----------|
+| Core tools | rustc, cargo, git, jj, kubectl present |
+| Environment | RUST_BACKTRACE, CARGO_HOME, WORKSPACE set |
+| Rust compilation | Can compile and run a simple program |
+
+**Usage:**
+
+```bash
+# Build and test
+make docker-test-garage
+
+# Or run directly
+./infra/dev-container/smoke-test.sh
+
+# Keep container for debugging
+./infra/dev-container/smoke-test.sh --keep
+```
+
+**Bike container tests** (future):
+
+Bike containers have no shell, so testing is different:
+- Verify binary exists and is executable
+- Check exposed ports match spec
+- Verify non-root user (UID 1000)
 
 ### CI/CD Pipeline (Future)
 
