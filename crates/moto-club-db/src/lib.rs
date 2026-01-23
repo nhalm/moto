@@ -2,20 +2,33 @@
 //!
 //! This crate provides:
 //! - Data models that map to the `PostgreSQL` schema (`models`)
-//! - Repository traits and implementations for database operations
+//! - Repository functions for database operations (`garage_repo`)
 //!
 //! # Example
 //!
 //! ```ignore
-//! use moto_club_db::{models::Garage, DbPool};
+//! use moto_club_db::{DbPool, garage_repo, garage_repo::CreateGarage};
+//! use uuid::Uuid;
 //!
 //! let pool = DbPool::connect("postgres://...").await?;
-//! let garage = sqlx::query_as::<_, Garage>("SELECT * FROM garages WHERE id = $1")
-//!     .bind(id)
-//!     .fetch_one(&pool)
-//!     .await?;
+//!
+//! // Create a new garage
+//! let input = CreateGarage {
+//!     id: Uuid::now_v7(),
+//!     name: "bold-mongoose".to_string(),
+//!     owner: "nick".to_string(),
+//!     branch: "main".to_string(),
+//!     ttl_seconds: 14400,
+//!     namespace: "moto-garage-abc123".to_string(),
+//!     pod_name: "dev-container".to_string(),
+//! };
+//! let garage = garage_repo::create(&pool, input).await?;
+//!
+//! // Get a garage by ID
+//! let garage = garage_repo::get_by_id(&pool, garage.id).await?;
 //! ```
 
+pub mod garage_repo;
 pub mod models;
 
 use thiserror::Error;
