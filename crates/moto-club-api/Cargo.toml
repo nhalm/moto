@@ -1,0 +1,38 @@
+[package]
+name = "moto-club-api"
+description = "REST API handlers for moto-club"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true }
+
+# Web framework
+axum = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Errors
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Database
+sqlx = { workspace = true }
+
+# Internal crates
+moto-club-db = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
