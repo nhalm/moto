@@ -56,6 +56,7 @@
     "CARGO_TARGET_DIR=/workspace/target"
     "RUST_BACKTRACE=1"
     "RUST_LOG=info"
+    "RUSTC_WRAPPER=sccache"
     "RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=mold"
     "NIX_PATH=nixpkgs=flake:nixpkgs"
     "PATH=/root/.local/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin"
