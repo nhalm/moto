@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.6 |
-| Last Updated | 2026-01-23 |
+| Version | 0.7 |
+| Last Updated | 2026-01-24 |
 
 ## Overview
 
@@ -13,7 +13,7 @@ The dev container is the garage environment - where Claude Code wrenches on the 
 - **NixOS** as the container OS (not just Nix-on-Linux)
 - **Flakes** for reproducible builds and dependency management
 - **Root flake** at repo root (`moto/flake.nix`) provides devShell
-- **Container config** in `moto/infra/dev-container/`
+- **Container config** in `moto/infra/pkgs/` and `moto/infra/modules/`
 
 ## Specification
 
@@ -42,23 +42,30 @@ We use NixOS because:
 
 ```
 moto/
-├── flake.nix                    # Root flake - devShell, workspace builds
+├── flake.nix                    # Root flake - single source of truth
 ├── flake.lock                   # Pinned dependencies
-├── infra/
-│   └── dev-container/
-│       ├── flake.nix            # Container-specific flake (imports root)
-│       ├── configuration.nix    # NixOS system configuration
-│       └── Dockerfile           # Builds the NixOS container image
+└── infra/
+    ├── pkgs/                    # Package/container definitions
+    │   ├── moto-garage.nix         # This container's definition
+    │   ├── moto-engine.nix      # Engine containers (future)
+    │   └── default.nix          # Exports all packages
+    ├── modules/                 # Reusable NixOS modules
+    │   ├── base.nix             # Common system settings
+    │   ├── ssh.nix              # SSH server configuration
+    │   ├── dev-tools.nix        # Development tooling
+    │   └── wireguard.nix        # WireGuard support
+    └── smoke-test.sh            # Container smoke tests
 ```
 
 **Root flake (`moto/flake.nix`):**
 - Provides `devShells.default` with all development tools
-- Future: `packages.*` for built binaries
-- Future: `checks.*` for CI validation
+- Provides `packages.moto-garage` (this container)
+- Provides `packages.moto-engine-*` (runtime containers)
+- Imports definitions from `./infra/pkgs/`
 
-**Container flake (`moto/infra/dev-container/flake.nix`):**
-- Imports root flake
-- Builds the NixOS container image
+**Container definition (`moto/infra/pkgs/moto-garage.nix`):**
+- Uses `dockerTools.buildLayeredImage`
+- Imports modules from `../modules/`
 - Configures services (SSH, WireGuard daemon)
 
 ### Included Tooling
@@ -348,23 +355,23 @@ moto garage open --cpu 8 --memory 16Gi
 
 ### Building the Container
 
-Container builds are defined in the root `flake.nix`. See [container-system.md](container-system.md) for the complete build pipeline.
+Container builds are defined in the root `flake.nix`, which imports from `infra/pkgs/`. See [container-system.md](container-system.md) for the complete build pipeline.
 
 **Build commands:**
 
 ```bash
 # Build the garage (dev) container from repo root
-nix build .#garage
+nix build .#moto-garage
 docker load < result
-# Image is now available as moto-dev:latest
+# Image is now available as moto-garage:latest
 
 # Or use Makefile targets
-make docker-build-garage
+make docker-build-moto-garage
 ```
 
 **Registry (when needed):**
-- Local: `localhost:5000/moto-dev:latest`
-- Remote: `ghcr.io/<org>/moto-dev:latest`
+- Local: `localhost:5000/moto-garage:latest`
+- Remote: `ghcr.io/<org>/moto-garage:latest`
 
 ### Testing the Container
 
@@ -374,9 +381,9 @@ Smoke tests verify the container builds correctly and contains expected tooling.
 
 | Target | Purpose |
 |--------|---------|
-| `docker-build-garage` | Build moto-dev image |
-| `docker-test-garage` | Build + run smoke tests |
-| `docker-shell-garage` | Interactive shell for debugging |
+| `docker-build-moto-garage` | Build moto-garage image |
+| `docker-test-moto-garage` | Build + run smoke tests |
+| `docker-shell-moto-garage` | Interactive shell for debugging |
 
 **Smoke tests verify:**
 
@@ -386,18 +393,18 @@ Smoke tests verify the container builds correctly and contains expected tooling.
 | Environment | RUST_BACKTRACE, CARGO_HOME, WORKSPACE set correctly |
 | Rust compilation | Can compile and run a simple Rust program |
 
-**Test script:** `infra/dev-container/smoke-test.sh`
+**Test script:** `infra/smoke-test.sh`
 
 **Usage:**
 
 ```bash
-make docker-test-garage
+make docker-test-moto-garage
 
 # Or directly
-./infra/dev-container/smoke-test.sh
+./infra/smoke-test.sh
 
 # Keep container for debugging
-./infra/dev-container/smoke-test.sh --keep
+./infra/smoke-test.sh --keep
 ```
 
 ### Example Root Flake
@@ -513,9 +520,17 @@ spiffe://moto.local/garage/{garage-id}
 
 ## Changelog
 
+### v0.7 (2026-01-24)
+- Reorganize infra directory: `pkgs/`, `modules/`, `machines/` structure
+- Rename from `moto-dev` to `moto-garage` for metaphor consistency
+- Container definition moves to `infra/pkgs/moto-garage.nix`
+- Build command: `nix build .#moto-garage`
+- Smoke test path: `infra/smoke-test.sh`
+- Update smoke test path to `infra/smoke-test.sh`
+
 ### v0.6 (2026-01-23)
 - Add "Testing the Container" section with smoke test specification
-- Update "Building the Container" to reference root flake.nix (`nix build .#garage`)
+- Update "Building the Container" to reference root flake.nix
 
 ### v0.5 (2026-01-23)
 - Claude Code: Install via native binary shell script, not nixpkgs
