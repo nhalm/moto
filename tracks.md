@@ -3,7 +3,7 @@
 <!--
 HOW TO USE THIS FILE:
 
-1. Section header = "## spec-name.md vX.Y" - must match current spec version
+1. For EACH "Ready to Rip" spec: read spec, verify section version matches
 2. If spec version > section version: check spec changelog, add new items to Remaining, update header
 3. If no section exists: compare spec to code, create section with Implemented and Remaining lists
 4. Pick ONE item from Remaining (skip blocked items)
