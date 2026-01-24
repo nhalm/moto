@@ -134,13 +134,12 @@ HOW TO USE THIS FILE:
 - Claude Code installation via native binary shell script (systemd service on first boot)
 - infra/dev-container/smoke-test.sh (smoke test script with --keep option)
 - Makefile targets: docker-build-garage, docker-test-garage, docker-shell-garage
-- Root flake.nix: packages.garage output for `nix build .#garage`
 - Rename container image from `moto-dev` to `moto-garage`
 - Move smoke-test.sh to infra/smoke-test.sh
 - Reorganize infra/: create pkgs/ and modules/ structure
-
-**Remaining:**
 - Move container definition to infra/pkgs/moto-garage.nix
 - Create reusable modules in infra/modules/ (base.nix, ssh.nix, dev-tools.nix, wireguard.nix)
-- Update root flake.nix: rename packages.garage to packages.moto-garage
+- Update root flake.nix: rename packages.garage to packages.moto-garage, import from infra/pkgs/
+
+**Remaining:**
 - Update Makefile targets to use new paths and image name
