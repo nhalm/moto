@@ -136,9 +136,9 @@ HOW TO USE THIS FILE:
 - Makefile targets: docker-build-garage, docker-test-garage, docker-shell-garage
 - Root flake.nix: packages.garage output for `nix build .#garage`
 - Rename container image from `moto-dev` to `moto-garage`
+- Move smoke-test.sh to infra/smoke-test.sh
 
 **Remaining:**
-- Move smoke-test.sh to infra/smoke-test.sh
 - Reorganize infra/: create pkgs/ and modules/ structure
 - Move container definition to infra/pkgs/moto-garage.nix
 - Create reusable modules in infra/modules/ (base.nix, ssh.nix, dev-tools.nix, wireguard.nix)

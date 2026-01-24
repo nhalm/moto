@@ -3,13 +3,13 @@
 # Verifies the container builds correctly and contains expected tooling.
 #
 # Usage:
-#   ./infra/dev-container/smoke-test.sh         # Run tests
-#   ./infra/dev-container/smoke-test.sh --keep  # Keep container for debugging
+#   ./infra/smoke-test.sh         # Run tests
+#   ./infra/smoke-test.sh --keep  # Keep container for debugging
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 IMAGE_NAME="moto-garage:latest"
 CONTAINER_NAME="moto-garage-smoke-test-$$"
 KEEP_CONTAINER=false

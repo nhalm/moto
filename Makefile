@@ -45,7 +45,7 @@ docker-build-garage:
 # Build and run smoke tests on the container
 docker-test-garage: docker-build-garage
 	@echo "Running smoke tests..."
-	./infra/dev-container/smoke-test.sh
+	./infra/smoke-test.sh
 
 # Interactive shell in the container for debugging
 docker-shell-garage:
