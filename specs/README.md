@@ -39,6 +39,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
 | [moto-cli](moto-cli.md) | Ready to Rip | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
+| [pre-commit](pre-commit.md) | Wrenching | Git hooks for fast feedback to agents |
 
 ## Phase 1: Infrastructure (The Garage)
 
