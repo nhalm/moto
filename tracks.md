@@ -140,6 +140,7 @@ HOW TO USE THIS FILE:
 - Move container definition to infra/pkgs/moto-garage.nix
 - Create reusable modules in infra/modules/ (base.nix, ssh.nix, dev-tools.nix, wireguard.nix)
 - Update root flake.nix: rename packages.garage to packages.moto-garage, import from infra/pkgs/
+- Update Makefile targets to use new paths and image name
 
 **Remaining:**
-- Update Makefile targets to use new paths and image name
+(none)

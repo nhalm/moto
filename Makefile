@@ -1,4 +1,4 @@
-.PHONY: build test check fmt lint clean run fix ci docker-build-garage docker-test-garage docker-shell-garage
+.PHONY: build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage
 
 # Build all crates
 build:
@@ -38,19 +38,19 @@ ci: fmt check lint test
 # === Dev Container (Garage) ===
 
 # Build the moto-garage container image using Nix
-docker-build-garage:
+docker-build-moto-garage:
 	@echo "Building moto-garage container..."
-	cd infra/dev-container && nix build .#container --print-out-paths | xargs docker load <
+	nix build .#moto-garage --print-out-paths | xargs docker load <
 
 # Build and run smoke tests on the container
-docker-test-garage: docker-build-garage
+docker-test-moto-garage: docker-build-moto-garage
 	@echo "Running smoke tests..."
 	./infra/smoke-test.sh
 
 # Interactive shell in the container for debugging
-docker-shell-garage:
+docker-shell-moto-garage:
 	@if ! docker image inspect moto-garage:latest &>/dev/null; then \
 		echo "Image not found, building..."; \
-		$(MAKE) docker-build-garage; \
+		$(MAKE) docker-build-moto-garage; \
 	fi
 	docker run -it --rm moto-garage:latest
