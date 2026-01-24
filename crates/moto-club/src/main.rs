@@ -13,7 +13,7 @@
 //!
 //! Optional environment variables:
 //! - `MOTO_CLUB_BIND_ADDR`: Server bind address (default: `0.0.0.0:8080`)
-//! - `MOTO_CLUB_DEV_CONTAINER_IMAGE`: Dev container image (default: `ghcr.io/moto-dev/moto-dev:latest`)
+//! - `MOTO_CLUB_DEV_CONTAINER_IMAGE`: Dev container image (default: `ghcr.io/moto-dev/moto-garage:latest`)
 //! - `MOTO_CLUB_RECONCILE_INTERVAL_SECONDS`: Reconciliation interval (default: 30)
 //! - `KUBECONFIG`: Path to kubeconfig file (auto-detected in-cluster)
 //! - `RUST_LOG`: Log filter (default: `moto_club=info`)

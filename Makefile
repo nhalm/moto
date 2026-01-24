@@ -37,9 +37,9 @@ ci: fmt check lint test
 
 # === Dev Container (Garage) ===
 
-# Build the moto-dev container image using Nix
+# Build the moto-garage container image using Nix
 docker-build-garage:
-	@echo "Building moto-dev container..."
+	@echo "Building moto-garage container..."
 	cd infra/dev-container && nix build .#container --print-out-paths | xargs docker load <
 
 # Build and run smoke tests on the container
@@ -49,8 +49,8 @@ docker-test-garage: docker-build-garage
 
 # Interactive shell in the container for debugging
 docker-shell-garage:
-	@if ! docker image inspect moto-dev:latest &>/dev/null; then \
+	@if ! docker image inspect moto-garage:latest &>/dev/null; then \
 		echo "Image not found, building..."; \
 		$(MAKE) docker-build-garage; \
 	fi
-	docker run -it --rm moto-dev:latest
+	docker run -it --rm moto-garage:latest

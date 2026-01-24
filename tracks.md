@@ -122,7 +122,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## dev-container.md v0.6
+## dev-container.md v0.7
 
 **Status:** In Progress
 
@@ -135,6 +135,12 @@ HOW TO USE THIS FILE:
 - infra/dev-container/smoke-test.sh (smoke test script with --keep option)
 - Makefile targets: docker-build-garage, docker-test-garage, docker-shell-garage
 - Root flake.nix: packages.garage output for `nix build .#garage`
+- Rename container image from `moto-dev` to `moto-garage`
 
 **Remaining:**
-(none)
+- Move smoke-test.sh to infra/smoke-test.sh
+- Reorganize infra/: create pkgs/ and modules/ structure
+- Move container definition to infra/pkgs/moto-garage.nix
+- Create reusable modules in infra/modules/ (base.nix, ssh.nix, dev-tools.nix, wireguard.nix)
+- Update root flake.nix: rename packages.garage to packages.moto-garage
+- Update Makefile targets to use new paths and image name

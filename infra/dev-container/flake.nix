@@ -50,7 +50,7 @@
       # Container image output
       packages.${containerSystem} = {
         container = pkgs.dockerTools.buildLayeredImage {
-          name = "moto-dev";
+          name = "moto-garage";
           tag = "latest";
 
           contents = with pkgs; [

@@ -23,7 +23,7 @@
         # Container image is only built for x86_64-linux
         garageImage = if system == "x86_64-linux" then
           pkgs.dockerTools.buildLayeredImage {
-            name = "moto-dev";
+            name = "moto-garage";
             tag = "latest";
 
             contents = with pkgs; [

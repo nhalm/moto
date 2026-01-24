@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke tests for moto-dev container
+# Smoke tests for moto-garage container
 # Verifies the container builds correctly and contains expected tooling.
 #
 # Usage:
@@ -10,8 +10,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-IMAGE_NAME="moto-dev:latest"
-CONTAINER_NAME="moto-dev-smoke-test-$$"
+IMAGE_NAME="moto-garage:latest"
+CONTAINER_NAME="moto-garage-smoke-test-$$"
 KEEP_CONTAINER=false
 
 # Parse arguments
@@ -37,7 +37,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-echo "=== Moto Dev Container Smoke Tests ==="
+echo "=== Moto Garage Container Smoke Tests ==="
 echo ""
 
 # Check if image exists
@@ -108,12 +108,12 @@ RUST_TEST='
 cd /tmp
 cat > test.rs << EOF
 fn main() {
-    println!("Hello from moto-dev!");
+    println!("Hello from moto-garage!");
 }
 EOF
 rustc test.rs -o test && ./test
 '
-run_test_output "compile and run" "$RUST_TEST" "Hello from moto-dev!" || ((FAILED++))
+run_test_output "compile and run" "$RUST_TEST" "Hello from moto-garage!" || ((FAILED++))
 
 echo ""
 echo "=== Results ==="
