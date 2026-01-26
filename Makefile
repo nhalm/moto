@@ -1,4 +1,8 @@
-.PHONY: build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage
+.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage
+
+# Set up local development environment
+install:
+	git config core.hooksPath .githooks
 
 # Build all crates
 build:

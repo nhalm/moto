@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -e
+
+# Block secrets
+if git diff --cached --name-only | grep -qE '\.(pem|key)$|\.env'; then
+    echo "ERROR: Sensitive files detected"
+    echo "FIX: git reset HEAD <filename>"
+    exit 1
+fi
+
+# Rust formatting (if Rust files changed)
+if git diff --cached --name-only | grep -qE '\.(rs)$|Cargo\.'; then
+    cargo fmt --all --check || {
+        echo "FIX: cargo fmt --all"
+        exit 1
+    }
+fi
+
+# Nix syntax (if Nix files changed)
+if git diff --cached --name-only | grep -qE '\.nix$' && command -v nix &>/dev/null; then
+    nix flake check --no-build 2>/dev/null || {
+        echo "FIX: check nix flake check output"
+        exit 1
+    }
+fi

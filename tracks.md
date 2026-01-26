@@ -144,3 +144,33 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 (none)
+
+---
+
+## pre-commit.md v0.1
+
+**Status:** Complete
+
+**Implemented:**
+- .githooks/pre-commit script with secrets detection
+- .githooks/pre-commit script with Rust formatting check
+- .githooks/pre-commit script with Nix syntax check
+- make install target sets core.hooksPath
+
+**Remaining:**
+(none)
+
+---
+
+## makefile.md v0.1
+
+**Status:** Complete
+
+**Implemented:**
+- install target (sets git hooks path)
+- build, test, check, fmt, lint, clean, fix, ci targets
+- docker-build-moto-garage, docker-test-moto-garage, docker-shell-moto-garage targets
+- .PHONY declarations for all targets
+
+**Remaining:**
+- k3s-install, k3s-start, k3s-stop, k3s-status targets (future)
