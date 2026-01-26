@@ -1,4 +1,4 @@
-.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage docker-push-moto-garage docker-clean registry-start registry-stop
+.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage docker-push-moto-garage docker-push-local docker-clean registry-start registry-stop
 
 # Set up local development environment
 install:
@@ -68,6 +68,16 @@ docker-shell-moto-garage:
 # Default registry for pushing images
 REGISTRY ?= localhost:5000
 SHA := $(shell git rev-parse --short HEAD)
+
+# Push all images to local registry (localhost:5000)
+# Currently only pushes moto-garage; moto-engine will be added when bike.md is ready
+docker-push-local: docker-build-moto-garage
+	@echo "Pushing all images to $(REGISTRY)..."
+	docker tag moto-garage:latest $(REGISTRY)/moto-garage:latest
+	docker tag moto-garage:latest $(REGISTRY)/moto-garage:$(SHA)
+	docker push $(REGISTRY)/moto-garage:latest
+	docker push $(REGISTRY)/moto-garage:$(SHA)
+	@echo "Pushed $(REGISTRY)/moto-garage:latest and $(REGISTRY)/moto-garage:$(SHA)"
 
 # Push moto-garage to registry
 docker-push-moto-garage:
