@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
-| Status | Ready to Rip |
-| Last Updated | 2026-01-25 |
+| Version | 0.5 |
+| Status | Ripping |
+| Last Updated | 2026-01-26 |
 
 ## Overview
 
@@ -30,8 +30,8 @@ Think of containers like motorcycle builds:
 
 **Core principles:**
 
-1. **Works everywhere**: Dockerfile for garage (builds on Mac/Linux), Nix for bikes (CI only)
-2. **Reproducible**: Nix flake.lock pins package versions in both approaches
+1. **Reproducible**: Nix dockerTools builds guarantee identical images from identical inputs
+2. **Layered**: `buildLayeredImage` creates efficient Docker layers automatically
 3. **Minimal runtime**: Bike containers exclude all build tooling
 4. **Secure by default**: Non-root, no shell in production
 
@@ -43,14 +43,14 @@ Think of containers like motorcycle builds:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐                      ┌──────────────┐         │
-│  │  Dockerfile  │                      │   flake.nix  │         │
-│  │ + flake.nix  │                      │ + Cargo.toml │         │
+│  │  flake.nix   │                      │   flake.nix  │         │
+│  │ + modules/   │                      │ + Cargo.toml │         │
 │  └──────┬───────┘                      └──────┬───────┘         │
 │         │                                     │                  │
 │         ▼                                     ▼                  │
 │  ┌──────────────┐                      ┌──────────────┐         │
-│  │ docker build │                      │ nix build    │         │
-│  │ (multi-arch) │                      │ (CI only)    │         │
+│  │ nix build    │                      │ nix build    │         │
+│  │ (dockerTools)│                      │ (dockerTools)│         │
 │  └──────┬───────┘                      └──────┬───────┘         │
 │         │                                     │                  │
 │         ▼                                     ▼                  │
@@ -92,13 +92,18 @@ Contains: Runtime dependencies + CA certificates
 
 ```
 moto/
-├── flake.nix                    # Root flake - defines devShell tooling
+├── flake.nix                    # Root flake - exports packages and devShell
 ├── flake.lock                   # Pinned dependencies
 └── infra/
-    ├── Dockerfile.moto-garage   # Garage container (Dockerfile + Nix inside)
-    ├── pkgs/                    # Nix package definitions (for bike containers)
+    ├── pkgs/                    # Container package definitions
+    │   ├── moto-garage.nix      # Garage container (full dev environment)
     │   ├── moto-engine.nix      # Engine container (minimal runtime)
     │   └── default.nix          # Exports all packages
+    ├── modules/                 # Reusable Nix modules
+    │   ├── base.nix             # Core packages (bash, coreutils, cacert)
+    │   ├── dev-tools.nix        # Rust toolchain, build tools
+    │   ├── ssh.nix              # OpenSSH
+    │   └── wireguard.nix        # WireGuard tools
     └── smoke-test.sh            # Container smoke tests
 ```
 
@@ -106,17 +111,23 @@ moto/
 
 | Path | Purpose |
 |------|---------|
-| `Dockerfile.moto-garage` | Garage container using Dockerfile (builds on Mac/Linux) |
-| `pkgs/` | Bike container definitions using `dockerTools.buildLayeredImage` (CI only) |
+| `pkgs/` | Container definitions using `dockerTools.buildLayeredImage` |
+| `modules/` | Reusable Nix modules composed into containers |
 
 **Build commands (all from repo root):**
 
 ```bash
-# Garage container (works on Mac via Docker/Colima)
+# Garage container (Makefile auto-detects architecture)
 make docker-build-moto-garage
 
-# Bike container (CI only - requires Linux)
+# Or directly with Nix
+nix build .#packages.aarch64-linux.moto-garage  # ARM
+nix build .#packages.x86_64-linux.moto-garage   # Intel
+docker load < result
+
+# Bike container
 nix build .#moto-engine
+docker load < result
 ```
 
 ### Build Pipeline Architecture

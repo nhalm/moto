@@ -2,19 +2,19 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.8 |
-| Status | Ready to Rip |
-| Last Updated | 2026-01-25 |
+| Version | 0.9 |
+| Status | Ripping |
+| Last Updated | 2026-01-26 |
 
 ## Overview
 
-The dev container is the garage environment - where Claude Code wrenches on the codebase. This is a **Dockerfile-based container** that uses **Nix** for reproducible package management.
+The dev container is the garage environment - where Claude Code wrenches on the codebase. This is a **Nix-built container** using `dockerTools.buildLayeredImage` for fully reproducible, declarative builds.
 
 **Key architecture decisions:**
-- **Dockerfile** for container builds (works on Mac/Linux, multi-arch support)
-- **Nix** inside the container for reproducible package installation
-- **Root flake** at repo root (`moto/flake.nix`) defines tooling
-- **Multi-arch builds** via `docker buildx` (amd64 + arm64)
+- **Nix dockerTools** for container builds (reproducible, layered images)
+- **Modular Nix config** in `infra/modules/` for composable container definitions
+- **Root flake** at repo root (`moto/flake.nix`) exports container packages
+- **Multi-arch** via flake outputs (`x86_64-linux`, `aarch64-linux`)
 
 ## Specification
 
@@ -26,40 +26,47 @@ The dev container is the garage environment - where Claude Code wrenches on the 
 - **Root access**: AI needs full control inside the sandbox
 - **Isolated**: Security comes from the container/namespace boundary
 
-### Why Dockerfile + Nix
+### Why Nix dockerTools
 
 | Approach | Description | Trade-off |
 |----------|-------------|-----------|
 | Pure Dockerfile | Install packages via apt/apk | Simple but not reproducible |
-| Nix dockerTools | Build image entirely with Nix | Reproducible but requires Linux builder on Mac |
-| **Dockerfile + Nix** | Dockerfile builds image, Nix installs packages inside | Best of both: works on Mac, reproducible packages |
+| Dockerfile + Nix | Dockerfile shell, Nix inside | Mixed build systems |
+| **Nix dockerTools** | Build image entirely with Nix | Fully reproducible, layered, content-addressed |
 
-We use Dockerfile + Nix because:
-- **Works on Mac**: Docker/Colima handles Linux VM transparently
-- **Multi-arch**: `docker buildx` builds amd64 + arm64 from one command
-- **Reproducible**: Nix flake.lock pins exact package versions
-- **Familiar**: Standard Docker workflow, easy for any dev to understand
+We use Nix dockerTools because:
+- **Reproducible**: Same inputs always produce identical images (content-addressed)
+- **Layered**: `buildLayeredImage` creates efficient Docker layers automatically
+- **Modular**: Compose container contents from reusable Nix modules
+- **Multi-arch**: Flake outputs for both `x86_64-linux` and `aarch64-linux`
 
 ### Project Structure
 
 ```
 moto/
-├── flake.nix                    # Root flake - defines devShell tooling
+├── flake.nix                    # Root flake - exports packages and devShell
 ├── flake.lock                   # Pinned dependencies
 └── infra/
-    ├── Dockerfile.moto-garage   # Container build definition
+    ├── pkgs/                    # Container package definitions
+    │   ├── moto-garage.nix      # Garage container definition
+    │   └── default.nix          # Exports all packages
+    ├── modules/                 # Reusable Nix modules
+    │   ├── base.nix             # Core packages (bash, coreutils, cacert)
+    │   ├── dev-tools.nix        # Rust toolchain, build tools, K8s tools
+    │   ├── ssh.nix              # OpenSSH for terminal access
+    │   └── wireguard.nix        # WireGuard for tunnel connectivity
     └── smoke-test.sh            # Container smoke tests
 ```
 
 **Root flake (`moto/flake.nix`):**
 - Provides `devShells.default` with all development tools
-- Same tooling used in container and local dev
+- Provides `packages.moto-garage` for Linux systems
+- Imports container definitions from `./infra/pkgs/`
 
-**Container definition (`moto/infra/Dockerfile.moto-garage`):**
-- Multi-stage build using `nixos/nix` base image
-- Copies flake.nix into build context
-- Runs `nix develop` to install all tools
-- Produces multi-arch image (amd64 + arm64)
+**Container definition (`moto/infra/pkgs/moto-garage.nix`):**
+- Uses `dockerTools.buildLayeredImage` for efficient layering
+- Composes modules: base + ssh + dev-tools + wireguard
+- Configures working directory, environment variables, volumes
 
 ### Included Tooling
 
@@ -341,23 +348,18 @@ moto garage open --cpu 8 --memory 16Gi
 
 ### Building the Container
 
-Container builds use standard Docker tooling with multi-arch support.
+Container builds use Nix flake outputs. The Makefile auto-detects architecture.
 
 **Build commands:**
 
 ```bash
-# Build for current architecture (fast, for local testing)
+# Build via Makefile (auto-detects architecture)
 make docker-build-moto-garage
 
-# Build multi-arch (for registry push)
-make docker-build-moto-garage-multiarch
-
-# Or directly with docker
-docker build -f infra/Dockerfile.moto-garage -t moto-garage:latest .
-
-# Multi-arch with buildx
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -f infra/Dockerfile.moto-garage -t moto-garage:latest .
+# Or directly with Nix (specify architecture)
+nix build .#packages.aarch64-linux.moto-garage  # ARM (Apple Silicon)
+nix build .#packages.x86_64-linux.moto-garage   # Intel/AMD
+docker load < result
 ```
 
 **Registry:**
@@ -365,10 +367,10 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 - Remote: `ghcr.io/<org>/moto-garage:latest`
 
 **Architecture notes:**
-- Mac (ARM): Builds `linux/arm64` natively, fast
-- Mac (Intel): Builds `linux/amd64` natively, fast
-- CI: Builds both architectures, pushes multi-arch manifest
-- k3s on Mac: Automatically pulls matching architecture
+- Mac (ARM): Builds `aarch64-linux` via flake output
+- Mac (Intel): Builds `x86_64-linux` via flake output
+- CI: Can build both architectures
+- k3s on Mac: Runs matching architecture natively
 
 ### Testing the Container
 
@@ -404,37 +406,38 @@ make docker-test-moto-garage
 ./infra/smoke-test.sh --keep
 ```
 
-### Example Dockerfile
+### Example Container Definition
 
-```dockerfile
-# infra/Dockerfile.moto-garage
-FROM nixos/nix:latest
+```nix
+# infra/pkgs/moto-garage.nix
+{ pkgs, rustToolchain }:
 
-# Enable flakes
-RUN mkdir -p /etc/nix && \
-    echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
+let
+  base = import ../modules/base.nix { inherit pkgs; };
+  ssh = import ../modules/ssh.nix { inherit pkgs; };
+  devTools = import ../modules/dev-tools.nix { inherit pkgs rustToolchain; };
+  wireguard = import ../modules/wireguard.nix { inherit pkgs; };
 
-# Copy flake files
-WORKDIR /setup
-COPY flake.nix flake.lock ./
-
-# Build the devShell and create a profile
-RUN nix develop --profile /nix/var/nix/profiles/dev-env --command true
-
-# Set up environment to use the profile
-ENV PATH="/nix/var/nix/profiles/dev-env/bin:$PATH"
-ENV RUST_BACKTRACE=1
-ENV CARGO_HOME=/root/.cargo
-ENV WORKSPACE=/workspace
-
-# Install Claude Code
-RUN curl -fsSL https://claude.ai/install.sh | bash
-
-WORKDIR /workspace
-CMD ["/bin/bash"]
+  allContents = base.contents ++ ssh.contents ++ devTools.contents ++ wireguard.contents;
+  allEnv = base.env ++ devTools.env;
+in
+pkgs.dockerTools.buildLayeredImage {
+  name = "moto-garage";
+  tag = "latest";
+  contents = allContents;
+  config = {
+    Cmd = [ "/bin/bash" ];
+    WorkingDir = "/workspace";
+    Env = allEnv;
+    Volumes = {
+      "/workspace" = {};
+      "/root/.cargo" = {};
+    };
+  };
+}
 ```
 
-The flake.nix defines the same tooling for both local development and the container.
+The modular design allows reusing components across different container types.
 
 ## Deferred Items
 
@@ -461,12 +464,15 @@ spiffe://moto.local/garage/{garage-id}
 
 ## Changelog
 
+### v0.9 (2026-01-26)
+- Correct spec to match implementation: Nix dockerTools approach
+- Document modular structure: base, dev-tools, ssh, wireguard modules
+- Update build commands to show `nix build` workflow
+- Multi-arch via flake outputs, not docker buildx
+- Mark as Ripping (implementation complete)
+
 ### v0.8 (2026-01-25)
-- Switch from Nix dockerTools to Dockerfile-based builds
-- Multi-arch support (amd64 + arm64) via docker buildx
-- Works on Mac without linux-builder setup
-- Container definition moves to `infra/Dockerfile.moto-garage`
-- Nix still used inside container for reproducible package installation
+- (Spec update that diverged from implementation - corrected in v0.9)
 
 ### v0.7 (2026-01-24)
 - Reorganize infra directory: `pkgs/`, `modules/`, `machines/` structure

@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
-| Status | Ready to Rip |
-| Last Updated | 2026-01-25 |
+| Version | 0.3 |
+| Status | Ripping |
+| Last Updated | 2026-01-26 |
 
 ## Overview
 
@@ -76,13 +76,25 @@ ci:             # Full CI check (fmt + check + lint + test)
 ### Container Targets
 
 ```makefile
-docker-build-moto-garage:            # Build garage container via Dockerfile
-docker-build-moto-garage-multiarch:  # Build multi-arch (amd64 + arm64)
-docker-test-moto-garage:             # Run smoke tests on container
-docker-shell-moto-garage:            # Interactive shell in container
+docker-build-moto-garage:   # Build garage container via Nix (auto-detects arch)
+docker-test-moto-garage:    # Run smoke tests on container
+docker-shell-moto-garage:   # Interactive shell in container
+docker-push-moto-garage:    # Push garage image to registry
+docker-push-local:          # Push all images to localhost:5000
+docker-scan:                # Scan images for vulnerabilities (requires trivy)
+docker-clean:               # Remove all moto images
 ```
 
-The garage container uses Dockerfile (works on Mac via Docker/Colima). Multi-arch builds require `docker buildx`.
+The garage container uses Nix `dockerTools.buildLayeredImage`. The Makefile auto-detects architecture (ARM vs Intel) and builds the appropriate Linux target.
+
+### Registry Targets
+
+```makefile
+registry-start:    # Start local Docker registry on localhost:5000
+registry-stop:     # Stop and remove local registry
+```
+
+Optional targets for local development with a registry.
 
 ### Cluster Targets (Future)
 
@@ -106,14 +118,21 @@ All targets should be declared `.PHONY` since they don't produce files:
 ```makefile
 .PHONY: install build test check fmt lint clean fix ci
 .PHONY: docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage
+.PHONY: docker-push-moto-garage docker-push-local docker-scan docker-clean
+.PHONY: registry-start registry-stop
 ```
 
 ## Changelog
 
+### v0.3 (2026-01-26)
+- Correct spec to match implementation: Nix dockerTools, not Dockerfile
+- Document push, scan, clean, registry targets
+- Remove multi-arch target (handled by flake outputs)
+- Mark as Ripping (implementation complete)
+
 ### v0.2 (2026-01-25)
 - Add Prerequisites section with Nix installation instructions
-- Update container targets to use Dockerfile instead of Nix
-- Add multi-arch build target
+- (Spec update that diverged from implementation - corrected in v0.3)
 
 ### v0.1 (2026-01-24)
 - Initial specification
