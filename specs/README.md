@@ -49,8 +49,8 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [moto-club](moto-club.md) | Ripping | Central orchestration, garage management |
 | [keybox](keybox.md) | Wrenching | Secrets manager, SPIFFE-based identity |
 | [ai-proxy](ai-proxy.md) | Bare Frame | AI provider gateway, injects secrets |
-| [dev-container](dev-container.md) | Ripping | NixOS container, tooling, environment |
-| [container-system](container-system.md) | Wrenching | Build pipeline, registry |
+| [dev-container](dev-container.md) | Ready to Rip | Dockerfile + Nix container, tooling, environment |
+| [container-system](container-system.md) | Ready to Rip | Build pipeline, registry |
 | [garage-isolation](garage-isolation.md) | Bare Frame | Network policies, resource limits |
 | [garage-local](garage-local.md) | Wrenching | Local K8s operations (no server) |
 | [garage-lifecycle](garage-lifecycle.md) | Wrenching | Full lifecycle with WebSocket, TTL |

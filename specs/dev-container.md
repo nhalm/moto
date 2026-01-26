@@ -2,19 +2,19 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.7 |
-| Status | Ripping |
-| Last Updated | 2026-01-24 |
+| Version | 0.8 |
+| Status | Ready to Rip |
+| Last Updated | 2026-01-25 |
 
 ## Overview
 
-The dev container is the garage environment - where Claude Code wrenches on the codebase. This is a **NixOS container** that provides a fully reproducible, declarative development environment.
+The dev container is the garage environment - where Claude Code wrenches on the codebase. This is a **Dockerfile-based container** that uses **Nix** for reproducible package management.
 
 **Key architecture decisions:**
-- **NixOS** as the container OS (not just Nix-on-Linux)
-- **Flakes** for reproducible builds and dependency management
-- **Root flake** at repo root (`moto/flake.nix`) provides devShell
-- **Container config** in `moto/infra/pkgs/` and `moto/infra/modules/`
+- **Dockerfile** for container builds (works on Mac/Linux, multi-arch support)
+- **Nix** inside the container for reproducible package installation
+- **Root flake** at repo root (`moto/flake.nix`) defines tooling
+- **Multi-arch builds** via `docker buildx` (amd64 + arm64)
 
 ## Specification
 
@@ -26,48 +26,40 @@ The dev container is the garage environment - where Claude Code wrenches on the 
 - **Root access**: AI needs full control inside the sandbox
 - **Isolated**: Security comes from the container/namespace boundary
 
-### Why NixOS (not just Nix)
+### Why Dockerfile + Nix
 
 | Approach | Description | Trade-off |
 |----------|-------------|-----------|
-| Nix on Alpine/Ubuntu | Nix package manager on top of another OS | Mixing package managers, less reproducible |
-| **NixOS container** | Entire OS is NixOS, everything from Nix | Fully declarative, larger image, steeper learning curve |
+| Pure Dockerfile | Install packages via apt/apk | Simple but not reproducible |
+| Nix dockerTools | Build image entirely with Nix | Reproducible but requires Linux builder on Mac |
+| **Dockerfile + Nix** | Dockerfile builds image, Nix installs packages inside | Best of both: works on Mac, reproducible packages |
 
-We use NixOS because:
-- Everything (packages, services, users) is declared in Nix
-- Services (SSH, WireGuard daemon) are easy to configure
-- System upgrades are atomic and rollback-able
-- No mixing of package managers
+We use Dockerfile + Nix because:
+- **Works on Mac**: Docker/Colima handles Linux VM transparently
+- **Multi-arch**: `docker buildx` builds amd64 + arm64 from one command
+- **Reproducible**: Nix flake.lock pins exact package versions
+- **Familiar**: Standard Docker workflow, easy for any dev to understand
 
 ### Project Structure
 
 ```
 moto/
-├── flake.nix                    # Root flake - single source of truth
+├── flake.nix                    # Root flake - defines devShell tooling
 ├── flake.lock                   # Pinned dependencies
 └── infra/
-    ├── pkgs/                    # Package/container definitions
-    │   ├── moto-garage.nix         # This container's definition
-    │   ├── moto-engine.nix      # Engine containers (future)
-    │   └── default.nix          # Exports all packages
-    ├── modules/                 # Reusable NixOS modules
-    │   ├── base.nix             # Common system settings
-    │   ├── ssh.nix              # SSH server configuration
-    │   ├── dev-tools.nix        # Development tooling
-    │   └── wireguard.nix        # WireGuard support
+    ├── Dockerfile.moto-garage   # Container build definition
     └── smoke-test.sh            # Container smoke tests
 ```
 
 **Root flake (`moto/flake.nix`):**
 - Provides `devShells.default` with all development tools
-- Provides `packages.moto-garage` (this container)
-- Provides `packages.moto-engine-*` (runtime containers)
-- Imports definitions from `./infra/pkgs/`
+- Same tooling used in container and local dev
 
-**Container definition (`moto/infra/pkgs/moto-garage.nix`):**
-- Uses `dockerTools.buildLayeredImage`
-- Imports modules from `../modules/`
-- Configures services (SSH, WireGuard daemon)
+**Container definition (`moto/infra/Dockerfile.moto-garage`):**
+- Multi-stage build using `nixos/nix` base image
+- Copies flake.nix into build context
+- Runs `nix develop` to install all tools
+- Produces multi-arch image (amd64 + arm64)
 
 ### Included Tooling
 
@@ -182,20 +174,14 @@ ANTHROPIC_BASE_URL="http://ai-proxy.moto-system.svc.cluster.local:8080"
 ANTHROPIC_API_KEY="garage-${GARAGE_ID}"  # Proxy handles real key
 ```
 
-### NixOS Services
+### Services
 
-The container runs these NixOS services:
+The container includes these services (configured in Dockerfile):
 
 **SSH Server:**
-```nix
-services.openssh = {
-  enable = true;
-  settings = {
-    PermitRootLogin = "yes";
-    PasswordAuthentication = false;
-  };
-};
-```
+- OpenSSH installed via Nix
+- Configured at container startup if needed
+- Root login enabled for AI access
 
 **WireGuard (configured by moto-garage-wgtunnel daemon):**
 - Daemon registers with moto-club on startup
@@ -355,23 +341,34 @@ moto garage open --cpu 8 --memory 16Gi
 
 ### Building the Container
 
-Container builds are defined in the root `flake.nix`, which imports from `infra/pkgs/`. See [container-system.md](container-system.md) for the complete build pipeline.
+Container builds use standard Docker tooling with multi-arch support.
 
 **Build commands:**
 
 ```bash
-# Build the garage (dev) container from repo root
-nix build .#moto-garage
-docker load < result
-# Image is now available as moto-garage:latest
-
-# Or use Makefile targets
+# Build for current architecture (fast, for local testing)
 make docker-build-moto-garage
+
+# Build multi-arch (for registry push)
+make docker-build-moto-garage-multiarch
+
+# Or directly with docker
+docker build -f infra/Dockerfile.moto-garage -t moto-garage:latest .
+
+# Multi-arch with buildx
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -f infra/Dockerfile.moto-garage -t moto-garage:latest .
 ```
 
-**Registry (when needed):**
-- Local: `localhost:5000/moto-garage:latest`
+**Registry:**
+- Local: `moto-garage:latest`
 - Remote: `ghcr.io/<org>/moto-garage:latest`
+
+**Architecture notes:**
+- Mac (ARM): Builds `linux/arm64` natively, fast
+- Mac (Intel): Builds `linux/amd64` natively, fast
+- CI: Builds both architectures, pushes multi-arch manifest
+- k3s on Mac: Automatically pulls matching architecture
 
 ### Testing the Container
 
@@ -407,93 +404,37 @@ make docker-test-moto-garage
 ./infra/smoke-test.sh --keep
 ```
 
-### Example Root Flake
+### Example Dockerfile
 
-```nix
-# moto/flake.nix
-{
-  description = "Moto - fintech infrastructure";
+```dockerfile
+# infra/Dockerfile.moto-garage
+FROM nixos/nix:latest
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
+# Enable flakes
+RUN mkdir -p /etc/nix && \
+    echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        overlays = [ (import rust-overlay) ];
-        pkgs = import nixpkgs { inherit system overlays; };
+# Copy flake files
+WORKDIR /setup
+COPY flake.nix flake.lock ./
 
-        rustToolchain = pkgs.rust-bin.stable."1.85.0".default.override {
-          extensions = [ "rust-src" "rust-analyzer" ];
-        };
-      in {
-        devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            # Rust
-            rustToolchain
-            cargo-watch
-            cargo-nextest
-            cargo-audit
-            cargo-deny
-            cargo-edit
-            cargo-expand
-            mold
-            sccache
-            sqlx-cli
+# Build the devShell and create a profile
+RUN nix develop --profile /nix/var/nix/profiles/dev-env --command true
 
-            # Build deps
-            pkg-config
-            openssl
-            postgresql.lib
-            clang
+# Set up environment to use the profile
+ENV PATH="/nix/var/nix/profiles/dev-env/bin:$PATH"
+ENV RUST_BACKTRACE=1
+ENV CARGO_HOME=/root/.cargo
+ENV WORKSPACE=/workspace
 
-            # Version control
-            git
-            jujutsu
-            gh
+# Install Claude Code
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
-            # Database clients
-            postgresql
-            redis
-
-            # General tools
-            curl
-            jq
-            yq
-            ripgrep
-            fd
-            bat
-            htop
-            tree
-
-            # Kubernetes
-            kubectl
-            k9s
-            kubernetes-helm
-
-            # AI - claude-code installed via shell script, not nix
-            # See: curl -fsSL https://claude.ai/install.sh | bash
-
-            # Connectivity
-            wireguard-tools
-            openssh
-          ];
-
-          shellHook = ''
-            export RUST_BACKTRACE=1
-            export RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=mold"
-          '';
-        };
-      }
-    );
-}
+WORKDIR /workspace
+CMD ["/bin/bash"]
 ```
+
+The flake.nix defines the same tooling for both local development and the container.
 
 ## Deferred Items
 
@@ -519,6 +460,13 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.8 (2026-01-25)
+- Switch from Nix dockerTools to Dockerfile-based builds
+- Multi-arch support (amd64 + arm64) via docker buildx
+- Works on Mac without linux-builder setup
+- Container definition moves to `infra/Dockerfile.moto-garage`
+- Nix still used inside container for reproducible package installation
 
 ### v0.7 (2026-01-24)
 - Reorganize infra directory: `pkgs/`, `modules/`, `machines/` structure

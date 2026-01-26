@@ -2,8 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
-| Last Updated | 2026-01-24 |
+| Version | 0.4 |
+| Status | Ready to Rip |
+| Last Updated | 2026-01-25 |
 
 ## Overview
 
@@ -29,8 +30,8 @@ Think of containers like motorcycle builds:
 
 **Core principles:**
 
-1. **Reproducible**: Nix builds guarantee identical images from identical inputs
-2. **Layered**: Changes to code don't rebuild system packages
+1. **Works everywhere**: Dockerfile for garage (builds on Mac/Linux), Nix for bikes (CI only)
+2. **Reproducible**: Nix flake.lock pins package versions in both approaches
 3. **Minimal runtime**: Bike containers exclude all build tooling
 4. **Secure by default**: Non-root, no shell in production
 
@@ -42,13 +43,14 @@ Think of containers like motorcycle builds:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐                      ┌──────────────┐         │
-│  │   flake.nix  │                      │   Cargo.toml │         │
+│  │  Dockerfile  │                      │   flake.nix  │         │
+│  │ + flake.nix  │                      │ + Cargo.toml │         │
 │  └──────┬───────┘                      └──────┬───────┘         │
 │         │                                     │                  │
 │         ▼                                     ▼                  │
 │  ┌──────────────┐                      ┌──────────────┐         │
-│  │ Nix Build    │                      │ Cargo Build  │         │
-│  │ (dev deps)   │                      │ (--release)  │         │
+│  │ docker build │                      │ nix build    │         │
+│  │ (multi-arch) │                      │ (CI only)    │         │
 │  └──────┬───────┘                      └──────┬───────┘         │
 │         │                                     │                  │
 │         ▼                                     ▼                  │
@@ -56,7 +58,7 @@ Think of containers like motorcycle builds:
 │  │   GARAGE     │                      │    BIKE      │         │
 │  │  Container   │                      │  Container   │         │
 │  │   ~3GB       │                      │   ~50MB      │         │
-│  │  (moto-garage)  │                      │ (moto-engine)│         │
+│  │(moto-garage) │                      │(moto-engine) │         │
 │  └──────────────┘                      └──────────────┘         │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -88,47 +90,33 @@ Contains: Runtime dependencies + CA certificates
 
 ### Infrastructure Directory Structure
 
-All Nix configuration lives under `infra/` with a clear separation of concerns:
-
 ```
 moto/
-├── flake.nix                    # Root flake - single source of truth
+├── flake.nix                    # Root flake - defines devShell tooling
 ├── flake.lock                   # Pinned dependencies
 └── infra/
-    ├── pkgs/                    # Package and container definitions
-    │   ├── moto-garage.nix      # Garage container (full dev environment)
+    ├── Dockerfile.moto-garage   # Garage container (Dockerfile + Nix inside)
+    ├── pkgs/                    # Nix package definitions (for bike containers)
     │   ├── moto-engine.nix      # Engine container (minimal runtime)
     │   └── default.nix          # Exports all packages
-    ├── modules/                 # Reusable NixOS modules
-    │   ├── base.nix             # Common system settings
-    │   ├── ssh.nix              # SSH server configuration
-    │   ├── dev-tools.nix        # Development tooling (Rust, etc.)
-    │   └── wireguard.nix        # WireGuard support
-    ├── machines/                # Machine-specific configs (future)
     └── smoke-test.sh            # Container smoke tests
 ```
 
 **Directory purposes:**
 
-| Directory | Purpose |
-|-----------|---------|
-| `pkgs/` | Container image definitions using `dockerTools.buildLayeredImage` |
-| `modules/` | Reusable NixOS modules that can be composed into containers |
-| `machines/` | Concrete machine configurations (for actual NixOS deployments) |
-
-**Root flake imports from infra:**
-
-```nix
-# flake.nix imports package definitions
-packages.moto-garage = import ./infra/pkgs/moto-garage.nix { inherit pkgs; modules = ./infra/modules; };
-packages.moto-engine = import ./infra/pkgs/moto-engine.nix { inherit pkgs; };
-```
+| Path | Purpose |
+|------|---------|
+| `Dockerfile.moto-garage` | Garage container using Dockerfile (builds on Mac/Linux) |
+| `pkgs/` | Bike container definitions using `dockerTools.buildLayeredImage` (CI only) |
 
 **Build commands (all from repo root):**
 
 ```bash
-nix build .#moto-garage   # Garage container (dev environment)
-nix build .#moto-engine   # Engine container (runtime for all services)
+# Garage container (works on Mac via Docker/Colima)
+make docker-build-moto-garage
+
+# Bike container (CI only - requires Linux)
+nix build .#moto-engine
 ```
 
 ### Build Pipeline Architecture
@@ -1136,6 +1124,13 @@ nix path-info --json .#moto-engine | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v0.4 (2026-01-25)
+- Switch garage container from Nix dockerTools to Dockerfile-based builds
+- Garage builds work on Mac (Docker/Colima) without linux-builder setup
+- Multi-arch support via docker buildx (amd64 + arm64)
+- Bike containers still use Nix dockerTools (built in CI on Linux)
+- Update directory structure: `infra/Dockerfile.moto-garage`
 
 ### v0.3 (2026-01-24)
 - Add infra directory structure: `pkgs/`, `modules/`, `machines/`

@@ -41,10 +41,14 @@ ci: fmt check lint test
 
 # === Dev Container (Garage) ===
 
+# Detect Linux target based on host architecture
+# aarch64-darwin -> aarch64-linux, x86_64-darwin -> x86_64-linux
+NIX_LINUX_SYSTEM := $(shell uname -m | sed 's/arm64/aarch64/')-linux
+
 # Build the moto-garage container image using Nix
 docker-build-moto-garage:
-	@echo "Building moto-garage container..."
-	nix build .#moto-garage --print-out-paths | xargs docker load <
+	@echo "Building moto-garage container for $(NIX_LINUX_SYSTEM)..."
+	docker load < $$(nix build .#packages.$(NIX_LINUX_SYSTEM).moto-garage --print-out-paths)
 
 # Build and run smoke tests on the container
 docker-test-moto-garage: docker-build-moto-garage

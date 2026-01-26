@@ -23,8 +23,8 @@
         # Import container packages from infra/pkgs/
         infraPkgs = import ./infra/pkgs { inherit pkgs rustToolchain; };
       in {
-        # Container packages (only for x86_64-linux)
-        packages = if system == "x86_64-linux" then {
+        # Container packages (Linux only - both x86_64 and aarch64)
+        packages = if pkgs.stdenv.isLinux then {
           moto-garage = infraPkgs.moto-garage;
           default = infraPkgs.moto-garage;
         } else {};

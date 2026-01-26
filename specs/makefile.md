@@ -2,15 +2,43 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.1 |
+| Version | 0.2 |
 | Status | Ready to Rip |
-| Last Updated | 2026-01-24 |
+| Last Updated | 2026-01-25 |
 
 ## Overview
 
 Defines the Makefile structure and targets for the moto project. The Makefile is the primary interface for development tasks.
 
 ## Specification
+
+### Prerequisites
+
+The following tools should be installed before running `make install`:
+
+| Tool | Purpose | Installation |
+|------|---------|--------------|
+| **Nix** | Package manager for reproducible devShell | See below |
+| **Docker** | Container runtime | Docker Desktop, Colima, or OrbStack |
+| **Git** | Version control | `brew install git` or system package |
+
+**Nix Installation (Determinate installer recommended):**
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+```
+
+After installing, open a new terminal or run:
+```bash
+. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+```
+
+Verify with: `nix --version`
+
+**Why Determinate Nix:**
+- Survives macOS upgrades
+- Enables flakes by default
+- Generates uninstall receipt for clean removal
 
 ### Target Groups
 
@@ -48,10 +76,13 @@ ci:             # Full CI check (fmt + check + lint + test)
 ### Container Targets
 
 ```makefile
-docker-build-moto-garage:   # Build garage container via Nix
-docker-test-moto-garage:    # Run smoke tests on container
-docker-shell-moto-garage:   # Interactive shell in container
+docker-build-moto-garage:            # Build garage container via Dockerfile
+docker-build-moto-garage-multiarch:  # Build multi-arch (amd64 + arm64)
+docker-test-moto-garage:             # Run smoke tests on container
+docker-shell-moto-garage:            # Interactive shell in container
 ```
+
+The garage container uses Dockerfile (works on Mac via Docker/Colima). Multi-arch builds require `docker buildx`.
 
 ### Cluster Targets (Future)
 
@@ -76,6 +107,16 @@ All targets should be declared `.PHONY` since they don't produce files:
 .PHONY: install build test check fmt lint clean fix ci
 .PHONY: docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage
 ```
+
+## Changelog
+
+### v0.2 (2026-01-25)
+- Add Prerequisites section with Nix installation instructions
+- Update container targets to use Dockerfile instead of Nix
+- Add multi-arch build target
+
+### v0.1 (2026-01-24)
+- Initial specification
 
 ## References
 
