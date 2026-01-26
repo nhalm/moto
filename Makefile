@@ -1,4 +1,6 @@
-.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage docker-push-moto-garage docker-push-local docker-clean docker-scan registry-start registry-stop
+.PHONY: install build test check fmt lint clean run fix ci
+.PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images
+.PHONY: registry-start registry-stop
 
 # Set up local development environment
 install:
@@ -39,27 +41,34 @@ fix: fmt
 # Full CI check
 ci: fmt check lint test
 
-# === Dev Container (Garage) ===
+# === Container (Garage) ===
 
 # Detect Linux target based on host architecture
 # aarch64-darwin -> aarch64-linux, x86_64-darwin -> x86_64-linux
 NIX_LINUX_SYSTEM := $(shell uname -m | sed 's/arm64/aarch64/')-linux
 
-# Build the moto-garage container image using Nix
-docker-build-moto-garage:
-	@echo "Building moto-garage container for $(NIX_LINUX_SYSTEM)..."
-	docker load < $$(nix build .#packages.$(NIX_LINUX_SYSTEM).moto-garage --print-out-paths)
+# Build the moto-garage container image using Docker-wrapped Nix
+# This runs nix build inside a nixos/nix container, works on Mac without configuring a Linux builder
+build-garage:
+	@echo "Building moto-garage container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
+	docker run --rm \
+		-v $(PWD):/workspace \
+		-v nix-store:/nix \
+		-w /workspace \
+		nixos/nix:latest \
+		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-garage --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
+		| docker load
 
 # Build and run smoke tests on the container
-docker-test-moto-garage: docker-build-moto-garage
+test-garage: build-garage
 	@echo "Running smoke tests..."
 	./infra/smoke-test.sh
 
 # Interactive shell in the container for debugging
-docker-shell-moto-garage:
+shell-garage:
 	@if ! docker image inspect moto-garage:latest &>/dev/null; then \
 		echo "Image not found, building..."; \
-		$(MAKE) docker-build-moto-garage; \
+		$(MAKE) build-garage; \
 	fi
 	docker run -it --rm moto-garage:latest
 
@@ -69,20 +78,10 @@ docker-shell-moto-garage:
 REGISTRY ?= localhost:5000
 SHA := $(shell git rev-parse --short HEAD)
 
-# Push all images to local registry (localhost:5000)
-# Currently only pushes moto-garage; moto-engine will be added when bike.md is ready
-docker-push-local: docker-build-moto-garage
-	@echo "Pushing all images to $(REGISTRY)..."
-	docker tag moto-garage:latest $(REGISTRY)/moto-garage:latest
-	docker tag moto-garage:latest $(REGISTRY)/moto-garage:$(SHA)
-	docker push $(REGISTRY)/moto-garage:latest
-	docker push $(REGISTRY)/moto-garage:$(SHA)
-	@echo "Pushed $(REGISTRY)/moto-garage:latest and $(REGISTRY)/moto-garage:$(SHA)"
-
-# Push moto-garage to registry
-docker-push-moto-garage:
+# Push moto-garage to registry (localhost:5000 by default)
+push-garage:
 	@if ! docker image inspect moto-garage:latest &>/dev/null; then \
-		echo "Error: moto-garage:latest not found. Run 'make docker-build-moto-garage' first."; \
+		echo "Error: moto-garage:latest not found. Run 'make build-garage' first."; \
 		exit 1; \
 	fi
 	@echo "Pushing moto-garage to $(REGISTRY)..."
@@ -95,14 +94,14 @@ docker-push-moto-garage:
 # === Scan ===
 
 # Scan images for vulnerabilities using trivy
-docker-scan:
+scan-garage:
 	@if ! command -v trivy &>/dev/null; then \
 		echo "Error: trivy is not installed. Install with 'brew install trivy' or 'nix-shell -p trivy'"; \
 		exit 1; \
 	fi
 	@echo "Scanning moto-garage for vulnerabilities..."
 	@if ! docker image inspect moto-garage:latest &>/dev/null; then \
-		echo "Error: moto-garage:latest not found. Run 'make docker-build-moto-garage' first."; \
+		echo "Error: moto-garage:latest not found. Run 'make build-garage' first."; \
 		exit 1; \
 	fi
 	trivy image --severity HIGH,CRITICAL moto-garage:latest
@@ -110,7 +109,7 @@ docker-scan:
 # === Cleanup ===
 
 # Remove all moto container images
-docker-clean:
+clean-images:
 	@echo "Removing moto images..."
 	-docker images --filter=reference='moto-*' -q | xargs docker rmi -f 2>/dev/null || true
 	-docker images --filter=reference='*/moto-*' -q | xargs docker rmi -f 2>/dev/null || true

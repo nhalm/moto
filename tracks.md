@@ -162,14 +162,20 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.1
+## makefile.md v0.4
 
 **Status:** Complete
 
 **Implemented:**
 - install target (sets git hooks path)
 - build, test, check, fmt, lint, clean, fix, ci targets
-- docker-build-moto-garage, docker-test-moto-garage, docker-shell-moto-garage targets
+- build-garage target (Docker-wrapped Nix: runs nix build inside nixos/nix container)
+- test-garage target (builds and runs smoke tests)
+- shell-garage target (interactive shell in container)
+- push-garage target (push to registry)
+- scan-garage target (vulnerability scanning with trivy)
+- clean-images target (remove moto images)
+- registry-start, registry-stop targets
 - .PHONY declarations for all targets
 
 **Remaining:**
