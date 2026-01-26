@@ -242,11 +242,26 @@ mod tests {
 
     #[test]
     fn garage_status_parse() {
-        assert_eq!("pending".parse::<GarageStatus>().unwrap(), GarageStatus::Pending);
-        assert_eq!("running".parse::<GarageStatus>().unwrap(), GarageStatus::Running);
-        assert_eq!("ready".parse::<GarageStatus>().unwrap(), GarageStatus::Ready);
-        assert_eq!("attached".parse::<GarageStatus>().unwrap(), GarageStatus::Attached);
-        assert_eq!("terminated".parse::<GarageStatus>().unwrap(), GarageStatus::Terminated);
+        assert_eq!(
+            "pending".parse::<GarageStatus>().unwrap(),
+            GarageStatus::Pending
+        );
+        assert_eq!(
+            "running".parse::<GarageStatus>().unwrap(),
+            GarageStatus::Running
+        );
+        assert_eq!(
+            "ready".parse::<GarageStatus>().unwrap(),
+            GarageStatus::Ready
+        );
+        assert_eq!(
+            "attached".parse::<GarageStatus>().unwrap(),
+            GarageStatus::Attached
+        );
+        assert_eq!(
+            "terminated".parse::<GarageStatus>().unwrap(),
+            GarageStatus::Terminated
+        );
         assert!("invalid".parse::<GarageStatus>().is_err());
     }
 
@@ -270,17 +285,35 @@ mod tests {
         assert_eq!(TerminationReason::UserClosed.to_string(), "user_closed");
         assert_eq!(TerminationReason::TtlExpired.to_string(), "ttl_expired");
         assert_eq!(TerminationReason::PodLost.to_string(), "pod_lost");
-        assert_eq!(TerminationReason::NamespaceMissing.to_string(), "namespace_missing");
+        assert_eq!(
+            TerminationReason::NamespaceMissing.to_string(),
+            "namespace_missing"
+        );
         assert_eq!(TerminationReason::ErrorReason.to_string(), "error");
     }
 
     #[test]
     fn termination_reason_parse() {
-        assert_eq!("user_closed".parse::<TerminationReason>().unwrap(), TerminationReason::UserClosed);
-        assert_eq!("ttl_expired".parse::<TerminationReason>().unwrap(), TerminationReason::TtlExpired);
-        assert_eq!("pod_lost".parse::<TerminationReason>().unwrap(), TerminationReason::PodLost);
-        assert_eq!("namespace_missing".parse::<TerminationReason>().unwrap(), TerminationReason::NamespaceMissing);
-        assert_eq!("error".parse::<TerminationReason>().unwrap(), TerminationReason::ErrorReason);
+        assert_eq!(
+            "user_closed".parse::<TerminationReason>().unwrap(),
+            TerminationReason::UserClosed
+        );
+        assert_eq!(
+            "ttl_expired".parse::<TerminationReason>().unwrap(),
+            TerminationReason::TtlExpired
+        );
+        assert_eq!(
+            "pod_lost".parse::<TerminationReason>().unwrap(),
+            TerminationReason::PodLost
+        );
+        assert_eq!(
+            "namespace_missing".parse::<TerminationReason>().unwrap(),
+            TerminationReason::NamespaceMissing
+        );
+        assert_eq!(
+            "error".parse::<TerminationReason>().unwrap(),
+            TerminationReason::ErrorReason
+        );
         assert!("invalid".parse::<TerminationReason>().is_err());
     }
 

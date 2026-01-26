@@ -275,11 +275,9 @@ impl GarageRegistrar {
     ) -> Result<RegistrationResponse> {
         self.config.validate()?;
 
-        let request = RegistrationRequest::new(
-            self.config.garage_id.clone(),
-            private_key.public_key(),
-        )
-        .with_endpoints(endpoints.to_vec());
+        let request =
+            RegistrationRequest::new(self.config.garage_id.clone(), private_key.public_key())
+                .with_endpoints(endpoints.to_vec());
 
         if self.config.retry_enabled {
             self.register_with_retry(&request).await
@@ -289,7 +287,10 @@ impl GarageRegistrar {
     }
 
     /// Register with automatic retry on transient failures.
-    async fn register_with_retry(&self, request: &RegistrationRequest) -> Result<RegistrationResponse> {
+    async fn register_with_retry(
+        &self,
+        request: &RegistrationRequest,
+    ) -> Result<RegistrationResponse> {
         for (attempt, backoff) in RETRY_BACKOFF.iter().enumerate() {
             match self.register_once(request).await {
                 Ok(response) => return Ok(response),
@@ -312,12 +313,10 @@ impl GarageRegistrar {
         // Final attempt after all backoffs
         match self.register_once(request).await {
             Ok(response) => Ok(response),
-            Err(RegistrationError::Unreachable(msg)) => {
-                Err(RegistrationError::RetriesExhausted {
-                    attempts: RETRY_BACKOFF.len() + 1,
-                    last_error: msg,
-                })
-            }
+            Err(RegistrationError::Unreachable(msg)) => Err(RegistrationError::RetriesExhausted {
+                attempts: RETRY_BACKOFF.len() + 1,
+                last_error: msg,
+            }),
             Err(e) => Err(e),
         }
     }
@@ -417,12 +416,12 @@ mod tests {
         assert!(config.validate().is_ok());
 
         // Empty URL
-        let config = RegistrationConfig::new(
-            String::new(),
-            "garage".to_string(),
-            "token".to_string(),
-        );
-        assert!(matches!(config.validate(), Err(RegistrationError::Config(_))));
+        let config =
+            RegistrationConfig::new(String::new(), "garage".to_string(), "token".to_string());
+        assert!(matches!(
+            config.validate(),
+            Err(RegistrationError::Config(_))
+        ));
 
         // Empty garage_id
         let config = RegistrationConfig::new(
@@ -430,7 +429,10 @@ mod tests {
             String::new(),
             "token".to_string(),
         );
-        assert!(matches!(config.validate(), Err(RegistrationError::Config(_))));
+        assert!(matches!(
+            config.validate(),
+            Err(RegistrationError::Config(_))
+        ));
 
         // Empty auth_token
         let config = RegistrationConfig::new(
@@ -438,7 +440,10 @@ mod tests {
             "garage".to_string(),
             String::new(),
         );
-        assert!(matches!(config.validate(), Err(RegistrationError::Config(_))));
+        assert!(matches!(
+            config.validate(),
+            Err(RegistrationError::Config(_))
+        ));
     }
 
     #[test]
@@ -504,11 +509,10 @@ mod tests {
 
         let response = RegistrationResponse {
             assigned_ip: OverlayIp::garage(12345),
-            derp_map: DerpMap::new()
-                .with_region(
-                    DerpRegion::new(1, "primary")
-                        .with_node(DerpNode::with_defaults("derp.example.com")),
-                ),
+            derp_map: DerpMap::new().with_region(
+                DerpRegion::new(1, "primary")
+                    .with_node(DerpNode::with_defaults("derp.example.com")),
+            ),
         };
 
         let json = serde_json::to_string(&response).unwrap();

@@ -118,9 +118,7 @@ impl GarageLifecycle {
         match current {
             GarageStatus::Pending => Some(GarageStatus::Running),
             GarageStatus::Running => Some(GarageStatus::Ready),
-            GarageStatus::Ready
-            | GarageStatus::Attached
-            | GarageStatus::Terminated => None,
+            GarageStatus::Ready | GarageStatus::Attached | GarageStatus::Terminated => None,
         }
     }
 
@@ -244,7 +242,10 @@ mod tests {
         // Invalid transition
         let result =
             GarageLifecycle::validate_transition(GarageStatus::Ready, GarageStatus::Pending);
-        assert!(matches!(result, Err(LifecycleError::InvalidTransition { .. })));
+        assert!(matches!(
+            result,
+            Err(LifecycleError::InvalidTransition { .. })
+        ));
 
         // From terminated
         let result =

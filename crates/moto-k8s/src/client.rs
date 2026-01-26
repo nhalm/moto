@@ -4,9 +4,9 @@ use std::collections::BTreeMap;
 
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{
+    Client, Config,
     api::{Api, ListParams, ObjectMeta, PostParams},
     config::{KubeConfigOptions, Kubeconfig},
-    Client, Config,
 };
 use tracing::{debug, instrument};
 
@@ -41,9 +41,7 @@ impl K8sClient {
             return Self::from_kubeconfig_path(&path).await;
         }
 
-        let client = Client::try_default()
-            .await
-            .map_err(Error::ClientCreate)?;
+        let client = Client::try_default().await.map_err(Error::ClientCreate)?;
         Ok(Self { client })
     }
 
@@ -53,8 +51,7 @@ impl K8sClient {
     ///
     /// Returns an error if the kubeconfig file cannot be read or is invalid.
     pub async fn from_kubeconfig_path(path: &str) -> Result<Self> {
-        let kubeconfig =
-            Kubeconfig::read_from(path).map_err(Error::KubeconfigRead)?;
+        let kubeconfig = Kubeconfig::read_from(path).map_err(Error::KubeconfigRead)?;
         let config = Config::from_custom_kubeconfig(kubeconfig, &KubeConfigOptions::default())
             .await
             .map_err(Error::KubeconfigRead)?;
@@ -78,8 +75,7 @@ impl K8sClient {
 
         // Check for MOTOCONFIG first
         let config = if let Ok(path) = std::env::var("MOTOCONFIG") {
-            let kubeconfig =
-                Kubeconfig::read_from(path).map_err(Error::KubeconfigRead)?;
+            let kubeconfig = Kubeconfig::read_from(path).map_err(Error::KubeconfigRead)?;
             Config::from_custom_kubeconfig(kubeconfig, &options)
                 .await
                 .map_err(Error::KubeconfigRead)?
@@ -195,15 +191,13 @@ impl NamespaceOps for K8sClient {
         let api: Api<Namespace> = Api::all(self.client.clone());
 
         debug!("getting namespace");
-        api.get(name)
-            .await
-            .map_err(|e| {
-                if is_not_found(&e) {
-                    Error::NamespaceNotFound(name.to_string())
-                } else {
-                    Error::NamespaceGet(e)
-                }
-            })
+        api.get(name).await.map_err(|e| {
+            if is_not_found(&e) {
+                Error::NamespaceNotFound(name.to_string())
+            } else {
+                Error::NamespaceGet(e)
+            }
+        })
     }
 
     #[instrument(skip(self))]
@@ -253,7 +247,11 @@ mod tests {
     #[ignore = "requires running K8s cluster"]
     async fn client_creation() {
         let client = K8sClient::new().await;
-        assert!(client.is_ok(), "Failed to create client: {:?}", client.err());
+        assert!(
+            client.is_ok(),
+            "Failed to create client: {:?}",
+            client.err()
+        );
     }
 
     #[tokio::test]
@@ -261,7 +259,11 @@ mod tests {
     async fn list_namespaces() {
         let client = K8sClient::new().await.expect("client creation failed");
         let namespaces = client.list_namespaces(None).await;
-        assert!(namespaces.is_ok(), "Failed to list namespaces: {:?}", namespaces.err());
+        assert!(
+            namespaces.is_ok(),
+            "Failed to list namespaces: {:?}",
+            namespaces.err()
+        );
         // Should at least have 'default' and 'kube-system'
         let ns = namespaces.unwrap();
         assert!(ns.len() >= 2, "Expected at least 2 namespaces");

@@ -120,9 +120,9 @@ pub mod platform;
 pub mod tunnel;
 
 pub use config::{
-    ConfigError, ConnectionMode, InterfaceConfig, PeerConfig, TimingConfig, TunnelConfig,
-    TunnelConfigBuilder, DEFAULT_DERP_TIMEOUT_SECS, DEFAULT_DIRECT_TIMEOUT_SECS,
-    DEFAULT_KEEPALIVE_SECS, DEFAULT_MTU, ENV_DERP_ONLY, ENV_LOG_LEVEL,
+    ConfigError, ConnectionMode, DEFAULT_DERP_TIMEOUT_SECS, DEFAULT_DIRECT_TIMEOUT_SECS,
+    DEFAULT_KEEPALIVE_SECS, DEFAULT_MTU, ENV_DERP_ONLY, ENV_LOG_LEVEL, InterfaceConfig, PeerConfig,
+    TimingConfig, TunnelConfig, TunnelConfigBuilder,
 };
 pub use platform::{TunConfig, TunDevice, TunError, TunInfo, VirtualTun};
 pub use tunnel::{Tunnel, TunnelBuilder, TunnelError, TunnelEvent, TunnelState, TunnelStats};

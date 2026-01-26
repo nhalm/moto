@@ -88,10 +88,7 @@ pub async fn connect(database_url: &str) -> DbResult<DbPool> {
 /// # Errors
 ///
 /// Returns an error if the connection fails.
-pub async fn connect_with_options(
-    database_url: &str,
-    max_connections: u32,
-) -> DbResult<DbPool> {
+pub async fn connect_with_options(database_url: &str, max_connections: u32) -> DbResult<DbPool> {
     use sqlx::postgres::PgPoolOptions;
 
     let pool = PgPoolOptions::new()

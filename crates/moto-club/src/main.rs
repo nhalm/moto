@@ -26,7 +26,7 @@ use tokio::net::TcpListener;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-use moto_club_api::{router, AppState};
+use moto_club_api::{AppState, router};
 use moto_club_db::DbPool;
 use moto_club_k8s::GarageK8s;
 use moto_club_reconcile::{GarageReconciler, ReconcileConfig};

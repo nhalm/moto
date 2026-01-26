@@ -41,7 +41,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use thiserror::Error;
 use tokio::net::UdpSocket;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc};
 use tokio::time::timeout;
 use tracing::{debug, trace, warn};
 
@@ -195,8 +195,7 @@ impl MagicConnConfig {
     /// # Panics
     /// This should never panic as we store valid key bytes.
     fn make_private_key(&self) -> WgPrivateKey {
-        WgPrivateKey::from_bytes(&self.private_key_bytes)
-            .expect("stored key bytes should be valid")
+        WgPrivateKey::from_bytes(&self.private_key_bytes).expect("stored key bytes should be valid")
     }
 }
 
@@ -506,15 +505,13 @@ impl MagicConn {
 
         // Create DERP client config with a fresh private key instance
         let private_key = self.config.make_private_key();
-        let derp_config = DerpClientConfig::new(private_key, node)
-            .with_connect_timeout(self.config.derp_timeout);
+        let derp_config =
+            DerpClientConfig::new(private_key, node).with_connect_timeout(self.config.derp_timeout);
 
         // Connect with timeout
         let client = timeout(self.config.derp_timeout, DerpClient::connect(derp_config))
             .await
-            .map_err(|_| {
-                MagicConnError::DerpFailed(DerpClientError::Timeout)
-            })??;
+            .map_err(|_| MagicConnError::DerpFailed(DerpClientError::Timeout))??;
 
         let handle = client.handle();
 
@@ -611,7 +608,11 @@ impl MagicConn {
                         // Clear DERP connection for this peer
                         let mut peers_guard = peers.write().await;
                         if let Some(peer) = peers_guard.get_mut(&key) {
-                            if peer.derp_region.as_ref().is_some_and(|(id, _)| *id == region_id) {
+                            if peer
+                                .derp_region
+                                .as_ref()
+                                .is_some_and(|(id, _)| *id == region_id)
+                            {
                                 peer.path_state.clear_path();
                                 peer.derp_handle = None;
                                 peer.derp_region = None;

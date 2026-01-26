@@ -608,9 +608,7 @@ impl SshConfigBuilder {
     #[must_use]
     pub fn build(self) -> SshConfig {
         SshConfig {
-            listen_address: self
-                .listen_address
-                .expect("listen_address is required"),
+            listen_address: self.listen_address.expect("listen_address is required"),
             user: self.user.unwrap_or_else(|| DEFAULT_SSH_USER.to_string()),
             authorized_keys_path: self
                 .authorized_keys_path
@@ -919,10 +917,7 @@ ssh-rsa AAAAB3NzaC1yc2EAAAA
         assert_eq!(config.listen_address(), addr);
         assert_eq!(config.user(), "testuser");
         assert_eq!(config.shell(), "/bin/zsh");
-        assert_eq!(
-            config.authorized_keys_path(),
-            Path::new("/custom/path")
-        );
+        assert_eq!(config.authorized_keys_path(), Path::new("/custom/path"));
         assert!(!config.password_auth());
         assert!(config.pubkey_auth());
     }

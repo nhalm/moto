@@ -150,7 +150,8 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             let show_context_column = context.as_deref() == Some("all");
 
             // Collect garages from the appropriate context(s)
-            let garages_with_context: Vec<GarageWithContext> = if context.as_deref() == Some("all") {
+            let garages_with_context: Vec<GarageWithContext> = if context.as_deref() == Some("all")
+            {
                 // List from all contexts
                 let contexts = K8sClient::list_contexts()?;
                 let mut all_garages = Vec::new();
@@ -169,7 +170,9 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                         Err(e) => {
                             // Skip contexts that fail to connect (e.g., cluster not available)
                             if flags.verbose > 0 {
-                                eprintln!("Warning: could not connect to context '{ctx_name}': {e}");
+                                eprintln!(
+                                    "Warning: could not connect to context '{ctx_name}': {e}"
+                                );
                             }
                         }
                     }
@@ -304,7 +307,9 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             if !flags.quiet && !flags.json {
                 println!("Opening garage...");
             }
-            let garage = client.open(&name, owner_ref, Some(ttl_seconds), engine_ref).await?;
+            let garage = client
+                .open(&name, owner_ref, Some(ttl_seconds), engine_ref)
+                .await?;
             if flags.json {
                 let json = GarageOpenJson {
                     name: garage.name.clone(),
@@ -577,7 +582,7 @@ fn parse_duration(s: &str) -> Result<i64> {
         _ => {
             return Err(CliError::invalid_input(format!(
                 "invalid duration unit: {unit} (use s, m, h, or d)"
-            )))
+            )));
         }
     };
 

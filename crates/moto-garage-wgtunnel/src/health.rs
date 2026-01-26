@@ -266,12 +266,7 @@ impl HealthCheck {
             }
             if self
                 .active_peers
-                .compare_exchange_weak(
-                    current,
-                    current - 1,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
+                .compare_exchange_weak(current, current - 1, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok()
             {
                 return current - 1;

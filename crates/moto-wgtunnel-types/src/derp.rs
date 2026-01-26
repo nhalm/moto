@@ -318,8 +318,8 @@ mod tests {
 
     #[test]
     fn derp_region_serde() {
-        let region = DerpRegion::new(1, "primary")
-            .with_node(DerpNode::with_defaults("derp.example.com"));
+        let region =
+            DerpRegion::new(1, "primary").with_node(DerpNode::with_defaults("derp.example.com"));
 
         let json = serde_json::to_string(&region).unwrap();
         let region2: DerpRegion = serde_json::from_str(&json).unwrap();
@@ -375,11 +375,9 @@ mod tests {
 
     #[test]
     fn derp_map_serde() {
-        let map = DerpMap::new()
-            .with_region(
-                DerpRegion::new(1, "primary")
-                    .with_node(DerpNode::new("derp.example.com", 443, 3478)),
-            );
+        let map = DerpMap::new().with_region(
+            DerpRegion::new(1, "primary").with_node(DerpNode::new("derp.example.com", 443, 3478)),
+        );
 
         let json = serde_json::to_string(&map).unwrap();
         let map2: DerpMap = serde_json::from_str(&json).unwrap();

@@ -11,18 +11,18 @@
 #![allow(clippy::single_match_else)]
 
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error_codes, ApiError, AppState};
-use moto_club_db::{garage_repo, DbError, Garage, GarageStatus, TerminationReason};
+use crate::{ApiError, AppState, error_codes};
+use moto_club_db::{DbError, Garage, GarageStatus, TerminationReason, garage_repo};
 
 /// Default TTL in seconds (4 hours).
 const DEFAULT_TTL_SECONDS: i32 = 14400;
@@ -126,7 +126,10 @@ fn extract_owner(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiErr
         .ok_or_else(|| {
             (
                 StatusCode::UNAUTHORIZED,
-                Json(ApiError::new("UNAUTHORIZED", "Missing Authorization header")),
+                Json(ApiError::new(
+                    "UNAUTHORIZED",
+                    "Missing Authorization header",
+                )),
             )
         })?;
 
@@ -233,34 +236,36 @@ async fn create_garage(
         pod_name,
     };
 
-    let garage = garage_repo::create(&state.db_pool, input).await.map_err(|e| {
-        match e {
-            DbError::AlreadyExists { .. } => (
-                StatusCode::CONFLICT,
-                Json(ApiError::new(
-                    error_codes::GARAGE_ALREADY_EXISTS,
-                    format!("Garage name '{name}' is already taken"),
-                )),
-            ),
-            DbError::Sqlx(e) => {
-                tracing::error!("Database error creating garage: {e}");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
+    let garage = garage_repo::create(&state.db_pool, input)
+        .await
+        .map_err(|e| {
+            match e {
+                DbError::AlreadyExists { .. } => (
+                    StatusCode::CONFLICT,
                     Json(ApiError::new(
-                        error_codes::DATABASE_ERROR,
-                        "Database error",
+                        error_codes::GARAGE_ALREADY_EXISTS,
+                        format!("Garage name '{name}' is already taken"),
                     )),
-                )
+                ),
+                DbError::Sqlx(e) => {
+                    tracing::error!("Database error creating garage: {e}");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiError::new(error_codes::DATABASE_ERROR, "Database error")),
+                    )
+                }
+                DbError::NotFound { .. } => {
+                    // Shouldn't happen for create
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiError::new(
+                            error_codes::INTERNAL_ERROR,
+                            "Unexpected error",
+                        )),
+                    )
+                }
             }
-            DbError::NotFound { .. } => {
-                // Shouldn't happen for create
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ApiError::new(error_codes::INTERNAL_ERROR, "Unexpected error")),
-                )
-            }
-        }
-    })?;
+        })?;
 
     // TODO: Create K8s namespace and deploy pod (moto-club-k8s crate)
     // For now, just return the database record
@@ -326,7 +331,10 @@ async fn get_garage(
                 // Shouldn't happen for get
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ApiError::new(error_codes::INTERNAL_ERROR, "Unexpected error")),
+                    Json(ApiError::new(
+                        error_codes::INTERNAL_ERROR,
+                        "Unexpected error",
+                    )),
                 )
             }
         })?;

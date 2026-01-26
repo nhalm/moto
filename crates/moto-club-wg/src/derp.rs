@@ -262,8 +262,14 @@ impl Default for InMemoryDerpStore {
 
 impl DerpStore for InMemoryDerpStore {
     fn get_map(&self) -> Result<DerpMap> {
-        let regions: Vec<DerpRegion> =
-            self.inner.lock().unwrap().regions.values().cloned().collect();
+        let regions: Vec<DerpRegion> = self
+            .inner
+            .lock()
+            .unwrap()
+            .regions
+            .values()
+            .cloned()
+            .collect();
 
         let mut map = DerpMap::new();
         for region in regions {
@@ -348,8 +354,12 @@ mod tests {
     fn add_multiple_regions() {
         let manager = create_manager();
 
-        manager.add_region(create_test_region(1, "us-west")).unwrap();
-        manager.add_region(create_test_region(2, "us-east")).unwrap();
+        manager
+            .add_region(create_test_region(1, "us-west"))
+            .unwrap();
+        manager
+            .add_region(create_test_region(2, "us-east"))
+            .unwrap();
         manager
             .add_region(create_test_region(3, "eu-central"))
             .unwrap();
@@ -370,11 +380,16 @@ mod tests {
         let manager = create_manager();
 
         // Add initial region
-        manager.add_region(create_test_region(1, "primary")).unwrap();
+        manager
+            .add_region(create_test_region(1, "primary"))
+            .unwrap();
 
         // Update with new name and nodes
-        let updated =
-            DerpRegion::new(1, "primary-updated").with_node(DerpNode::new("new.derp.com", 443, 3478));
+        let updated = DerpRegion::new(1, "primary-updated").with_node(DerpNode::new(
+            "new.derp.com",
+            443,
+            3478,
+        ));
 
         manager.add_region(updated).unwrap();
 
@@ -394,7 +409,9 @@ mod tests {
         assert!(manager.get_region(1).unwrap().is_none());
 
         // Add and retrieve
-        manager.add_region(create_test_region(1, "primary")).unwrap();
+        manager
+            .add_region(create_test_region(1, "primary"))
+            .unwrap();
 
         let region = manager.get_region(1).unwrap().unwrap();
         assert_eq!(region.name, "primary");
@@ -407,7 +424,9 @@ mod tests {
     fn remove_region() {
         let manager = create_manager();
 
-        manager.add_region(create_test_region(1, "primary")).unwrap();
+        manager
+            .add_region(create_test_region(1, "primary"))
+            .unwrap();
         manager
             .add_region(create_test_region(2, "secondary"))
             .unwrap();
@@ -430,7 +449,9 @@ mod tests {
     fn add_node_to_region() {
         let manager = create_manager();
 
-        manager.add_region(create_test_region(1, "primary")).unwrap();
+        manager
+            .add_region(create_test_region(1, "primary"))
+            .unwrap();
 
         // Add another node
         manager
@@ -470,9 +491,15 @@ mod tests {
         let manager = create_manager();
 
         // Add in non-sorted order
-        manager.add_region(create_test_region(3, "region3")).unwrap();
-        manager.add_region(create_test_region(1, "region1")).unwrap();
-        manager.add_region(create_test_region(2, "region2")).unwrap();
+        manager
+            .add_region(create_test_region(3, "region3"))
+            .unwrap();
+        manager
+            .add_region(create_test_region(1, "region1"))
+            .unwrap();
+        manager
+            .add_region(create_test_region(2, "region2"))
+            .unwrap();
 
         let ids = manager.list_region_ids().unwrap();
         assert_eq!(ids, vec![1, 2, 3]);
@@ -487,8 +514,11 @@ mod tests {
             .with_node(DerpNode::new("derp1.us-west.example.com", 443, 3478))
             .with_node(DerpNode::new("derp2.us-west.example.com", 443, 3478));
 
-        let region2 = DerpRegion::new(2, "eu-central")
-            .with_node(DerpNode::new("derp1.eu.example.com", 8443, 3479));
+        let region2 = DerpRegion::new(2, "eu-central").with_node(DerpNode::new(
+            "derp1.eu.example.com",
+            8443,
+            3479,
+        ));
 
         manager.add_region(region1).unwrap();
         manager.add_region(region2).unwrap();

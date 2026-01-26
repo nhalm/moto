@@ -73,10 +73,8 @@ pub trait GarageNamespaceOps {
     /// # Errors
     ///
     /// Returns an error if the namespace doesn't exist or the operation fails.
-    fn get_garage_namespace(
-        &self,
-        id: &GarageId,
-    ) -> impl Future<Output = Result<Namespace>> + Send;
+    fn get_garage_namespace(&self, id: &GarageId)
+    -> impl Future<Output = Result<Namespace>> + Send;
 
     /// Lists all garage namespaces.
     ///

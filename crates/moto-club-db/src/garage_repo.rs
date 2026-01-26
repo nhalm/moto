@@ -234,11 +234,7 @@ pub async fn update_status(pool: &DbPool, id: Uuid, status: GarageStatus) -> DbR
 /// # Errors
 ///
 /// Returns `DbError::NotFound` if the garage doesn't exist.
-pub async fn terminate(
-    pool: &DbPool,
-    id: Uuid,
-    reason: TerminationReason,
-) -> DbResult<Garage> {
+pub async fn terminate(pool: &DbPool, id: Uuid, reason: TerminationReason) -> DbResult<Garage> {
     let now = Utc::now();
 
     sqlx::query_as::<_, Garage>(
@@ -270,11 +266,7 @@ pub async fn terminate(
 /// # Errors
 ///
 /// Returns `DbError::NotFound` if the garage doesn't exist.
-pub async fn extend_ttl(
-    pool: &DbPool,
-    id: Uuid,
-    additional_seconds: i32,
-) -> DbResult<Garage> {
+pub async fn extend_ttl(pool: &DbPool, id: Uuid, additional_seconds: i32) -> DbResult<Garage> {
     let now = Utc::now();
 
     sqlx::query_as::<_, Garage>(

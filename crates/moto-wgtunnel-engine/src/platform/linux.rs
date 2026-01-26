@@ -31,7 +31,7 @@ use std::mem;
 use std::net::Ipv6Addr;
 use std::os::unix::io::AsRawFd;
 
-use super::{TunConfig, TunError, TunInfo, DEFAULT_TUN_NAME};
+use super::{DEFAULT_TUN_NAME, TunConfig, TunError, TunInfo};
 
 /// Path to the TUN clone device.
 const TUN_DEVICE_PATH: &str = "/dev/net/tun";
@@ -370,8 +370,9 @@ mod tests {
         // Write an IPv6 packet
         let packet = [
             0x60, 0x00, 0x00, 0x00, // Version, traffic class, flow label
-            0x00, 0x00, 0x00, 0x00, // Payload length, next header, hop limit
-            // ... rest of packet
+            0x00, 0x00, 0x00,
+            0x00, // Payload length, next header, hop limit
+                  // ... rest of packet
         ];
         let written = tun.write(&packet).unwrap();
         assert_eq!(written, packet.len());

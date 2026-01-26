@@ -9,10 +9,10 @@ use thiserror::Error;
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
-use moto_club_db::{garage_repo, DbError, DbPool, Garage, GarageStatus, TerminationReason};
+use moto_club_db::{DbError, DbPool, Garage, GarageStatus, TerminationReason, garage_repo};
 use moto_club_k8s::{
-    GarageK8s, GarageNamespaceInput, GarageNamespaceOps, GaragePodInput, GaragePodOps,
-    GaragePodStatus, DEV_CONTAINER_POD_NAME,
+    DEV_CONTAINER_POD_NAME, GarageK8s, GarageNamespaceInput, GarageNamespaceOps, GaragePodInput,
+    GaragePodOps, GaragePodStatus,
 };
 use moto_club_types::GarageId;
 
@@ -230,11 +230,7 @@ impl GarageService {
     /// Returns `NotFound` if the garage doesn't exist.
     /// Returns `NotOwned` if the garage is owned by someone else.
     #[instrument(skip(self))]
-    pub async fn get_owned(
-        &self,
-        owner: &str,
-        name: &str,
-    ) -> Result<Garage, GarageServiceError> {
+    pub async fn get_owned(&self, owner: &str, name: &str) -> Result<Garage, GarageServiceError> {
         let garage = self.get(name).await?;
 
         if garage.owner != owner {
@@ -397,7 +393,10 @@ impl GarageService {
     ///
     /// Returns an error if the K8s operation fails.
     #[instrument(skip(self), fields(garage_id = %id))]
-    pub async fn get_pod_status(&self, id: &GarageId) -> Result<GaragePodStatus, GarageServiceError> {
+    pub async fn get_pod_status(
+        &self,
+        id: &GarageId,
+    ) -> Result<GaragePodStatus, GarageServiceError> {
         Ok(self.k8s.get_garage_pod_status(id).await?)
     }
 
@@ -485,15 +484,15 @@ fn generate_name() -> String {
     use rand::Rng;
 
     const ADJECTIVES: &[&str] = &[
-        "bold", "calm", "dark", "eager", "fair", "glad", "hale", "idle", "jolly", "keen",
-        "lank", "meek", "neat", "odd", "pale", "quick", "rare", "sly", "tall", "vast",
-        "warm", "zany", "agile", "brave", "crisp", "deft", "epic", "fresh", "grand", "hardy",
+        "bold", "calm", "dark", "eager", "fair", "glad", "hale", "idle", "jolly", "keen", "lank",
+        "meek", "neat", "odd", "pale", "quick", "rare", "sly", "tall", "vast", "warm", "zany",
+        "agile", "brave", "crisp", "deft", "epic", "fresh", "grand", "hardy",
     ];
 
     const ANIMALS: &[&str] = &[
-        "ant", "bat", "cat", "dog", "elk", "fox", "gnu", "hog", "ibex", "jay",
-        "kite", "lynx", "moth", "newt", "owl", "puma", "quail", "rat", "seal", "toad",
-        "vole", "wolf", "yak", "zebra", "ape", "bear", "crow", "dove", "eel", "frog",
+        "ant", "bat", "cat", "dog", "elk", "fox", "gnu", "hog", "ibex", "jay", "kite", "lynx",
+        "moth", "newt", "owl", "puma", "quail", "rat", "seal", "toad", "vole", "wolf", "yak",
+        "zebra", "ape", "bear", "crow", "dove", "eel", "frog",
     ];
 
     let mut rng = rand::rng();

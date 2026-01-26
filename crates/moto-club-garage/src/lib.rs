@@ -32,9 +32,7 @@ mod lifecycle;
 mod service;
 
 pub use lifecycle::{GarageLifecycle, LifecycleError};
-pub use service::{
-    CreateGarageInput, ExtendTtlInput, GarageService, GarageServiceError,
-};
+pub use service::{CreateGarageInput, ExtendTtlInput, GarageService, GarageServiceError};
 
 /// Default TTL in seconds (4 hours).
 pub const DEFAULT_TTL_SECONDS: i32 = 14400;

@@ -428,7 +428,7 @@ impl PlatformTun {
                 return Err(TunError::Write(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "unknown IP version",
-                )))
+                )));
             }
         };
 

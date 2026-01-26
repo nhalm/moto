@@ -356,8 +356,7 @@ impl Tunnel {
         let peer_public = PublicKey::from(*peer_public_key.as_bytes());
 
         // Convert keepalive to u16 seconds for boringtun
-        let keepalive_secs =
-            keepalive.map(|d| u16::try_from(d.as_secs()).unwrap_or(u16::MAX));
+        let keepalive_secs = keepalive.map(|d| u16::try_from(d.as_secs()).unwrap_or(u16::MAX));
 
         let inner = Tunn::new(
             static_private,
@@ -656,10 +655,9 @@ impl Tunnel {
     pub fn time_to_next_timer(&self) -> Option<Duration> {
         // boringtun doesn't expose this directly, so we use a conservative default
         // based on the keepalive interval or a 10-second maximum
-        Some(
-            self.keepalive
-                .map_or(Duration::from_secs(10), |ka| ka.min(Duration::from_secs(10))),
-        )
+        Some(self.keepalive.map_or(Duration::from_secs(10), |ka| {
+            ka.min(Duration::from_secs(10))
+        }))
     }
 }
 

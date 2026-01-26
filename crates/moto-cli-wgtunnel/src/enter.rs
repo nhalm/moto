@@ -553,15 +553,17 @@ impl GarageSession {
         debug!(command = ?cmd, "executing SSH command");
 
         // Spawn and wait for the SSH process
-        let status = cmd.spawn().map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                EnterError::SshNotFound
-            } else {
-                EnterError::SshFailed(format!("failed to spawn SSH: {e}"))
-            }
-        })?.wait().map_err(|e| {
-            EnterError::SshFailed(format!("failed to wait for SSH: {e}"))
-        })?;
+        let status = cmd
+            .spawn()
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    EnterError::SshNotFound
+                } else {
+                    EnterError::SshFailed(format!("failed to spawn SSH: {e}"))
+                }
+            })?
+            .wait()
+            .map_err(|e| EnterError::SshFailed(format!("failed to wait for SSH: {e}")))?;
 
         info!(
             exit_code = status.code(),
@@ -701,8 +703,8 @@ pub async fn enter_garage(
 
     // Create moto-club client
     let club_config = MotoClubConfig::new(&config.moto_club_url, &config.owner);
-    let client = MotoClubClient::new(club_config)
-        .map_err(|e| EnterError::ClubUnreachable(e.to_string()))?;
+    let client =
+        MotoClubClient::new(club_config).map_err(|e| EnterError::ClubUnreachable(e.to_string()))?;
 
     // Step 1: Register device with moto-club
     progress.step_start("Registering device");
@@ -793,13 +795,8 @@ pub async fn enter_garage(
     progress.step_done("Initializing connection");
 
     // Step 5: Establish connection
-    let connection_result = establish_connection(
-        &session_response.session_id,
-        &config,
-        progress,
-        &conn_state,
-    )
-    .await;
+    let connection_result =
+        establish_connection(&session_response.session_id, &config, progress, &conn_state).await;
 
     let (path_type, path_detail) = match connection_result {
         Ok(result) => result,
@@ -812,7 +809,10 @@ pub async fn enter_garage(
     // Update session status
     let path = create_path_type(&path_type, &path_detail);
     manager
-        .update_session_status(&session_response.session_id, TunnelStatus::Connected { path })
+        .update_session_status(
+            &session_response.session_id,
+            TunnelStatus::Connected { path },
+        )
         .await?;
 
     progress.path_info(&format!("{path_type} ({path_detail})"));
@@ -845,9 +845,8 @@ async fn create_connection_state(
     config: &EnterConfig,
 ) -> Result<ConnectionState, EnterError> {
     // Create a copy of the private key by converting to/from bytes
-    let private_key_copy = WgPrivateKey::from_bytes(&private_key.as_bytes()).map_err(|e| {
-        EnterError::ConnectionFailed(format!("failed to copy private key: {e}"))
-    })?;
+    let private_key_copy = WgPrivateKey::from_bytes(&private_key.as_bytes())
+        .map_err(|e| EnterError::ConnectionFailed(format!("failed to copy private key: {e}")))?;
 
     // Create MagicConn config
     let magic_config = MagicConnConfig::new(private_key_copy, derp_map)
@@ -1296,7 +1295,10 @@ mod tests {
         assert!(args.contains(&"StrictHostKeyChecking=no".to_string()));
         assert!(args.contains(&"UserKnownHostsFile=/dev/null".to_string()));
         // IP format is fd00:6d6f:746f:1:: (moto encoded as hex: 6d6f = "mo", 746f = "to")
-        assert!(args.iter().any(|a| a.starts_with("moto@fd00:6d6f:746f:1::")));
+        assert!(
+            args.iter()
+                .any(|a| a.starts_with("moto@fd00:6d6f:746f:1::"))
+        );
         assert!(args.contains(&"-t".to_string()));
         assert!(args.iter().any(|a| a.contains("/workspace")));
     }
@@ -1308,7 +1310,10 @@ mod tests {
             .with_host_key_check(true); // Enable checking = disable_host_key_check is false
 
         // The identity file should be included
-        assert_eq!(config.identity_file, Some(PathBuf::from("/home/user/.ssh/id_custom")));
+        assert_eq!(
+            config.identity_file,
+            Some(PathBuf::from("/home/user/.ssh/id_custom"))
+        );
         assert!(!config.disable_host_key_check);
     }
 }

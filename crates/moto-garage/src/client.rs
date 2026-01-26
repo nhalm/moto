@@ -177,17 +177,25 @@ impl GarageClient {
         since_seconds: Option<i64>,
     ) -> Result<LogStream> {
         match &self.mode {
-            GarageMode::Local => self.logs_stream_local(name, tail_lines, since_seconds).await,
+            GarageMode::Local => {
+                self.logs_stream_local(name, tail_lines, since_seconds)
+                    .await
+            }
             GarageMode::Remote { .. } => Err(Error::RemoteNotImplemented),
         }
     }
 
     /// Lists garages in local mode.
     async fn list_local(&self) -> Result<Vec<GarageInfo>> {
-        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
+        let k8s = self
+            .k8s
+            .as_ref()
+            .expect("k8s client required for local mode");
 
         debug!("listing garages from K8s");
-        let namespaces = k8s.list_namespaces(Some(&Labels::garage_selector())).await?;
+        let namespaces = k8s
+            .list_namespaces(Some(&Labels::garage_selector()))
+            .await?;
 
         let mut garages = Vec::new();
         for ns in namespaces {
@@ -210,7 +218,10 @@ impl GarageClient {
         ttl_seconds: Option<i64>,
         engine: Option<&str>,
     ) -> Result<GarageInfo> {
-        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
+        let k8s = self
+            .k8s
+            .as_ref()
+            .expect("k8s client required for local mode");
 
         // Check if garage with this name already exists
         let existing = self.list_local().await?;
@@ -228,9 +239,8 @@ impl GarageClient {
         }
 
         // Calculate expiration time if TTL provided
-        let expires_at = ttl_seconds.and_then(|secs| {
-            Duration::try_seconds(secs).map(|d| Utc::now() + d)
-        });
+        let expires_at =
+            ttl_seconds.and_then(|secs| Duration::try_seconds(secs).map(|d| Utc::now() + d));
         if let Some(expires) = expires_at {
             info = info.with_expires_at(expires);
         }
@@ -255,7 +265,10 @@ impl GarageClient {
 
     /// Closes a garage in local mode.
     async fn close_local(&self, id: &GarageId) -> Result<()> {
-        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
+        let k8s = self
+            .k8s
+            .as_ref()
+            .expect("k8s client required for local mode");
 
         // Find the garage by ID
         let garages = self.list_local().await?;
@@ -272,7 +285,10 @@ impl GarageClient {
 
     /// Closes a garage by name in local mode.
     async fn close_by_name_local(&self, name: &str) -> Result<()> {
-        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
+        let k8s = self
+            .k8s
+            .as_ref()
+            .expect("k8s client required for local mode");
 
         // Find the garage by name
         let garages = self.list_local().await?;
@@ -294,7 +310,10 @@ impl GarageClient {
         tail_lines: Option<i64>,
         since_seconds: Option<i64>,
     ) -> Result<String> {
-        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
+        let k8s = self
+            .k8s
+            .as_ref()
+            .expect("k8s client required for local mode");
 
         // Find the garage by name
         let garages = self.list_local().await?;
@@ -310,9 +329,7 @@ impl GarageClient {
         };
 
         debug!(namespace = %garage.namespace, "fetching garage logs");
-        let logs = k8s
-            .get_pod_logs(&garage.namespace, None, &options)
-            .await?;
+        let logs = k8s.get_pod_logs(&garage.namespace, None, &options).await?;
 
         Ok(logs)
     }
@@ -324,7 +341,10 @@ impl GarageClient {
         tail_lines: Option<i64>,
         since_seconds: Option<i64>,
     ) -> Result<LogStream> {
-        let k8s = self.k8s.as_ref().expect("k8s client required for local mode");
+        let k8s = self
+            .k8s
+            .as_ref()
+            .expect("k8s client required for local mode");
 
         // Find the garage by name
         let garages = self.list_local().await?;
@@ -422,7 +442,11 @@ mod tests {
     #[ignore = "requires running K8s cluster"]
     async fn local_client_creation() {
         let client = GarageClient::local().await;
-        assert!(client.is_ok(), "Failed to create client: {:?}", client.err());
+        assert!(
+            client.is_ok(),
+            "Failed to create client: {:?}",
+            client.err()
+        );
         assert!(client.unwrap().mode().is_local());
     }
 
@@ -431,6 +455,10 @@ mod tests {
     async fn list_empty() {
         let client = GarageClient::local().await.expect("client creation failed");
         let garages = client.list().await;
-        assert!(garages.is_ok(), "Failed to list garages: {:?}", garages.err());
+        assert!(
+            garages.is_ok(),
+            "Failed to list garages: {:?}",
+            garages.err()
+        );
     }
 }

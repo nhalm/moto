@@ -11,7 +11,7 @@ use tokio::time::interval;
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
-use moto_club_db::{garage_repo, DbPool, GarageStatus, TerminationReason};
+use moto_club_db::{DbPool, GarageStatus, TerminationReason, garage_repo};
 use moto_club_k8s::{GarageK8s, GarageNamespaceOps, GaragePodOps, GaragePodStatus};
 use moto_club_types::GarageId;
 use moto_k8s::Labels;
@@ -117,7 +117,10 @@ impl GarageReconciler {
                             "reconciliation complete"
                         );
                     } else {
-                        debug!(checked = stats.checked, "reconciliation complete, no changes");
+                        debug!(
+                            checked = stats.checked,
+                            "reconciliation complete, no changes"
+                        );
                     }
                 }
                 Err(e) => {
@@ -148,13 +151,19 @@ impl GarageReconciler {
             })
             .collect();
 
-        debug!(k8s_count = k8s_namespaces.len(), "found garage namespaces in K8s");
+        debug!(
+            k8s_count = k8s_namespaces.len(),
+            "found garage namespaces in K8s"
+        );
 
         // Step 2: Get all non-terminated garages from DB
         let db_garages = garage_repo::list_all(&self.db, false).await?;
         let db_ids: HashSet<String> = db_garages.iter().map(|g| g.id.to_string()).collect();
 
-        debug!(db_count = db_garages.len(), "found non-terminated garages in DB");
+        debug!(
+            db_count = db_garages.len(),
+            "found non-terminated garages in DB"
+        );
 
         // Step 3: Reconcile K8s → DB (update status, mark lost pods)
         for ns in &k8s_namespaces {
@@ -213,8 +222,12 @@ impl GarageReconciler {
                     "namespace missing in K8s, terminating"
                 );
 
-                match garage_repo::terminate(&self.db, garage.id, TerminationReason::NamespaceMissing)
-                    .await
+                match garage_repo::terminate(
+                    &self.db,
+                    garage.id,
+                    TerminationReason::NamespaceMissing,
+                )
+                .await
                 {
                     Ok(_) => {
                         info!(
@@ -244,11 +257,9 @@ impl GarageReconciler {
         let garage_id = id_str
             .parse::<Uuid>()
             .map(GarageId::from_uuid)
-            .map_err(|_| {
-                moto_club_db::DbError::NotFound {
-                    entity: "garage",
-                    id: id_str.to_string(),
-                }
+            .map_err(|_| moto_club_db::DbError::NotFound {
+                entity: "garage",
+                id: id_str.to_string(),
             })?;
 
         let uuid = garage_id.as_uuid();
@@ -372,24 +383,48 @@ mod tests {
     #[test]
     fn should_update_status_allows_forward_progress() {
         // Normal forward progress
-        assert!(should_update_status(GarageStatus::Pending, GarageStatus::Running));
-        assert!(should_update_status(GarageStatus::Running, GarageStatus::Ready));
-        assert!(should_update_status(GarageStatus::Ready, GarageStatus::Attached));
+        assert!(should_update_status(
+            GarageStatus::Pending,
+            GarageStatus::Running
+        ));
+        assert!(should_update_status(
+            GarageStatus::Running,
+            GarageStatus::Ready
+        ));
+        assert!(should_update_status(
+            GarageStatus::Ready,
+            GarageStatus::Attached
+        ));
     }
 
     #[test]
     fn should_update_status_prevents_downgrades() {
         // Don't downgrade from Ready
-        assert!(!should_update_status(GarageStatus::Ready, GarageStatus::Running));
+        assert!(!should_update_status(
+            GarageStatus::Ready,
+            GarageStatus::Running
+        ));
         // Don't change Attached based on pod status
-        assert!(!should_update_status(GarageStatus::Attached, GarageStatus::Running));
-        assert!(!should_update_status(GarageStatus::Attached, GarageStatus::Ready));
+        assert!(!should_update_status(
+            GarageStatus::Attached,
+            GarageStatus::Running
+        ));
+        assert!(!should_update_status(
+            GarageStatus::Attached,
+            GarageStatus::Ready
+        ));
     }
 
     #[test]
     fn should_update_status_allows_pending_restart() {
         // Allow going back to Pending (pod restart)
-        assert!(should_update_status(GarageStatus::Running, GarageStatus::Pending));
-        assert!(should_update_status(GarageStatus::Ready, GarageStatus::Pending));
+        assert!(should_update_status(
+            GarageStatus::Running,
+            GarageStatus::Pending
+        ));
+        assert!(should_update_status(
+            GarageStatus::Ready,
+            GarageStatus::Pending
+        ));
     }
 }

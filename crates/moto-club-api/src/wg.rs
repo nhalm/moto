@@ -15,11 +15,11 @@ use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{delete, get, post},
-    Json, Router,
 };
 use chrono::{DateTime, Utc};
 use moto_club_wg::{
@@ -31,7 +31,7 @@ use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error_codes, ApiError, AppState};
+use crate::{ApiError, AppState, error_codes};
 
 // ============================================================================
 // Request/Response types
@@ -231,7 +231,10 @@ fn extract_owner(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiErr
         .ok_or_else(|| {
             (
                 StatusCode::UNAUTHORIZED,
-                Json(ApiError::new("UNAUTHORIZED", "Missing Authorization header")),
+                Json(ApiError::new(
+                    "UNAUTHORIZED",
+                    "Missing Authorization header",
+                )),
             )
         })?;
 
@@ -361,10 +364,7 @@ async fn create_session(
 /// List active sessions.
 ///
 /// GET /api/v1/wg/sessions
-async fn list_sessions(
-    State(_state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+async fn list_sessions(State(_state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let _owner = extract_owner(&headers)?;
 
     // TODO: Use actual SessionManager from AppState

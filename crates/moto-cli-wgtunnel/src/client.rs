@@ -349,9 +349,10 @@ impl MotoClubClient {
             .map_err(|e| self.connection_error(e))?;
 
         if response.status().is_success() {
-            response.json().await.map_err(|e| {
-                ClientError::ParseError(format!("failed to parse response: {e}"))
-            })
+            response
+                .json()
+                .await
+                .map_err(|e| ClientError::ParseError(format!("failed to parse response: {e}")))
         } else {
             self.handle_error_response(response).await
         }
@@ -371,9 +372,10 @@ impl MotoClubClient {
             .map_err(|e| self.connection_error(e))?;
 
         if response.status().is_success() {
-            response.json().await.map_err(|e| {
-                ClientError::ParseError(format!("failed to parse response: {e}"))
-            })
+            response
+                .json()
+                .await
+                .map_err(|e| ClientError::ParseError(format!("failed to parse response: {e}")))
         } else {
             self.handle_error_response(response).await
         }
@@ -392,7 +394,10 @@ impl MotoClubClient {
     }
 
     /// Handle an error response from the server.
-    async fn handle_error_response<T>(&self, response: reqwest::Response) -> Result<T, ClientError> {
+    async fn handle_error_response<T>(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<T, ClientError> {
         let status = response.status();
 
         // Try to parse error response

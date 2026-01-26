@@ -116,7 +116,13 @@ mod tests {
 
     #[test]
     fn for_garage_with_expires_at() {
-        let labels = Labels::for_garage("abc-123", "my-project", None, Some("2026-01-21T14:00:00Z"), None);
+        let labels = Labels::for_garage(
+            "abc-123",
+            "my-project",
+            None,
+            Some("2026-01-21T14:00:00Z"),
+            None,
+        );
         assert_eq!(
             labels.get(Labels::EXPIRES_AT),
             Some(&"2026-01-21T14:00:00Z".to_string())

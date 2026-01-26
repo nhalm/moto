@@ -423,10 +423,9 @@ impl TunnelSession {
     /// - Tunnel is not configured
     /// - Handshake initiation fails
     pub fn initiate_handshake(&mut self) -> Result<Vec<WgTunnelEvent>, TunnelError> {
-        let tunnel = self
-            .wg_tunnel
-            .as_mut()
-            .ok_or_else(|| TunnelError::ConnectionFailed("WireGuard tunnel not configured".into()))?;
+        let tunnel = self.wg_tunnel.as_mut().ok_or_else(|| {
+            TunnelError::ConnectionFailed("WireGuard tunnel not configured".into())
+        })?;
 
         let events = tunnel.force_handshake()?;
 
@@ -454,10 +453,9 @@ impl TunnelSession {
     /// - Tunnel is not configured
     /// - Encapsulation fails
     pub fn encapsulate(&mut self, ip_packet: &[u8]) -> Result<Vec<WgTunnelEvent>, TunnelError> {
-        let tunnel = self
-            .wg_tunnel
-            .as_mut()
-            .ok_or_else(|| TunnelError::ConnectionFailed("WireGuard tunnel not configured".into()))?;
+        let tunnel = self.wg_tunnel.as_mut().ok_or_else(|| {
+            TunnelError::ConnectionFailed("WireGuard tunnel not configured".into())
+        })?;
 
         let events = tunnel.encapsulate(ip_packet)?;
         Ok(events)
@@ -478,10 +476,9 @@ impl TunnelSession {
     /// - Tunnel is not configured
     /// - Decapsulation fails
     pub fn decapsulate(&mut self, wg_packet: &[u8]) -> Result<Vec<WgTunnelEvent>, TunnelError> {
-        let tunnel = self
-            .wg_tunnel
-            .as_mut()
-            .ok_or_else(|| TunnelError::ConnectionFailed("WireGuard tunnel not configured".into()))?;
+        let tunnel = self.wg_tunnel.as_mut().ok_or_else(|| {
+            TunnelError::ConnectionFailed("WireGuard tunnel not configured".into())
+        })?;
 
         let events = tunnel.decapsulate(wg_packet)?;
         Ok(events)
@@ -496,10 +493,9 @@ impl TunnelSession {
     ///
     /// Returns error if timer processing fails.
     pub fn update_timers(&mut self) -> Result<Vec<WgTunnelEvent>, TunnelError> {
-        let tunnel = self
-            .wg_tunnel
-            .as_mut()
-            .ok_or_else(|| TunnelError::ConnectionFailed("WireGuard tunnel not configured".into()))?;
+        let tunnel = self.wg_tunnel.as_mut().ok_or_else(|| {
+            TunnelError::ConnectionFailed("WireGuard tunnel not configured".into())
+        })?;
 
         let events = tunnel.update_timers()?;
         Ok(events)

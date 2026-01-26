@@ -32,7 +32,7 @@ mod namespace;
 mod pods;
 
 pub use namespace::{GarageNamespaceInput, GarageNamespaceOps};
-pub use pods::{GaragePodInput, GaragePodOps, GaragePodStatus, DEV_CONTAINER_POD_NAME};
+pub use pods::{DEV_CONTAINER_POD_NAME, GaragePodInput, GaragePodOps, GaragePodStatus};
 
 use moto_k8s::K8sClient;
 

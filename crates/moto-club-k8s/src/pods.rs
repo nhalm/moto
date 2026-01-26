@@ -6,9 +6,7 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 
-use k8s_openapi::api::core::v1::{
-    Container, Pod, PodSpec, ResourceRequirements, SecurityContext,
-};
+use k8s_openapi::api::core::v1::{Container, Pod, PodSpec, ResourceRequirements, SecurityContext};
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use kube::api::{Api, DeleteParams, ObjectMeta, PostParams};
 use tracing::{debug, instrument};
@@ -88,7 +86,8 @@ pub trait GaragePodOps {
     /// # Errors
     ///
     /// Returns an error if the namespace doesn't exist or pod creation fails.
-    fn deploy_garage_pod(&self, input: &GaragePodInput) -> impl Future<Output = Result<Pod>> + Send;
+    fn deploy_garage_pod(&self, input: &GaragePodInput)
+    -> impl Future<Output = Result<Pod>> + Send;
 
     /// Gets the status of a garage pod.
     ///
@@ -141,12 +140,7 @@ impl GaragePodOps for GarageK8s {
             None,
         );
 
-        let pod = build_dev_container_pod(
-            &namespace,
-            image,
-            &input.branch,
-            labels,
-        );
+        let pod = build_dev_container_pod(&namespace, image, &input.branch, labels);
 
         let api: Api<Pod> = Api::namespaced(self.client.inner().clone(), &namespace);
         let created = api
@@ -184,17 +178,15 @@ impl GaragePodOps for GarageK8s {
         debug!(namespace = %namespace, "getting garage pod");
         let api: Api<Pod> = Api::namespaced(self.client.inner().clone(), &namespace);
 
-        api.get(DEV_CONTAINER_POD_NAME)
-            .await
-            .map_err(|e| {
-                if is_not_found(&e) {
-                    moto_k8s::Error::PodNotFound(format!(
-                        "{DEV_CONTAINER_POD_NAME} in namespace {namespace}"
-                    ))
-                } else {
-                    moto_k8s::Error::PodList(e)
-                }
-            })
+        api.get(DEV_CONTAINER_POD_NAME).await.map_err(|e| {
+            if is_not_found(&e) {
+                moto_k8s::Error::PodNotFound(format!(
+                    "{DEV_CONTAINER_POD_NAME} in namespace {namespace}"
+                ))
+            } else {
+                moto_k8s::Error::PodList(e)
+            }
+        })
     }
 
     #[instrument(skip(self), fields(garage_id = %id))]
@@ -370,10 +362,7 @@ mod tests {
         let pod = build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels);
 
         // Check metadata
-        assert_eq!(
-            pod.metadata.name,
-            Some(DEV_CONTAINER_POD_NAME.to_string())
-        );
+        assert_eq!(pod.metadata.name, Some(DEV_CONTAINER_POD_NAME.to_string()));
         assert_eq!(
             pod.metadata.namespace,
             Some("moto-garage-abc12345".to_string())

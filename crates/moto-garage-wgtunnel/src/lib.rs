@@ -33,7 +33,5 @@ pub mod ssh;
 
 pub use daemon::{Daemon, DaemonConfig, DaemonError, PeerState};
 pub use health::{HealthCheck, HealthStatus, OverallStatus, WireGuardState};
-pub use register::{
-    GarageRegistrar, RegistrationConfig, RegistrationError, RegistrationResponse,
-};
+pub use register::{GarageRegistrar, RegistrationConfig, RegistrationError, RegistrationResponse};
 pub use ssh::{AuthorizedKeys, KeyType, SshConfig, SshConfigBuilder, SshError, SshPublicKey};

@@ -305,13 +305,7 @@ mod tests {
 
     #[test]
     fn subnet_display() {
-        assert_eq!(
-            GARAGE_SUBNET.to_string(),
-            "fd00:6d6f:746f:1::/64"
-        );
-        assert_eq!(
-            CLIENT_SUBNET.to_string(),
-            "fd00:6d6f:746f:2::/64"
-        );
+        assert_eq!(GARAGE_SUBNET.to_string(), "fd00:6d6f:746f:1::/64");
+        assert_eq!(CLIENT_SUBNET.to_string(), "fd00:6d6f:746f:2::/64");
     }
 }

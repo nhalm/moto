@@ -553,10 +553,7 @@ mod tests {
 
     #[test]
     fn tun_config_builder() {
-        let config = TunConfig::new()
-            .name("test0")
-            .mtu(1280)
-            .virtual_tun(false);
+        let config = TunConfig::new().name("test0").mtu(1280).virtual_tun(false);
 
         assert_eq!(config.name, "test0");
         assert_eq!(config.mtu, 1280);

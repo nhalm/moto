@@ -49,7 +49,7 @@ pub mod ip;
 pub mod keys;
 pub mod peer;
 
-pub use derp::{DerpMap, DerpNode, DerpRegion, DEFAULT_DERP_PORT, DEFAULT_STUN_PORT};
-pub use ip::{IpError, OverlayIp, Subnet, CLIENT_SUBNET, GARAGE_SUBNET};
+pub use derp::{DEFAULT_DERP_PORT, DEFAULT_STUN_PORT, DerpMap, DerpNode, DerpRegion};
+pub use ip::{CLIENT_SUBNET, GARAGE_SUBNET, IpError, OverlayIp, Subnet};
 pub use keys::{KeyError, WgPrivateKey, WgPublicKey};
 pub use peer::{PeerAction, PeerInfo};

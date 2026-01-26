@@ -156,9 +156,7 @@ impl DaemonConfig {
     /// Returns error if configuration is invalid.
     pub fn validate(&self) -> Result<()> {
         if self.moto_club_url.is_empty() {
-            return Err(DaemonError::Config(
-                "moto_club_url is required".to_string(),
-            ));
+            return Err(DaemonError::Config("moto_club_url is required".to_string()));
         }
 
         if self.garage_id.is_empty() {
@@ -593,11 +591,7 @@ mod tests {
         assert!(config.validate().is_ok());
 
         // Empty URL
-        let config = DaemonConfig::new(
-            String::new(),
-            "garage".to_string(),
-            "token".to_string(),
-        );
+        let config = DaemonConfig::new(String::new(), "garage".to_string(), "token".to_string());
         assert!(matches!(config.validate(), Err(DaemonError::Config(_))));
 
         // Empty garage_id

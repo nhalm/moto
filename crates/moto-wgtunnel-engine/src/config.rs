@@ -530,7 +530,8 @@ impl TunnelConfigBuilder {
     /// Use [`try_build`](Self::try_build) for fallible construction.
     #[must_use]
     pub fn build(self) -> TunnelConfig {
-        self.try_build().expect("interface configuration is required")
+        self.try_build()
+            .expect("interface configuration is required")
     }
 
     /// Try to build the tunnel configuration.
@@ -544,7 +545,9 @@ impl TunnelConfigBuilder {
             .ok_or(ConfigError::MissingField("interface"))?;
 
         // Use environment variable for connection mode if not explicitly set
-        let connection_mode = self.connection_mode.unwrap_or_else(ConnectionMode::from_env);
+        let connection_mode = self
+            .connection_mode
+            .unwrap_or_else(ConnectionMode::from_env);
 
         Ok(TunnelConfig {
             interface,
@@ -590,9 +593,18 @@ mod tests {
     fn timing_config_defaults() {
         let timing = TimingConfig::default();
 
-        assert_eq!(timing.keepalive(), Duration::from_secs(DEFAULT_KEEPALIVE_SECS));
-        assert_eq!(timing.direct_timeout(), Duration::from_secs(DEFAULT_DIRECT_TIMEOUT_SECS));
-        assert_eq!(timing.derp_timeout(), Duration::from_secs(DEFAULT_DERP_TIMEOUT_SECS));
+        assert_eq!(
+            timing.keepalive(),
+            Duration::from_secs(DEFAULT_KEEPALIVE_SECS)
+        );
+        assert_eq!(
+            timing.direct_timeout(),
+            Duration::from_secs(DEFAULT_DIRECT_TIMEOUT_SECS)
+        );
+        assert_eq!(
+            timing.derp_timeout(),
+            Duration::from_secs(DEFAULT_DERP_TIMEOUT_SECS)
+        );
     }
 
     #[test]
@@ -702,7 +714,10 @@ mod tests {
     fn tunnel_config_builder_missing_interface() {
         let result = TunnelConfig::builder().try_build();
 
-        assert!(matches!(result, Err(ConfigError::MissingField("interface"))));
+        assert!(matches!(
+            result,
+            Err(ConfigError::MissingField("interface"))
+        ));
     }
 
     #[test]
