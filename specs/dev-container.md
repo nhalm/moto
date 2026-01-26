@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.9 |
-| Status | Ripping |
+| Version | 0.10 |
+| Status | Ready to Rip |
 | Last Updated | 2026-01-26 |
 
 ## Overview
@@ -348,41 +348,20 @@ moto garage open --cpu 8 --memory 16Gi
 
 ### Building the Container
 
-Container builds use Nix flake outputs. The Makefile auto-detects architecture.
-
-**Build commands:**
+Local builds use Docker-wrapped Nix: runs `nix build` inside a `nixos/nix` container. This works on Mac without a Linux builder. Architecture is auto-detected.
 
 ```bash
-# Build via Makefile (auto-detects architecture)
-make docker-build-moto-garage
-
-# Or directly with Nix (specify architecture)
-nix build .#packages.aarch64-linux.moto-garage  # ARM (Apple Silicon)
-nix build .#packages.x86_64-linux.moto-garage   # Intel/AMD
-docker load < result
+make build-garage    # Build the container
+make test-garage     # Build + run smoke tests
+make shell-garage    # Interactive shell for debugging
+make push-garage     # Push to local registry
 ```
 
-**Registry:**
-- Local: `moto-garage:latest`
-- Remote: `ghcr.io/<org>/moto-garage:latest`
-
-**Architecture notes:**
-- Mac (ARM): Builds `aarch64-linux` via flake output
-- Mac (Intel): Builds `x86_64-linux` via flake output
-- CI: Can build both architectures
-- k3s on Mac: Runs matching architecture natively
+See [container-system.md](container-system.md) for details on the build approach.
 
 ### Testing the Container
 
 Smoke tests verify the container builds correctly and contains expected tooling.
-
-**Makefile targets:**
-
-| Target | Purpose |
-|--------|---------|
-| `docker-build-moto-garage` | Build moto-garage image |
-| `docker-test-moto-garage` | Build + run smoke tests |
-| `docker-shell-moto-garage` | Interactive shell for debugging |
 
 **Smoke tests verify:**
 
@@ -394,10 +373,8 @@ Smoke tests verify the container builds correctly and contains expected tooling.
 
 **Test script:** `infra/smoke-test.sh`
 
-**Usage:**
-
 ```bash
-make docker-test-moto-garage
+make test-garage
 
 # Or directly
 ./infra/smoke-test.sh
@@ -463,6 +440,11 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.10 (2026-01-26)
+- Update build targets: `build-garage`, `test-garage`, `shell-garage`, `push-garage`
+- Docker-wrapped Nix approach for Mac compatibility
+- Simplify build section, reference container-system.md for details
 
 ### v0.9 (2026-01-26)
 - Correct spec to match implementation: Nix dockerTools approach

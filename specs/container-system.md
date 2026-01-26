@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
-| Status | Ripping |
+| Version | 0.6 |
+| Status | Ready to Rip |
 | Last Updated | 2026-01-26 |
 
 ## Overview
@@ -114,21 +114,9 @@ moto/
 | `pkgs/` | Container definitions using `dockerTools.buildLayeredImage` |
 | `modules/` | Reusable Nix modules composed into containers |
 
-**Build commands (all from repo root):**
+**Build commands:**
 
-```bash
-# Garage container (Makefile auto-detects architecture)
-make docker-build-moto-garage
-
-# Or directly with Nix
-nix build .#packages.aarch64-linux.moto-garage  # ARM
-nix build .#packages.x86_64-linux.moto-garage   # Intel
-docker load < result
-
-# Bike container
-nix build .#moto-engine
-docker load < result
-```
+See [makefile.md](makefile.md) for build targets. Local builds use Docker-wrapped Nix.
 
 ### Build Pipeline Architecture
 
@@ -429,62 +417,17 @@ ghcr.io/nhalm/moto-engine:v1.0.0
 
 ### Local Build Workflow
 
-**Primary workflow: Build and load locally.**
+**Docker-wrapped Nix:** Local builds run `nix build` inside a `nixos/nix` container. This works on any platform (Mac or Linux) without requiring a Linux builder configuration.
 
-```bash
-# Build garage container
-nix build .#moto-garage
-docker load < result
-# → moto-garage:latest loaded
+The flow:
+1. Docker runs a `nixos/nix` container with the repo mounted
+2. Inside the container, `nix build .#moto-garage` runs
+3. Output is loaded via `docker load`
+4. Image is pushed to local registry
 
-# Build engine container
-nix build .#moto-engine
-docker load < result
-# → moto-engine:latest loaded
+Architecture is auto-detected - ARM Mac builds `aarch64-linux`, Intel builds `x86_64-linux`.
 
-# Tag and push to local registry
-docker tag moto-garage:latest localhost:5000/moto-garage:latest
-docker push localhost:5000/moto-garage:latest
-
-# Or use Makefile (recommended)
-make docker-build          # Build all images
-make docker-push-local     # Push to localhost:5000
-```
-
-**Makefile targets:**
-
-```makefile
-REGISTRY ?= localhost:5000
-SHA := $(shell git rev-parse --short HEAD)
-
-.PHONY: docker-build docker-push-local
-
-docker-build: docker-build-moto-garage docker-build-moto-engine
-
-docker-build-moto-garage:
-	nix build .#moto-garage
-	docker load < result
-
-docker-build-moto-engine:
-	nix build .#moto-engine
-	docker load < result
-
-docker-push-local: docker-build
-	docker tag moto-garage:latest $(REGISTRY)/moto-garage:latest
-	docker tag moto-garage:latest $(REGISTRY)/moto-garage:$(SHA)
-	docker tag moto-engine:latest $(REGISTRY)/moto-engine:latest
-	docker tag moto-engine:latest $(REGISTRY)/moto-engine:$(SHA)
-	docker push $(REGISTRY)/moto-garage:latest
-	docker push $(REGISTRY)/moto-garage:$(SHA)
-	docker push $(REGISTRY)/moto-engine:latest
-	docker push $(REGISTRY)/moto-engine:$(SHA)
-
-docker-test-moto-garage: docker-build-moto-garage
-	./infra/smoke-test.sh
-
-docker-shell-moto-garage:
-	docker run -it --rm -v $(PWD):/workspace moto-garage:latest /bin/bash
-```
+See [makefile.md](makefile.md) for build targets.
 
 ### Smoke Testing
 
@@ -501,8 +444,8 @@ Smoke tests verify containers build correctly and contain expected tools/configu
 **Usage:**
 
 ```bash
-# Build and test
-make docker-test-moto-garage
+# Build and test via Makefile
+make test-garage
 
 # Or run directly
 ./infra/smoke-test.sh
@@ -518,11 +461,11 @@ Bike containers have no shell, so testing is different:
 - Check exposed ports match spec
 - Verify non-root user (UID 1000)
 
-### CI/CD Pipeline (Future)
+### CI/CD Pipeline
 
-**For remote registry (when needed):**
+**CI uses direct Nix, not Makefile.**
 
-GitHub Actions workflow for pushing to ghcr.io or other remote registries. This is optional - local development doesn't require it.
+GitHub Actions installs Nix on Linux runners and runs `nix build` directly. This avoids Docker-in-Docker and is faster than the local Docker-wrapped approach.
 
 ```yaml
 # .github/workflows/containers.yml
@@ -909,86 +852,7 @@ Useful for:
 
 ### Local Development
 
-**Building locally:**
-
-```bash
-# Build garage container
-nix build .#moto-garage
-docker load < result
-
-# Build specific engine
-nix build .#moto-engine
-docker load < result
-
-# Run garage locally
-docker run -it --rm \
-  -v $(pwd):/workspace \
-  moto-garage:latest
-```
-
-**Makefile targets:**
-
-```makefile
-REGISTRY ?= localhost:5000
-SHA := $(shell git rev-parse --short HEAD)
-
-.PHONY: help docker-build docker-push docker-clean docker-scan
-
-help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
-
-# === Build ===
-docker-build: docker-build-garage docker-build-engines ## Build all containers
-
-docker-build-garage: ## Build garage (dev) container
-	nix build .#moto-garage
-	docker load < result
-
-docker-build-moto-engine: ## Build engine (runtime) container
-	nix build .#moto-engine
-	docker load < result
-
-# === Push ===
-docker-push: docker-push-moto-garage docker-push-moto-engine ## Push all to registry
-
-docker-push-moto-garage: ## Push garage to registry
-	docker tag moto-garage:latest $(REGISTRY)/moto-garage:latest
-	docker tag moto-garage:latest $(REGISTRY)/moto-garage:$(SHA)
-	docker push $(REGISTRY)/moto-garage:latest
-	docker push $(REGISTRY)/moto-garage:$(SHA)
-
-docker-push-moto-engine: ## Push engine to registry
-	docker tag moto-engine:latest $(REGISTRY)/moto-engine:latest
-	docker tag moto-engine:latest $(REGISTRY)/moto-engine:$(SHA)
-	docker push $(REGISTRY)/moto-engine:latest
-	docker push $(REGISTRY)/moto-engine:$(SHA)
-
-# === Run ===
-docker-run-garage: ## Run garage container with workspace mounted
-	docker run -it --rm -v $(PWD):/workspace moto-garage:latest
-
-# === Inspect & Debug ===
-docker-inspect: ## Show image layers and sizes
-	@echo "=== moto-garage ===" && docker history moto-garage:latest
-	@echo "=== moto-engine ===" && docker history moto-engine:latest 2>/dev/null || true
-
-docker-scan: ## Scan images for vulnerabilities (requires trivy)
-	trivy image --severity HIGH,CRITICAL moto-garage:latest
-	trivy image --severity HIGH,CRITICAL moto-engine:latest
-
-# === Cleanup ===
-docker-clean: ## Remove all moto images
-	docker images --filter=reference='moto-*' -q | xargs -r docker rmi -f
-	docker images --filter=reference='*/moto-*' -q | xargs -r docker rmi -f
-
-# === Registry ===
-registry-start: ## Start local registry
-	docker run -d -p 5000:5000 --name moto-registry registry:2 || true
-
-registry-stop: ## Stop local registry
-	docker stop moto-registry && docker rm moto-registry || true
-```
+See [makefile.md](makefile.md) for build targets (`build-garage`, `test-garage`, etc.).
 
 ### Image Size Targets
 
@@ -1135,6 +999,13 @@ nix path-info --json .#moto-engine | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v0.6 (2026-01-26)
+- Docker-wrapped Nix approach: run `nix build` inside `nixos/nix` container
+- Works on Mac without Linux builder, keeps Nix flake as single source of truth
+- No separate Dockerfile needed
+- CI uses direct `nix build` on Linux runners
+- See makefile.md for build targets
 
 ### v0.4 (2026-01-25)
 - Switch garage container from Nix dockerTools to Dockerfile-based builds

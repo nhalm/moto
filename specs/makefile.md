@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
-| Status | Ripping |
+| Version | 0.4 |
+| Status | Ready to Rip |
 | Last Updated | 2026-01-26 |
 
 ## Overview
@@ -76,16 +76,31 @@ ci:             # Full CI check (fmt + check + lint + test)
 ### Container Targets
 
 ```makefile
-docker-build-moto-garage:   # Build garage container via Nix (auto-detects arch)
-docker-test-moto-garage:    # Run smoke tests on container
-docker-shell-moto-garage:   # Interactive shell in container
-docker-push-moto-garage:    # Push garage image to registry
-docker-push-local:          # Push all images to localhost:5000
-docker-scan:                # Scan images for vulnerabilities (requires trivy)
-docker-clean:               # Remove all moto images
+# Build
+build-garage:               # Build garage container (Docker-wrapped Nix, works on Mac and Linux)
+
+# Test and debug
+test-garage:                # Run smoke tests on container
+shell-garage:               # Interactive shell in container
+
+# Push
+push-garage:                # Push garage image to local registry (localhost:5000)
+
+# Maintenance
+scan-garage:                # Scan image for vulnerabilities (requires trivy)
+clean-images:               # Remove all moto images
 ```
 
-The garage container uses Nix `dockerTools.buildLayeredImage`. The Makefile auto-detects architecture (ARM vs Intel) and builds the appropriate Linux target.
+**How `build-garage` works:**
+
+1. Runs a `nixos/nix` container with the repo mounted
+2. Executes `nix build .#moto-garage` inside the container
+3. Loads the resulting image via `docker load`
+4. Pushes to local registry
+
+This approach uses the Nix flake as the single source of truth while working on any platform (Mac or Linux). Architecture is auto-detected - ARM Mac builds `aarch64-linux`, Intel builds `x86_64-linux`.
+
+**CI builds differently:** GitHub Actions installs Nix directly on Linux runners and runs `nix build` without Docker. See [container-system.md](container-system.md) for CI workflow.
 
 ### Registry Targets
 
@@ -107,8 +122,8 @@ k3s-status:     # Show cluster status
 
 ### Naming Conventions
 
-- Use hyphens, not underscores: `docker-build` not `docker_build`
-- Group prefix for related targets: `docker-*`, `k3s-*`
+- Use hyphens, not underscores: `build-garage` not `build_garage`
+- Pattern: `<action>-<target>` (e.g., `build-garage`, `test-garage`, `push-garage`)
 - Keep names short but clear
 
 ### Phony Targets
@@ -117,12 +132,18 @@ All targets should be declared `.PHONY` since they don't produce files:
 
 ```makefile
 .PHONY: install build test check fmt lint clean fix ci
-.PHONY: docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage
-.PHONY: docker-push-moto-garage docker-push-local docker-scan docker-clean
+.PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images
 .PHONY: registry-start registry-stop
 ```
 
 ## Changelog
+
+### v0.4 (2026-01-26)
+- New container targets: `build-garage`, `test-garage`, `shell-garage`, `push-garage`, `scan-garage`, `clean-images`
+- `build-garage` uses Docker-wrapped Nix: runs `nix build` inside `nixos/nix` container
+- Works on Mac without configuring a Linux builder
+- CI uses direct `nix build` on Linux runners (not Makefile)
+- Remove old `docker-build-moto-garage` naming convention
 
 ### v0.3 (2026-01-26)
 - Correct spec to match implementation: Nix dockerTools, not Dockerfile
