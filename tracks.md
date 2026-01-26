@@ -192,7 +192,7 @@ HOW TO USE THIS FILE:
 - Makefile: registry-stop target (stop local registry)
 - Makefile: docker-push-moto-garage target
 - Makefile: docker-push-local target
+- Makefile: docker-scan target (scans moto-garage for vulnerabilities using trivy)
 
 **Remaining:**
-- Makefile: docker-scan target (requires trivy)
 - infra/pkgs/moto-engine.nix (bike container - blocked: bike.md is Wrenching)

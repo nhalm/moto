@@ -1,4 +1,4 @@
-.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage docker-push-moto-garage docker-push-local docker-clean registry-start registry-stop
+.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage docker-push-moto-garage docker-push-local docker-clean docker-scan registry-start registry-stop
 
 # Set up local development environment
 install:
@@ -91,6 +91,21 @@ docker-push-moto-garage:
 	docker push $(REGISTRY)/moto-garage:latest
 	docker push $(REGISTRY)/moto-garage:$(SHA)
 	@echo "Pushed $(REGISTRY)/moto-garage:latest and $(REGISTRY)/moto-garage:$(SHA)"
+
+# === Scan ===
+
+# Scan images for vulnerabilities using trivy
+docker-scan:
+	@if ! command -v trivy &>/dev/null; then \
+		echo "Error: trivy is not installed. Install with 'brew install trivy' or 'nix-shell -p trivy'"; \
+		exit 1; \
+	fi
+	@echo "Scanning moto-garage for vulnerabilities..."
+	@if ! docker image inspect moto-garage:latest &>/dev/null; then \
+		echo "Error: moto-garage:latest not found. Run 'make docker-build-moto-garage' first."; \
+		exit 1; \
+	fi
+	trivy image --severity HIGH,CRITICAL moto-garage:latest
 
 # === Cleanup ===
 
