@@ -90,29 +90,32 @@ Contains: Runtime dependencies + CA certificates
 
 ### Infrastructure Directory Structure
 
-Uses **flake-parts** for modular flake organization:
+Modular structure with packages and modules:
 
 ```
 moto/
-├── flake.nix                    # Root flake - imports flake-parts modules
+├── flake.nix                    # Root flake - devShells + imports infra/pkgs
 ├── flake.lock                   # Pinned dependencies
 └── infra/
-    ├── flake/                   # Flake-parts modules
-    │   ├── devshell.nix         # Development shell module
-    │   ├── garage.nix           # Garage container module
-    │   ├── engine.nix           # Engine container module (future)
-    │   └── rust-toolchain.nix   # Shared Rust toolchain config
+    ├── pkgs/                    # Container package definitions
+    │   ├── default.nix          # Exports all packages
+    │   └── moto-garage.nix      # Garage container definition
+    ├── modules/                 # Reusable module components
+    │   ├── base.nix             # Core system tools
+    │   ├── dev-tools.nix        # Development tooling
+    │   ├── ssh.nix              # SSH server
+    │   └── wireguard.nix        # WireGuard tools
     └── smoke-test.sh            # Container smoke tests
 ```
 
-**Why flake-parts:**
+**Why this structure:**
 
 | Benefit | Description |
 |---------|-------------|
-| Modular | Each `infra/flake/*.nix` file is a self-contained module |
-| No collisions | Uses `buildEnv` - Nix handles file conflicts |
-| Multi-system | Built-in `perSystem` - no manual `eachSystem` loops |
-| Composable | Modules can depend on each other cleanly |
+| Modular | Each `infra/modules/*.nix` provides a reusable component |
+| No collisions | Uses `buildEnv` in pkgs - Nix handles file conflicts |
+| Simple | Direct imports, no framework dependencies |
+| Composable | Modules return `{ contents, env }` for easy merging |
 
 **Build commands:**
 
@@ -280,38 +283,41 @@ Layer 2: CA certificates                        ← rarely changes
 Layer 3: Application binary                     ← changes per build
 ```
 
-**Garage image** (defined in `infra/garage.nix` flake-parts module):
+**Garage image** (defined in `infra/pkgs/moto-garage.nix`):
 
 ```nix
-# infra/flake/garage.nix
-{ inputs, ... }: {
-  perSystem = { pkgs, ... }: {
-    packages.moto-garage = pkgs.dockerTools.streamLayeredImage {
-      name = "moto-garage";
-      tag = "latest";
+# infra/pkgs/moto-garage.nix
+{ pkgs, rustToolchain }:
+let
+  # Import modules
+  base = import ../modules/base.nix { inherit pkgs; };
+  devTools = import ../modules/dev-tools.nix { inherit pkgs rustToolchain; };
+  # ... other modules
 
-      # Use buildEnv to avoid file collisions
-      contents = pkgs.buildEnv {
-        name = "garage-env";
-        paths = with pkgs; [
-          bashInteractive coreutils cacert openssh
-          # ... other packages
-        ];
-      };
+  allContents = base.contents ++ devTools.contents;
 
-      config = {
-        User = "root";
-        Env = [ "PATH=/bin:/usr/bin" ];
-      };
-    };
+  # Use buildEnv to handle file collisions
+  garageEnv = pkgs.buildEnv {
+    name = "garage-env";
+    paths = allContents;
+  };
+in
+pkgs.dockerTools.buildLayeredImage {
+  name = "moto-garage";
+  tag = "latest";
+  contents = [ garageEnv ];
+  config = {
+    Cmd = [ "/bin/bash" ];
+    WorkingDir = "/workspace";
+    Env = base.env ++ devTools.env;
   };
 }
 ```
 
 **Key points:**
-- `streamLayeredImage` streams directly to `docker load` (more efficient)
-- `buildEnv` handles file collisions automatically
-- No manual `contents ++` merging needed
+- `buildLayeredImage` produces tarball for `docker load`
+- `buildEnv` handles file collisions automatically (required for packages with overlapping dirs like `share/`)
+- Modules in `infra/modules/` provide reusable package sets
 
 **Bike image** (defined in `infra/engine.nix` flake-parts module):
 
@@ -1021,7 +1027,7 @@ nix path-info --json .#moto-engine | jq '.[] | .path'
 - Switch to flake-parts for modular flake organization
 - Move from `infra/pkgs/*.nix` + `infra/modules/*.nix` to `infra/*.nix` flake-parts modules
 - Use `buildEnv` for package composition (avoids file collisions like cacert)
-- Use `streamLayeredImage` instead of `buildLayeredImage` for efficiency
+- Use `buildLayeredImage` with `buildEnv` wrapper for collision-free builds
 
 ### v0.7 (2026-01-26)
 - Mark crane flake example as reference/aspirational (not current implementation)

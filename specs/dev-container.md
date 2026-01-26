@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.11 |
+| Version | 0.12 |
 | Status | Ready to Rip |
 | Last Updated | 2026-01-26 |
 
@@ -42,35 +42,39 @@ We use Nix dockerTools because:
 
 ### Project Structure
 
-Uses **flake-parts** for modular flake organization:
+Modular structure with packages and modules:
 
 ```
 moto/
-├── flake.nix                    # Root flake - imports flake-parts modules
+├── flake.nix                    # Root flake - devShells + imports infra/pkgs
 ├── flake.lock                   # Pinned dependencies
 └── infra/
-    ├── flake/                   # Flake-parts modules
-    │   ├── devshell.nix         # Development shell (local dev tools)
-    │   ├── garage.nix           # Garage container definition
-    │   └── rust-toolchain.nix   # Shared Rust toolchain config
+    ├── pkgs/                    # Container package definitions
+    │   ├── default.nix          # Exports all packages
+    │   └── moto-garage.nix      # Garage container definition
+    ├── modules/                 # Reusable module components
+    │   ├── base.nix             # Core system tools (bash, coreutils, etc.)
+    │   ├── dev-tools.nix        # Development tooling (Rust, cargo, etc.)
+    │   ├── ssh.nix              # SSH server
+    │   └── wireguard.nix        # WireGuard tools
     └── smoke-test.sh            # Container smoke tests
 ```
 
-**Why flake-parts:**
-- Modular without manual composition hacks
-- Each module defines its own outputs cleanly
-- Built-in handling for multi-system (no manual `eachSystem`)
-- Avoids file collisions that occur with manual `contents ++` merging
+**Why this structure:**
+- Modular: each module returns `{ contents, env }` for composition
+- `buildEnv` wraps contents to avoid file collisions
+- Simple direct imports, no framework dependencies
+- Reusable modules across different container types
 
 **Root flake (`moto/flake.nix`):**
-- Imports `flake-parts` and `nixpkgs`
-- Loads modules from `./infra/flake/*.nix`
-- Each module adds to `packages`, `devShells`, etc.
+- Defines `devShells.default` with development tools
+- Imports container packages from `./infra/pkgs`
+- Uses `eachDefaultSystem` for multi-platform support
 
-**Container definition (`moto/infra/flake/garage.nix`):**
-- Uses `dockerTools.streamLayeredImage` for efficient builds
-- Defines packages inline using `buildEnv` (handles collisions)
-- No separate modules directory - composition happens in flake-parts
+**Container definition (`moto/infra/pkgs/moto-garage.nix`):**
+- Uses `dockerTools.buildLayeredImage` for efficient layered images
+- Wraps contents with `buildEnv` (handles file collisions)
+- Imports modules from `../modules/` and combines them
 
 ### Included Tooling
 
@@ -363,6 +367,28 @@ make push-garage     # Push to local registry
 
 See [container-system.md](container-system.md) for details on the build approach.
 
+### Build Verification (Required)
+
+**After modifying any container-related files, you MUST build and test:**
+
+```bash
+make build-garage && make test-garage
+```
+
+**Both commands must succeed.** Container builds can fail in non-obvious ways (file collisions, missing packages, broken paths) that only surface when actually built.
+
+**Files requiring build verification:**
+- `infra/pkgs/*.nix` - Container package definitions
+- `infra/modules/*.nix` - Container modules
+- `flake.nix` - Nix flake (container outputs)
+
+**Common build failures:**
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `File exists` | Package collision in `contents` | Use `buildEnv` to wrap contents |
+| `are the same file` | Duplicate file copy | Remove redundant copy in `extraCommands` |
+| `command not found` | Missing from PATH | Check `PATH` in env, verify package in contents |
+
 ### Testing the Container
 
 Smoke tests verify the container builds correctly and contains expected tooling.
@@ -445,11 +471,15 @@ spiffe://moto.local/garage/{garage-id}
 
 ## Changelog
 
+### v0.12 (2026-01-26)
+- Add "Build Verification (Required)" section with mandatory build testing
+- Document common build failures and fixes
+- Correct project structure to match implementation (infra/pkgs/ + infra/modules/)
+- Use `buildLayeredImage` with `buildEnv` wrapper for collision-free builds
+
 ### v0.11 (2026-01-26)
-- Switch to flake-parts for modular flake organization
-- Move from `infra/modules/*.nix` to `infra/*.nix` flake-parts modules
 - Use `buildEnv` for package composition (avoids file collisions)
-- Simplify structure: no manual `contents ++` merging
+- Modular structure with infra/pkgs/ and infra/modules/
 
 ### v0.10 (2026-01-26)
 - Update build targets: `build-garage`, `test-garage`, `shell-garage`, `push-garage`

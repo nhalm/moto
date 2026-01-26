@@ -13,12 +13,21 @@ let
 
   # Combine all environment variables from modules
   allEnv = base.env ++ devTools.env;
+
+  # Use buildEnv to handle file collisions between packages
+  # This is required because multiple packages have 'share' directories
+  garageEnv = pkgs.buildEnv {
+    name = "garage-env";
+    paths = allContents;
+    # pathsToLink defaults to all, which is what we want
+  };
 in
 pkgs.dockerTools.buildLayeredImage {
   name = "moto-garage";
   tag = "latest";
 
-  contents = allContents;
+  # Use the buildEnv instead of raw contents to avoid collisions
+  contents = [ garageEnv ];
 
   config = {
     Cmd = [ "/bin/bash" ];
@@ -40,13 +49,12 @@ pkgs.dockerTools.buildLayeredImage {
     mkdir -p root/.local/bin
     mkdir -p workspace
     mkdir -p etc/ssh
-    mkdir -p etc/ssl/certs
     mkdir -p var/run
     mkdir -p tmp
     chmod 1777 tmp
 
-    # Copy CA certificates
-    cp ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt etc/ssl/certs/ca-bundle.crt
+    # CA certificates are provided by cacert in the buildEnv
+    # and SSL_CERT_FILE env var points to the correct location
 
     # Claude Code is installed at runtime via the install script
     # The script installs to ~/.local/bin/claude

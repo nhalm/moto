@@ -27,6 +27,7 @@ Thumbs.db
 .env.*
 secrets.yaml
 *.secret
+keys/
 
 # Docker
 .docker/

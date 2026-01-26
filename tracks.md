@@ -122,13 +122,13 @@ HOW TO USE THIS FILE:
 
 ---
 
-## dev-container.md v0.11
+## dev-container.md v0.12
 
 **Status:** Complete
 
 **Implemented:**
 - Root flake.nix with devShells.default (Rust toolchain, build deps, version control, db clients, general tools, k8s tools, connectivity)
-- infra/pkgs/moto-garage.nix (container definition using dockerTools.streamLayeredImage)
+- infra/pkgs/moto-garage.nix (container definition using dockerTools.buildLayeredImage + buildEnv)
 - infra/pkgs/default.nix (exports packages)
 - infra/modules/ (base.nix, ssh.nix, dev-tools.nix, wireguard.nix for container composition)
 - Claude Code installation via native binary shell script (systemd service on first boot)
@@ -136,6 +136,7 @@ HOW TO USE THIS FILE:
 - Makefile targets: build-garage, test-garage, shell-garage, push-garage
 - Container image named `moto-garage`
 - Docker-wrapped Nix build (works on Mac without Linux builder)
+- Build verification requirement (must run build-garage && test-garage after changes)
 
 **Remaining:**
 (none)
@@ -184,7 +185,7 @@ HOW TO USE THIS FILE:
 **Status:** In Progress
 
 **Implemented:**
-- infra/pkgs/moto-garage.nix (garage container definition using streamLayeredImage)
+- infra/pkgs/moto-garage.nix (garage container definition using buildLayeredImage + buildEnv)
 - infra/pkgs/default.nix (exports packages)
 - infra/modules/ (base.nix, ssh.nix, dev-tools.nix, wireguard.nix)
 - infra/smoke-test.sh (container smoke tests)
