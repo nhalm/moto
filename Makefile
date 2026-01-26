@@ -1,4 +1,4 @@
-.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage docker-clean registry-start
+.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage docker-clean registry-start registry-stop
 
 # Set up local development environment
 install:
@@ -78,3 +78,9 @@ registry-start:
 	@docker run -d -p 5000:5000 --name moto-registry registry:2 2>/dev/null || \
 		(docker start moto-registry 2>/dev/null && echo "Registry already exists, started.") || \
 		echo "Registry already running."
+
+# Stop local registry
+registry-stop:
+	@echo "Stopping local registry..."
+	@docker stop moto-registry 2>/dev/null && docker rm moto-registry 2>/dev/null && echo "Registry stopped and removed." || \
+		echo "Registry not running or already removed."

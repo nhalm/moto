@@ -189,9 +189,9 @@ HOW TO USE THIS FILE:
 - Makefile: docker-build-moto-garage, docker-test-moto-garage, docker-shell-moto-garage
 - Makefile: docker-clean target (remove moto images)
 - Makefile: registry-start target (start local registry)
+- Makefile: registry-stop target (stop local registry)
 
 **Remaining:**
-- Makefile: registry-stop target (stop local registry)
 - Makefile: docker-push-moto-garage target
 - Makefile: docker-push-local target
 - Makefile: docker-scan target (requires trivy)
