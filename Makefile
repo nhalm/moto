@@ -1,5 +1,5 @@
 .PHONY: install build test check fmt lint clean run fix ci
-.PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images
+.PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
 .PHONY: registry-start registry-stop
 
 # Set up local development environment
@@ -114,6 +114,13 @@ clean-images:
 	-docker images --filter=reference='moto-*' -q | xargs docker rmi -f 2>/dev/null || true
 	-docker images --filter=reference='*/moto-*' -q | xargs docker rmi -f 2>/dev/null || true
 	@echo "Done."
+
+# Remove Docker volume used for Nix store caching
+# This forces a fresh build but speeds up subsequent builds after running
+clean-nix-cache:
+	@echo "Removing Nix store cache volume..."
+	-docker volume rm nix-store 2>/dev/null && echo "Removed nix-store volume." || \
+		echo "nix-store volume does not exist or is in use."
 
 # === Registry ===
 

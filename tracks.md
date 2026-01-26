@@ -122,25 +122,20 @@ HOW TO USE THIS FILE:
 
 ---
 
-## dev-container.md v0.7
+## dev-container.md v0.11
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - Root flake.nix with devShells.default (Rust toolchain, build deps, version control, db clients, general tools, k8s tools, connectivity)
-- infra/dev-container/flake.nix (container-specific flake that imports root)
-- infra/dev-container/configuration.nix (NixOS system configuration with SSH, WireGuard)
-- infra/dev-container/Dockerfile (builds the NixOS container image via Nix)
+- infra/pkgs/moto-garage.nix (container definition using dockerTools.streamLayeredImage)
+- infra/pkgs/default.nix (exports packages)
+- infra/modules/ (base.nix, ssh.nix, dev-tools.nix, wireguard.nix for container composition)
 - Claude Code installation via native binary shell script (systemd service on first boot)
-- infra/dev-container/smoke-test.sh (smoke test script with --keep option)
-- Makefile targets: docker-build-garage, docker-test-garage, docker-shell-garage
-- Rename container image from `moto-dev` to `moto-garage`
-- Move smoke-test.sh to infra/smoke-test.sh
-- Reorganize infra/: create pkgs/ and modules/ structure
-- Move container definition to infra/pkgs/moto-garage.nix
-- Create reusable modules in infra/modules/ (base.nix, ssh.nix, dev-tools.nix, wireguard.nix)
-- Update root flake.nix: rename packages.garage to packages.moto-garage, import from infra/pkgs/
-- Update Makefile targets to use new paths and image name
+- infra/smoke-test.sh (smoke test script with --keep option)
+- Makefile targets: build-garage, test-garage, shell-garage, push-garage
+- Container image named `moto-garage`
+- Docker-wrapped Nix build (works on Mac without Linux builder)
 
 **Remaining:**
 (none)
@@ -162,7 +157,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.4
+## makefile.md v0.5
 
 **Status:** Complete
 
@@ -175,6 +170,7 @@ HOW TO USE THIS FILE:
 - push-garage target (push to registry)
 - scan-garage target (vulnerability scanning with trivy)
 - clean-images target (remove moto images)
+- clean-nix-cache target (remove Nix store Docker volume)
 - registry-start, registry-stop targets
 - .PHONY declarations for all targets
 
@@ -183,22 +179,23 @@ HOW TO USE THIS FILE:
 
 ---
 
-## container-system.md v0.4
+## container-system.md v0.8
 
 **Status:** In Progress
 
 **Implemented:**
-- infra/pkgs/moto-garage.nix (garage container definition)
+- infra/pkgs/moto-garage.nix (garage container definition using streamLayeredImage)
 - infra/pkgs/default.nix (exports packages)
+- infra/modules/ (base.nix, ssh.nix, dev-tools.nix, wireguard.nix)
 - infra/smoke-test.sh (container smoke tests)
 - Root flake.nix: packages.moto-garage for Linux systems
-- Makefile: docker-build-moto-garage, docker-test-moto-garage, docker-shell-moto-garage
-- Makefile: docker-clean target (remove moto images)
+- Makefile: build-garage, test-garage, shell-garage targets
+- Makefile: clean-images target (remove moto images)
+- Makefile: clean-nix-cache target (remove Nix store volume)
 - Makefile: registry-start target (start local registry)
 - Makefile: registry-stop target (stop local registry)
-- Makefile: docker-push-moto-garage target
-- Makefile: docker-push-local target
-- Makefile: docker-scan target (scans moto-garage for vulnerabilities using trivy)
+- Makefile: push-garage target (push to registry)
+- Makefile: scan-garage target (scans moto-garage for vulnerabilities using trivy)
 
 **Remaining:**
 - infra/pkgs/moto-engine.nix (bike container - blocked: bike.md is Wrenching)
