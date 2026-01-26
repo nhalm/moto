@@ -39,7 +39,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
 | [moto-cli](moto-cli.md) | Ready to Rip | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
-| [pre-commit](pre-commit.md) | Ready to Rip | Git hooks for fast feedback to agents |
+| [pre-commit](pre-commit.md) | Ripping | Git hooks for fast feedback to agents |
 | [makefile](makefile.md) | Ready to Rip | Makefile targets and conventions |
 
 ## Phase 1: Infrastructure (The Garage)
@@ -49,7 +49,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [moto-club](moto-club.md) | Ripping | Central orchestration, garage management |
 | [keybox](keybox.md) | Wrenching | Secrets manager, SPIFFE-based identity |
 | [ai-proxy](ai-proxy.md) | Bare Frame | AI provider gateway, injects secrets |
-| [dev-container](dev-container.md) | Ready to Rip | NixOS container, tooling, environment |
+| [dev-container](dev-container.md) | Ripping | NixOS container, tooling, environment |
 | [container-system](container-system.md) | Wrenching | Build pipeline, registry |
 | [garage-isolation](garage-isolation.md) | Bare Frame | Network policies, resource limits |
 | [garage-local](garage-local.md) | Wrenching | Local K8s operations (no server) |
