@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.10 |
+| Version | 0.11 |
 | Status | Ready to Rip |
 | Last Updated | 2026-01-26 |
 
@@ -12,7 +12,7 @@ The dev container is the garage environment - where Claude Code wrenches on the 
 
 **Key architecture decisions:**
 - **Nix dockerTools** for container builds (reproducible, layered images)
-- **Modular Nix config** in `infra/modules/` for composable container definitions
+- **Modular flake** using flake-parts for clean composition
 - **Root flake** at repo root (`moto/flake.nix`) exports container packages
 - **Multi-arch** via flake outputs (`x86_64-linux`, `aarch64-linux`)
 
@@ -42,31 +42,35 @@ We use Nix dockerTools because:
 
 ### Project Structure
 
+Uses **flake-parts** for modular flake organization:
+
 ```
 moto/
-├── flake.nix                    # Root flake - exports packages and devShell
+├── flake.nix                    # Root flake - imports flake-parts modules
 ├── flake.lock                   # Pinned dependencies
 └── infra/
-    ├── pkgs/                    # Container package definitions
-    │   ├── moto-garage.nix      # Garage container definition
-    │   └── default.nix          # Exports all packages
-    ├── modules/                 # Reusable Nix modules
-    │   ├── base.nix             # Core packages (bash, coreutils, cacert)
-    │   ├── dev-tools.nix        # Rust toolchain, build tools, K8s tools
-    │   ├── ssh.nix              # OpenSSH for terminal access
-    │   └── wireguard.nix        # WireGuard for tunnel connectivity
+    ├── flake/                   # Flake-parts modules
+    │   ├── devshell.nix         # Development shell (local dev tools)
+    │   ├── garage.nix           # Garage container definition
+    │   └── rust-toolchain.nix   # Shared Rust toolchain config
     └── smoke-test.sh            # Container smoke tests
 ```
 
-**Root flake (`moto/flake.nix`):**
-- Provides `devShells.default` with all development tools
-- Provides `packages.moto-garage` for Linux systems
-- Imports container definitions from `./infra/pkgs/`
+**Why flake-parts:**
+- Modular without manual composition hacks
+- Each module defines its own outputs cleanly
+- Built-in handling for multi-system (no manual `eachSystem`)
+- Avoids file collisions that occur with manual `contents ++` merging
 
-**Container definition (`moto/infra/pkgs/moto-garage.nix`):**
-- Uses `dockerTools.buildLayeredImage` for efficient layering
-- Composes modules: base + ssh + dev-tools + wireguard
-- Configures working directory, environment variables, volumes
+**Root flake (`moto/flake.nix`):**
+- Imports `flake-parts` and `nixpkgs`
+- Loads modules from `./infra/flake/*.nix`
+- Each module adds to `packages`, `devShells`, etc.
+
+**Container definition (`moto/infra/flake/garage.nix`):**
+- Uses `dockerTools.streamLayeredImage` for efficient builds
+- Defines packages inline using `buildEnv` (handles collisions)
+- No separate modules directory - composition happens in flake-parts
 
 ### Included Tooling
 
@@ -440,6 +444,12 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.11 (2026-01-26)
+- Switch to flake-parts for modular flake organization
+- Move from `infra/modules/*.nix` to `infra/*.nix` flake-parts modules
+- Use `buildEnv` for package composition (avoids file collisions)
+- Simplify structure: no manual `contents ++` merging
 
 ### v0.10 (2026-01-26)
 - Update build targets: `build-garage`, `test-garage`, `shell-garage`, `push-garage`

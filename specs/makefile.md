@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
+| Version | 0.5 |
 | Status | Ready to Rip |
 | Last Updated | 2026-01-26 |
 
@@ -89,6 +89,7 @@ push-garage:                # Push garage image to local registry (localhost:500
 # Maintenance
 scan-garage:                # Scan image for vulnerabilities (requires trivy)
 clean-images:               # Remove all moto images
+clean-nix-cache:            # Remove Docker volume used for Nix store caching
 ```
 
 **How `build-garage` works:**
@@ -101,6 +102,13 @@ clean-images:               # Remove all moto images
 This approach uses the Nix flake as the single source of truth while working on any platform (Mac or Linux). Architecture is auto-detected - ARM Mac builds `aarch64-linux`, Intel builds `x86_64-linux`.
 
 **CI builds differently:** GitHub Actions installs Nix directly on Linux runners and runs `nix build` without Docker. See [container-system.md](container-system.md) for CI workflow.
+
+**Nix cache:** The Docker-wrapped build uses a named volume (`nix-store`) to cache the Nix store between builds. This speeds up subsequent builds but can grow over time. Use `clean-nix-cache` to remove it and force a fresh build.
+
+**Error handling:** If `build-garage` fails:
+- Verify Docker is running (`docker info`)
+- Check the `nixos/nix` image is available (`docker pull nixos/nix:latest`)
+- For detailed output, the target should print the nix build command on failure
 
 ### Registry Targets
 
@@ -132,11 +140,16 @@ All targets should be declared `.PHONY` since they don't produce files:
 
 ```makefile
 .PHONY: install build test check fmt lint clean fix ci
-.PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images
+.PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
 .PHONY: registry-start registry-stop
 ```
 
 ## Changelog
+
+### v0.5 (2026-01-26)
+- Add `clean-nix-cache` target for removing Docker volume used by Nix store
+- Add error handling guidance for `build-garage` failures
+- Document Nix cache behavior
 
 ### v0.4 (2026-01-26)
 - New container targets: `build-garage`, `test-garage`, `shell-garage`, `push-garage`, `scan-garage`, `clean-images`

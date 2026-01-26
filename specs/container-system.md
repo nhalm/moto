@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.6 |
+| Version | 0.8 |
 | Status | Ready to Rip |
 | Last Updated | 2026-01-26 |
 
@@ -90,29 +90,29 @@ Contains: Runtime dependencies + CA certificates
 
 ### Infrastructure Directory Structure
 
+Uses **flake-parts** for modular flake organization:
+
 ```
 moto/
-├── flake.nix                    # Root flake - exports packages and devShell
+├── flake.nix                    # Root flake - imports flake-parts modules
 ├── flake.lock                   # Pinned dependencies
 └── infra/
-    ├── pkgs/                    # Container package definitions
-    │   ├── moto-garage.nix      # Garage container (full dev environment)
-    │   ├── moto-engine.nix      # Engine container (minimal runtime)
-    │   └── default.nix          # Exports all packages
-    ├── modules/                 # Reusable Nix modules
-    │   ├── base.nix             # Core packages (bash, coreutils, cacert)
-    │   ├── dev-tools.nix        # Rust toolchain, build tools
-    │   ├── ssh.nix              # OpenSSH
-    │   └── wireguard.nix        # WireGuard tools
+    ├── flake/                   # Flake-parts modules
+    │   ├── devshell.nix         # Development shell module
+    │   ├── garage.nix           # Garage container module
+    │   ├── engine.nix           # Engine container module (future)
+    │   └── rust-toolchain.nix   # Shared Rust toolchain config
     └── smoke-test.sh            # Container smoke tests
 ```
 
-**Directory purposes:**
+**Why flake-parts:**
 
-| Path | Purpose |
-|------|---------|
-| `pkgs/` | Container definitions using `dockerTools.buildLayeredImage` |
-| `modules/` | Reusable Nix modules composed into containers |
+| Benefit | Description |
+|---------|-------------|
+| Modular | Each `infra/flake/*.nix` file is a self-contained module |
+| No collisions | Uses `buildEnv` - Nix handles file conflicts |
+| Multi-system | Built-in `perSystem` - no manual `eachSystem` loops |
+| Composable | Modules can depend on each other cleanly |
 
 **Build commands:**
 
@@ -134,7 +134,9 @@ src/**
 
 **Key insight:** Nix handles the build-vs-runtime separation automatically. The build stage has full toolchain; the output is a minimal closure.
 
-### Complete Flake Example
+### Complete Flake Example (Reference)
+
+> **Note:** This is a reference implementation showing the ideal pattern with crane for cached Rust builds. The current implementation uses a simpler approach without crane. Consider adopting crane when build times become a bottleneck.
 
 Full `flake.nix` with crane for cached Rust builds:
 
@@ -278,32 +280,47 @@ Layer 2: CA certificates                        ← rarely changes
 Layer 3: Application binary                     ← changes per build
 ```
 
-**Garage image** (see `infra/pkgs/moto-garage.nix`):
+**Garage image** (defined in `infra/garage.nix` flake-parts module):
 
 ```nix
-packages.moto-garage = pkgs.dockerTools.buildLayeredImage {
-  name = "moto-garage";
-  tag = "latest";
-  contents = commonPackages ++ [ pkgs.cacert ];
-  config = {
-    User = "root";
-    Env = [
-      # IMPORTANT: PATH must reference where dockerTools places binaries
-      # In buildLayeredImage, binaries are symlinked to /bin
-      "PATH=/root/.local/bin:/bin:/usr/bin"
-      # NOT: /nix/var/nix/profiles/default/bin (doesn't exist in containers)
-    ];
+# infra/flake/garage.nix
+{ inputs, ... }: {
+  perSystem = { pkgs, ... }: {
+    packages.moto-garage = pkgs.dockerTools.streamLayeredImage {
+      name = "moto-garage";
+      tag = "latest";
+
+      # Use buildEnv to avoid file collisions
+      contents = pkgs.buildEnv {
+        name = "garage-env";
+        paths = with pkgs; [
+          bashInteractive coreutils cacert openssh
+          # ... other packages
+        ];
+      };
+
+      config = {
+        User = "root";
+        Env = [ "PATH=/bin:/usr/bin" ];
+      };
+    };
   };
-};
+}
 ```
 
-**PATH note:** In `dockerTools.buildLayeredImage` containers, binaries from `contents` packages are symlinked into `/bin` and `/usr/bin`. Do NOT use NixOS-specific paths like `/nix/var/nix/profiles/default/bin` or `/run/current-system/sw/bin` - these don't exist in minimal containers.
+**Key points:**
+- `streamLayeredImage` streams directly to `docker load` (more efficient)
+- `buildEnv` handles file collisions automatically
+- No manual `contents ++` merging needed
 
-**Bike image:**
+**Bike image** (defined in `infra/engine.nix` flake-parts module):
 
 ```nix
-# infra/pkgs/moto-engine.nix
-{ pkgs, engine }:
+# infra/flake/engine.nix
+{ inputs, ... }: {
+  perSystem = { pkgs, self', ... }:
+  let
+    mkEngine = name: binary:
 
 pkgs.dockerTools.buildLayeredImage {
   name = "moto-engine-${engine.name}";
@@ -572,7 +589,7 @@ sha256sum result
 
 Nix store paths include content hash:
 ```
-/nix/store/abc123...-moto-club-1.0.0
+/infra/store/abc123...-moto-club-1.0.0
             ^^^^^^^
             content hash
 ```
@@ -999,6 +1016,15 @@ nix path-info --json .#moto-engine | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v0.8 (2026-01-26)
+- Switch to flake-parts for modular flake organization
+- Move from `infra/pkgs/*.nix` + `infra/modules/*.nix` to `infra/*.nix` flake-parts modules
+- Use `buildEnv` for package composition (avoids file collisions like cacert)
+- Use `streamLayeredImage` instead of `buildLayeredImage` for efficiency
+
+### v0.7 (2026-01-26)
+- Mark crane flake example as reference/aspirational (not current implementation)
 
 ### v0.6 (2026-01-26)
 - Docker-wrapped Nix approach: run `nix build` inside `nixos/nix` container
