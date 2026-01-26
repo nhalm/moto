@@ -78,7 +78,6 @@ All tools are installed via Nix in the devShell/container.
 |------|---------|---------|
 | Rust | 1.85 stable | Primary language |
 | Node.js | 22.x LTS | For tooling (claude-code) |
-| Python | 3.12 | For scripts, tooling |
 
 **Rust toolchain:**
 
