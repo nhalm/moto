@@ -1,4 +1,4 @@
-.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage
+.PHONY: install build test check fmt lint clean run fix ci docker-build-moto-garage docker-test-moto-garage docker-shell-moto-garage docker-clean
 
 # Set up local development environment
 install:
@@ -62,3 +62,10 @@ docker-shell-moto-garage:
 		$(MAKE) docker-build-moto-garage; \
 	fi
 	docker run -it --rm moto-garage:latest
+
+# Remove all moto container images
+docker-clean:
+	@echo "Removing moto images..."
+	-docker images --filter=reference='moto-*' -q | xargs docker rmi -f 2>/dev/null || true
+	-docker images --filter=reference='*/moto-*' -q | xargs docker rmi -f 2>/dev/null || true
+	@echo "Done."

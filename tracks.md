@@ -174,3 +174,25 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 - k3s-install, k3s-start, k3s-stop, k3s-status targets (future)
+
+---
+
+## container-system.md v0.4
+
+**Status:** In Progress
+
+**Implemented:**
+- infra/pkgs/moto-garage.nix (garage container definition)
+- infra/pkgs/default.nix (exports packages)
+- infra/smoke-test.sh (container smoke tests)
+- Root flake.nix: packages.moto-garage for Linux systems
+- Makefile: docker-build-moto-garage, docker-test-moto-garage, docker-shell-moto-garage
+- Makefile: docker-clean target (remove moto images)
+
+**Remaining:**
+- Makefile: registry-start target (start local registry)
+- Makefile: registry-stop target (stop local registry)
+- Makefile: docker-push-moto-garage target
+- Makefile: docker-push-local target
+- Makefile: docker-scan target (requires trivy)
+- infra/pkgs/moto-engine.nix (bike container - blocked: bike.md is Wrenching)
