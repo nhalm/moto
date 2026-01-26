@@ -8,271 +8,89 @@
 
 ## Overview
 
-Pre-commit hooks provide fast feedback to agents (and humans) that their changes are on track. When working in loops, agents need to know immediately if they've broken something - not after a full CI run.
+Pre-commit hooks provide automatic validation on every commit. Agents can't sidestep them - they run automatically via git.
 
 **Design principles:**
-- **Fast first** - Pre-commit must be fast (<10s) or agents will skip it
-- **Fail early** - Catch obvious errors before they compound
-- **Path-selective** - Only run checks relevant to changed files
-- **Nix-aware** - Validate Nix changes don't break the container build
+- **Automatic** - No manual steps, hooks run on every `git commit`
+- **Fast** - Must complete in <5s or developers bypass them
+- **Simple** - Shell scripts, no external tools
 
 ## Specification
 
-### Tool: prek
+### Hook Location
 
-We use [prek](https://prek.j178.dev/) - a fast, Rust-based pre-commit hook manager with no Python dependency.
-
-**Installation:**
-```bash
-# Via cargo
-cargo install prek
-
-# Or via nix (when available in nixpkgs)
-nix profile install nixpkgs#prek
-```
-
-**Usage:**
-```bash
-prek install          # Install hooks
-prek run --all-files  # Run all hooks on all files
-prek run <hook-id>    # Run specific hook
-```
-
-### Configuration
-
-**`.pre-commit-config.yaml`:**
-
-```yaml
-# prek configuration
-# Install hooks: prek install
-# Run all hooks: prek run --all-files
-# Run specific hook: prek run <hook-id>
-
-default_stages: [pre-commit]
-
-repos:
-  - repo: local
-    hooks:
-      # === Security ===
-
-      - id: block-secrets
-        name: Block secrets
-        entry: scripts/hooks/block-secrets.sh
-        language: script
-        types: [text]
-        pass_filenames: false
-        always_run: true
-
-      # === Rust (only when Rust files change) ===
-
-      - id: cargo-fmt
-        name: Rust formatting
-        entry: cargo fmt --all --check
-        language: system
-        files: '\.(rs)$|Cargo\.(toml|lock)$'
-        pass_filenames: false
-
-      # === Nix (only when Nix files change) ===
-
-      - id: nix-fmt
-        name: Nix formatting
-        entry: nixfmt --check
-        language: system
-        files: '\.nix$'
-        pass_filenames: true
-
-      - id: nix-check
-        name: Nix syntax check
-        entry: scripts/hooks/nix-check.sh
-        language: script
-        files: '\.nix$|flake\.lock$'
-        pass_filenames: false
-
-  # === Pre-push hooks (thorough checks) ===
-
-  - repo: local
-    hooks:
-      - id: cargo-clippy
-        name: Rust lints
-        entry: cargo clippy --workspace --all-targets -- -D warnings
-        language: system
-        files: '\.(rs)$|Cargo\.(toml|lock)$'
-        pass_filenames: false
-        stages: [pre-push]
-
-      - id: cargo-test
-        name: Rust tests
-        entry: cargo test --workspace
-        language: system
-        files: '\.(rs)$|Cargo\.(toml|lock)$'
-        pass_filenames: false
-        stages: [pre-push]
-
-      - id: nix-build-check
-        name: Nix build validation
-        entry: scripts/hooks/nix-build-check.sh
-        language: script
-        files: '\.nix$|flake\.lock$|^infra/'
-        pass_filenames: false
-        stages: [pre-push]
-```
-
-### Hook Scripts
-
-**`scripts/hooks/block-secrets.sh`:**
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Check staged files for potential secrets
-STAGED=$(git diff --cached --name-only)
-
-if echo "$STAGED" | grep -qE '\.(pem|key)$'; then
-    echo "ERROR: Private key files detected"
-    exit 1
-fi
-
-if echo "$STAGED" | grep -qE '(^|/)\.env($|\.)'; then
-    echo "ERROR: .env files detected"
-    exit 1
-fi
-
-if echo "$STAGED" | grep -qE 'credentials.*\.json$'; then
-    echo "ERROR: Credentials file detected"
-    exit 1
-fi
-
-exit 0
-```
-
-**`scripts/hooks/nix-check.sh`:**
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Skip if nix not available
-if ! command -v nix &>/dev/null; then
-    echo "Skipping: nix not available"
-    exit 0
-fi
-
-# Fast syntax check (no build)
-nix flake check --no-build 2>&1 || {
-    echo "Nix syntax error - run 'nix flake check' for details"
-    exit 1
-}
-```
-
-**`scripts/hooks/nix-build-check.sh`:**
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Skip if nix not available
-if ! command -v nix &>/dev/null; then
-    echo "Skipping: nix not available"
-    exit 0
-fi
-
-# Dry-run validates evaluation without building
-echo "Validating Nix build (dry-run)..."
-nix build .#moto-garage --dry-run
-```
-
-### Hook Summary
-
-| Hook ID | Stage | Files | Purpose | Time |
-|---------|-------|-------|---------|------|
-| `block-secrets` | pre-commit | all | Block secrets | <1s |
-| `cargo-fmt` | pre-commit | `*.rs`, `Cargo.*` | Rust formatting | ~1s |
-| `nix-fmt` | pre-commit | `*.nix` | Nix formatting | ~1s |
-| `nix-check` | pre-commit | `*.nix`, `flake.lock` | Nix syntax | ~2s |
-| `cargo-clippy` | pre-push | `*.rs`, `Cargo.*` | Rust lints | ~30s |
-| `cargo-test` | pre-push | `*.rs`, `Cargo.*` | Rust tests | ~20s |
-| `nix-build-check` | pre-push | `*.nix`, `infra/*` | Nix build eval | ~10s |
-
-**Path-selective behavior:** If you only change `.nix` files, only Nix hooks run. If you only change `.rs` files, only Rust hooks run. This keeps feedback fast and relevant.
-
-### Directory Structure
+Hooks live in `.githooks/` (committed to repo):
 
 ```
 moto/
-├── .pre-commit-config.yaml    # prek configuration
-└── scripts/
-    └── hooks/
-        ├── block-secrets.sh
-        ├── nix-check.sh
-        └── nix-build-check.sh
+└── .githooks/
+    └── pre-commit
 ```
 
-### Makefile Targets
+Git is configured to use this directory via `core.hooksPath`.
 
-```makefile
-.PHONY: install-hooks check-hooks
+### Installation
 
-# Install prek hooks
-install-hooks:
-	@command -v prek >/dev/null || { echo "Install prek: cargo install prek"; exit 1; }
-	prek install
+| Context | How |
+|---------|-----|
+| **Garage (container)** | Automatic - configured in NixOS |
+| **Local development** | `make install` (one-time setup) |
 
-# Run pre-commit checks manually
-check-hooks:
-	prek run --all-files
-```
+### Pre-Commit Hook
 
-### Agent Workflow
-
-When agents work in loops:
-
-1. **Make changes** to code
-2. **Run `prek run`** or `make check-hooks` before committing
-3. **If checks fail** - fix immediately, don't accumulate errors
-4. **Commit** - hooks run automatically
-5. **Continue loop** with confidence changes are valid
-
-**Key insight:** Agents should run `prek run` proactively, not just rely on git hooks. This catches errors before attempting to commit.
-
-### Bypassing Hooks
-
-For emergencies only:
+**`.githooks/pre-commit`:**
 
 ```bash
-# Skip pre-commit (use sparingly)
-git commit --no-verify -m "WIP: emergency fix"
+#!/usr/bin/env bash
+set -e
 
-# Skip pre-push (use sparingly)
-git push --no-verify
+# Block secrets
+if git diff --cached --name-only | grep -qE '\.(pem|key)$|\.env'; then
+    echo "ERROR: Sensitive files detected"
+    exit 1
+fi
+
+# Rust checks (if Rust files changed)
+if git diff --cached --name-only | grep -qE '\.(rs)$|Cargo\.'; then
+    cargo fmt --all --check
+fi
+
+# Nix checks (if Nix files changed)
+if git diff --cached --name-only | grep -qE '\.nix$' && command -v nix &>/dev/null; then
+    nix flake check --no-build 2>/dev/null || {
+        echo "Nix syntax error"
+        exit 1
+    }
+fi
 ```
 
-**Agents should NEVER use `--no-verify`** unless explicitly instructed.
+### What the Hook Checks
 
-### CI Integration
+| Check | When | Purpose |
+|-------|------|---------|
+| Secret detection | Always | Block `.pem`, `.key`, `.env` files |
+| `cargo fmt --check` | Rust files changed | Formatting |
+| `nix flake check --no-build` | Nix files changed | Syntax validation |
 
-Hooks are a first line of defense. CI runs the full suite:
+### What's NOT in the Hook
 
-| CI Check | Equivalent Hook | Additional |
-|----------|-----------------|------------|
-| `cargo fmt --check` | `cargo-fmt` | - |
-| `cargo clippy` | `cargo-clippy` | - |
-| `cargo test` | `cargo-test` | Coverage |
-| `nix flake check` | `nix-check` | Full check |
-| `nix build .#moto-garage` | - | Full build |
-| Container smoke tests | - | `make docker-test-moto-garage` |
+- `cargo clippy` - Too slow, run in CI
+- `cargo test` - Too slow, run in CI
+- `nix build` - Too slow, run in CI
 
-### Dependencies
+The hook catches obvious mistakes fast. CI does thorough validation.
 
-- `prek` - Hook manager (Rust binary)
-- `cargo` - Rust toolchain
-- `nix` - Nix package manager (optional, hooks skip gracefully)
-- `nixfmt` - Nix formatter (optional)
+### Bypassing
 
----
+For emergencies:
+
+```bash
+git commit --no-verify -m "WIP: emergency"
+```
+
+Agents should NEVER use `--no-verify` unless explicitly instructed.
 
 ## References
 
-- [prek documentation](https://prek.j178.dev/) - Fast Rust-based pre-commit hook manager
-- [prek GitHub](https://github.com/j178/prek) - Source and issues
 - [git hooks documentation](https://git-scm.com/docs/githooks)
+- [core.hooksPath](https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath)
