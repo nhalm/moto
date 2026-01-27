@@ -31,7 +31,7 @@
 //! # Example
 //!
 //! ```
-//! use moto_keybox::{SpiffeId, Scope, SecretMetadata};
+//! use moto_keybox::{SpiffeId, Scope, SecretMetadata, PolicyEngine, Action};
 //!
 //! // Create a SPIFFE ID for a garage
 //! let id = SpiffeId::garage("my-garage-id");
@@ -42,11 +42,13 @@
 //! assert_eq!(meta.scope, Scope::Global);
 //! ```
 
+pub mod abac;
 pub mod envelope;
 mod error;
 pub mod svid;
 pub mod types;
 
+pub use abac::{AccessRequest, Action, PolicyEngine};
 pub use envelope::{DataEncryptionKey, EncryptedDek, EncryptedSecret, MasterKey};
 pub use error::{Error, Result};
 pub use svid::{DEFAULT_SVID_TTL_SECS, SvidClaims, SvidIssuer, SvidValidator};
