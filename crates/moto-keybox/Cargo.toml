@@ -1,0 +1,62 @@
+[package]
+name = "moto-keybox"
+description = "Secrets manager for moto: SVID issuance, secret storage, ABAC"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "moto-keybox"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true }
+
+# Web framework
+axum = { workspace = true }
+
+# Database
+sqlx = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Errors
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["json"] }
+
+# Time
+chrono = { workspace = true }
+
+# IDs
+uuid = { workspace = true }
+
+# Random
+rand = { workspace = true }
+
+# Crypto - for SVID signing and envelope encryption
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+aes-gcm = "0.10"
+base64 = "0.22"
+zeroize = { version = "1", features = ["derive"] }
+
+# JWT for SVIDs
+jsonwebtoken = "9"
+
+# Internal crates
+moto-common = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+tokio-test = { workspace = true }
+
+[lints]
+workspace = true

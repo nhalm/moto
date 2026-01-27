@@ -9,7 +9,6 @@
 | moto-wgtunnel.md | v0.4 | enter.rs: Get garage peer info via moto-club API | blocked: moto-club.md |
 | makefile.md | v0.5 | k3s-install, k3s-start, k3s-stop, k3s-status targets | future |
 | container-system.md | v0.8 | infra/pkgs/moto-engine.nix (bike container) | blocked: bike.md is Wrenching |
-| keybox.md | v0.2 | moto-keybox crate: server with auth, SVID issuance, secret storage, ABAC | |
 | keybox.md | v0.2 | moto-keybox-client crate: SVID cache, auto-refresh, secret fetching | |
 | keybox.md | v0.2 | moto-keybox-cli crate: CLI for secret management, dev SVID issuance | |
 | keybox.md | v0.2 | Database schema: PostgreSQL tables for secrets, DEKs, audit log | |
@@ -26,6 +25,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| keybox.md | v0.2 | moto-keybox crate: server with auth, SVID issuance, secret storage, ABAC |
 
 ---
 
