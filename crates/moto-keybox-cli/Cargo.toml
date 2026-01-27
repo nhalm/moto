@@ -1,0 +1,25 @@
+[package]
+name = "moto-keybox-cli"
+description = "CLI for keybox secrets management"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "moto-keybox"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+moto-keybox.workspace = true
+clap.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
