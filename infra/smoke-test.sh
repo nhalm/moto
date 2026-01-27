@@ -43,7 +43,7 @@ echo ""
 # Check if image exists
 if ! docker image inspect "$IMAGE_NAME" &>/dev/null; then
     echo "ERROR: Image $IMAGE_NAME not found."
-    echo "Build it first with: make docker-build-moto-garage"
+    echo "Build it first with: make build-garage"
     exit 1
 fi
 

@@ -9,7 +9,6 @@
 | moto-wgtunnel.md | v0.4 | enter.rs: Get garage peer info via moto-club API | blocked: moto-club.md |
 | makefile.md | v0.5 | k3s-install, k3s-start, k3s-stop, k3s-status targets | future |
 | container-system.md | v0.8 | infra/pkgs/moto-engine.nix (bike container) | blocked: bike.md is Wrenching |
-| dev-container.md | v0.12 | infra/smoke-test.sh: container smoke tests | |
 
 ## Implemented
 
@@ -17,6 +16,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| dev-container.md | v0.12 | infra/smoke-test.sh: container smoke tests |
 | dev-container.md | v0.12 | infra/modules/wireguard.nix: WireGuard tools module |
 | dev-container.md | v0.12 | infra/modules/ssh.nix: SSH server module |
 | dev-container.md | v0.12 | infra/modules/dev-tools.nix: Rust toolchain and cargo tools module |
