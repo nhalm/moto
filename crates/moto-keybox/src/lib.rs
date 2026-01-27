@@ -42,10 +42,12 @@
 //! assert_eq!(meta.scope, Scope::Global);
 //! ```
 
+pub mod envelope;
 mod error;
 pub mod svid;
 pub mod types;
 
+pub use envelope::{DataEncryptionKey, EncryptedDek, EncryptedSecret, MasterKey};
 pub use error::{Error, Result};
 pub use svid::{DEFAULT_SVID_TTL_SECS, SvidClaims, SvidIssuer, SvidValidator};
 pub use types::{AuditEntry, AuditEventType, PrincipalType, Scope, SecretMetadata, SpiffeId};
