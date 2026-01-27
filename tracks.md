@@ -25,7 +25,6 @@
 
 | Spec | Version | Item |
 |------|---------|------|
-| keybox.md | v0.2 | moto-keybox crate: server with auth, SVID issuance, secret storage, ABAC |
 
 ---
 

@@ -2,6 +2,9 @@
 
 <!-- NEW ITEMS GO HERE -->
 
+### 2026-01-27: keybox.md
+- moto-keybox crate: server with auth, SVID issuance, secret storage, ABAC
+
 ---
 
 ## 2024 Archive
