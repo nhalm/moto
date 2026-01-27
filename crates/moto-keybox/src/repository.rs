@@ -568,6 +568,11 @@ impl SecretRepository {
         &self.audit_log
     }
 
+    /// Adds an audit entry directly (for events outside CRUD operations).
+    pub fn add_audit_entry(&mut self, entry: AuditEntry) {
+        self.audit_log.push(entry);
+    }
+
     /// Clears the audit log.
     pub fn clear_audit_log(&mut self) {
         self.audit_log.clear();
@@ -948,6 +953,20 @@ mod tests {
         assert!(entry.spiffe_id.as_ref().unwrap().contains("moto-club"));
         assert_eq!(entry.secret_scope, Some(Scope::Global));
         assert_eq!(entry.secret_name, Some("test".to_string()));
+    }
+
+    #[test]
+    fn add_audit_entry_directly() {
+        let mut repo = test_repo();
+        let spiffe = SpiffeId::bike("test-bike");
+        let entry = AuditEntry::svid_issued(&spiffe);
+
+        repo.add_audit_entry(entry);
+
+        let log = repo.audit_log();
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0].event_type, AuditEventType::SvidIssued);
+        assert_eq!(log[0].principal_id, Some("test-bike".to_string()));
     }
 
     #[test]

@@ -6,6 +6,7 @@
 //! - `POST /secrets/{scope}/{name}` - Create/update a secret
 //! - `DELETE /secrets/{scope}/{name}` - Delete a secret
 //! - `GET /secrets/{scope}` - List secrets in a scope
+//! - `GET /audit/logs` - Query audit logs (admin only)
 //!
 //! # Authentication
 //!
@@ -29,7 +30,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -42,7 +43,7 @@ use crate::abac::PolicyEngine;
 use crate::envelope::MasterKey;
 use crate::repository::SecretRepository;
 use crate::svid::{SvidClaims, SvidIssuer, SvidValidator};
-use crate::types::{PrincipalType, Scope, SecretMetadata, SpiffeId};
+use crate::types::{AuditEntry, AuditEventType, PrincipalType, Scope, SecretMetadata, SpiffeId};
 
 /// Shared application state for the keybox API.
 #[derive(Clone)]
@@ -233,6 +234,71 @@ pub struct ListSecretsResponse {
     pub secrets: Vec<SecretMetadataResponse>,
 }
 
+/// Response containing audit log entries.
+#[derive(Debug, Clone, Serialize)]
+pub struct AuditLogsResponse {
+    /// List of audit log entries.
+    pub entries: Vec<AuditEntryResponse>,
+    /// Total number of entries (before pagination).
+    pub total: usize,
+}
+
+/// An audit log entry in API responses.
+#[derive(Debug, Clone, Serialize)]
+pub struct AuditEntryResponse {
+    /// Unique identifier.
+    pub id: String,
+    /// The type of event.
+    pub event_type: AuditEventType,
+    /// The principal type (if applicable).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub principal_type: Option<PrincipalType>,
+    /// The principal ID (if applicable).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub principal_id: Option<String>,
+    /// The SPIFFE ID (if applicable).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spiffe_id: Option<String>,
+    /// The secret scope (if applicable).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_scope: Option<Scope>,
+    /// The secret name (if applicable).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_name: Option<String>,
+    /// When the event occurred (RFC 3339).
+    pub timestamp: String,
+}
+
+impl From<&AuditEntry> for AuditEntryResponse {
+    fn from(entry: &AuditEntry) -> Self {
+        Self {
+            id: entry.id.to_string(),
+            event_type: entry.event_type,
+            principal_type: entry.principal_type,
+            principal_id: entry.principal_id.clone(),
+            spiffe_id: entry.spiffe_id.clone(),
+            secret_scope: entry.secret_scope,
+            secret_name: entry.secret_name.clone(),
+            timestamp: entry.timestamp.to_rfc3339(),
+        }
+    }
+}
+
+/// Query parameters for audit log endpoint.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AuditLogsQuery {
+    /// Filter by event type.
+    pub event_type: Option<String>,
+    /// Filter by principal ID.
+    pub principal_id: Option<String>,
+    /// Filter by secret name.
+    pub secret_name: Option<String>,
+    /// Maximum number of entries to return (default 100).
+    pub limit: Option<usize>,
+    /// Number of entries to skip (for pagination).
+    pub offset: Option<usize>,
+}
+
 /// Extract SVID from Authorization header.
 fn extract_svid(
     headers: &HeaderMap,
@@ -365,6 +431,10 @@ async fn issue_token(
 
     match state.svid_issuer.issue_with_claims(&claims) {
         Ok(token) => {
+            // Audit SVID issuance (no secret values logged)
+            let audit_entry = AuditEntry::svid_issued(&spiffe_id);
+            state.repository.write().await.add_audit_entry(audit_entry);
+
             let response = TokenResponse {
                 token,
                 expires_at: claims.exp,
@@ -678,6 +748,89 @@ async fn list_instance_secrets(
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
+/// Query audit logs.
+///
+/// GET /audit/logs
+///
+/// Only admin services can access audit logs.
+async fn get_audit_logs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<AuditLogsQuery>,
+) -> impl IntoResponse {
+    let claims = extract_svid(&headers, &state.svid_validator)?;
+
+    // Only admin services can view audit logs
+    if claims.principal_type != PrincipalType::Service {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::ACCESS_DENIED,
+                "Only admin services can access audit logs",
+            )),
+        ));
+    }
+
+    // Clone audit entries to release the lock quickly
+    let all_entries: Vec<AuditEntry> = state.repository.read().await.audit_log().to_vec();
+
+    // Apply filters
+    let filtered: Vec<&AuditEntry> = all_entries
+        .iter()
+        .filter(|e| {
+            // Filter by event type
+            if let Some(ref event_type_str) = query.event_type {
+                let matches = match event_type_str.as_str() {
+                    "accessed" => e.event_type == AuditEventType::Accessed,
+                    "created" => e.event_type == AuditEventType::Created,
+                    "updated" => e.event_type == AuditEventType::Updated,
+                    "deleted" => e.event_type == AuditEventType::Deleted,
+                    "svid_issued" => e.event_type == AuditEventType::SvidIssued,
+                    "auth_failed" => e.event_type == AuditEventType::AuthFailed,
+                    "access_denied" => e.event_type == AuditEventType::AccessDenied,
+                    _ => true,
+                };
+                if !matches {
+                    return false;
+                }
+            }
+
+            // Filter by principal ID
+            if let Some(ref pid) = query.principal_id {
+                if e.principal_id.as_ref() != Some(pid) {
+                    return false;
+                }
+            }
+
+            // Filter by secret name
+            if let Some(ref name) = query.secret_name {
+                if e.secret_name.as_ref() != Some(name) {
+                    return false;
+                }
+            }
+
+            true
+        })
+        .collect();
+
+    let total = filtered.len();
+
+    // Apply pagination
+    let limit = query.limit.unwrap_or(100).min(1000);
+    let offset = query.offset.unwrap_or(0);
+
+    let entries: Vec<AuditEntryResponse> = filtered
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .map(AuditEntryResponse::from)
+        .collect();
+
+    let response = AuditLogsResponse { entries, total };
+
+    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
+}
+
 // =============================================================================
 // Router
 // =============================================================================
@@ -692,6 +845,7 @@ async fn list_instance_secrets(
 /// - `GET /secrets/{scope}` - List secrets (global scope only)
 /// - `GET /secrets/service/{service}` - List service secrets
 /// - `GET /secrets/instance/{instance_id}` - List instance secrets
+/// - `GET /audit/logs` - Query audit logs (admin services only)
 pub fn router(state: AppState) -> Router {
     Router::new()
         // Auth endpoint
@@ -708,6 +862,8 @@ pub fn router(state: AppState) -> Router {
             "/secrets/instance/{instance_id}",
             get(list_instance_secrets),
         )
+        // Audit endpoint
+        .route("/audit/logs", get(get_audit_logs))
         .with_state(state)
 }
 
@@ -830,5 +986,63 @@ mod tests {
         assert!(result.is_err());
         let (status, _) = result.unwrap_err();
         assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn audit_entry_response_from_entry() {
+        let spiffe = SpiffeId::garage("test-garage");
+        let entry = AuditEntry::svid_issued(&spiffe);
+        let resp = AuditEntryResponse::from(&entry);
+
+        assert_eq!(resp.event_type, AuditEventType::SvidIssued);
+        assert_eq!(resp.principal_type, Some(PrincipalType::Garage));
+        assert_eq!(resp.principal_id, Some("test-garage".to_string()));
+        assert!(resp.spiffe_id.is_some());
+        assert!(resp.secret_scope.is_none());
+        assert!(resp.secret_name.is_none());
+    }
+
+    #[test]
+    fn audit_logs_response_serialize() {
+        let spiffe = SpiffeId::service("moto-club");
+        let entry = AuditEntry::svid_issued(&spiffe);
+        let resp = AuditLogsResponse {
+            entries: vec![AuditEntryResponse::from(&entry)],
+            total: 1,
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+
+        assert!(json.contains(r#""event_type":"svid_issued""#));
+        assert!(json.contains(r#""total":1"#));
+        assert!(json.contains(r#""principal_id":"moto-club""#));
+    }
+
+    #[test]
+    fn audit_entry_response_access_denied() {
+        let spiffe = SpiffeId::bike("untrusted-bike");
+        let entry = AuditEntry::access_denied(&spiffe, Scope::Global, "crypto/master-key");
+        let resp = AuditEntryResponse::from(&entry);
+
+        assert_eq!(resp.event_type, AuditEventType::AccessDenied);
+        assert_eq!(resp.secret_scope, Some(Scope::Global));
+        assert_eq!(resp.secret_name, Some("crypto/master-key".to_string()));
+    }
+
+    #[test]
+    fn audit_logs_query_deserialize() {
+        let query: AuditLogsQuery = serde_json::from_str(
+            r#"{
+            "event_type": "accessed",
+            "principal_id": "my-garage",
+            "limit": 50,
+            "offset": 10
+        }"#,
+        )
+        .unwrap();
+
+        assert_eq!(query.event_type, Some("accessed".to_string()));
+        assert_eq!(query.principal_id, Some("my-garage".to_string()));
+        assert_eq!(query.limit, Some(50));
+        assert_eq!(query.offset, Some(10));
     }
 }

@@ -331,6 +331,51 @@ impl AuditEntry {
             timestamp: Utc::now(),
         }
     }
+
+    /// Creates a new audit entry for an SVID issuance event.
+    #[must_use]
+    pub fn svid_issued(spiffe_id: &SpiffeId) -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            event_type: AuditEventType::SvidIssued,
+            principal_type: Some(spiffe_id.principal_type),
+            principal_id: Some(spiffe_id.id.clone()),
+            spiffe_id: Some(spiffe_id.to_uri()),
+            secret_scope: None,
+            secret_name: None,
+            timestamp: Utc::now(),
+        }
+    }
+
+    /// Creates a new audit entry for an authentication failure.
+    #[must_use]
+    pub fn auth_failed(reason: impl Into<String>) -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            event_type: AuditEventType::AuthFailed,
+            principal_type: None,
+            principal_id: None,
+            spiffe_id: None,
+            secret_scope: None,
+            secret_name: Some(reason.into()), // Store reason in secret_name field
+            timestamp: Utc::now(),
+        }
+    }
+
+    /// Creates a new audit entry for an access denied event.
+    #[must_use]
+    pub fn access_denied(spiffe_id: &SpiffeId, scope: Scope, name: impl Into<String>) -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            event_type: AuditEventType::AccessDenied,
+            principal_type: Some(spiffe_id.principal_type),
+            principal_id: Some(spiffe_id.id.clone()),
+            spiffe_id: Some(spiffe_id.to_uri()),
+            secret_scope: Some(scope),
+            secret_name: Some(name.into()),
+            timestamp: Utc::now(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -472,5 +517,39 @@ mod tests {
         assert_eq!(entry.principal_id, Some("test123".to_string()));
         assert_eq!(entry.secret_scope, Some(Scope::Global));
         assert_eq!(entry.secret_name, Some("ai/anthropic".to_string()));
+    }
+
+    #[test]
+    fn audit_entry_svid_issued() {
+        let spiffe = SpiffeId::bike("bike-456");
+        let entry = AuditEntry::svid_issued(&spiffe);
+        assert_eq!(entry.event_type, AuditEventType::SvidIssued);
+        assert_eq!(entry.principal_type, Some(PrincipalType::Bike));
+        assert_eq!(entry.principal_id, Some("bike-456".to_string()));
+        assert!(entry.secret_scope.is_none());
+        assert!(entry.secret_name.is_none());
+    }
+
+    #[test]
+    fn audit_entry_auth_failed() {
+        let entry = AuditEntry::auth_failed("Invalid token signature");
+        assert_eq!(entry.event_type, AuditEventType::AuthFailed);
+        assert!(entry.principal_type.is_none());
+        assert!(entry.spiffe_id.is_none());
+        assert_eq!(
+            entry.secret_name,
+            Some("Invalid token signature".to_string())
+        );
+    }
+
+    #[test]
+    fn audit_entry_access_denied() {
+        let spiffe = SpiffeId::service("untrusted-service");
+        let entry = AuditEntry::access_denied(&spiffe, Scope::Global, "crypto/master-key");
+        assert_eq!(entry.event_type, AuditEventType::AccessDenied);
+        assert_eq!(entry.principal_type, Some(PrincipalType::Service));
+        assert_eq!(entry.principal_id, Some("untrusted-service".to_string()));
+        assert_eq!(entry.secret_scope, Some(Scope::Global));
+        assert_eq!(entry.secret_name, Some("crypto/master-key".to_string()));
     }
 }
