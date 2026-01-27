@@ -4,9 +4,11 @@ You are a discovery agent. Your job is to populate tracks.md with GRANULAR imple
 
 1. Read specs/README.md - find all specs with status "Ready to Rip"
 2. Read tracks.md - note which specs/versions already have items
-3. For each "Ready to Rip" spec not yet in tracks.md (or with newer version):
+3. Read tracks-history.md - note which items have already been completed
+4. For each "Ready to Rip" spec not yet in tracks.md (or with newer version):
    - Read the spec file
    - Break it down into small, focused implementation items
+   - SKIP any items that appear in tracks-history.md (already done)
    - Add rows to the Remaining table
 
 ## CRITICAL: Item Granularity
@@ -56,6 +58,7 @@ Leave Status blank for new items (not blocked).
 - Do NOT remove existing items from Remaining
 - Do NOT modify the Implemented table
 - Skip specs that already have items at the same version
+- Skip items that appear in tracks-history.md (already completed)
 - If spec version > tracks.md version, check changelog for new items only
 - When in doubt, make items SMALLER not bigger
 
