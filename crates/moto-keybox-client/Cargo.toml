@@ -1,0 +1,23 @@
+[package]
+name = "moto-keybox-client"
+description = "Client library for accessing secrets via moto-keybox"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+moto-keybox.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+base64.workspace = true
+tokio = { workspace = true, features = ["sync", "fs"] }
+
+[dev-dependencies]
+
+[lints]
+workspace = true
