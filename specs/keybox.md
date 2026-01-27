@@ -2,12 +2,26 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.1 |
-| Last Updated | 2026-01-19 |
+| Version | 0.2 |
+| Last Updated | 2026-01-26 |
+
+## Changelog
+
+### v0.2 (2026-01-26)
+- Clarified keybox is internal service (users go through moto-club)
+- Added service-to-service auth section (moto-club → keybox)
+- Added policy storage note (hardcoded for MVP)
+- Added local development section (dev SVID workflow)
+- Added CLI commands section
+
+### v0.1 (2026-01-19)
+- Initial spec
 
 ## Overview
 
 Secrets manager for moto. Provides credentials to garages (wrenching) and bikes (ripping) without baking secrets into containers or code. Uses SPIFFE-inspired identity for authentication and ABAC for authorization.
+
+**Keybox is an internal service.** It is not publicly exposed. All user-facing secret management goes through **moto-club**, which handles user authentication and proxies requests to keybox. Garages and bikes authenticate directly to keybox via SVID (they're inside the cluster).
 
 ## Specification
 
@@ -84,6 +98,19 @@ Resolution priority: Instance → Service → Global
 
 3. Pod caches SVID, refreshes at 14 min (before expiry)
 ```
+
+### Service-to-Service Auth (moto-club)
+
+moto-club is the public API gateway. It handles user authentication (Authentik/OIDC in the future) and proxies secret management requests to keybox.
+
+**Auth mechanism:** Static shared token for MVP. moto-club includes this token in requests to keybox.
+
+```
+moto-club → POST /secrets/global/ai/anthropic
+  Headers: Authorization: Bearer <service-token>
+```
+
+Future: mTLS or SPIFFE-based service identity.
 
 ### Secret Retrieval Flow
 
@@ -170,6 +197,8 @@ resource.scope == "global" AND
 resource.name STARTS_WITH "ai/"
 ```
 
+**Policy storage:** Policies are hardcoded in Rust for MVP (garage accesses garage secrets, bike accesses bike secrets, etc.). Future: load from config file for flexibility.
+
 ### Secret Types
 
 | Type | Scope | Examples |
@@ -204,6 +233,31 @@ let value = api_key.expose();
 // Automatic zeroization when api_key drops
 ```
 
+### Local Development
+
+In K8s, pods authenticate via ServiceAccount JWT. For local development without K8s, use CLI-issued dev SVIDs.
+
+**Setup:**
+```bash
+# Issue a dev SVID for local garage testing
+moto keybox issue-dev-svid --garage-id=test-garage --output=./dev-svid.jwt
+
+# SVID is long-lived (24h) for dev convenience
+```
+
+**Client usage:**
+```rust
+// Client detects local mode via env var
+// MOTO_KEYBOX_SVID_FILE=./dev-svid.jwt
+
+let client = KeyboxClient::new()?;  // Reads SVID from file instead of K8s
+let secret = client.get_secret(Scope::Global, "ai/anthropic").await?;
+```
+
+The client library supports both paths:
+- **K8s mode:** Fetches SVID via ServiceAccount JWT (default)
+- **Local mode:** Reads SVID from `MOTO_KEYBOX_SVID_FILE`
+
 ### API Endpoints
 
 **Authentication:**
@@ -225,6 +279,41 @@ GET  /secrets/{scope}            - List secrets in scope (names only, no values)
 ```
 GET  /audit/logs                 - Query audit logs
 POST /admin/rotate-dek/{name}    - Rotate a secret's DEK
+```
+
+### CLI Commands
+
+The CLI (`moto-keybox-cli`) is for **local development and admin tasks only**. In production, users manage secrets via moto-club UI.
+
+**Initialization:**
+```bash
+# Generate KEK and SVID signing key (run once)
+moto keybox init --output-dir=./keybox-keys
+
+# Creates:
+#   ./keybox-keys/master.key      (KEK, AES-256, base64-encoded)
+#   ./keybox-keys/signing.key     (Ed25519 private key)
+```
+
+**Secret management (local dev):**
+```bash
+# Set a secret (requires keybox server running)
+moto keybox set global ai/anthropic "sk-ant-..." --url http://localhost:8080
+
+# Read from stdin to avoid shell history
+echo "sk-ant-..." | moto keybox set global ai/anthropic --stdin
+
+# List secrets
+moto keybox list global
+
+# Get a secret
+moto keybox get global ai/anthropic
+```
+
+**Dev SVID issuance:**
+```bash
+# Issue dev SVID for local garage testing
+moto keybox issue-dev-svid --garage-id=test-garage --output=./dev-svid.jwt
 ```
 
 ### Configuration
