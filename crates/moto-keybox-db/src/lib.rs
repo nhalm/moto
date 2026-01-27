@@ -49,6 +49,10 @@ pub enum DbError {
     #[error("database error: {0}")]
     Sqlx(#[from] sqlx::Error),
 
+    /// Migration error.
+    #[error("migration error: {0}")]
+    Migration(#[from] sqlx::migrate::MigrateError),
+
     /// Record not found.
     #[error("{entity} not found: {id}")]
     NotFound {
@@ -70,6 +74,12 @@ pub enum DbError {
 
 /// Result type for database operations.
 pub type DbResult<T> = Result<T, DbError>;
+
+/// Embedded database migrations.
+///
+/// This uses sqlx's compile-time migration embedding to include all
+/// SQL migration files from the `migrations/` directory.
+pub static MIGRATIONS: sqlx::migrate::Migrator = sqlx::migrate!();
 
 /// Create a database connection pool.
 ///
@@ -94,6 +104,19 @@ pub async fn connect_with_options(database_url: &str, max_connections: u32) -> D
         .connect(database_url)
         .await?;
     Ok(pool)
+}
+
+/// Run database migrations.
+///
+/// This applies all pending migrations from the embedded `MIGRATIONS`.
+/// Safe to call multiple times - already applied migrations are skipped.
+///
+/// # Errors
+///
+/// Returns an error if migration fails.
+pub async fn run_migrations(pool: &DbPool) -> DbResult<()> {
+    MIGRATIONS.run(pool).await?;
+    Ok(())
 }
 
 /// SQL schema for the keybox database.
@@ -182,5 +205,23 @@ mod tests {
         assert!(SCHEMA_SQL.contains("secret_versions"));
         assert!(SCHEMA_SQL.contains("encrypted_deks"));
         assert!(SCHEMA_SQL.contains("audit_log"));
+    }
+
+    #[test]
+    fn migrations_are_embedded() {
+        // Verify migrations are properly embedded at compile time
+        assert!(
+            !MIGRATIONS.iter().collect::<Vec<_>>().is_empty(),
+            "migrations should be embedded"
+        );
+
+        // Check the initial migration exists
+        let migrations: Vec<_> = MIGRATIONS.iter().collect();
+        assert_eq!(migrations.len(), 1, "should have exactly one migration");
+        // sqlx converts underscores to spaces in descriptions
+        assert!(
+            migrations[0].description.contains("initial"),
+            "first migration should be initial schema"
+        );
     }
 }
