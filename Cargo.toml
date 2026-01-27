@@ -56,6 +56,10 @@ uuid = { version = "1", features = ["v7", "serde"] }
 # Random
 rand = "0.9"
 
+# Crypto
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+base64 = "0.22"
+
 # Testing
 proptest = "1"
 tokio-test = "0.4"

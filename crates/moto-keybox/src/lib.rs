@@ -43,7 +43,9 @@
 //! ```
 
 mod error;
+pub mod svid;
 pub mod types;
 
 pub use error::{Error, Result};
+pub use svid::{DEFAULT_SVID_TTL_SECS, SvidClaims, SvidIssuer, SvidValidator};
 pub use types::{AuditEntry, AuditEventType, PrincipalType, Scope, SecretMetadata, SpiffeId};
