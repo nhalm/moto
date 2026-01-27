@@ -45,6 +45,7 @@
 pub mod abac;
 pub mod envelope;
 mod error;
+pub mod repository;
 pub mod svid;
 pub mod types;
 

@@ -32,6 +32,10 @@
 //! resource.name STARTS_WITH "ai/"
 //! ```
 
+// MVP: Policy rules are hardcoded. Methods take &self to allow future
+// per-instance policy configuration without API changes.
+#![allow(clippy::unused_self)]
+
 use crate::svid::SvidClaims;
 use crate::types::{PrincipalType, Scope, SecretMetadata};
 use crate::{Error, Result};
@@ -295,7 +299,7 @@ pub struct AccessRequest<'a> {
 impl<'a> AccessRequest<'a> {
     /// Creates a new access request for a principal.
     #[must_use]
-    pub fn new(claims: &'a SvidClaims) -> Self {
+    pub const fn new(claims: &'a SvidClaims) -> Self {
         Self {
             claims,
             secret: None,
