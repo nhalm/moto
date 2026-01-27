@@ -43,6 +43,7 @@
 //! ```
 
 pub mod abac;
+pub mod api;
 pub mod envelope;
 mod error;
 pub mod repository;
@@ -50,6 +51,7 @@ pub mod svid;
 pub mod types;
 
 pub use abac::{AccessRequest, Action, PolicyEngine};
+pub use api::{AppState, router};
 pub use envelope::{DataEncryptionKey, EncryptedDek, EncryptedSecret, MasterKey};
 pub use error::{Error, Result};
 pub use svid::{DEFAULT_SVID_TTL_SECS, SvidClaims, SvidIssuer, SvidValidator};
