@@ -16,26 +16,6 @@
 
 | Spec | Version | Item |
 |------|---------|------|
-| dev-container.md | v0.12 | infra/smoke-test.sh: container smoke tests |
-| dev-container.md | v0.12 | infra/modules/wireguard.nix: WireGuard tools module |
-| dev-container.md | v0.12 | infra/modules/ssh.nix: SSH server module |
-| dev-container.md | v0.12 | infra/modules/dev-tools.nix: Rust toolchain and cargo tools module |
-| dev-container.md | v0.12 | infra/modules/base.nix: core system tools module |
-| dev-container.md | v0.12 | infra/pkgs/moto-garage.nix: garage container definition |
-| keybox.md | v0.2 | Database migrations: sqlx migration setup and initial schema |
-| keybox.md | v0.2 | Database schema: PostgreSQL tables (secrets, secret_versions, encrypted_deks, audit_log) |
-| keybox.md | v0.2 | moto-keybox-cli: dev SVID issuance command |
-| keybox.md | v0.2 | moto-keybox: REST API endpoints (/auth/token, /secrets) |
-| keybox.md | v0.2 | moto-keybox: crate scaffolding (lib.rs, types, error handling) |
-| keybox.md | v0.2 | moto-keybox: SVID issuance (Ed25519 JWT signing, K8s token validation) |
-| keybox.md | v0.2 | moto-keybox: envelope encryption (KEK wraps DEK wraps secret) |
-| keybox.md | v0.2 | moto-keybox: ABAC policy engine (hardcoded rules for MVP) |
-| keybox.md | v0.2 | moto-keybox: secret storage repository (CRUD operations) |
-| keybox.md | v0.2 | moto-keybox: audit logging (event capture, no secret values) |
-| keybox.md | v0.2 | moto-keybox-client: crate scaffolding and SVID cache |
-| keybox.md | v0.2 | moto-keybox-client: secret fetching and auto-refresh |
-| keybox.md | v0.2 | moto-keybox-cli: init command (generate KEK and signing key) |
-| keybox.md | v0.2 | moto-keybox-cli: secret management commands (set, get, list) |
 
 ---
 

@@ -2,12 +2,35 @@
 
 <!-- NEW ITEMS GO HERE -->
 
+### 2026-01-27: dev-container.md
+- infra/smoke-test.sh: container smoke tests
+- infra/modules/wireguard.nix: WireGuard tools module
+- infra/modules/ssh.nix: SSH server module
+- infra/modules/dev-tools.nix: Rust toolchain and cargo tools module
+- infra/modules/base.nix: core system tools module
+- infra/pkgs/moto-garage.nix: garage container definition
+
 ### 2026-01-27: keybox.md
+- Database migrations: sqlx migration setup and initial schema
+- Database schema: PostgreSQL tables (secrets, secret_versions, encrypted_deks, audit_log)
+- moto-keybox-cli: dev SVID issuance command
+- moto-keybox: REST API endpoints (/auth/token, /secrets)
+- moto-keybox: crate scaffolding (lib.rs, types, error handling)
+- moto-keybox: SVID issuance (Ed25519 JWT signing, K8s token validation)
+- moto-keybox: envelope encryption (KEK wraps DEK wraps secret)
+- moto-keybox: ABAC policy engine (hardcoded rules for MVP)
+- moto-keybox: secret storage repository (CRUD operations)
+- moto-keybox: audit logging (event capture, no secret values)
+- moto-keybox-client: crate scaffolding and SVID cache
+- moto-keybox-client: secret fetching and auto-refresh
+- moto-keybox-cli: init command (generate KEK and signing key)
+- moto-keybox-cli: secret management commands (set, get, list)
+
+### 2026-01-27: keybox.md
+
 - moto-keybox crate: server with auth, SVID issuance, secret storage, ABAC
 
 ---
-
-## 2024 Archive
 
 ### project-structure.md v1.1 - Complete
 
