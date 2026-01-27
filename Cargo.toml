@@ -85,6 +85,7 @@ moto-garage-wgtunnel = { path = "crates/moto-garage-wgtunnel" }
 moto-club-garage = { path = "crates/moto-club-garage" }
 moto-club-reconcile = { path = "crates/moto-club-reconcile" }
 moto-keybox = { path = "crates/moto-keybox" }
+moto-keybox-db = { path = "crates/moto-keybox-db" }
 moto-keybox-client = { path = "crates/moto-keybox-client" }
 moto-keybox-cli = { path = "crates/moto-keybox-cli" }
 
