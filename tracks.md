@@ -9,7 +9,6 @@
 | moto-wgtunnel.md | v0.4 | enter.rs: Get garage peer info via moto-club API | blocked: moto-club.md |
 | makefile.md | v0.5 | k3s-install, k3s-start, k3s-stop, k3s-status targets | future |
 | container-system.md | v0.8 | infra/pkgs/moto-engine.nix (bike container) | blocked: bike.md is Wrenching |
-| keybox.md | v0.2 | moto-keybox-client: secret fetching and auto-refresh | |
 | keybox.md | v0.2 | moto-keybox-cli: init command (generate KEK and signing key) | |
 | keybox.md | v0.2 | moto-keybox-cli: secret management commands (set, get, list) | |
 | keybox.md | v0.2 | moto-keybox-cli: dev SVID issuance command | |
@@ -36,6 +35,7 @@
 | keybox.md | v0.2 | moto-keybox: secret storage repository (CRUD operations) |
 | keybox.md | v0.2 | moto-keybox: audit logging (event capture, no secret values) |
 | keybox.md | v0.2 | moto-keybox-client: crate scaffolding and SVID cache |
+| keybox.md | v0.2 | moto-keybox-client: secret fetching and auto-refresh |
 
 ---
 

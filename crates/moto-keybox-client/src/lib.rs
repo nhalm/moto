@@ -14,37 +14,43 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use moto_keybox_client::{SvidCache, Scope};
+//! use moto_keybox_client::{KeyboxClient, Scope};
+//! use secrecy::ExposeSecret;
 //!
 //! # async fn example() -> moto_keybox_client::Result<()> {
-//! // Create cache from environment (auto-detects mode)
-//! let cache = SvidCache::from_env().await?;
+//! // Create client from environment (auto-detects mode)
+//! let client = KeyboxClient::from_env().await?;
 //!
-//! // Get the current SVID token
-//! let token = cache.get().await?;
+//! // Fetch a secret
+//! let secret = client.get_secret(Scope::Global, "ai/anthropic").await?;
 //!
-//! // Use token to authenticate to keybox server...
+//! // Use the secret (automatically zeroizes on drop)
+//! let api_key = secret.expose_secret();
 //! # Ok(())
 //! # }
 //! ```
 //!
 //! # Local Development
 //!
-//! For local development without K8s, set `MOTO_KEYBOX_SVID_FILE`:
+//! For local development without K8s, set environment variables:
 //!
 //! ```bash
 //! # Issue a dev SVID using the CLI
 //! moto keybox issue-dev-svid --garage-id=test-garage --output=./dev-svid.jwt
 //!
-//! # Set environment variable
+//! # Set environment variables
+//! export MOTO_KEYBOX_URL=http://localhost:8080
 //! export MOTO_KEYBOX_SVID_FILE=./dev-svid.jwt
 //! ```
 //!
-//! The client will automatically load the SVID from the file.
+//! The client will automatically load the SVID from the file and connect
+//! to the specified keybox server.
 
+mod client;
 mod error;
 mod svid_cache;
 
+pub use client::{DEFAULT_KEYBOX_URL, DEFAULT_TIMEOUT_SECS, KeyboxClient, KeyboxConfig};
 pub use error::{Error, Result};
 pub use svid_cache::SvidCache;
 

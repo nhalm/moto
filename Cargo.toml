@@ -60,6 +60,7 @@ rand = "0.9"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 aes-gcm = "0.10"
 base64 = "0.22"
+secrecy = "0.10"
 
 # Testing
 proptest = "1"

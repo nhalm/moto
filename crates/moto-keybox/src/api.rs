@@ -144,7 +144,7 @@ pub mod error_codes {
 ///
 /// In production, this would include the K8s `ServiceAccount` JWT.
 /// For MVP, we accept principal info directly.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenRequest {
     /// Principal type (garage, bike, service).
     pub principal_type: PrincipalType,
@@ -155,7 +155,7 @@ pub struct TokenRequest {
 }
 
 /// Response containing an issued SVID.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
     /// The signed SVID JWT.
     pub token: String,
@@ -175,7 +175,7 @@ pub struct SetSecretRequest {
 }
 
 /// Response after creating or updating a secret.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretResponse {
     /// Secret metadata.
     #[serde(flatten)]
@@ -183,17 +183,17 @@ pub struct SecretResponse {
 }
 
 /// Secret metadata in API responses.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretMetadataResponse {
     /// Secret name.
     pub name: String,
     /// Secret scope.
     pub scope: Scope,
     /// Service (for service-scoped).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub service: Option<String>,
     /// Instance ID (for instance-scoped).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub instance_id: Option<String>,
     /// Current version number.
     pub version: u32,
@@ -218,7 +218,7 @@ impl From<SecretMetadata> for SecretMetadataResponse {
 }
 
 /// Response containing a secret value.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetSecretResponse {
     /// Secret metadata.
     #[serde(flatten)]
@@ -228,7 +228,7 @@ pub struct GetSecretResponse {
 }
 
 /// Response listing secrets.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListSecretsResponse {
     /// List of secret metadata (no values).
     pub secrets: Vec<SecretMetadataResponse>,
