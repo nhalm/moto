@@ -13,7 +13,8 @@ cat discovery-prompt.md | claude -p \
     | tee "$DISCOVERY_OUTPUT" \
     | npx repomirror visualize
 
-if grep -q "DISCOVERY: no new items" "$DISCOVERY_OUTPUT"; then
+# Match agent text output, not tool results containing file content
+if grep -q '"text":"[^"]*DISCOVERY: no new items' "$DISCOVERY_OUTPUT"; then
     echo "=== No new items to implement ==="
 fi
 
@@ -33,12 +34,13 @@ while true; do
         | tee "$OUTPUT_FILE" \
         | npx repomirror visualize
 
-    if grep -q "LOOP_COMPLETE: true" "$OUTPUT_FILE"; then
+    # Match agent text output, not tool results containing file content
+    if grep -q '"text":"[^"]*LOOP_COMPLETE: true' "$OUTPUT_FILE"; then
         echo "=== All tasks complete ==="
         break
     fi
 
-    if grep -q "You've hit your limit" "$OUTPUT_FILE"; then
+    if grep -q '"text":"[^"]*You'"'"'ve hit your limit' "$OUTPUT_FILE"; then
         echo "=== API usage limit reached ==="
         break
     fi
