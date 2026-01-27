@@ -28,6 +28,7 @@ fn main() {
 
     let result = match &cli.command {
         Command::Init(cmd) => commands::init::run(cmd),
+        Command::IssueDevSvid(cmd) => commands::issue_dev_svid::run(cmd),
         Command::Set(cmd) => run_async(commands::secrets::run_set(cmd)),
         Command::Get(cmd) => run_async(commands::secrets::run_get(cmd)),
         Command::List(cmd) => run_async(commands::secrets::run_list(cmd)),

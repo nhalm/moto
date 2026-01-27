@@ -3,6 +3,7 @@
 use clap::{Parser, Subcommand};
 
 use crate::commands::init::InitCommand;
+use crate::commands::issue_dev_svid::IssueDevSvidCommand;
 
 /// Keybox CLI - secrets management and key generation.
 #[derive(Parser)]
@@ -23,6 +24,8 @@ pub struct Cli {
 pub enum Command {
     /// Generate KEK and SVID signing key for keybox server
     Init(InitCommand),
+    /// Issue a dev SVID for local development
+    IssueDevSvid(IssueDevSvidCommand),
     /// Set a secret value
     Set(SetArgs),
     /// Get a secret value

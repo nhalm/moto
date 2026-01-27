@@ -9,7 +9,6 @@
 | moto-wgtunnel.md | v0.4 | enter.rs: Get garage peer info via moto-club API | blocked: moto-club.md |
 | makefile.md | v0.5 | k3s-install, k3s-start, k3s-stop, k3s-status targets | future |
 | container-system.md | v0.8 | infra/pkgs/moto-engine.nix (bike container) | blocked: bike.md is Wrenching |
-| keybox.md | v0.2 | moto-keybox-cli: dev SVID issuance command | |
 | keybox.md | v0.2 | Database schema: PostgreSQL tables (secrets, secret_versions, encrypted_deks, audit_log) | |
 | keybox.md | v0.2 | Database migrations: sqlx migration setup and initial schema | |
 | dev-container.md | v0.12 | infra/pkgs/moto-garage.nix: garage container definition | |
@@ -25,6 +24,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| keybox.md | v0.2 | moto-keybox-cli: dev SVID issuance command |
 | keybox.md | v0.2 | moto-keybox: REST API endpoints (/auth/token, /secrets) |
 | keybox.md | v0.2 | moto-keybox: crate scaffolding (lib.rs, types, error handling) |
 | keybox.md | v0.2 | moto-keybox: SVID issuance (Ed25519 JWT signing, K8s token validation) |
