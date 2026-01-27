@@ -930,7 +930,7 @@ strip = true
 | `bike.md` | Defines bike container requirements |
 | `moto-club.md` | Club runs in bike container |
 | `garage-lifecycle.md` | Manages garage container instances |
-| `k3s-cluster.md` | Where containers run |
+| `local-cluster.md` | Where containers run |
 
 ### Troubleshooting
 
