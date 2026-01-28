@@ -40,6 +40,10 @@ pub enum BikeAction {
         #[arg(long)]
         replicas: Option<u32>,
 
+        /// Target namespace (default: current context namespace)
+        #[arg(long, short = 'n')]
+        namespace: Option<String>,
+
         /// Wait for deployment to complete
         #[arg(long)]
         wait: bool,
@@ -430,6 +434,7 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
         BikeAction::Deploy {
             image,
             replicas,
+            namespace,
             wait,
             wait_timeout,
         } => {
@@ -442,8 +447,11 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                 None => get_latest_local_image(&config.name)?,
             };
 
-            // Get the current namespace
-            let namespace = get_current_namespace()?;
+            // Get namespace: use --namespace if provided, otherwise current context namespace
+            let namespace = match namespace {
+                Some(ns) => ns,
+                None => get_current_namespace()?,
+            };
 
             // Parse wait timeout
             let timeout_seconds = parse_duration(&wait_timeout)?;
