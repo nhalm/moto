@@ -47,7 +47,7 @@ pub struct RegisterDeviceRequest {
 }
 
 /// Response for device registration.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceResponse {
     /// Unique device identifier.
     pub device_id: Uuid,
@@ -261,12 +261,6 @@ fn extract_owner(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiErr
     Ok(token.to_string())
 }
 
-/// Convert a UUID to a u64 host ID by taking the lower 64 bits.
-#[allow(clippy::cast_possible_truncation)]
-const fn uuid_to_host_id(id: Uuid) -> u64 {
-    id.as_u128() as u64
-}
-
 /// Compute a u64 host ID from a string by hashing.
 fn string_to_host_id(s: &str) -> u64 {
     let mut hasher = DefaultHasher::new();
@@ -282,7 +276,7 @@ fn string_to_host_id(s: &str) -> u64 {
 ///
 /// POST /api/v1/wg/devices
 async fn register_device(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<RegisterDeviceRequest>,
 ) -> impl IntoResponse {
@@ -291,21 +285,29 @@ async fn register_device(
     // Generate a device ID for new registrations
     let device_id = Uuid::now_v7();
 
-    let _registration = DeviceRegistration {
-        device_id,
-        public_key: req.public_key.clone(),
-        device_name: req.device_name.clone(),
-    };
-
-    // TODO: Use actual PeerRegistry from AppState when moto-club is wired up
-    // For now, return a mock response showing the API contract
-    let host_id = uuid_to_host_id(device_id);
-    let response = DeviceResponse {
+    let registration = DeviceRegistration {
         device_id,
         public_key: req.public_key,
-        overlay_ip: OverlayIp::client(host_id),
         device_name: req.device_name,
     };
+
+    // Register the device with the peer registry
+    let device = state
+        .peer_registry
+        .register_device(registration)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to register device");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    format!("Failed to register device: {e}"),
+                )),
+            )
+        })?;
+
+    let response = DeviceResponse::from(device);
 
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::CREATED, Json(response)))
 }
@@ -314,21 +316,39 @@ async fn register_device(
 ///
 /// GET /api/v1/wg/devices/{id}
 async fn get_device(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     headers: HeaderMap,
     Path(device_id): Path<Uuid>,
 ) -> impl IntoResponse {
     let _owner = extract_owner(&headers)?;
 
-    // TODO: Use actual PeerRegistry from AppState when moto-club is wired up
-    // For now, return not found to show the API contract
-    Err::<(StatusCode, Json<DeviceResponse>), _>((
-        StatusCode::NOT_FOUND,
-        Json(ApiError::new(
-            error_codes::DEVICE_NOT_FOUND,
-            format!("Device '{device_id}' not found"),
-        )),
-    ))
+    // Look up the device in the peer registry
+    let device = state.peer_registry.get_device(device_id).map_err(|e| {
+        tracing::error!(error = %e, device_id = %device_id, "Failed to get device");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError::new(
+                error_codes::INTERNAL_ERROR,
+                format!("Failed to get device: {e}"),
+            )),
+        )
+    })?;
+
+    device.map_or_else(
+        || {
+            Err((
+                StatusCode::NOT_FOUND,
+                Json(ApiError::new(
+                    error_codes::DEVICE_NOT_FOUND,
+                    format!("Device '{device_id}' not found"),
+                )),
+            ))
+        },
+        |d| {
+            let response = DeviceResponse::from(d);
+            Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
+        },
+    )
 }
 
 /// Create a tunnel session.
@@ -642,5 +662,191 @@ mod tests {
         };
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("SHA256:abc123"));
+    }
+
+    mod handler_tests {
+        use super::*;
+        use crate::AppState;
+        use axum::{
+            body::Body,
+            http::{Request, header},
+        };
+        use moto_club_wg::{InMemoryPeerStore, InMemoryStore, Ipam, PeerRegistry};
+        use sqlx::postgres::PgPoolOptions;
+        use std::sync::Arc;
+        use tower::ServiceExt;
+
+        fn create_test_state() -> AppState {
+            let ipam_store = InMemoryStore::new();
+            let peer_store = InMemoryPeerStore::new();
+            let ipam = Ipam::new(ipam_store);
+            let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
+            // Create a pool that will never actually connect (WG endpoints don't use DB)
+            let db_pool = PgPoolOptions::new()
+                .max_connections(1)
+                .connect_lazy("postgres://unused:unused@localhost/unused")
+                .unwrap();
+            AppState {
+                db_pool,
+                peer_registry,
+            }
+        }
+
+        #[tokio::test]
+        async fn register_device_success() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let key = test_public_key();
+            let body = serde_json::json!({
+                "public_key": key.to_base64(),
+                "device_name": "test-laptop"
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/wg/devices")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::CREATED);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let device: DeviceResponse = serde_json::from_slice(&body).unwrap();
+
+            assert_eq!(device.device_name, Some("test-laptop".to_string()));
+            assert!(device.overlay_ip.is_client());
+        }
+
+        #[tokio::test]
+        async fn register_device_without_name() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let key = test_public_key();
+            let body = serde_json::json!({
+                "public_key": key.to_base64()
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/wg/devices")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::CREATED);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let device: DeviceResponse = serde_json::from_slice(&body).unwrap();
+
+            assert!(device.device_name.is_none());
+        }
+
+        #[tokio::test]
+        async fn register_device_requires_auth() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let key = test_public_key();
+            let body = serde_json::json!({
+                "public_key": key.to_base64()
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/wg/devices")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        // No authorization header
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        #[tokio::test]
+        async fn get_device_not_found() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let device_id = Uuid::now_v7();
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri(format!("/api/v1/wg/devices/{device_id}"))
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        }
+
+        #[tokio::test]
+        async fn register_then_get_device() {
+            let state = create_test_state();
+            let peer_registry = state.peer_registry.clone();
+            let app = router().with_state(state);
+
+            // Register a device
+            let key = test_public_key();
+            let body = serde_json::json!({
+                "public_key": key.to_base64(),
+                "device_name": "test-device"
+            });
+
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/wg/devices")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::CREATED);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let registered: DeviceResponse = serde_json::from_slice(&body).unwrap();
+
+            // Now get the device - use the peer_registry directly since we need state
+            let device = peer_registry.get_device(registered.device_id).unwrap();
+            assert!(device.is_some());
+            let device = device.unwrap();
+            assert_eq!(device.device_id, registered.device_id);
+            assert_eq!(device.overlay_ip, registered.overlay_ip);
+        }
     }
 }

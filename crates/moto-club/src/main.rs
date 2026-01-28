@@ -20,6 +20,7 @@
 
 use std::env;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::net::TcpListener;
@@ -30,6 +31,7 @@ use moto_club_api::{AppState, router};
 use moto_club_db::DbPool;
 use moto_club_k8s::GarageK8s;
 use moto_club_reconcile::{GarageReconciler, ReconcileConfig};
+use moto_club_wg::{InMemoryPeerStore, InMemoryStore, Ipam, PeerRegistry};
 use moto_k8s::K8sClient;
 
 /// Default bind address.
@@ -157,8 +159,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         reconciler.run().await;
     });
 
+    // Create WireGuard peer registry (in-memory for now)
+    let ipam_store = InMemoryStore::new();
+    let peer_store = InMemoryPeerStore::new();
+    let ipam = Ipam::new(ipam_store);
+    let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
+
     // Create API router
-    let state = AppState::new(db_pool);
+    let state = AppState::new(db_pool, peer_registry);
     let app = router(state);
 
     // Start server

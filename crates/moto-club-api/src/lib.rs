@@ -3,16 +3,22 @@
 //! This crate provides the HTTP API layer for moto-club, including:
 //! - Health check endpoints (`/health`, `/api/v1/info`)
 //! - Garage management endpoints (`/api/v1/garages/*`)
-//! - `WireGuard` coordination endpoints (`/api/v1/wg/*`) - future
+//! - `WireGuard` coordination endpoints (`/api/v1/wg/*`)
 //!
 //! # Example
 //!
 //! ```ignore
 //! use moto_club_api::{AppState, router};
 //! use moto_club_db::DbPool;
+//! use moto_club_wg::{PeerRegistry, InMemoryPeerStore, Ipam, InMemoryStore};
+//! use std::sync::Arc;
 //!
 //! let pool = DbPool::connect("postgres://...").await?;
-//! let state = AppState::new(pool);
+//! let peer_registry = Arc::new(PeerRegistry::new(
+//!     InMemoryPeerStore::new(),
+//!     Ipam::new(InMemoryStore::new()),
+//! ));
+//! let state = AppState::new(pool, peer_registry);
 //! let app = router(state);
 //!
 //! // Run with axum
@@ -24,8 +30,14 @@ pub mod garages;
 pub mod health;
 pub mod wg;
 
+use std::sync::Arc;
+
 use axum::Router;
 use moto_club_db::DbPool;
+use moto_club_wg::{InMemoryPeerStore, InMemoryStore, PeerRegistry};
+
+/// Type alias for the peer registry used in production.
+pub type WgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>;
 
 /// Shared application state.
 ///
@@ -34,13 +46,18 @@ use moto_club_db::DbPool;
 pub struct AppState {
     /// Database connection pool.
     pub db_pool: DbPool,
+    /// `WireGuard` peer registry for device and garage registration.
+    pub peer_registry: Arc<WgPeerRegistry>,
 }
 
 impl AppState {
-    /// Creates a new `AppState` with the given database pool.
+    /// Creates a new `AppState` with the given database pool and peer registry.
     #[must_use]
-    pub const fn new(db_pool: DbPool) -> Self {
-        Self { db_pool }
+    pub const fn new(db_pool: DbPool, peer_registry: Arc<WgPeerRegistry>) -> Self {
+        Self {
+            db_pool,
+            peer_registry,
+        }
     }
 }
 

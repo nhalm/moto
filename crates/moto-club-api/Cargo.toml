@@ -47,3 +47,4 @@ moto-wgtunnel-types = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }
+tower = { workspace = true }

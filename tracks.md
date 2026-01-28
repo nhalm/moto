@@ -4,7 +4,6 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/devices endpoint (device registration) | |
 | moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/sessions endpoint (session creation) | |
 | moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/garages endpoint (garage WG registration) | |
 | moto-wgtunnel.md | v0.4 | moto-club-api: /internal/wg/garages/{id}/peers WebSocket (peer streaming) | |
@@ -25,6 +24,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/devices endpoint (device registration) |
 | local-cluster.md | v0.1 | cluster status: JSON output format |
 | local-cluster.md | v0.1 | cluster status: registry health check |
 | local-cluster.md | v0.1 | cluster status: K8s API health check |
