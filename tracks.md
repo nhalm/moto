@@ -20,21 +20,6 @@
 
 | Spec | Version | Item |
 |------|---------|------|
-| moto-wgtunnel.md | v0.4 | moto-club-api: /internal/wg/garages/{id}/peers WebSocket (peer streaming) |
-| moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/users/ssh-keys endpoint (SSH key registration) |
-| moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/garages endpoint (garage WG registration) |
-| moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/sessions endpoint (session creation) |
-| moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/devices endpoint (device registration) |
-| local-cluster.md | v0.1 | cluster status: JSON output format |
-| local-cluster.md | v0.1 | cluster status: registry health check |
-| local-cluster.md | v0.1 | cluster status: K8s API health check |
-| local-cluster.md | v0.1 | cluster status: check if cluster exists via k3d |
-| local-cluster.md | v0.1 | crates/moto-cli/src/commands/cluster.rs: module scaffolding |
-| local-cluster.md | v0.1 | cluster init: Docker running check |
-| local-cluster.md | v0.1 | cluster init: k3d cluster create command execution |
-| local-cluster.md | v0.1 | cluster init: idempotent handling (cluster already exists) |
-| local-cluster.md | v0.1 | cluster init: wait for K8s API ready |
-| local-cluster.md | v0.1 | cluster init: --force flag (delete and recreate) |
 
 ---
 

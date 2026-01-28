@@ -2,6 +2,25 @@
 
 <!-- NEW ITEMS GO HERE -->
 
+### 2026-01-27: moto-wgtunnel.md
+- moto-club-api: /internal/wg/garages/{id}/peers WebSocket (peer streaming)
+- moto-club-api: /api/v1/users/ssh-keys endpoint (SSH key registration)
+- moto-club-api: /api/v1/wg/garages endpoint (garage WG registration)
+- moto-club-api: /api/v1/wg/sessions endpoint (session creation)
+- moto-club-api: /api/v1/wg/devices endpoint (device registration)
+
+### 2026-01-27: local-cluster.md
+- cluster status: JSON output format
+- cluster status: registry health check
+- cluster status: K8s API health check
+- cluster status: check if cluster exists via k3d
+- crates/moto-cli/src/commands/cluster.rs: module scaffolding
+- cluster init: Docker running check
+- cluster init: k3d cluster create command execution
+- cluster init: idempotent handling (cluster already exists)
+- cluster init: wait for K8s API ready
+- cluster init: --force flag (delete and recreate)
+
 ### 2026-01-27: dev-container.md
 - infra/smoke-test.sh: container smoke tests
 - infra/modules/wireguard.nix: WireGuard tools module
