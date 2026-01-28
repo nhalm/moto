@@ -11,10 +11,10 @@ use k8s_openapi::api::core::v1::{
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
-use kube::api::{Api, ObjectMeta, Patch, PatchParams, PostParams};
+use kube::api::{Api, ListParams, ObjectMeta, Patch, PatchParams, PostParams};
 use tracing::{debug, instrument};
 
-use crate::{Error, K8sClient, Result};
+use crate::{Error, K8sClient, Labels, Result};
 
 /// Configuration for creating a bike deployment.
 #[derive(Debug, Clone)]
@@ -39,6 +39,23 @@ pub struct BikeDeploymentConfig {
     pub memory_request: Option<String>,
     /// Memory limit (e.g., "2Gi").
     pub memory_limit: Option<String>,
+}
+
+/// Information about a deployed bike.
+#[derive(Debug, Clone)]
+pub struct BikeInfo {
+    /// Name of the bike (without "moto-" prefix).
+    pub name: String,
+    /// Current status of the bike (e.g., "running", "progressing", "degraded").
+    pub status: String,
+    /// Number of ready replicas.
+    pub replicas_ready: i32,
+    /// Number of desired replicas.
+    pub replicas_desired: i32,
+    /// Age of the deployment in seconds.
+    pub age_seconds: i64,
+    /// Container image being used.
+    pub image: String,
 }
 
 /// Trait for deployment operations.
@@ -75,6 +92,14 @@ pub trait DeploymentOps {
         name: &str,
         timeout: std::time::Duration,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
+
+    /// Lists all bikes in the specified namespace.
+    ///
+    /// Returns deployments labeled with `moto.dev/type=bike`.
+    fn list_bikes(
+        &self,
+        namespace: &str,
+    ) -> impl std::future::Future<Output = Result<Vec<BikeInfo>>> + Send;
 }
 
 impl DeploymentOps for K8sClient {
@@ -216,6 +241,73 @@ impl DeploymentOps for K8sClient {
             tokio::time::sleep(poll_interval).await;
         }
     }
+
+    #[instrument(skip(self), fields(namespace = %namespace))]
+    async fn list_bikes(&self, namespace: &str) -> Result<Vec<BikeInfo>> {
+        let api: Api<Deployment> = Api::namespaced(self.inner().clone(), namespace);
+
+        let params = ListParams::default().labels(&Labels::bike_selector());
+        debug!("listing bikes");
+        let list = api.list(&params).await.map_err(Error::DeploymentList)?;
+
+        let now = chrono::Utc::now();
+        let bikes = list
+            .items
+            .into_iter()
+            .filter_map(|deployment| {
+                let metadata = &deployment.metadata;
+                let name = metadata
+                    .labels
+                    .as_ref()
+                    .and_then(|l| l.get(Labels::NAME))
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        // Fall back to deployment name without "moto-" prefix
+                        metadata
+                            .name
+                            .as_ref()
+                            .map(|n| n.strip_prefix("moto-").unwrap_or(n).to_string())
+                            .unwrap_or_default()
+                    });
+
+                let spec = deployment.spec.as_ref()?;
+                let status = deployment.status.as_ref();
+
+                let replicas_desired = spec.replicas.unwrap_or(1);
+                let replicas_ready = status.and_then(|s| s.ready_replicas).unwrap_or(0);
+
+                // Determine status based on conditions and replica counts
+                let bike_status = deployment_status(status, replicas_ready, replicas_desired);
+
+                // Calculate age from creation timestamp
+                let age_seconds = metadata
+                    .creation_timestamp
+                    .as_ref()
+                    .map(|ts| (now - ts.0).num_seconds())
+                    .unwrap_or(0);
+
+                // Get image from first container
+                let image = spec
+                    .template
+                    .spec
+                    .as_ref()
+                    .and_then(|pod_spec| pod_spec.containers.first())
+                    .and_then(|c| c.image.clone())
+                    .unwrap_or_default();
+
+                Some(BikeInfo {
+                    name,
+                    status: bike_status,
+                    replicas_ready,
+                    replicas_desired,
+                    age_seconds,
+                    image,
+                })
+            })
+            .collect();
+
+        Ok(bikes)
+    }
 }
 
 /// Checks if a kube error is a "not found" error.
@@ -224,6 +316,42 @@ const fn is_not_found(e: &kube::Error) -> bool {
         e,
         kube::Error::Api(kube::core::ErrorResponse { code: 404, .. })
     )
+}
+
+/// Determines deployment status from K8s deployment status.
+fn deployment_status(
+    status: Option<&k8s_openapi::api::apps::v1::DeploymentStatus>,
+    ready: i32,
+    desired: i32,
+) -> String {
+    let Some(status) = status else {
+        return "unknown".to_string();
+    };
+
+    // Check conditions for specific states
+    if let Some(conditions) = &status.conditions {
+        for condition in conditions {
+            if condition.type_ == "Progressing" && condition.status == "True" {
+                if let Some(reason) = &condition.reason {
+                    if reason == "NewReplicaSetAvailable" && ready >= desired {
+                        return "running".to_string();
+                    }
+                }
+            }
+            if condition.type_ == "Available" && condition.status == "False" {
+                return "degraded".to_string();
+            }
+        }
+    }
+
+    // Fall back to replica counts
+    if ready >= desired && desired > 0 {
+        "running".to_string()
+    } else if ready > 0 {
+        "progressing".to_string()
+    } else {
+        "pending".to_string()
+    }
 }
 
 /// Builds a K8s Deployment from the bike config.

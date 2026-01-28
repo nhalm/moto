@@ -84,6 +84,10 @@ pub enum Error {
     /// Deployment timed out waiting for readiness.
     #[error("deployment timed out waiting for readiness: {0}")]
     DeploymentTimeout(String),
+
+    /// Failed to list deployments.
+    #[error("failed to list deployments: {0}")]
+    DeploymentList(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.

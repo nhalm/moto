@@ -4,8 +4,6 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| moto-cli.md | v0.3 | moto bike list: formatted output (NAME, STATUS, REPLICAS, AGE, IMAGE) | |
-| moto-cli.md | v0.3 | moto bike list: --json output format | |
 | moto-cli.md | v0.3 | moto bike logs: --follow/-f, --tail/-n, --since options | |
 | moto-wgtunnel.md | v0.5 | enter.rs: Wire up moto-wgtunnel-engine to configure WireGuard tunnel | |
 | moto-wgtunnel.md | v0.5 | enter.rs: Wire up MagicConn for direct UDP connection attempts | |
@@ -23,6 +21,8 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| moto-cli.md | v0.3 | moto bike list: formatted output (NAME, STATUS, REPLICAS, AGE, IMAGE) |
+| moto-cli.md | v0.3 | moto bike list: --json output format |
 | moto-cli.md | v0.3 | moto bike deploy: --namespace flag (default: current context) |
 | moto-cli.md | v0.3 | moto bike deploy: --replicas override, --wait for ready, --wait-timeout |
 | moto-cli.md | v0.3 | moto bike deploy: image selection, K8s Deployment generation |

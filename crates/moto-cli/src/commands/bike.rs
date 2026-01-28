@@ -52,6 +52,13 @@ pub enum BikeAction {
         #[arg(long, default_value = "5m")]
         wait_timeout: String,
     },
+
+    /// List bikes in the current context
+    List {
+        /// Target namespace (default: current context namespace)
+        #[arg(long, short = 'n')]
+        namespace: Option<String>,
+    },
 }
 
 /// JSON output for bike build
@@ -69,6 +76,23 @@ struct BikeDeployJson {
     image: String,
     replicas: u32,
     status: String,
+}
+
+/// JSON output for bike list
+#[derive(Serialize)]
+struct BikeListJson {
+    bikes: Vec<BikeJson>,
+}
+
+/// JSON representation of a bike (matches spec)
+#[derive(Serialize)]
+struct BikeJson {
+    name: String,
+    status: String,
+    replicas_ready: i32,
+    replicas_desired: i32,
+    age_seconds: i64,
+    image: String,
 }
 
 /// Parse a duration string like "5m", "1h", "2d" into seconds.
@@ -498,9 +522,116 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                 println!("Deployment complete.");
             }
         }
+
+        BikeAction::List { namespace } => {
+            // Get namespace: use --namespace if provided, otherwise current context namespace
+            let namespace = match namespace {
+                Some(ns) => ns,
+                None => get_current_namespace()?,
+            };
+
+            // Create K8s client and list bikes
+            let client = K8sClient::new().await?;
+            let bikes = client.list_bikes(&namespace).await?;
+
+            if flags.json {
+                let json = BikeListJson {
+                    bikes: bikes
+                        .iter()
+                        .map(|b| BikeJson {
+                            name: b.name.clone(),
+                            status: b.status.clone(),
+                            replicas_ready: b.replicas_ready,
+                            replicas_desired: b.replicas_desired,
+                            age_seconds: b.age_seconds,
+                            image: b.image.clone(),
+                        })
+                        .collect(),
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if bikes.is_empty() {
+                if !flags.quiet {
+                    println!("No bikes found.");
+                }
+            } else {
+                println!(
+                    "{:<14} {:<10} {:<10} {:<8} {}",
+                    "NAME", "STATUS", "REPLICAS", "AGE", "IMAGE"
+                );
+                for bike in bikes {
+                    let replicas = format!("{}/{}", bike.replicas_ready, bike.replicas_desired);
+                    let age = format_duration(bike.age_seconds);
+                    println!(
+                        "{:<14} {:<10} {:<10} {:<8} {}",
+                        truncate(&bike.name, 14),
+                        bike.status,
+                        replicas,
+                        age,
+                        truncate_image(&bike.image, 40)
+                    );
+                }
+            }
+        }
     }
 
     Ok(())
+}
+
+/// Truncate a string to a maximum length, adding "..." if truncated.
+fn truncate(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len - 3])
+    }
+}
+
+/// Truncate an image reference, preferring to show the tag.
+fn truncate_image(image: &str, max_len: usize) -> String {
+    if image.len() <= max_len {
+        return image.to_string();
+    }
+
+    // Try to preserve the tag portion
+    if let Some(colon_pos) = image.rfind(':') {
+        let tag = &image[colon_pos..];
+        let name = &image[..colon_pos];
+        let available = max_len.saturating_sub(tag.len()).saturating_sub(3);
+        if available > 0 {
+            return format!("{}...{}", &name[..available.min(name.len())], tag);
+        }
+    }
+
+    format!("{}...", &image[..max_len - 3])
+}
+
+/// Format a duration in seconds as a human-readable string (e.g., "2h15m", "45m", "3d").
+fn format_duration(seconds: i64) -> String {
+    if seconds < 0 {
+        return "0s".to_string();
+    }
+
+    let days = seconds / 86400;
+    let hours = (seconds % 86400) / 3600;
+    let minutes = (seconds % 3600) / 60;
+
+    if days > 0 {
+        if hours > 0 {
+            format!("{days}d{hours}h")
+        } else {
+            format!("{days}d")
+        }
+    } else if hours > 0 {
+        if minutes > 0 {
+            format!("{hours}h{minutes}m")
+        } else {
+            format!("{hours}h")
+        }
+    } else if minutes > 0 {
+        format!("{minutes}m")
+    } else {
+        format!("{seconds}s")
+    }
 }
 
 #[cfg(test)]
@@ -615,5 +746,83 @@ mod tests {
     fn test_parse_duration_empty() {
         assert!(parse_duration("").is_err());
         assert!(parse_duration("  ").is_err());
+    }
+
+    #[test]
+    fn test_format_duration_seconds() {
+        assert_eq!(format_duration(0), "0s");
+        assert_eq!(format_duration(30), "30s");
+        assert_eq!(format_duration(59), "59s");
+    }
+
+    #[test]
+    fn test_format_duration_minutes() {
+        assert_eq!(format_duration(60), "1m");
+        assert_eq!(format_duration(90), "1m");
+        assert_eq!(format_duration(3540), "59m");
+    }
+
+    #[test]
+    fn test_format_duration_hours() {
+        assert_eq!(format_duration(3600), "1h");
+        assert_eq!(format_duration(3660), "1h1m");
+        assert_eq!(format_duration(8100), "2h15m");
+        assert_eq!(format_duration(7200), "2h");
+    }
+
+    #[test]
+    fn test_format_duration_days() {
+        assert_eq!(format_duration(86400), "1d");
+        assert_eq!(format_duration(90000), "1d1h");
+        assert_eq!(format_duration(172800), "2d");
+    }
+
+    #[test]
+    fn test_format_duration_negative() {
+        assert_eq!(format_duration(-100), "0s");
+    }
+
+    #[test]
+    fn test_truncate() {
+        assert_eq!(truncate("short", 10), "short");
+        assert_eq!(truncate("exactly10c", 10), "exactly10c");
+        assert_eq!(truncate("this is too long", 10), "this is...");
+    }
+
+    #[test]
+    fn test_truncate_image_short() {
+        assert_eq!(truncate_image("api:v1", 40), "api:v1");
+    }
+
+    #[test]
+    fn test_truncate_image_long() {
+        let image = "ghcr.io/moto/very-long-image-name:abc123";
+        let truncated = truncate_image(image, 30);
+        assert!(truncated.len() <= 30);
+        assert!(truncated.ends_with(":abc123"));
+    }
+
+    #[test]
+    fn test_bike_list_json_serialization() {
+        let json = BikeListJson {
+            bikes: vec![BikeJson {
+                name: "api-service".to_string(),
+                status: "running".to_string(),
+                replicas_ready: 2,
+                replicas_desired: 2,
+                age_seconds: 259200,
+                image: "api-service:abc123f".to_string(),
+            }],
+        };
+
+        let output = serde_json::to_string_pretty(&json).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["bikes"][0]["name"], "api-service");
+        assert_eq!(parsed["bikes"][0]["status"], "running");
+        assert_eq!(parsed["bikes"][0]["replicas_ready"], 2);
+        assert_eq!(parsed["bikes"][0]["replicas_desired"], 2);
+        assert_eq!(parsed["bikes"][0]["age_seconds"], 259200);
+        assert_eq!(parsed["bikes"][0]["image"], "api-service:abc123f");
     }
 }

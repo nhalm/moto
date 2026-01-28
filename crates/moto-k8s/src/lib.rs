@@ -15,7 +15,7 @@ mod namespace;
 mod pod;
 
 pub use client::K8sClient;
-pub use deployment::{BikeDeploymentConfig, DeploymentOps};
+pub use deployment::{BikeDeploymentConfig, BikeInfo, DeploymentOps};
 pub use error::{Error, Result};
 pub use labels::Labels;
 pub use namespace::NamespaceOps;
