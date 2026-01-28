@@ -56,6 +56,30 @@ pub enum Error {
     /// Context not found.
     #[error("context not found: {0}")]
     ContextNotFound(String),
+
+    /// Failed to create deployment.
+    #[error("failed to create deployment: {0}")]
+    DeploymentCreate(#[source] kube::Error),
+
+    /// Failed to get deployment.
+    #[error("failed to get deployment: {0}")]
+    DeploymentGet(#[source] kube::Error),
+
+    /// Failed to update deployment.
+    #[error("failed to update deployment: {0}")]
+    DeploymentUpdate(#[source] kube::Error),
+
+    /// Deployment not found.
+    #[error("deployment not found: {0}")]
+    DeploymentNotFound(String),
+
+    /// Failed to create service.
+    #[error("failed to create service: {0}")]
+    ServiceCreate(#[source] kube::Error),
+
+    /// Failed to get service.
+    #[error("failed to get service: {0}")]
+    ServiceGet(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.

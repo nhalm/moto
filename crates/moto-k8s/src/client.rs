@@ -93,13 +93,13 @@ impl K8sClient {
     ///
     /// Useful for testing or when you already have a configured client.
     #[must_use]
-    pub fn from_client(client: Client) -> Self {
+    pub const fn from_client(client: Client) -> Self {
         Self { client }
     }
 
     /// Returns a reference to the underlying `kube::Client`.
     #[must_use]
-    pub fn inner(&self) -> &Client {
+    pub const fn inner(&self) -> &Client {
         &self.client
     }
 
@@ -129,11 +129,10 @@ impl K8sClient {
 
     /// Reads the kubeconfig, respecting `MOTOCONFIG` env var.
     fn read_kubeconfig() -> Result<Kubeconfig> {
-        if let Ok(path) = std::env::var("MOTOCONFIG") {
-            Kubeconfig::read_from(path).map_err(Error::KubeconfigRead)
-        } else {
-            Kubeconfig::read().map_err(Error::KubeconfigRead)
-        }
+        std::env::var("MOTOCONFIG").map_or_else(
+            |_| Kubeconfig::read().map_err(Error::KubeconfigRead),
+            |path| Kubeconfig::read_from(path).map_err(Error::KubeconfigRead),
+        )
     }
 }
 
@@ -179,7 +178,7 @@ impl NamespaceOps for K8sClient {
         }
 
         debug!("deleting namespace");
-        api.delete(name, &Default::default())
+        api.delete(name, &kube::api::DeleteParams::default())
             .await
             .map_err(Error::NamespaceDelete)?;
 
@@ -228,7 +227,7 @@ impl NamespaceOps for K8sClient {
 }
 
 /// Checks if a kube error is a "not found" error.
-fn is_not_found(e: &kube::Error) -> bool {
+const fn is_not_found(e: &kube::Error) -> bool {
     matches!(
         e,
         kube::Error::Api(kube::core::ErrorResponse { code: 404, .. })

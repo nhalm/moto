@@ -80,7 +80,8 @@ impl From<moto_k8s::Error> for CliError {
         match &err {
             moto_k8s::Error::NamespaceNotFound(_)
             | moto_k8s::Error::PodNotFound(_)
-            | moto_k8s::Error::ContextNotFound(_) => CliError::not_found(err.to_string()),
+            | moto_k8s::Error::ContextNotFound(_)
+            | moto_k8s::Error::DeploymentNotFound(_) => CliError::not_found(err.to_string()),
             _ => CliError::general(err.to_string()),
         }
     }

@@ -1,10 +1,11 @@
 //! Bike subcommands: build, deploy, list, logs.
 
 use clap::{Args, Subcommand};
+use moto_k8s::{BikeDeploymentConfig, DeploymentOps, K8sClient};
 use serde::Serialize;
 use std::process::{Command as ProcessCommand, Stdio};
 
-use crate::bike::discover_bike;
+use crate::bike::{BikeConfig, discover_bike};
 use crate::cli::GlobalFlags;
 use crate::error::{CliError, Result};
 
@@ -28,6 +29,13 @@ pub enum BikeAction {
         #[arg(long)]
         push: bool,
     },
+
+    /// Deploy a bike to the current context
+    Deploy {
+        /// Deploy specific image (default: latest local build)
+        #[arg(long)]
+        image: Option<String>,
+    },
 }
 
 /// JSON output for bike build
@@ -36,6 +44,15 @@ struct BikeBuildJson {
     name: String,
     image: String,
     pushed: bool,
+}
+
+/// JSON output for bike deploy
+#[derive(Serialize)]
+struct BikeDeployJson {
+    name: String,
+    image: String,
+    replicas: u32,
+    status: String,
 }
 
 /// Get the Linux target system based on host architecture.
@@ -138,6 +155,69 @@ fn push_image(image_ref: &str, quiet: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Get the latest local image tag for a bike.
+/// Checks docker images to find the most recent build.
+fn get_latest_local_image(bike_name: &str) -> Result<String> {
+    let output = ProcessCommand::new("docker")
+        .args(["images", "--format", "{{.Tag}}", bike_name])
+        .output()
+        .map_err(|e| CliError::general(format!("failed to list docker images: {e}")))?;
+
+    if !output.status.success() {
+        return Err(CliError::general("failed to list docker images"));
+    }
+
+    let tags = String::from_utf8_lossy(&output.stdout);
+    let first_tag = tags.lines().next();
+
+    match first_tag {
+        Some(tag) if !tag.is_empty() => Ok(format!("{}:{}", bike_name, tag)),
+        _ => Err(CliError::invalid_input(format!(
+            "No local image found for '{}'. Build first with: moto bike build",
+            bike_name
+        ))),
+    }
+}
+
+/// Convert BikeConfig to BikeDeploymentConfig for K8s deployment.
+fn to_deployment_config(config: &BikeConfig, image: &str) -> BikeDeploymentConfig {
+    BikeDeploymentConfig {
+        name: config.name.clone(),
+        image: image.to_string(),
+        replicas: config.deploy.replicas,
+        port: config.deploy.port,
+        health_port: config.health.port,
+        health_path: config.health.path.clone(),
+        cpu_request: config.resources.cpu_request.clone(),
+        cpu_limit: config.resources.cpu_limit.clone(),
+        memory_request: config.resources.memory_request.clone(),
+        memory_limit: config.resources.memory_limit.clone(),
+    }
+}
+
+/// Get the current kubectl namespace from kubeconfig.
+fn get_current_namespace() -> Result<String> {
+    let output = ProcessCommand::new("kubectl")
+        .args([
+            "config",
+            "view",
+            "--minify",
+            "--output",
+            "jsonpath={..namespace}",
+        ])
+        .output()
+        .map_err(|e| CliError::general(format!("failed to get current namespace: {e}")))?;
+
+    let ns = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    // If no namespace is set in the context, default to "default"
+    Ok(if ns.is_empty() {
+        "default".to_string()
+    } else {
+        ns
+    })
 }
 
 /// Build the bike container using Docker-wrapped Nix.
@@ -303,6 +383,42 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                 println!("Build complete: {}", image_ref);
             }
         }
+
+        BikeAction::Deploy { image } => {
+            // Discover bike.toml - this validates the file exists and is valid
+            let (_bike_path, config) = discover_bike()?;
+
+            // Determine the image to deploy
+            let image_ref = match image {
+                Some(img) => img,
+                None => get_latest_local_image(&config.name)?,
+            };
+
+            // Get the current namespace
+            let namespace = get_current_namespace()?;
+
+            if !flags.quiet {
+                eprintln!("Deploying {}...", image_ref);
+            }
+
+            // Create K8s client and deploy
+            let client = K8sClient::new().await?;
+            let deploy_config = to_deployment_config(&config, &image_ref);
+            client.deploy_bike(&namespace, &deploy_config).await?;
+
+            // Output results
+            if flags.json {
+                let json = BikeDeployJson {
+                    name: config.name.clone(),
+                    image: image_ref.clone(),
+                    replicas: config.deploy.replicas,
+                    status: "deployed".to_string(),
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if !flags.quiet {
+                println!("Deployment complete.");
+            }
+        }
     }
 
     Ok(())
@@ -366,5 +482,23 @@ mod tests {
         assert_eq!(parsed["name"], "club");
         assert_eq!(parsed["image"], "ghcr.io/moto/club:abc123");
         assert_eq!(parsed["pushed"], true);
+    }
+
+    #[test]
+    fn test_bike_deploy_json_serialization() {
+        let json = BikeDeployJson {
+            name: "club".to_string(),
+            image: "club:abc123".to_string(),
+            replicas: 2,
+            status: "deployed".to_string(),
+        };
+
+        let output = serde_json::to_string_pretty(&json).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["name"], "club");
+        assert_eq!(parsed["image"], "club:abc123");
+        assert_eq!(parsed["replicas"], 2);
+        assert_eq!(parsed["status"], "deployed");
     }
 }

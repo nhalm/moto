@@ -4,7 +4,6 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| moto-cli.md | v0.3 | moto bike deploy: image selection, K8s Deployment generation | |
 | moto-cli.md | v0.3 | moto bike deploy: --replicas override, --wait for ready, --wait-timeout | |
 | moto-cli.md | v0.3 | moto bike deploy: --namespace flag (default: current context) | |
 | moto-cli.md | v0.3 | moto bike list: formatted output (NAME, STATUS, REPLICAS, AGE, IMAGE) | |
@@ -26,6 +25,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| moto-cli.md | v0.3 | moto bike deploy: image selection, K8s Deployment generation |
 | moto-cli.md | v0.3 | moto bike build: --tag override, --push to registry |
 | moto-cli.md | v0.3 | moto bike build: Nix build wrapper, docker load |
 | moto-cli.md | v0.3 | moto bike build: bike.toml discovery (search up to git root) |
