@@ -38,6 +38,8 @@ pub enum ClusterAction {
         #[arg(long)]
         force: bool,
     },
+    /// Show cluster status
+    Status,
 }
 
 /// Cluster name used by moto
@@ -63,6 +65,7 @@ struct ClusterInitJson {
 pub async fn run(cmd: ClusterCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
         ClusterAction::Init { force } => init_cluster(flags, force).await,
+        ClusterAction::Status => cluster_status(flags).await,
     }
 }
 
@@ -306,6 +309,93 @@ async fn init_cluster(flags: &GlobalFlags, force: bool) -> Result<()> {
     Ok(())
 }
 
+/// Cluster status values
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClusterStatus {
+    /// Cluster exists and is running
+    Running,
+    /// Cluster exists but is stopped
+    Stopped,
+    /// No cluster found
+    NotFound,
+}
+
+impl ClusterStatus {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ClusterStatus::Running => "running",
+            ClusterStatus::Stopped => "stopped",
+            ClusterStatus::NotFound => "not_found",
+        }
+    }
+}
+
+/// Get the current cluster status by checking k3d
+fn get_cluster_status() -> Result<ClusterStatus> {
+    let output = ProcessCommand::new("k3d")
+        .args(["cluster", "list", "--no-headers"])
+        .output()
+        .map_err(|e| CliError::general(format!("failed to list k3d clusters: {e}")))?;
+
+    if !output.status.success() {
+        return Err(CliError::general("failed to list k3d clusters"));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // k3d cluster list output format: "name  servers  agents  loadbalancer"
+    // servers column shows "1/1" for running, "0/1" for stopped
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.first() == Some(&CLUSTER_NAME) {
+            // Check servers column (index 1) for running state
+            // Format is "running/total" e.g., "1/1" or "0/1"
+            if let Some(servers) = parts.get(1) {
+                if servers.starts_with("0/") {
+                    return Ok(ClusterStatus::Stopped);
+                }
+            }
+            return Ok(ClusterStatus::Running);
+        }
+    }
+
+    Ok(ClusterStatus::NotFound)
+}
+
+/// Show cluster status
+async fn cluster_status(flags: &GlobalFlags) -> Result<()> {
+    check_k3d_installed()?;
+
+    let status = get_cluster_status()?;
+
+    match status {
+        ClusterStatus::NotFound => {
+            if !flags.quiet {
+                eprintln!("Cluster '{CLUSTER_NAME}' not found.");
+                eprintln!();
+                eprintln!("Run 'moto cluster init' to create the cluster.");
+            }
+            // Exit code 1 for not running
+            std::process::exit(1);
+        }
+        ClusterStatus::Stopped => {
+            if !flags.quiet {
+                println!("Cluster: {CLUSTER_NAME} (k3d)");
+                println!("Status: stopped");
+            }
+            // Exit code 1 for not running
+            std::process::exit(1);
+        }
+        ClusterStatus::Running => {
+            if !flags.quiet {
+                println!("Cluster: {CLUSTER_NAME} (k3d)");
+                println!("Status: {}", status.as_str());
+            }
+            Ok(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -466,5 +556,71 @@ mod tests {
         // The force flag is defined in ClusterAction::Init
         let _action = ClusterAction::Init { force: true };
         let _action_no_force = ClusterAction::Init { force: false };
+    }
+
+    #[test]
+    fn test_cluster_status_enum() {
+        // Verify ClusterStatus enum values and string representations
+        assert_eq!(ClusterStatus::Running.as_str(), "running");
+        assert_eq!(ClusterStatus::Stopped.as_str(), "stopped");
+        assert_eq!(ClusterStatus::NotFound.as_str(), "not_found");
+    }
+
+    #[test]
+    fn test_cluster_status_parsing_running() {
+        // Test parsing k3d cluster list output for running cluster
+        // Format: "name  servers  agents  loadbalancer"
+        // servers "1/1" means 1 of 1 servers running
+
+        let sample_output = "moto   1/1     0/0    true\n";
+        let status = parse_cluster_status_from_output(sample_output);
+        assert_eq!(status, ClusterStatus::Running);
+    }
+
+    #[test]
+    fn test_cluster_status_parsing_stopped() {
+        // Test parsing k3d cluster list output for stopped cluster
+        // servers "0/1" means 0 of 1 servers running (stopped)
+
+        let sample_output = "moto   0/1     0/0    false\n";
+        let status = parse_cluster_status_from_output(sample_output);
+        assert_eq!(status, ClusterStatus::Stopped);
+    }
+
+    #[test]
+    fn test_cluster_status_parsing_not_found() {
+        // Test parsing when cluster doesn't exist
+        let sample_output = "other-cluster   1/1     0/0    true\n";
+        let status = parse_cluster_status_from_output(sample_output);
+        assert_eq!(status, ClusterStatus::NotFound);
+
+        // Empty output
+        let empty_output = "";
+        let status_empty = parse_cluster_status_from_output(empty_output);
+        assert_eq!(status_empty, ClusterStatus::NotFound);
+    }
+
+    #[test]
+    fn test_cluster_status_parsing_multiple_clusters() {
+        // Test parsing when multiple clusters exist
+        let sample_output = "dev-cluster   1/1     0/0    true\nmoto   1/1     0/0    true\ntest   0/1     0/0    false\n";
+        let status = parse_cluster_status_from_output(sample_output);
+        assert_eq!(status, ClusterStatus::Running);
+    }
+
+    /// Helper function to parse cluster status from k3d output (for testing)
+    fn parse_cluster_status_from_output(stdout: &str) -> ClusterStatus {
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.first() == Some(&CLUSTER_NAME) {
+                if let Some(servers) = parts.get(1) {
+                    if servers.starts_with("0/") {
+                        return ClusterStatus::Stopped;
+                    }
+                }
+                return ClusterStatus::Running;
+            }
+        }
+        ClusterStatus::NotFound
     }
 }
