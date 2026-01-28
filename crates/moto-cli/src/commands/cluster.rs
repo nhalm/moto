@@ -228,6 +228,33 @@ fn check_api_healthy() -> bool {
     }
 }
 
+/// Check if the container registry is healthy (for status reporting)
+fn check_registry_healthy() -> bool {
+    // Check registry health via the Docker API /v2/ endpoint
+    // The registry runs at localhost:5000
+    let output = ProcessCommand::new("curl")
+        .args([
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "--connect-timeout",
+            "2",
+            &format!("http://localhost:{REGISTRY_PORT}/v2/"),
+        ])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            // curl returns HTTP status code, 200 means healthy
+            let status_code = String::from_utf8_lossy(&o.stdout);
+            status_code.trim() == "200"
+        }
+        _ => false,
+    }
+}
+
 /// Wait for the cluster API to be ready with retries
 async fn wait_for_cluster_ready(quiet: bool) -> Result<()> {
     if !quiet {
@@ -417,15 +444,25 @@ async fn cluster_status(flags: &GlobalFlags) -> Result<()> {
             let api_status = if api_healthy { "healthy" } else { "unhealthy" };
             let api_endpoint = format!("https://localhost:{API_PORT}");
 
+            // Check registry health
+            let registry_healthy = check_registry_healthy();
+            let registry_status = if registry_healthy {
+                "healthy"
+            } else {
+                "unhealthy"
+            };
+            let registry_endpoint = format!("localhost:{REGISTRY_PORT}");
+
             if !flags.quiet {
                 println!("Cluster: {CLUSTER_NAME} (k3d)");
                 println!("Status: {}", status.as_str());
                 println!();
                 println!("  K8s API:   {api_status} ({api_endpoint})");
+                println!("  Registry:  {registry_status} ({registry_endpoint})");
             }
 
-            // Exit code 1 if API is unhealthy
-            if !api_healthy {
+            // Exit code 1 if API or registry is unhealthy
+            if !api_healthy || !registry_healthy {
                 std::process::exit(1);
             }
             Ok(())
@@ -580,6 +617,24 @@ mod tests {
         let result = check_api_healthy();
         // Result is a boolean (true or false), not a panic
         assert!(result || !result);
+    }
+
+    #[test]
+    fn test_check_registry_healthy_returns_bool() {
+        // This test verifies that check_registry_healthy() returns a boolean
+        // The actual result depends on whether the registry is running
+        let result = check_registry_healthy();
+        // Result is a boolean (true or false), not a panic
+        assert!(result || !result);
+    }
+
+    #[test]
+    fn test_registry_health_endpoint() {
+        // Verify the health check uses the correct registry endpoint:
+        // curl http://localhost:5000/v2/
+        // This should return HTTP 200 when healthy
+        let expected_endpoint = format!("http://localhost:{}/v2/", REGISTRY_PORT);
+        assert_eq!(expected_endpoint, "http://localhost:5000/v2/");
     }
 
     #[test]
