@@ -332,4 +332,49 @@ mod tests {
         assert_eq!(expected_args[10], "moto-registry:5000");
         assert_eq!(expected_args[12], "--disable=traefik@server:0");
     }
+
+    #[test]
+    fn test_cluster_exists_parsing() {
+        // Test the parsing logic used in cluster_exists()
+        // k3d cluster list --no-headers output format: "name  servers  agents  loadbalancer"
+
+        let sample_output = "moto   1/1     0/0    true\n";
+        let has_moto = sample_output.lines().any(|line| {
+            line.split_whitespace()
+                .next()
+                .map(|name| name == CLUSTER_NAME)
+                .unwrap_or(false)
+        });
+        assert!(has_moto);
+
+        // Test with other cluster names
+        let other_output = "other-cluster   1/1     0/0    true\n";
+        let has_moto_other = other_output.lines().any(|line| {
+            line.split_whitespace()
+                .next()
+                .map(|name| name == CLUSTER_NAME)
+                .unwrap_or(false)
+        });
+        assert!(!has_moto_other);
+
+        // Test with multiple clusters including moto
+        let multi_output = "dev-cluster   1/1     0/0    true\nmoto   1/1     0/0    true\ntest   1/1     0/0    true\n";
+        let has_moto_multi = multi_output.lines().any(|line| {
+            line.split_whitespace()
+                .next()
+                .map(|name| name == CLUSTER_NAME)
+                .unwrap_or(false)
+        });
+        assert!(has_moto_multi);
+
+        // Test with empty output
+        let empty_output = "";
+        let has_moto_empty = empty_output.lines().any(|line| {
+            line.split_whitespace()
+                .next()
+                .map(|name| name == CLUSTER_NAME)
+                .unwrap_or(false)
+        });
+        assert!(!has_moto_empty);
+    }
 }

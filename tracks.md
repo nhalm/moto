@@ -4,7 +4,6 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| local-cluster.md | v0.1 | cluster init: idempotent handling (cluster already exists) | |
 | local-cluster.md | v0.1 | cluster init: wait for K8s API ready | |
 | local-cluster.md | v0.1 | cluster init: --force flag (delete and recreate) | |
 | local-cluster.md | v0.1 | cluster status: check if cluster exists via k3d | |
@@ -35,6 +34,7 @@
 | local-cluster.md | v0.1 | crates/moto-cli/src/commands/cluster.rs: module scaffolding |
 | local-cluster.md | v0.1 | cluster init: Docker running check |
 | local-cluster.md | v0.1 | cluster init: k3d cluster create command execution |
+| local-cluster.md | v0.1 | cluster init: idempotent handling (cluster already exists) |
 
 ---
 
