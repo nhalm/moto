@@ -1,8 +1,10 @@
 //! Bike subcommands: build, deploy, list, logs.
 
 use clap::{Args, Subcommand};
-use moto_k8s::{BikeDeploymentConfig, DeploymentOps, K8sClient};
+use futures_util::StreamExt;
+use moto_k8s::{BikeDeploymentConfig, DeploymentOps, K8sClient, Labels, PodLogOptions, PodOps};
 use serde::Serialize;
+use std::io::Write;
 use std::process::{Command as ProcessCommand, Stdio};
 
 use crate::bike::{BikeConfig, discover_bike};
@@ -57,6 +59,28 @@ pub enum BikeAction {
     List {
         /// Target namespace (default: current context namespace)
         #[arg(long, short = 'n')]
+        namespace: Option<String>,
+    },
+
+    /// View logs from a bike
+    Logs {
+        /// Name of the bike
+        name: String,
+
+        /// Stream logs continuously (Ctrl+C to stop)
+        #[arg(long, short = 'f')]
+        follow: bool,
+
+        /// Show last n lines (default: 100)
+        #[arg(long, short = 'n', default_value = "100")]
+        tail: i64,
+
+        /// Show logs from last duration (e.g., 5m, 1h)
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Target namespace (default: current context namespace)
+        #[arg(long)]
         namespace: Option<String>,
     },
 }
@@ -569,6 +593,93 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                         age,
                         truncate_image(&bike.image, 40)
                     );
+                }
+            }
+        }
+
+        BikeAction::Logs {
+            name,
+            follow,
+            tail,
+            since,
+            namespace,
+        } => {
+            // Parse since duration if provided
+            let since_seconds = since.as_deref().map(parse_duration).transpose()?;
+
+            // Get namespace: use --namespace if provided, otherwise current context namespace
+            let namespace = match namespace {
+                Some(ns) => ns,
+                None => get_current_namespace()?,
+            };
+
+            // Create label selector for the specific bike
+            // Bikes are deployed as moto-{name}, so the label is moto.dev/name={name}
+            let label_selector = format!(
+                "{}={},{}={}",
+                Labels::TYPE,
+                Labels::TYPE_BIKE,
+                Labels::NAME,
+                name
+            );
+
+            // Create K8s client
+            let client = K8sClient::new().await?;
+
+            let log_options = PodLogOptions {
+                tail_lines: Some(tail),
+                since_seconds: since_seconds.map(|s| s as i64),
+                follow,
+            };
+
+            if follow {
+                // Streaming mode - not compatible with JSON output
+                if flags.json {
+                    return Err(CliError::invalid_input(
+                        "JSON output is not supported with --follow",
+                    ));
+                }
+
+                let mut stream = client
+                    .stream_pod_logs(&namespace, Some(&label_selector), &log_options)
+                    .await
+                    .map_err(|_| {
+                        CliError::not_found(format!(
+                            "Bike '{}' not found.\n\nTry: moto bike list",
+                            name
+                        ))
+                    })?;
+
+                // Stream logs to stdout
+                let mut stdout = std::io::stdout().lock();
+                while let Some(result) = stream.next().await {
+                    match result {
+                        Ok(line) => {
+                            // Write directly without extra formatting - line already has newline
+                            stdout.write_all(line.as_bytes())?;
+                            stdout.flush()?;
+                        }
+                        Err(e) => {
+                            return Err(CliError::general(format!("log stream error: {}", e)));
+                        }
+                    }
+                }
+            } else {
+                // Non-streaming mode
+                let logs = client
+                    .get_pod_logs(&namespace, Some(&label_selector), &log_options)
+                    .await?;
+
+                if logs.is_empty() {
+                    if !flags.quiet {
+                        eprintln!("No logs found for bike '{}'.", name);
+                    }
+                } else {
+                    // Print logs directly (already includes pod prefixes from K8s layer)
+                    print!("{}", logs);
+                    if !logs.ends_with('\n') {
+                        println!();
+                    }
                 }
             }
         }
