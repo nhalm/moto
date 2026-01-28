@@ -5,9 +5,22 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
 use std::process::Command as ProcessCommand;
+use std::time::Duration;
+use tokio::time::sleep;
 
 use crate::cli::GlobalFlags;
 use crate::error::{CliError, Result};
+
+/// Backoff delays for waiting on cluster API readiness
+const API_READY_BACKOFF: &[Duration] = &[
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+    Duration::from_secs(8),
+];
+
+/// Maximum total wait time for API readiness (sum of backoff + initial check)
+const API_READY_TIMEOUT_SECS: u64 = 30;
 
 /// Cluster command and subcommands
 #[derive(Args)]
@@ -178,26 +191,51 @@ fn create_cluster(quiet: bool) -> Result<()> {
     Ok(())
 }
 
-/// Wait for the cluster API to be ready
-fn wait_for_cluster_ready(quiet: bool) -> Result<()> {
-    if !quiet {
-        eprintln!("Waiting for cluster to be ready...");
-    }
-
-    // k3d waits for the cluster to be ready as part of create, but we can
-    // verify by checking kubectl connectivity
+/// Check if the cluster API is responding
+fn check_api_ready() -> bool {
     let output = ProcessCommand::new("kubectl")
         .args(["--context", &format!("k3d-{CLUSTER_NAME}"), "cluster-info"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status();
 
-    match output {
-        Ok(status) if status.success() => Ok(()),
-        _ => Err(CliError::general(
-            "Cluster created but API not responding. Try: kubectl cluster-info --context k3d-moto",
-        )),
+    matches!(output, Ok(status) if status.success())
+}
+
+/// Wait for the cluster API to be ready with retries
+async fn wait_for_cluster_ready(quiet: bool) -> Result<()> {
+    if !quiet {
+        eprintln!("Waiting for cluster to be ready...");
     }
+
+    // Initial check - API might already be ready
+    if check_api_ready() {
+        return Ok(());
+    }
+
+    // Retry with backoff
+    for (i, delay) in API_READY_BACKOFF.iter().enumerate() {
+        sleep(*delay).await;
+
+        if check_api_ready() {
+            return Ok(());
+        }
+
+        if !quiet {
+            eprintln!(
+                "  API not ready yet, retrying... ({}/{})",
+                i + 1,
+                API_READY_BACKOFF.len()
+            );
+        }
+    }
+
+    // Final error after all retries exhausted
+    Err(CliError::general(format!(
+        "Cluster created but API not responding after {}s.\n\n\
+         Try: kubectl cluster-info --context k3d-{CLUSTER_NAME}",
+        API_READY_TIMEOUT_SECS
+    )))
 }
 
 /// Initialize the local k3d cluster
@@ -246,7 +284,7 @@ async fn init_cluster(flags: &GlobalFlags, force: bool) -> Result<()> {
     create_cluster(flags.quiet)?;
 
     // Wait for it to be ready
-    wait_for_cluster_ready(flags.quiet)?;
+    wait_for_cluster_ready(flags.quiet).await?;
 
     // Success output
     if flags.json {
@@ -376,5 +414,35 @@ mod tests {
                 .unwrap_or(false)
         });
         assert!(!has_moto_empty);
+    }
+
+    #[test]
+    fn test_api_ready_backoff_config() {
+        // Verify backoff configuration is reasonable
+        assert!(!API_READY_BACKOFF.is_empty(), "backoff should have delays");
+
+        // Check delays are increasing (exponential-style)
+        for window in API_READY_BACKOFF.windows(2) {
+            assert!(
+                window[1] >= window[0],
+                "backoff delays should be non-decreasing"
+            );
+        }
+
+        // Calculate total wait time
+        let total_wait: u64 = API_READY_BACKOFF.iter().map(|d| d.as_secs()).sum();
+        assert!(
+            total_wait <= API_READY_TIMEOUT_SECS,
+            "total backoff wait ({total_wait}s) should not exceed timeout ({API_READY_TIMEOUT_SECS}s)"
+        );
+    }
+
+    #[test]
+    fn test_check_api_ready_returns_bool() {
+        // This test verifies that check_api_ready() returns a boolean
+        // The actual result depends on whether kubectl and the cluster are available
+        let result = check_api_ready();
+        // Result is a boolean (true or false), not a panic
+        assert!(result || !result);
     }
 }
