@@ -80,6 +80,10 @@ pub enum Error {
     /// Failed to get service.
     #[error("failed to get service: {0}")]
     ServiceGet(#[source] kube::Error),
+
+    /// Deployment timed out waiting for readiness.
+    #[error("deployment timed out waiting for readiness: {0}")]
+    DeploymentTimeout(String),
 }
 
 /// Result type alias for K8s operations.

@@ -1,6 +1,7 @@
 //! Kubernetes Deployment and Service operations for bikes.
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{
@@ -64,6 +65,16 @@ pub trait DeploymentOps {
         namespace: &str,
         name: &str,
     ) -> impl std::future::Future<Output = Result<bool>> + Send;
+
+    /// Waits for a deployment to be ready (all replicas available).
+    ///
+    /// Returns when all desired replicas are ready, or errors on timeout.
+    fn wait_for_deployment(
+        &self,
+        namespace: &str,
+        name: &str,
+        timeout: std::time::Duration,
+    ) -> impl std::future::Future<Output = Result<()>> + Send;
 }
 
 impl DeploymentOps for K8sClient {
@@ -151,6 +162,58 @@ impl DeploymentOps for K8sClient {
             Ok(_) => Ok(true),
             Err(e) if is_not_found(&e) => Ok(false),
             Err(e) => Err(Error::DeploymentGet(e)),
+        }
+    }
+
+    #[instrument(skip(self), fields(deployment = %name, namespace = %namespace, timeout_secs = %timeout.as_secs()))]
+    async fn wait_for_deployment(
+        &self,
+        namespace: &str,
+        name: &str,
+        timeout: Duration,
+    ) -> Result<()> {
+        let api: Api<Deployment> = Api::namespaced(self.inner().clone(), namespace);
+        let start = std::time::Instant::now();
+        let poll_interval = Duration::from_secs(1);
+
+        debug!("waiting for deployment to be ready");
+
+        loop {
+            // Check timeout
+            if start.elapsed() > timeout {
+                return Err(Error::DeploymentTimeout(name.to_string()));
+            }
+
+            // Get deployment status
+            let deployment = api.get(name).await.map_err(|e| {
+                if is_not_found(&e) {
+                    Error::DeploymentNotFound(name.to_string())
+                } else {
+                    Error::DeploymentGet(e)
+                }
+            })?;
+
+            // Check if ready
+            if let Some(status) = deployment.status {
+                let desired = deployment
+                    .spec
+                    .as_ref()
+                    .and_then(|s| s.replicas)
+                    .unwrap_or(1);
+                let ready = status.ready_replicas.unwrap_or(0);
+                let updated = status.updated_replicas.unwrap_or(0);
+
+                debug!(desired, ready, updated, "checking deployment status");
+
+                // Deployment is ready when all replicas are ready and updated
+                if ready >= desired && updated >= desired {
+                    debug!("deployment is ready");
+                    return Ok(());
+                }
+            }
+
+            // Wait before polling again
+            tokio::time::sleep(poll_interval).await;
         }
     }
 }

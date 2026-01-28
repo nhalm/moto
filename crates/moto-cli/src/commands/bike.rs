@@ -35,6 +35,18 @@ pub enum BikeAction {
         /// Deploy specific image (default: latest local build)
         #[arg(long)]
         image: Option<String>,
+
+        /// Override replica count
+        #[arg(long)]
+        replicas: Option<u32>,
+
+        /// Wait for deployment to complete
+        #[arg(long)]
+        wait: bool,
+
+        /// Timeout for --wait (default: 5m)
+        #[arg(long, default_value = "5m")]
+        wait_timeout: String,
     },
 }
 
@@ -53,6 +65,33 @@ struct BikeDeployJson {
     image: String,
     replicas: u32,
     status: String,
+}
+
+/// Parse a duration string like "5m", "1h", "2d" into seconds.
+fn parse_duration(s: &str) -> Result<u64> {
+    let s = s.trim();
+    if s.is_empty() {
+        return Err(CliError::invalid_input("empty duration"));
+    }
+
+    let (num_str, unit) = s.split_at(s.len() - 1);
+    let num: u64 = num_str
+        .parse()
+        .map_err(|_| CliError::invalid_input(format!("invalid duration number: {num_str}")))?;
+
+    let multiplier = match unit {
+        "s" => 1,
+        "m" => 60,
+        "h" => 3600,
+        "d" => 86400,
+        _ => {
+            return Err(CliError::invalid_input(format!(
+                "invalid duration unit: {unit} (use s, m, h, or d)"
+            )));
+        }
+    };
+
+    Ok(num * multiplier)
 }
 
 /// Get the Linux target system based on host architecture.
@@ -182,11 +221,15 @@ fn get_latest_local_image(bike_name: &str) -> Result<String> {
 }
 
 /// Convert BikeConfig to BikeDeploymentConfig for K8s deployment.
-fn to_deployment_config(config: &BikeConfig, image: &str) -> BikeDeploymentConfig {
+fn to_deployment_config(
+    config: &BikeConfig,
+    image: &str,
+    replicas_override: Option<u32>,
+) -> BikeDeploymentConfig {
     BikeDeploymentConfig {
         name: config.name.clone(),
         image: image.to_string(),
-        replicas: config.deploy.replicas,
+        replicas: replicas_override.unwrap_or(config.deploy.replicas),
         port: config.deploy.port,
         health_port: config.health.port,
         health_path: config.health.path.clone(),
@@ -384,7 +427,12 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
             }
         }
 
-        BikeAction::Deploy { image } => {
+        BikeAction::Deploy {
+            image,
+            replicas,
+            wait,
+            wait_timeout,
+        } => {
             // Discover bike.toml - this validates the file exists and is valid
             let (_bike_path, config) = discover_bike()?;
 
@@ -397,21 +445,44 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
             // Get the current namespace
             let namespace = get_current_namespace()?;
 
+            // Parse wait timeout
+            let timeout_seconds = parse_duration(&wait_timeout)?;
+            let timeout = std::time::Duration::from_secs(timeout_seconds);
+
+            // Effective replica count
+            let effective_replicas = replicas.unwrap_or(config.deploy.replicas);
+
             if !flags.quiet {
                 eprintln!("Deploying {}...", image_ref);
             }
 
             // Create K8s client and deploy
             let client = K8sClient::new().await?;
-            let deploy_config = to_deployment_config(&config, &image_ref);
+            let deploy_config = to_deployment_config(&config, &image_ref, replicas);
             client.deploy_bike(&namespace, &deploy_config).await?;
+
+            // Wait for deployment if requested
+            if wait {
+                if !flags.quiet {
+                    eprint!("  Waiting for pods... ");
+                }
+
+                let deployment_name = format!("moto-{}", config.name);
+                client
+                    .wait_for_deployment(&namespace, &deployment_name, timeout)
+                    .await?;
+
+                if !flags.quiet {
+                    eprintln!("{}/{} ready", effective_replicas, effective_replicas);
+                }
+            }
 
             // Output results
             if flags.json {
                 let json = BikeDeployJson {
                     name: config.name.clone(),
                     image: image_ref.clone(),
-                    replicas: config.deploy.replicas,
+                    replicas: effective_replicas,
                     status: "deployed".to_string(),
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
@@ -500,5 +571,41 @@ mod tests {
         assert_eq!(parsed["image"], "club:abc123");
         assert_eq!(parsed["replicas"], 2);
         assert_eq!(parsed["status"], "deployed");
+    }
+
+    #[test]
+    fn test_parse_duration_seconds() {
+        assert_eq!(parse_duration("30s").unwrap(), 30);
+        assert_eq!(parse_duration("1s").unwrap(), 1);
+        assert_eq!(parse_duration("120s").unwrap(), 120);
+    }
+
+    #[test]
+    fn test_parse_duration_minutes() {
+        assert_eq!(parse_duration("5m").unwrap(), 300);
+        assert_eq!(parse_duration("1m").unwrap(), 60);
+        assert_eq!(parse_duration("10m").unwrap(), 600);
+    }
+
+    #[test]
+    fn test_parse_duration_hours() {
+        assert_eq!(parse_duration("1h").unwrap(), 3600);
+        assert_eq!(parse_duration("2h").unwrap(), 7200);
+    }
+
+    #[test]
+    fn test_parse_duration_days() {
+        assert_eq!(parse_duration("1d").unwrap(), 86400);
+    }
+
+    #[test]
+    fn test_parse_duration_invalid_unit() {
+        assert!(parse_duration("5x").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_empty() {
+        assert!(parse_duration("").is_err());
+        assert!(parse_duration("  ").is_err());
     }
 }
