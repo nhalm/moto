@@ -4,15 +4,28 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| moto-cli.md | v0.3 | moto bike build: bike.toml discovery, container image build | blocked: bike.md Wrenching |
-| moto-cli.md | v0.3 | moto bike build: --tag override, --push flag | blocked: bike.md Wrenching |
-| moto-cli.md | v0.3 | moto bike deploy: image selection, replica override, --wait | blocked: bike.md Wrenching |
-| moto-cli.md | v0.3 | moto bike list: formatted output, JSON output | blocked: bike.md Wrenching |
-| moto-cli.md | v0.3 | moto bike logs: --follow, --tail, --since options | blocked: bike.md Wrenching |
-| container-system.md | v0.8 | infra/pkgs/moto-engine.nix: minimal runtime container | blocked: bike.md Wrenching |
-| container-system.md | v0.8 | CI workflow: .github/workflows/containers.yml | future |
-| container-system.md | v0.8 | Image signing: cosign keyless signing in CI | future |
-| container-system.md | v0.8 | SBOM generation: trivy SBOM + cosign attestation | future |
+| moto-bike.md | v0.3 | infra/pkgs/moto-bike.nix: minimal base image (CA certs, tzdata, non-root user) | |
+| moto-bike.md | v0.3 | infra/pkgs/moto-bike.nix: mkBike helper function (base + engine binary) | |
+| moto-bike.md | v0.3 | flake.nix: export moto-bike package output | |
+| moto-bike.md | v0.3 | Makefile: build-bike, test-bike targets | |
+| moto-cli.md | v0.3 | moto bike build: bike.toml discovery (search up to git root) | |
+| moto-cli.md | v0.3 | moto bike build: Nix build wrapper, docker load | |
+| moto-cli.md | v0.3 | moto bike build: --tag override, --push to registry | |
+| moto-cli.md | v0.3 | moto bike deploy: image selection, K8s Deployment generation | |
+| moto-cli.md | v0.3 | moto bike deploy: --replicas override, --wait for ready, --wait-timeout | |
+| moto-cli.md | v0.3 | moto bike deploy: --namespace flag (default: current context) | |
+| moto-cli.md | v0.3 | moto bike list: formatted output (NAME, STATUS, REPLICAS, AGE, IMAGE) | |
+| moto-cli.md | v0.3 | moto bike list: --json output format | |
+| moto-cli.md | v0.3 | moto bike logs: --follow/-f, --tail/-n, --since options | |
+| moto-wgtunnel.md | v0.5 | enter.rs: Wire up moto-wgtunnel-engine to configure WireGuard tunnel | |
+| moto-wgtunnel.md | v0.5 | enter.rs: Wire up MagicConn for direct UDP connection attempts | |
+| moto-wgtunnel.md | v0.5 | enter.rs: Wire up DerpClient for DERP relay fallback | |
+| moto-wgtunnel.md | v0.5 | enter.rs: Spawn SSH session to garage overlay IP after tunnel established | |
+| moto-wgtunnel.md | v0.5 | enter.rs: Device registration via moto-club API | blocked: moto-club API endpoints |
+| moto-wgtunnel.md | v0.5 | enter.rs: Session creation via moto-club API | blocked: moto-club API endpoints |
+| container-system.md | v0.9 | CI workflow: .github/workflows/containers.yml | future |
+| container-system.md | v0.9 | Image signing: cosign keyless signing in CI | future |
+| container-system.md | v0.9 | SBOM generation: trivy SBOM + cosign attestation | future |
 
 ## Implemented
 
