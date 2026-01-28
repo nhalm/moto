@@ -4,7 +4,6 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| moto-bike.md | v0.3 | flake.nix: export moto-bike package output | |
 | moto-cli.md | v0.3 | moto bike build: bike.toml discovery (search up to git root) | |
 | moto-cli.md | v0.3 | moto bike build: Nix build wrapper, docker load | |
 | moto-cli.md | v0.3 | moto bike build: --tag override, --push to registry | |
@@ -33,6 +32,7 @@
 | moto-bike.md | v0.3 | infra/pkgs/moto-bike.nix: minimal base image (CA certs, tzdata, non-root user) |
 | moto-bike.md | v0.3 | infra/pkgs/moto-bike.nix: mkBike helper function (base + engine binary) |
 | moto-bike.md | v0.3 | Makefile: build-bike, test-bike targets |
+| moto-bike.md | v0.3 | flake.nix: export moto-bike package output |
 
 ---
 
