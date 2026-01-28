@@ -304,7 +304,7 @@ Authorization: Bearer <user-token>
   "device_name": "macbook-pro"  // optional, for display
 }
 
-Response 200:
+Response 201:
 {
   "device_id": "uuid-of-device",
   "assigned_ip": "fd00:moto:2::1"
@@ -327,7 +327,7 @@ Authorization: Bearer <user-token>
   "public_key": "ssh-ed25519 AAAA... user@host"
 }
 
-Response 200:
+Response 201:
 {
   "fingerprint": "SHA256:..."
 }
@@ -345,7 +345,7 @@ Authorization: Bearer <user-token>
   "ttl_seconds": 14400  // optional, defaults to garage TTL
 }
 
-Response 200:
+Response 201:
 {
   "session_id": "sess_xyz789",
   "garage": {
