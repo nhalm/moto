@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.8 |
+| Version | 0.9 |
 | Status | Ready to Rip |
-| Last Updated | 2026-01-26 |
+| Last Updated | 2026-01-28 |
 
 ## Overview
 
@@ -56,9 +56,9 @@ Think of containers like motorcycle builds:
 │         ▼                                     ▼                  │
 │  ┌──────────────┐                      ┌──────────────┐         │
 │  │   GARAGE     │                      │    BIKE      │         │
-│  │  Container   │                      │  Container   │         │
-│  │   ~3GB       │                      │   ~50MB      │         │
-│  │(moto-garage) │                      │(moto-engine) │         │
+│  │  Container   │                      │  (base image)│         │
+│  │   ~3GB       │                      │   <20MB      │         │
+│  │(moto-garage) │                      │ (moto-bike)  │         │
 │  └──────────────┘                      └──────────────┘         │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -75,18 +75,24 @@ User: root
 Contains: Full Rust toolchain, all dev tools, Claude Code
 ```
 
-#### Engine Container (`moto-engine`)
+#### Bike Base Image (`moto-bike`)
 
-The production runtime. Single minimal container for all services.
+The minimal production base image. Engines (binaries) are added to create final deployable images.
 
 ```
-Image: ${MOTO_REGISTRY}/moto-engine
-Size: ~20-50MB compressed
+Image: ${MOTO_REGISTRY}/moto-bike
+Size: <20MB compressed
 User: 1000:1000 (non-root)
-Contains: Runtime dependencies + CA certificates
+Contains: CA certificates, tzdata, non-root user setup
+Excludes: Shell, package manager, libc (engines are static)
 ```
 
-**Binary selection at deployment:** The engine container is a single base image. Which service runs is determined by the entrypoint/command at deployment time, not build time. This keeps the container definition simple and consistent across all services (club, vault, proxy, etc.).
+**Final images:** Each engine gets its own image built from the bike base:
+- `moto-bike` + club binary → `moto-club`
+- `moto-bike` + vault binary → `moto-vault`
+- `moto-bike` + proxy binary → `moto-proxy`
+
+See [moto-bike.md](moto-bike.md) for full specification of the bike base image and engine contract.
 
 ### Infrastructure Directory Structure
 
@@ -220,15 +226,13 @@ Full `flake.nix` with crane for cached Rust builds:
           };
         };
 
-        # Bike container builder
-        mkEngine = { name, package }: pkgs.dockerTools.buildLayeredImage {
-          name = "moto-engine-${name}";
+        # Bike base image
+        moto-bike = pkgs.dockerTools.buildLayeredImage {
+          name = "moto-bike";
           tag = "latest";
-          contents = [ package pkgs.cacert ];
+          contents = [ pkgs.cacert ];
           config = {
-            Entrypoint = [ "${package}/bin/${name}" ];
             User = "1000:1000";
-            ExposedPorts = { "8080/tcp" = {}; "8081/tcp" = {}; "9090/tcp" = {}; };
             Env = [ "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" ];
           };
           fakeRootCommands = ''
@@ -239,11 +243,26 @@ Full `flake.nix` with crane for cached Rust builds:
           enableFakechroot = true;
         };
 
+        # Final image builder: bike base + engine binary
+        mkBike = { name, package }: pkgs.dockerTools.buildLayeredImage {
+          name = "moto-${name}";
+          tag = "latest";
+          fromImage = moto-bike;
+          contents = [ package ];
+          config = {
+            Entrypoint = [ "${package}/bin/${name}" ];
+            User = "1000:1000";
+            ExposedPorts = { "8080/tcp" = {}; "8081/tcp" = {}; "9090/tcp" = {}; };
+          };
+        };
+
       in {
         packages = {
-          inherit moto-club moto-vault;
-          moto-garage = garage;  # Garage container for development
-          moto-engine = engine;  # Engine container for runtime (binary selected at deployment)
+          inherit moto-club moto-vault moto-bike;
+          moto-garage = garage;
+          # Final images built with mkBike
+          moto-club-image = mkBike { name = "club"; package = moto-club; };
+          moto-vault-image = mkBike { name = "vault"; package = moto-vault; };
           default = moto-club;
         };
 
@@ -319,54 +338,48 @@ pkgs.dockerTools.buildLayeredImage {
 - `buildEnv` handles file collisions automatically (required for packages with overlapping dirs like `share/`)
 - Modules in `infra/modules/` provide reusable package sets
 
-**Bike image** (defined in `infra/engine.nix` flake-parts module):
+**Bike base + final images** (defined in `infra/bike.nix` flake-parts module):
 
 ```nix
-# infra/flake/engine.nix
+# infra/flake/bike.nix
 { inputs, ... }: {
   perSystem = { pkgs, self', ... }:
   let
-    mkEngine = name: binary:
-
-pkgs.dockerTools.buildLayeredImage {
-  name = "moto-engine-${engine.name}";
-  tag = "latest";
-
-  # Minimal contents - just the binary and TLS certs
-  contents = [
-    engine.package        # The compiled Rust binary
-    pkgs.cacert           # CA certificates for TLS
-  ];
-
-  config = {
-    Entrypoint = [ "${engine.package}/bin/${engine.name}" ];
-
-    # Non-root for security
-    User = "1000:1000";
-
-    # Standard port
-    ExposedPorts = {
-      "8080/tcp" = {};
+    # Bike base image - minimal runtime
+    moto-bike = pkgs.dockerTools.buildLayeredImage {
+      name = "moto-bike";
+      tag = "latest";
+      contents = [ pkgs.cacert ];
+      config = {
+        User = "1000:1000";
+        Env = [ "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" ];
+      };
+      fakeRootCommands = ''
+        ${pkgs.dockerTools.shadowSetup}
+        groupadd -g 1000 moto
+        useradd -u 1000 -g moto -d / -s /sbin/nologin moto
+      '';
+      enableFakechroot = true;
     };
 
-    WorkingDir = "/";
-
-    Env = [
-      "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-      "RUST_BACKTRACE=1"
-    ];
-  };
-
-  # Create non-root user properly (not extraCommands which runs as build user)
-  # Note: Nix derivation hash already provides reproducibility - no need to
-  # override timestamp. Real build time is more useful operationally.
-  fakeRootCommands = ''
-    ${pkgs.dockerTools.shadowSetup}
-    groupadd -g 1000 moto
-    useradd -u 1000 -g moto -d / -s /sbin/nologin moto
-  '';
-  enableFakechroot = true;
-}
+    # Build final image: bike base + engine binary
+    mkBike = { name, package }: pkgs.dockerTools.buildLayeredImage {
+      name = "moto-${name}";
+      tag = "latest";
+      fromImage = moto-bike;
+      contents = [ package ];
+      config = {
+        Entrypoint = [ "${package}/bin/${name}" ];
+        User = "1000:1000";
+        ExposedPorts = {
+          "8080/tcp" = {};
+          "8081/tcp" = {};
+          "9090/tcp" = {};
+        };
+        WorkingDir = "/";
+        Env = [ "RUST_BACKTRACE=1" ];
+      };
+    };
 ```
 
 ### Image Registry & Tagging Strategy
@@ -407,11 +420,14 @@ docker run -d -p 5000:5000 --name moto-registry registry:2
 **Naming convention:**
 
 ```
-${MOTO_REGISTRY}/moto-<type>[-<name>]:<tag>
+${MOTO_REGISTRY}/moto-<name>:<tag>
 
-Types:
-  moto-garage   → Garage container (development)
-  moto-engine   → Engine container (runtime for all services)
+Images:
+  moto-garage   → Development container (full toolchain)
+  moto-bike     → Production base image (minimal runtime)
+  moto-club     → Club engine (bike + club binary)
+  moto-vault    → Vault engine (bike + vault binary)
+  moto-proxy    → Proxy engine (bike + proxy binary)
 ```
 
 **Tagging strategy:**
@@ -420,7 +436,7 @@ Types:
 |-----|------|---------|
 | `latest` | Every main branch build | `moto-garage:latest` |
 | `<sha>` | Every build | `moto-garage:a1b2c3d` |
-| `v<semver>` | Git tags only | `moto-engine:v1.2.3` |
+| `v<semver>` | Git tags only | `moto-club:v1.2.3` |
 | `<branch>` | Feature branches (optional) | `moto-garage:feature-tokenization` |
 
 **Example full image references:**
@@ -428,14 +444,15 @@ Types:
 ```bash
 # Local development
 localhost:5000/moto-garage:latest
-localhost:5000/moto-engine:a1b2c3d
+localhost:5000/moto-bike:latest
+localhost:5000/moto-club:a1b2c3d
 
 # K3s cluster
-registry.moto-system:5000/moto-garage:latest
-registry.moto-system:5000/moto-engine:v1.0.0
+registry.moto-system:5000/moto-club:v1.0.0
+registry.moto-system:5000/moto-vault:v1.0.0
 
 # Remote (future/optional)
-ghcr.io/nhalm/moto-engine:v1.0.0
+ghcr.io/nhalm/moto-club:v1.0.0
 ```
 
 ### Local Build Workflow
@@ -558,17 +575,17 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Build ${{ matrix.engine }} image
-        run: nix build .#engine-${{ matrix.engine }}
+      - name: Build moto-${{ matrix.engine }} image
+        run: nix build .#moto-${{ matrix.engine }}-image
 
       - name: Load and push
         if: github.event_name != 'pull_request'
         run: |
           docker load < result
           SHA=$(git rev-parse --short HEAD)
-          docker tag moto-engine-${{ matrix.engine }}:latest \
-            ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-engine-${{ matrix.engine }}:$SHA
-          docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-engine-${{ matrix.engine }}:$SHA
+          docker tag moto-${{ matrix.engine }}:latest \
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.engine }}:$SHA
+          docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.engine }}:$SHA
 ```
 
 ### Reproducibility Guarantees
@@ -586,7 +603,7 @@ jobs:
 
 ```bash
 # Two builds from same commit should produce identical images
-nix build .#moto-engine
+nix build .#moto-club-image
 sha256sum result
 # → same hash every time on same commit
 ```
@@ -626,9 +643,9 @@ For releases, GitHub Actions builds both architectures and creates a multi-arch 
 
 ```bash
 # Single tag, multiple architectures
-docker manifest create ghcr.io/nhalm/moto-engine:v1.0.0 \
-  ghcr.io/nhalm/moto-engine:v1.0.0-amd64 \
-  ghcr.io/nhalm/moto-engine:v1.0.0-arm64
+docker manifest create ghcr.io/nhalm/moto-club:v1.0.0 \
+  ghcr.io/nhalm/moto-club:v1.0.0-amd64 \
+  ghcr.io/nhalm/moto-club:v1.0.0-arm64
 ```
 
 ### Cache Strategy
@@ -699,7 +716,7 @@ Uses OIDC identity from GitHub Actions - no keys to manage:
 
 ```bash
 # In CI, cosign uses GitHub's OIDC token automatically
-cosign sign --yes ${REGISTRY}/moto-engine:${SHA}
+cosign sign --yes ${REGISTRY}/moto-club:${SHA}
 ```
 
 **Local signing with key pair:**
@@ -710,10 +727,10 @@ cosign generate-key-pair
 # Creates cosign.key (private) and cosign.pub (public)
 
 # Sign an image
-cosign sign --key cosign.key localhost:5000/moto-engine:latest
+cosign sign --key cosign.key localhost:5000/moto-club:latest
 
 # Verify an image
-cosign verify --key cosign.pub localhost:5000/moto-engine:latest
+cosign verify --key cosign.pub localhost:5000/moto-club:latest
 ```
 
 **CI workflow addition:**
@@ -724,7 +741,7 @@ cosign verify --key cosign.pub localhost:5000/moto-engine:latest
   env:
     COSIGN_EXPERIMENTAL: "true"  # Enable keyless
   run: |
-    cosign sign --yes ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-engine-${{ matrix.engine }}:$SHA
+    cosign sign --yes ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.engine }}:$SHA
 ```
 
 **Verification policy (future):**
@@ -775,18 +792,18 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
 
 ```bash
 # Scan with severity filter
-trivy image --severity HIGH,CRITICAL moto-engine:latest
+trivy image --severity HIGH,CRITICAL moto-club:latest
 
 # Scan and fail on findings (for CI)
-trivy image --exit-code 1 --severity CRITICAL moto-engine:latest
+trivy image --exit-code 1 --severity CRITICAL moto-club:latest
 
 # Output as JSON for processing
-trivy image --format json --output results.json moto-engine:latest
+trivy image --format json --output results.json moto-club:latest
 
 # Scan before pushing (recommended flow)
-nix build .#moto-engine && docker load < result
-trivy image --exit-code 1 --severity HIGH,CRITICAL moto-engine:latest
-docker push localhost:5000/moto-engine:latest
+nix build .#moto-club-image && docker load < result
+trivy image --exit-code 1 --severity HIGH,CRITICAL moto-club:latest
+docker push localhost:5000/moto-club:latest
 ```
 
 **CI workflow addition:**
@@ -798,8 +815,8 @@ docker push localhost:5000/moto-engine:latest
     curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
     # Scan - fail on CRITICAL, warn on HIGH
-    trivy image --exit-code 1 --severity CRITICAL moto-engine-${{ matrix.engine }}:latest
-    trivy image --severity HIGH moto-engine-${{ matrix.engine }}:latest
+    trivy image --exit-code 1 --severity CRITICAL moto-${{ matrix.engine }}:latest
+    trivy image --severity HIGH moto-${{ matrix.engine }}:latest
 ```
 
 **Severity policy:**
@@ -819,10 +836,10 @@ Software Bill of Materials - list all components in the image for compliance and
 
 ```bash
 # SPDX format (widely supported)
-trivy image --format spdx-json --output sbom.spdx.json moto-engine:latest
+trivy image --format spdx-json --output sbom.spdx.json moto-club:latest
 
 # CycloneDX format (good for security tools)
-trivy image --format cyclonedx --output sbom.cdx.json moto-engine:latest
+trivy image --format cyclonedx --output sbom.cdx.json moto-club:latest
 ```
 
 **Alternative: syft (from Anchore):**
@@ -832,7 +849,7 @@ trivy image --format cyclonedx --output sbom.cdx.json moto-engine:latest
 brew install syft
 
 # Generate SBOM
-syft moto-engine:latest -o spdx-json > sbom.spdx.json
+syft moto-club:latest -o spdx-json > sbom.spdx.json
 ```
 
 **Attach SBOM to image as attestation:**
@@ -840,11 +857,11 @@ syft moto-engine:latest -o spdx-json > sbom.spdx.json
 ```bash
 # Sign and attach SBOM
 cosign attest --predicate sbom.spdx.json --type spdx \
-  localhost:5000/moto-engine:latest
+  localhost:5000/moto-club:latest
 
 # Verify attestation exists
 cosign verify-attestation --type spdx \
-  localhost:5000/moto-engine:latest
+  localhost:5000/moto-club:latest
 ```
 
 **CI workflow addition:**
@@ -854,11 +871,11 @@ cosign verify-attestation --type spdx \
   run: |
     # Generate SBOM
     trivy image --format spdx-json --output sbom.spdx.json \
-      moto-engine-${{ matrix.engine }}:latest
+      moto-${{ matrix.engine }}:latest
 
     # Attach as attestation (if signing enabled)
     cosign attest --yes --predicate sbom.spdx.json --type spdx \
-      ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-engine-${{ matrix.engine }}:$SHA
+      ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.engine }}:$SHA
 ```
 
 **What SBOM captures:**
@@ -882,7 +899,8 @@ See [makefile.md](makefile.md) for build targets (`build-garage`, `test-garage`,
 | Image | Target | Rationale |
 |-------|--------|-----------|
 | `moto-garage` | < 3GB | Full toolchain acceptable for dev |
-| `moto-engine-*` | < 50MB | Minimal for fast deploys |
+| `moto-bike` | < 20MB | Minimal base (just certs, user) |
+| `moto-club`, etc. | < 50MB | Bike base + single engine binary |
 
 **Size optimization for bikes:**
 
@@ -927,7 +945,7 @@ strip = true
 | Spec | Relationship |
 |------|--------------|
 | `dev-container.md` | Defines garage container contents |
-| `bike.md` | Defines bike container requirements |
+| `moto-bike.md` | Defines bike base image and engine contract |
 | `moto-club.md` | Club runs in bike container |
 | `garage-lifecycle.md` | Manages garage container instances |
 | `local-cluster.md` | Where containers run |
@@ -975,12 +993,12 @@ kubectl debug -it moto-club-abc123 --image=busybox --target=club
 
 # Or run the image with shell override (for local testing)
 # This won't work because there's no shell, but you can:
-docker run --rm -it --entrypoint="" moto-engine:latest /bin/sh
+docker run --rm -it --entrypoint="" moto-club:latest /bin/sh
 # Error: executable file not found
 
 # Instead, use a sidecar approach or copy binary out:
-docker create --name temp moto-engine:latest
-docker cp temp:/bin/moto-engine ./moto-engine
+docker create --name temp moto-club:latest
+docker cp temp:/bin/club ./club
 docker rm temp
 # Now inspect the binary locally
 ```
@@ -1012,16 +1030,24 @@ docker logs moto-registry
 
 ```bash
 # Build twice and compare
-nix build .#moto-engine -o result1
-nix build .#moto-engine -o result2
+nix build .#moto-club-image -o result1
+nix build .#moto-club-image -o result2
 diff <(sha256sum result1) <(sha256sum result2)
 # Should be identical
 
 # Check derivation hash
-nix path-info --json .#moto-engine | jq '.[] | .path'
+nix path-info --json .#moto-club-image | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v0.9 (2026-01-28)
+- Clarified container naming: `moto-bike` is base image, `moto-club`/`moto-vault`/`moto-proxy` are final images
+- Renamed `mkEngine` → `mkBike` helper, produces `moto-{name}` not `moto-engine-{name}`
+- Added `moto-bike` base image definition (minimal: CA certs, non-root user)
+- Final images now use `fromImage = moto-bike` layering
+- Updated all examples and CI workflows to use new naming
+- See moto-bike.md for full specification
 
 ### v0.8 (2026-01-26)
 - Switch to flake-parts for modular flake organization
@@ -1049,7 +1075,7 @@ nix path-info --json .#moto-engine | jq '.[] | .path'
 ### v0.3 (2026-01-24)
 - Add infra directory structure: `pkgs/`, `modules/`, `machines/`
 - Rename `moto-dev` to `moto-garage` for metaphor consistency
-- Single `moto-engine` container (binary selected at deployment, not build time)
+- Introduced `moto-bike` base image concept (see moto-bike.md)
 - Update all build commands and Makefile targets
 - Add PATH note for dockerTools containers
 

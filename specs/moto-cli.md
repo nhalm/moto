@@ -249,32 +249,11 @@ Options:
 
 ### Bike Commands
 
-#### bike.toml Discovery
+#### bike.toml
 
 Bike commands look for `bike.toml` in the current working directory. If not found, they search up to the git root.
 
-#### `bike.toml` format
-
-```toml
-name = "api-service"
-engine = "axum"
-
-[build]
-target = "release"
-
-[deploy]
-replicas = 2
-port = 8080
-
-[health]
-path = "/health"
-
-[resources]
-cpu = "500m"
-memory = "512Mi"
-```
-
-**Required fields:** `name`
+See [moto-bike.md](moto-bike.md) for the full `bike.toml` specification.
 
 ---
 
@@ -523,7 +502,7 @@ Try: Create a bike.toml or cd to a directory containing one.
 - [jj-workflow.md](jj-workflow.md) - Code sync and PR workflow
 - [moto-wgtunnel.md](moto-wgtunnel.md) - WireGuard connectivity
 - [garage-lifecycle.md](garage-lifecycle.md) - Garage state machine
-- [bike.md](bike.md) - Bike deployment model
+- [moto-bike.md](moto-bike.md) - Bike base image and engine contract
 - [moto-club.md](moto-club.md) - Server API
 
 ---
