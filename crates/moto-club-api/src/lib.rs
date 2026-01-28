@@ -10,7 +10,8 @@
 //! ```ignore
 //! use moto_club_api::{AppState, router};
 //! use moto_club_db::DbPool;
-//! use moto_club_wg::{PeerRegistry, InMemoryPeerStore, Ipam, InMemoryStore};
+//! use moto_club_wg::{PeerRegistry, InMemoryPeerStore, Ipam, InMemoryStore, SessionManager,
+//!     InMemorySessionStore, DerpMapManager, InMemoryDerpStore, SshKeyManager, InMemorySshKeyStore};
 //! use std::sync::Arc;
 //!
 //! let pool = DbPool::connect("postgres://...").await?;
@@ -18,7 +19,10 @@
 //!     InMemoryPeerStore::new(),
 //!     Ipam::new(InMemoryStore::new()),
 //! ));
-//! let state = AppState::new(pool, peer_registry);
+//! let session_manager = Arc::new(SessionManager::new(InMemorySessionStore::new()));
+//! let derp_manager = Arc::new(DerpMapManager::new(InMemoryDerpStore::with_default_map()));
+//! let ssh_key_manager = Arc::new(SshKeyManager::new(InMemorySshKeyStore::new()));
+//! let state = AppState::new(pool, peer_registry, session_manager, derp_manager, ssh_key_manager);
 //! let app = router(state);
 //!
 //! // Run with axum
@@ -35,8 +39,8 @@ use std::sync::Arc;
 use axum::Router;
 use moto_club_db::DbPool;
 use moto_club_wg::{
-    DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore, InMemoryStore,
-    PeerRegistry, SessionManager,
+    DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
+    InMemorySshKeyStore, InMemoryStore, PeerRegistry, SessionManager, SshKeyManager,
 };
 
 /// Type alias for the peer registry used in production.
@@ -47,6 +51,9 @@ pub type WgSessionManager = SessionManager<InMemorySessionStore>;
 
 /// Type alias for the DERP map manager used in production.
 pub type WgDerpMapManager = DerpMapManager<InMemoryDerpStore>;
+
+/// Type alias for the SSH key manager used in production.
+pub type WgSshKeyManager = SshKeyManager<InMemorySshKeyStore>;
 
 /// Shared application state.
 ///
@@ -61,22 +68,26 @@ pub struct AppState {
     pub session_manager: Arc<WgSessionManager>,
     /// DERP map manager for relay server configuration.
     pub derp_manager: Arc<WgDerpMapManager>,
+    /// SSH key manager for user key registration.
+    pub ssh_key_manager: Arc<WgSshKeyManager>,
 }
 
 impl AppState {
-    /// Creates a new `AppState` with the given database pool, peer registry, session manager, and DERP manager.
+    /// Creates a new `AppState` with the given database pool, peer registry, session manager, DERP manager, and SSH key manager.
     #[must_use]
     pub const fn new(
         db_pool: DbPool,
         peer_registry: Arc<WgPeerRegistry>,
         session_manager: Arc<WgSessionManager>,
         derp_manager: Arc<WgDerpMapManager>,
+        ssh_key_manager: Arc<WgSshKeyManager>,
     ) -> Self {
         Self {
             db_pool,
             peer_registry,
             session_manager,
             derp_manager,
+            ssh_key_manager,
         }
     }
 }
@@ -172,6 +183,8 @@ pub mod error_codes {
     pub const K8S_ERROR: &str = "K8S_ERROR";
     /// Database connection error.
     pub const DATABASE_ERROR: &str = "DATABASE_ERROR";
+    /// Invalid SSH public key.
+    pub const INVALID_SSH_KEY: &str = "INVALID_SSH_KEY";
 }
 
 #[cfg(test)]

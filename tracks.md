@@ -5,7 +5,6 @@
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
 | moto-wgtunnel.md | v0.4 | moto-club-api: /internal/wg/garages/{id}/peers WebSocket (peer streaming) | |
-| moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/users/ssh-keys endpoint (SSH key registration) | |
 | moto-cli.md | v0.3 | moto bike build: bike.toml discovery, container image build | blocked: bike.md Wrenching |
 | moto-cli.md | v0.3 | moto bike build: --tag override, --push flag | blocked: bike.md Wrenching |
 | moto-cli.md | v0.3 | moto bike deploy: image selection, replica override, --wait | blocked: bike.md Wrenching |
@@ -22,6 +21,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/users/ssh-keys endpoint (SSH key registration) |
 | moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/garages endpoint (garage WG registration) |
 | moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/sessions endpoint (session creation) |
 | moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/devices endpoint (device registration) |
