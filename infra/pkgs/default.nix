@@ -4,5 +4,5 @@
 
 {
   moto-garage = import ./moto-garage.nix { inherit pkgs rustToolchain; };
-  # moto-engine = import ./moto-engine.nix { inherit pkgs; };  # Future
+  moto-bike = import ./moto-bike.nix { inherit pkgs; };
 }

@@ -26,6 +26,7 @@
         # Container packages (Linux only - both x86_64 and aarch64)
         packages = if pkgs.stdenv.isLinux then {
           moto-garage = infraPkgs.moto-garage;
+          moto-bike = infraPkgs.moto-bike;
           default = infraPkgs.moto-garage;
         } else {};
 
