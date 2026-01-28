@@ -30,6 +30,12 @@
           default = infraPkgs.moto-garage;
         } else {};
 
+        # Export mkBike helper for building final engine images
+        # Usage: nix eval .#lib.mkBike or import in other flakes
+        lib = if pkgs.stdenv.isLinux then {
+          inherit (infraPkgs) mkBike;
+        } else {};
+
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             # Rust
