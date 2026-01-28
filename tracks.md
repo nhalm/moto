@@ -4,7 +4,6 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| moto-wgtunnel.md | v0.5 | enter.rs: Wire up moto-wgtunnel-engine to configure WireGuard tunnel | |
 | moto-wgtunnel.md | v0.5 | enter.rs: Wire up MagicConn for direct UDP connection attempts | |
 | moto-wgtunnel.md | v0.5 | enter.rs: Wire up DerpClient for DERP relay fallback | |
 | moto-wgtunnel.md | v0.5 | enter.rs: Spawn SSH session to garage overlay IP after tunnel established | |
@@ -20,6 +19,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| moto-wgtunnel.md | v0.5 | enter.rs: Wire up moto-wgtunnel-engine to configure WireGuard tunnel |
 | moto-cli.md | v0.3 | moto bike logs: --follow/-f, --tail/-n, --since options |
 | moto-cli.md | v0.3 | moto bike list: formatted output (NAME, STATUS, REPLICAS, AGE, IMAGE) |
 | moto-cli.md | v0.3 | moto bike list: --json output format |
