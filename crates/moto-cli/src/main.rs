@@ -38,6 +38,7 @@ async fn main() {
         .init();
 
     let result = match cli.command {
+        Command::Cluster(cmd) => commands::cluster::run(cmd, &flags).await,
         Command::Garage(cmd) => commands::garage::run(cmd, &flags).await,
     };
 

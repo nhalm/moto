@@ -2,6 +2,7 @@
 
 use clap::{Parser, Subcommand};
 
+use crate::commands::cluster::ClusterCommand;
 use crate::commands::garage::GarageCommand;
 use crate::config::{ColorMode, Config};
 
@@ -66,6 +67,8 @@ impl Cli {
 /// Top-level commands
 #[derive(Subcommand)]
 pub enum Command {
+    /// Manage the local Kubernetes cluster
+    Cluster(ClusterCommand),
     /// Manage development garages (isolated environments)
     Garage(GarageCommand),
 }
