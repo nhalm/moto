@@ -9,20 +9,25 @@
 //! - `POST /api/v1/wg/garages` - Register garage (called by garage pod)
 //! - `GET /api/v1/wg/garages/{id}/peers` - Get peer list (garage polls this)
 //! - `POST /api/v1/users/ssh-keys` - Register user SSH key
+//! - `WS /internal/wg/garages/{id}/peers` - WebSocket for real-time peer streaming
 
 use std::net::SocketAddr;
 
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{
+        Path, State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+    },
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{delete, get, post},
 };
 use chrono::{DateTime, Utc};
+use futures_util::{SinkExt, StreamExt};
 use moto_club_wg::{
     CreateSessionRequest as WgCreateSessionRequest, CreateSessionResponse, DeviceRegistration,
-    GarageConnectionInfo, GarageRegistration, RegisteredDevice, Session, SshKeyError,
+    GarageConnectionInfo, GarageRegistration, PeerEvent, RegisteredDevice, Session, SshKeyError,
     SshKeyRegistration, SshKeyResponse,
 };
 use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
@@ -642,6 +647,110 @@ async fn register_ssh_key(
 }
 
 // ============================================================================
+// WebSocket Handler
+// ============================================================================
+
+/// WebSocket upgrade handler for peer streaming.
+///
+/// GET /internal/wg/garages/{id}/peers (WebSocket upgrade)
+///
+/// Garages maintain a persistent WebSocket connection to receive real-time
+/// peer updates when sessions are created or closed.
+async fn peers_websocket(
+    State(state): State<AppState>,
+    Path(garage_id): Path<String>,
+    headers: HeaderMap,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    // TODO: Validate K8s ServiceAccount token via TokenReview API
+    let _ = headers.get("authorization");
+
+    tracing::info!(garage_id = %garage_id, "Garage connecting to peer WebSocket");
+
+    ws.on_upgrade(move |socket| handle_peers_socket(socket, garage_id, state))
+}
+
+/// Handle the WebSocket connection for peer streaming.
+async fn handle_peers_socket(socket: WebSocket, garage_id: String, state: AppState) {
+    let (mut sender, mut receiver) = socket.split();
+
+    // Subscribe to peer events for this garage
+    let mut peer_rx = state.peer_broadcaster.subscribe(&garage_id);
+
+    tracing::info!(garage_id = %garage_id, "Peer WebSocket connected");
+
+    // Send current peers (sessions) to the garage on connect
+    if let Ok(sessions) = state.session_manager.list_sessions_for_garage(&garage_id) {
+        for session in sessions {
+            if let Ok(Some(device)) = state.peer_registry.get_device(session.device_id) {
+                let event = PeerEvent::add(device.public_key, device.overlay_ip);
+                if let Ok(json) = event.to_json() {
+                    if sender.send(Message::Text(json.into())).await.is_err() {
+                        tracing::debug!(garage_id = %garage_id, "Failed to send initial peer");
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    loop {
+        tokio::select! {
+            // Forward peer events to the WebSocket
+            result = peer_rx.recv() => {
+                match result {
+                    Ok(event) => {
+                        match event.to_json() {
+                            Ok(json) => {
+                                if sender.send(Message::Text(json.into())).await.is_err() {
+                                    tracing::debug!(garage_id = %garage_id, "WebSocket send failed, closing");
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(garage_id = %garage_id, error = %e, "Failed to serialize peer event");
+                            }
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!(garage_id = %garage_id, lagged = n, "Peer events lagged, some events dropped");
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        tracing::debug!(garage_id = %garage_id, "Peer broadcast channel closed");
+                        break;
+                    }
+                }
+            }
+            // Handle incoming WebSocket messages (pings, close, etc.)
+            result = receiver.next() => {
+                match result {
+                    Some(Ok(Message::Ping(data))) => {
+                        if sender.send(Message::Pong(data)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None => {
+                        tracing::info!(garage_id = %garage_id, "Peer WebSocket closed by client");
+                        break;
+                    }
+                    Some(Err(e)) => {
+                        tracing::debug!(garage_id = %garage_id, error = %e, "WebSocket error");
+                        break;
+                    }
+                    _ => {
+                        // Ignore text/binary messages from garage
+                    }
+                }
+            }
+        }
+    }
+
+    // Cleanup when WebSocket closes
+    state.peer_broadcaster.remove_garage(&garage_id);
+    tracing::info!(garage_id = %garage_id, "Peer WebSocket disconnected");
+}
+
+// ============================================================================
 // Router
 // ============================================================================
 
@@ -656,6 +765,7 @@ async fn register_ssh_key(
 /// - `POST /api/v1/wg/garages` - Register garage
 /// - `GET /api/v1/wg/garages/{id}/peers` - Get peer list
 /// - `POST /api/v1/users/ssh-keys` - Register SSH key
+/// - `WS /internal/wg/garages/{id}/peers` - Peer streaming WebSocket
 pub fn router() -> Router<AppState> {
     Router::new()
         // Device endpoints
@@ -670,6 +780,8 @@ pub fn router() -> Router<AppState> {
         // Garage WireGuard endpoints
         .route("/api/v1/wg/garages", post(register_garage))
         .route("/api/v1/wg/garages/{id}/peers", get(get_garage_peers))
+        // Internal WebSocket for peer streaming (garages connect here)
+        .route("/internal/wg/garages/{id}/peers", get(peers_websocket))
         // SSH key endpoint
         .route("/api/v1/users/ssh-keys", post(register_ssh_key))
 }
@@ -821,7 +933,8 @@ mod tests {
         };
         use moto_club_wg::{
             DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
-            InMemorySshKeyStore, InMemoryStore, Ipam, PeerRegistry, SessionManager, SshKeyManager,
+            InMemorySshKeyStore, InMemoryStore, Ipam, PeerBroadcaster, PeerRegistry,
+            SessionManager, SshKeyManager,
         };
         use sqlx::postgres::PgPoolOptions;
         use std::sync::Arc;
@@ -839,6 +952,7 @@ mod tests {
             let session_manager = Arc::new(SessionManager::new(session_store));
             let derp_manager = Arc::new(DerpMapManager::new(derp_store));
             let ssh_key_manager = Arc::new(SshKeyManager::new(ssh_key_store));
+            let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 
             // Create a pool that will never actually connect (WG endpoints don't use DB)
             let db_pool = PgPoolOptions::new()
@@ -851,6 +965,7 @@ mod tests {
                 session_manager,
                 derp_manager,
                 ssh_key_manager,
+                peer_broadcaster,
             )
         }
 

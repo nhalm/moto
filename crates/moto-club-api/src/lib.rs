@@ -4,6 +4,7 @@
 //! - Health check endpoints (`/health`, `/api/v1/info`)
 //! - Garage management endpoints (`/api/v1/garages/*`)
 //! - `WireGuard` coordination endpoints (`/api/v1/wg/*`)
+//! - Peer streaming WebSocket (`/internal/wg/garages/{id}/peers`)
 //!
 //! # Example
 //!
@@ -11,7 +12,8 @@
 //! use moto_club_api::{AppState, router};
 //! use moto_club_db::DbPool;
 //! use moto_club_wg::{PeerRegistry, InMemoryPeerStore, Ipam, InMemoryStore, SessionManager,
-//!     InMemorySessionStore, DerpMapManager, InMemoryDerpStore, SshKeyManager, InMemorySshKeyStore};
+//!     InMemorySessionStore, DerpMapManager, InMemoryDerpStore, SshKeyManager, InMemorySshKeyStore,
+//!     PeerBroadcaster};
 //! use std::sync::Arc;
 //!
 //! let pool = DbPool::connect("postgres://...").await?;
@@ -22,7 +24,8 @@
 //! let session_manager = Arc::new(SessionManager::new(InMemorySessionStore::new()));
 //! let derp_manager = Arc::new(DerpMapManager::new(InMemoryDerpStore::with_default_map()));
 //! let ssh_key_manager = Arc::new(SshKeyManager::new(InMemorySshKeyStore::new()));
-//! let state = AppState::new(pool, peer_registry, session_manager, derp_manager, ssh_key_manager);
+//! let peer_broadcaster = Arc::new(PeerBroadcaster::new());
+//! let state = AppState::new(pool, peer_registry, session_manager, derp_manager, ssh_key_manager, peer_broadcaster);
 //! let app = router(state);
 //!
 //! // Run with axum
@@ -40,7 +43,8 @@ use axum::Router;
 use moto_club_db::DbPool;
 use moto_club_wg::{
     DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
-    InMemorySshKeyStore, InMemoryStore, PeerRegistry, SessionManager, SshKeyManager,
+    InMemorySshKeyStore, InMemoryStore, PeerBroadcaster, PeerRegistry, SessionManager,
+    SshKeyManager,
 };
 
 /// Type alias for the peer registry used in production.
@@ -70,10 +74,12 @@ pub struct AppState {
     pub derp_manager: Arc<WgDerpMapManager>,
     /// SSH key manager for user key registration.
     pub ssh_key_manager: Arc<WgSshKeyManager>,
+    /// Peer event broadcaster for garage WebSocket connections.
+    pub peer_broadcaster: Arc<PeerBroadcaster>,
 }
 
 impl AppState {
-    /// Creates a new `AppState` with the given database pool, peer registry, session manager, DERP manager, and SSH key manager.
+    /// Creates a new `AppState` with the given database pool, peer registry, session manager, DERP manager, SSH key manager, and peer broadcaster.
     #[must_use]
     pub const fn new(
         db_pool: DbPool,
@@ -81,6 +87,7 @@ impl AppState {
         session_manager: Arc<WgSessionManager>,
         derp_manager: Arc<WgDerpMapManager>,
         ssh_key_manager: Arc<WgSshKeyManager>,
+        peer_broadcaster: Arc<PeerBroadcaster>,
     ) -> Self {
         Self {
             db_pool,
@@ -88,6 +95,7 @@ impl AppState {
             session_manager,
             derp_manager,
             ssh_key_manager,
+            peer_broadcaster,
         }
     }
 }

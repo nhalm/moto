@@ -7,6 +7,7 @@
 //! - [`sessions`]: Tunnel session management
 //! - [`ssh_keys`]: User SSH key management for garage access
 //! - [`derp`]: DERP relay map management
+//! - [`broadcaster`]: Real-time peer event broadcasting for garage WebSockets
 //!
 //! # Architecture
 //!
@@ -58,12 +59,14 @@
 //! # });
 //! ```
 
+pub mod broadcaster;
 pub mod derp;
 pub mod ipam;
 pub mod peers;
 pub mod sessions;
 pub mod ssh_keys;
 
+pub use broadcaster::{PeerAction, PeerBroadcaster, PeerEvent};
 pub use derp::{DerpError, DerpMapManager, DerpStore, InMemoryDerpStore};
 pub use ipam::{InMemoryStore, Ipam, IpamError, IpamStore};
 pub use peers::{

@@ -15,8 +15,11 @@ workspace = true
 # Async runtime
 tokio = { workspace = true }
 
+# WebSocket
+futures-util = { workspace = true }
+
 # Web framework
-axum = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
 
 # Serialization
 serde = { workspace = true }
