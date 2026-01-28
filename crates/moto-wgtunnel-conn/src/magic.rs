@@ -43,7 +43,7 @@ use thiserror::Error;
 use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock, mpsc};
 use tokio::time::timeout;
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::endpoint::{EndpointConfig, EndpointSelector};
 use crate::path::{PathState, PathType};
@@ -269,8 +269,11 @@ pub struct MagicConn {
     /// Connected peers.
     peers: Arc<RwLock<HashMap<WgPublicKey, PeerState>>>,
 
-    /// Active DERP clients by region ID.
-    derp_clients: Arc<Mutex<HashMap<u16, DerpClient>>>,
+    /// Active DERP client handles by region ID.
+    /// We store handles (not full clients) because the `DerpClient` is moved
+    /// to the receiver task. The handle allows sending packets while the
+    /// receiver task handles incoming events.
+    derp_handles: Arc<Mutex<HashMap<u16, DerpClientHandle>>>,
 
     /// Channel for received packets.
     recv_tx: mpsc::Sender<ReceivedPacket>,
@@ -306,7 +309,7 @@ impl MagicConn {
             config,
             udp_socket: Arc::new(udp_socket),
             peers: Arc::new(RwLock::new(HashMap::new())),
-            derp_clients: Arc::new(Mutex::new(HashMap::new())),
+            derp_handles: Arc::new(Mutex::new(HashMap::new())),
             recv_tx,
             recv_rx: Mutex::new(recv_rx),
         };
@@ -481,17 +484,28 @@ impl MagicConn {
     }
 
     /// Get or create a DERP client for a region.
-    #[allow(clippy::significant_drop_tightening)] // Lock scope is correct
+    ///
+    /// This method manages DERP client connections efficiently:
+    /// - Returns an existing handle if we already have an active connection to the region
+    /// - Creates a new `DerpClient`, starts its receiver task, and caches the handle
+    ///
+    /// The `DerpClient` is moved to the receiver task which handles incoming events.
+    /// We cache the `DerpClientHandle` for sending packets to that region.
     async fn get_or_create_derp_client(
         &self,
         region_id: u16,
     ) -> Result<DerpClientHandle, MagicConnError> {
-        let clients = self.derp_clients.lock().await;
-
-        // Check if we already have a client for this region
-        if let Some(client) = clients.get(&region_id) {
-            return Ok(client.handle());
+        // First, check if we already have an active handle for this region (read-only check)
+        {
+            let handles = self.derp_handles.lock().await;
+            if let Some(handle) = handles.get(&region_id) {
+                debug!(region_id, "reusing existing DERP client handle");
+                return Ok(handle.clone());
+            }
         }
+
+        // No existing handle - need to create a new DERP client connection
+        debug!(region_id, "creating new DERP client connection");
 
         // Get the region from the DERP map
         let region = self
@@ -508,21 +522,31 @@ impl MagicConn {
         let derp_config =
             DerpClientConfig::new(private_key, node).with_connect_timeout(self.config.derp_timeout);
 
-        // Connect with timeout
+        // Connect with timeout - this performs the DERP handshake:
+        // 1. WebSocket connection to wss://host:port/derp
+        // 2. Receive ServerKey frame
+        // 3. Send ClientInfo frame with our public key
+        // 4. Receive ServerInfo frame
         let client = timeout(self.config.derp_timeout, DerpClient::connect(derp_config))
             .await
             .map_err(|_| MagicConnError::DerpFailed(DerpClientError::Timeout))??;
 
         let handle = client.handle();
 
-        // Start DERP receive loop for this client
+        // Start DERP receive loop - this spawns a task that:
+        // - Receives packets relayed through the DERP server
+        // - Handles PeerPresent/PeerGone notifications
+        // - Processes health and restart messages
+        // The DerpClient is moved to this task; we keep only the handle for sending
         self.start_derp_receiver(region_id, client);
 
-        // Store a placeholder - the actual client is owned by the receiver task
-        // We only need the handle
-        // Note: We can't store the client since it's moved to the receiver task
-        // Instead, we track that we have an active connection to this region
+        // Cache the handle for future use with this region
+        {
+            let mut handles = self.derp_handles.lock().await;
+            handles.insert(region_id, handle.clone());
+        }
 
+        info!(region_id, "DERP client connected and ready for relay");
         Ok(handle)
     }
 
