@@ -61,6 +61,29 @@ struct ClusterInitJson {
     registry_endpoint: String,
 }
 
+/// JSON output for cluster status
+#[derive(Serialize)]
+struct ClusterStatusJson {
+    name: String,
+    #[serde(rename = "type")]
+    cluster_type: String,
+    status: String,
+    api: ApiStatusJson,
+    registry: RegistryStatusJson,
+}
+
+#[derive(Serialize)]
+struct ApiStatusJson {
+    endpoint: String,
+    healthy: bool,
+}
+
+#[derive(Serialize)]
+struct RegistryStatusJson {
+    endpoint: String,
+    healthy: bool,
+}
+
 /// Run the cluster command
 pub async fn run(cmd: ClusterCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
@@ -420,7 +443,22 @@ async fn cluster_status(flags: &GlobalFlags) -> Result<()> {
 
     match status {
         ClusterStatus::NotFound => {
-            if !flags.quiet {
+            if flags.json {
+                let json = ClusterStatusJson {
+                    name: CLUSTER_NAME.to_string(),
+                    cluster_type: "k3d".to_string(),
+                    status: status.as_str().to_string(),
+                    api: ApiStatusJson {
+                        endpoint: format!("https://localhost:{API_PORT}"),
+                        healthy: false,
+                    },
+                    registry: RegistryStatusJson {
+                        endpoint: format!("localhost:{REGISTRY_PORT}"),
+                        healthy: false,
+                    },
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if !flags.quiet {
                 eprintln!("Cluster '{CLUSTER_NAME}' not found.");
                 eprintln!();
                 eprintln!("Run 'moto cluster init' to create the cluster.");
@@ -429,7 +467,22 @@ async fn cluster_status(flags: &GlobalFlags) -> Result<()> {
             std::process::exit(1);
         }
         ClusterStatus::Stopped => {
-            if !flags.quiet {
+            if flags.json {
+                let json = ClusterStatusJson {
+                    name: CLUSTER_NAME.to_string(),
+                    cluster_type: "k3d".to_string(),
+                    status: status.as_str().to_string(),
+                    api: ApiStatusJson {
+                        endpoint: format!("https://localhost:{API_PORT}"),
+                        healthy: false,
+                    },
+                    registry: RegistryStatusJson {
+                        endpoint: format!("localhost:{REGISTRY_PORT}"),
+                        healthy: false,
+                    },
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if !flags.quiet {
                 println!("Cluster: {CLUSTER_NAME} (k3d)");
                 println!("Status: stopped");
                 println!();
@@ -441,19 +494,35 @@ async fn cluster_status(flags: &GlobalFlags) -> Result<()> {
         ClusterStatus::Running => {
             // Check K8s API health
             let api_healthy = check_api_healthy();
-            let api_status = if api_healthy { "healthy" } else { "unhealthy" };
             let api_endpoint = format!("https://localhost:{API_PORT}");
 
             // Check registry health
             let registry_healthy = check_registry_healthy();
-            let registry_status = if registry_healthy {
-                "healthy"
-            } else {
-                "unhealthy"
-            };
             let registry_endpoint = format!("localhost:{REGISTRY_PORT}");
 
-            if !flags.quiet {
+            if flags.json {
+                let json = ClusterStatusJson {
+                    name: CLUSTER_NAME.to_string(),
+                    cluster_type: "k3d".to_string(),
+                    status: status.as_str().to_string(),
+                    api: ApiStatusJson {
+                        endpoint: api_endpoint,
+                        healthy: api_healthy,
+                    },
+                    registry: RegistryStatusJson {
+                        endpoint: registry_endpoint,
+                        healthy: registry_healthy,
+                    },
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if !flags.quiet {
+                let api_status = if api_healthy { "healthy" } else { "unhealthy" };
+                let registry_status = if registry_healthy {
+                    "healthy"
+                } else {
+                    "unhealthy"
+                };
+
                 println!("Cluster: {CLUSTER_NAME} (k3d)");
                 println!("Status: {}", status.as_str());
                 println!();
@@ -732,5 +801,125 @@ mod tests {
             }
         }
         ClusterStatus::NotFound
+    }
+
+    #[test]
+    fn test_cluster_status_json_running() {
+        // Test JSON output format for running cluster matches spec
+        let json = ClusterStatusJson {
+            name: CLUSTER_NAME.to_string(),
+            cluster_type: "k3d".to_string(),
+            status: ClusterStatus::Running.as_str().to_string(),
+            api: ApiStatusJson {
+                endpoint: format!("https://localhost:{}", API_PORT),
+                healthy: true,
+            },
+            registry: RegistryStatusJson {
+                endpoint: format!("localhost:{}", REGISTRY_PORT),
+                healthy: true,
+            },
+        };
+
+        let output = serde_json::to_string_pretty(&json).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["name"], "moto");
+        assert_eq!(parsed["type"], "k3d");
+        assert_eq!(parsed["status"], "running");
+        assert_eq!(parsed["api"]["endpoint"], "https://localhost:6550");
+        assert_eq!(parsed["api"]["healthy"], true);
+        assert_eq!(parsed["registry"]["endpoint"], "localhost:5000");
+        assert_eq!(parsed["registry"]["healthy"], true);
+    }
+
+    #[test]
+    fn test_cluster_status_json_stopped() {
+        // Test JSON output format for stopped cluster
+        let json = ClusterStatusJson {
+            name: CLUSTER_NAME.to_string(),
+            cluster_type: "k3d".to_string(),
+            status: ClusterStatus::Stopped.as_str().to_string(),
+            api: ApiStatusJson {
+                endpoint: format!("https://localhost:{}", API_PORT),
+                healthy: false,
+            },
+            registry: RegistryStatusJson {
+                endpoint: format!("localhost:{}", REGISTRY_PORT),
+                healthy: false,
+            },
+        };
+
+        let output = serde_json::to_string_pretty(&json).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["status"], "stopped");
+        assert_eq!(parsed["api"]["healthy"], false);
+        assert_eq!(parsed["registry"]["healthy"], false);
+    }
+
+    #[test]
+    fn test_cluster_status_json_not_found() {
+        // Test JSON output format for not found cluster
+        let json = ClusterStatusJson {
+            name: CLUSTER_NAME.to_string(),
+            cluster_type: "k3d".to_string(),
+            status: ClusterStatus::NotFound.as_str().to_string(),
+            api: ApiStatusJson {
+                endpoint: format!("https://localhost:{}", API_PORT),
+                healthy: false,
+            },
+            registry: RegistryStatusJson {
+                endpoint: format!("localhost:{}", REGISTRY_PORT),
+                healthy: false,
+            },
+        };
+
+        let output = serde_json::to_string_pretty(&json).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["status"], "not_found");
+        assert_eq!(parsed["api"]["healthy"], false);
+        assert_eq!(parsed["registry"]["healthy"], false);
+    }
+
+    #[test]
+    fn test_cluster_status_json_structure_matches_spec() {
+        // Verify the JSON structure matches the spec exactly:
+        // {
+        //   "name": "moto",
+        //   "type": "k3d",
+        //   "status": "running",
+        //   "api": {
+        //     "endpoint": "https://localhost:6550",
+        //     "healthy": true
+        //   },
+        //   "registry": {
+        //     "endpoint": "localhost:5000",
+        //     "healthy": true
+        //   }
+        // }
+        let json = ClusterStatusJson {
+            name: "moto".to_string(),
+            cluster_type: "k3d".to_string(),
+            status: "running".to_string(),
+            api: ApiStatusJson {
+                endpoint: "https://localhost:6550".to_string(),
+                healthy: true,
+            },
+            registry: RegistryStatusJson {
+                endpoint: "localhost:5000".to_string(),
+                healthy: true,
+            },
+        };
+
+        let output = serde_json::to_string(&json).unwrap();
+        // Verify all expected keys are present
+        assert!(output.contains("\"name\""));
+        assert!(output.contains("\"type\""));
+        assert!(output.contains("\"status\""));
+        assert!(output.contains("\"api\""));
+        assert!(output.contains("\"endpoint\""));
+        assert!(output.contains("\"healthy\""));
+        assert!(output.contains("\"registry\""));
     }
 }

@@ -4,7 +4,6 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| local-cluster.md | v0.1 | cluster status: JSON output format | |
 | moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/devices endpoint (device registration) | |
 | moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/sessions endpoint (session creation) | |
 | moto-wgtunnel.md | v0.4 | moto-club-api: /api/v1/wg/garages endpoint (garage WG registration) | |
@@ -26,6 +25,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| local-cluster.md | v0.1 | cluster status: JSON output format |
 | local-cluster.md | v0.1 | cluster status: registry health check |
 | local-cluster.md | v0.1 | cluster status: K8s API health check |
 | local-cluster.md | v0.1 | cluster status: check if cluster exists via k3d |
