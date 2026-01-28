@@ -16,23 +16,6 @@
 
 | Spec | Version | Item |
 |------|---------|------|
-| moto-wgtunnel.md | v0.5 | enter.rs: Spawn SSH session to garage overlay IP after tunnel established |
-| moto-wgtunnel.md | v0.5 | enter.rs: Wire up DerpClient for DERP relay fallback |
-| moto-wgtunnel.md | v0.5 | enter.rs: Wire up MagicConn for direct UDP connection attempts |
-| moto-wgtunnel.md | v0.5 | enter.rs: Wire up moto-wgtunnel-engine to configure WireGuard tunnel |
-| moto-cli.md | v0.3 | moto bike logs: --follow/-f, --tail/-n, --since options |
-| moto-cli.md | v0.3 | moto bike list: formatted output (NAME, STATUS, REPLICAS, AGE, IMAGE) |
-| moto-cli.md | v0.3 | moto bike list: --json output format |
-| moto-cli.md | v0.3 | moto bike deploy: --namespace flag (default: current context) |
-| moto-cli.md | v0.3 | moto bike deploy: --replicas override, --wait for ready, --wait-timeout |
-| moto-cli.md | v0.3 | moto bike deploy: image selection, K8s Deployment generation |
-| moto-cli.md | v0.3 | moto bike build: --tag override, --push to registry |
-| moto-cli.md | v0.3 | moto bike build: Nix build wrapper, docker load |
-| moto-cli.md | v0.3 | moto bike build: bike.toml discovery (search up to git root) |
-| moto-bike.md | v0.3 | infra/pkgs/moto-bike.nix: minimal base image (CA certs, tzdata, non-root user) |
-| moto-bike.md | v0.3 | infra/pkgs/moto-bike.nix: mkBike helper function (base + engine binary) |
-| moto-bike.md | v0.3 | Makefile: build-bike, test-bike targets |
-| moto-bike.md | v0.3 | flake.nix: export moto-bike package output |
 
 ---
 

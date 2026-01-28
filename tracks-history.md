@@ -2,6 +2,29 @@
 
 <!-- NEW ITEMS GO HERE -->
 
+### 2026-01-28: moto-wgtunnel.md
+- enter.rs: Spawn SSH session to garage overlay IP after tunnel established
+- enter.rs: Wire up DerpClient for DERP relay fallback
+- enter.rs: Wire up MagicConn for direct UDP connection attempts
+- enter.rs: Wire up moto-wgtunnel-engine to configure WireGuard tunnel
+
+### 2026-01-28: moto-cli.md
+- moto bike logs: --follow/-f, --tail/-n, --since options
+- moto bike list: formatted output (NAME, STATUS, REPLICAS, AGE, IMAGE)
+- moto bike list: --json output format
+- moto bike deploy: --namespace flag (default: current context)
+- moto bike deploy: --replicas override, --wait for ready, --wait-timeout
+- moto bike deploy: image selection, K8s Deployment generation
+- moto bike build: --tag override, --push to registry
+- moto bike build: Nix build wrapper, docker load
+- moto bike build: bike.toml discovery (search up to git root)
+
+### 2026-01-28: moto-bike.md
+- infra/pkgs/moto-bike.nix: minimal base image (CA certs, tzdata, non-root user)
+- infra/pkgs/moto-bike.nix: mkBike helper function (base + engine binary)
+- Makefile: build-bike, test-bike targets
+- flake.nix: export moto-bike package output
+
 ### 2026-01-27: moto-wgtunnel.md
 - moto-club-api: /internal/wg/garages/{id}/peers WebSocket (peer streaming)
 - moto-club-api: /api/v1/users/ssh-keys endpoint (SSH key registration)
