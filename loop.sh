@@ -6,7 +6,6 @@ cd "$(dirname "$0")"
 echo "=== Running discovery ==="
 DISCOVERY_OUTPUT="/tmp/moto-discovery-$(date +%Y%m%d-%H%M%S).txt"
 cat discovery-prompt.md | claude -p \
-    --model sonnet \
     --dangerously-skip-permissions \
     --output-format=stream-json \
     --verbose \
