@@ -34,10 +34,19 @@ use std::sync::Arc;
 
 use axum::Router;
 use moto_club_db::DbPool;
-use moto_club_wg::{InMemoryPeerStore, InMemoryStore, PeerRegistry};
+use moto_club_wg::{
+    DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore, InMemoryStore,
+    PeerRegistry, SessionManager,
+};
 
 /// Type alias for the peer registry used in production.
 pub type WgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>;
+
+/// Type alias for the session manager used in production.
+pub type WgSessionManager = SessionManager<InMemorySessionStore>;
+
+/// Type alias for the DERP map manager used in production.
+pub type WgDerpMapManager = DerpMapManager<InMemoryDerpStore>;
 
 /// Shared application state.
 ///
@@ -48,15 +57,26 @@ pub struct AppState {
     pub db_pool: DbPool,
     /// `WireGuard` peer registry for device and garage registration.
     pub peer_registry: Arc<WgPeerRegistry>,
+    /// `WireGuard` session manager for tunnel sessions.
+    pub session_manager: Arc<WgSessionManager>,
+    /// DERP map manager for relay server configuration.
+    pub derp_manager: Arc<WgDerpMapManager>,
 }
 
 impl AppState {
-    /// Creates a new `AppState` with the given database pool and peer registry.
+    /// Creates a new `AppState` with the given database pool, peer registry, session manager, and DERP manager.
     #[must_use]
-    pub const fn new(db_pool: DbPool, peer_registry: Arc<WgPeerRegistry>) -> Self {
+    pub const fn new(
+        db_pool: DbPool,
+        peer_registry: Arc<WgPeerRegistry>,
+        session_manager: Arc<WgSessionManager>,
+        derp_manager: Arc<WgDerpMapManager>,
+    ) -> Self {
         Self {
             db_pool,
             peer_registry,
+            session_manager,
+            derp_manager,
         }
     }
 }

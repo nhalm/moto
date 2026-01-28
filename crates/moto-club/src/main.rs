@@ -31,7 +31,10 @@ use moto_club_api::{AppState, router};
 use moto_club_db::DbPool;
 use moto_club_k8s::GarageK8s;
 use moto_club_reconcile::{GarageReconciler, ReconcileConfig};
-use moto_club_wg::{InMemoryPeerStore, InMemoryStore, Ipam, PeerRegistry};
+use moto_club_wg::{
+    DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore, InMemoryStore,
+    Ipam, PeerRegistry, SessionManager,
+};
 use moto_k8s::K8sClient;
 
 /// Default bind address.
@@ -165,8 +168,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let ipam = Ipam::new(ipam_store);
     let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
 
+    // Create WireGuard session manager (in-memory for now)
+    let session_store = InMemorySessionStore::new();
+    let session_manager = Arc::new(SessionManager::new(session_store));
+
+    // Create DERP map manager with default configuration
+    let derp_store = InMemoryDerpStore::with_default_map();
+    let derp_manager = Arc::new(DerpMapManager::new(derp_store));
+
     // Create API router
-    let state = AppState::new(db_pool, peer_registry);
+    let state = AppState::new(db_pool, peer_registry, session_manager, derp_manager);
     let app = router(state);
 
     // Start server

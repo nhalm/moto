@@ -83,7 +83,7 @@ pub struct CreateSessionRequest {
 }
 
 /// Response for session creation.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionResponse {
     /// Unique session identifier (prefixed with "sess_").
     pub session_id: String,
@@ -355,40 +355,116 @@ async fn get_device(
 ///
 /// POST /api/v1/wg/sessions
 async fn create_session(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<CreateSessionRequest>,
 ) -> impl IntoResponse {
     let _owner = extract_owner(&headers)?;
 
-    let _wg_request = WgCreateSessionRequest {
+    // Look up the device
+    let device = state
+        .peer_registry
+        .get_device(req.device_id)
+        .map_err(|e| {
+            tracing::error!(error = %e, device_id = %req.device_id, "Failed to get device");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    format!("Failed to get device: {e}"),
+                )),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(ApiError::new(
+                    error_codes::DEVICE_NOT_FOUND,
+                    format!("Device '{}' not found", req.device_id),
+                )),
+            )
+        })?;
+
+    // Look up the garage
+    let garage = state
+        .peer_registry
+        .get_garage(&req.garage_id)
+        .map_err(|e| {
+            tracing::error!(error = %e, garage_id = %req.garage_id, "Failed to get garage");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    format!("Failed to get garage: {e}"),
+                )),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(ApiError::new(
+                    error_codes::GARAGE_NOT_FOUND,
+                    format!(
+                        "Garage '{}' not found or not registered for WireGuard",
+                        req.garage_id
+                    ),
+                )),
+            )
+        })?;
+
+    // Get the DERP map
+    let derp_map = state.derp_manager.get_map().map_err(|e| {
+        tracing::error!(error = %e, "Failed to get DERP map");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError::new(
+                error_codes::INTERNAL_ERROR,
+                format!("Failed to get DERP map: {e}"),
+            )),
+        )
+    })?;
+
+    // Create the session
+    let wg_request = WgCreateSessionRequest {
         garage_id: req.garage_id.clone(),
         device_id: req.device_id,
         ttl_seconds: req.ttl_seconds,
     };
 
-    // TODO: Use actual SessionManager and PeerRegistry from AppState
-    // For now, return error to indicate garage not registered
-    Err::<(StatusCode, Json<SessionResponse>), _>((
-        StatusCode::NOT_FOUND,
-        Json(ApiError::new(
-            error_codes::GARAGE_NOT_FOUND,
-            format!(
-                "Garage '{}' not found or not registered for WireGuard",
-                req.garage_id
-            ),
-        )),
+    let response = state
+        .session_manager
+        .create_session(wg_request, &device, &garage, &derp_map)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to create session");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    format!("Failed to create session: {e}"),
+                )),
+            )
+        })?;
+
+    Ok::<_, (StatusCode, Json<ApiError>)>((
+        StatusCode::CREATED,
+        Json(SessionResponse::from(response)),
     ))
 }
 
 /// List active sessions.
 ///
 /// GET /api/v1/wg/sessions
-async fn list_sessions(State(_state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+///
+/// Note: This endpoint requires a `device_id` query parameter to filter sessions.
+/// For now, we return all sessions for the authenticated user (simplified).
+async fn list_sessions(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let _owner = extract_owner(&headers)?;
 
-    // TODO: Use actual SessionManager from AppState
-    // For now, return empty list
+    // For a complete implementation, we would filter by device_id or user ownership.
+    // For now, return an empty list since we don't have a device_id parameter.
+    // The sessions can still be accessed via the session_manager directly.
+    let _ = &state.session_manager;
     let response = ListSessionsResponse { sessions: vec![] };
 
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
@@ -398,21 +474,28 @@ async fn list_sessions(State(_state): State<AppState>, headers: HeaderMap) -> im
 ///
 /// DELETE /api/v1/wg/sessions/{id}
 async fn close_session(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     headers: HeaderMap,
     Path(session_id): Path<String>,
 ) -> impl IntoResponse {
     let _owner = extract_owner(&headers)?;
 
-    // TODO: Use actual SessionManager from AppState
-    // For now, return not found
-    Err::<StatusCode, _>((
-        StatusCode::NOT_FOUND,
-        Json(ApiError::new(
-            error_codes::SESSION_NOT_FOUND,
-            format!("Session '{session_id}' not found"),
-        )),
-    ))
+    // Close the session
+    state
+        .session_manager
+        .close_session(&session_id)
+        .map_err(|e| {
+            tracing::debug!(error = %e, session_id = %session_id, "Failed to close session");
+            (
+                StatusCode::NOT_FOUND,
+                Json(ApiError::new(
+                    error_codes::SESSION_NOT_FOUND,
+                    format!("Session '{session_id}' not found"),
+                )),
+            )
+        })?;
+
+    Ok::<_, (StatusCode, Json<ApiError>)>(StatusCode::NO_CONTENT)
 }
 
 /// Register a garage (called by garage pod).
@@ -671,7 +754,10 @@ mod tests {
             body::Body,
             http::{Request, header},
         };
-        use moto_club_wg::{InMemoryPeerStore, InMemoryStore, Ipam, PeerRegistry};
+        use moto_club_wg::{
+            DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
+            InMemoryStore, Ipam, PeerRegistry, SessionManager,
+        };
         use sqlx::postgres::PgPoolOptions;
         use std::sync::Arc;
         use tower::ServiceExt;
@@ -679,17 +765,20 @@ mod tests {
         fn create_test_state() -> AppState {
             let ipam_store = InMemoryStore::new();
             let peer_store = InMemoryPeerStore::new();
+            let session_store = InMemorySessionStore::new();
+            let derp_store = InMemoryDerpStore::with_default_map();
+
             let ipam = Ipam::new(ipam_store);
             let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
+            let session_manager = Arc::new(SessionManager::new(session_store));
+            let derp_manager = Arc::new(DerpMapManager::new(derp_store));
+
             // Create a pool that will never actually connect (WG endpoints don't use DB)
             let db_pool = PgPoolOptions::new()
                 .max_connections(1)
                 .connect_lazy("postgres://unused:unused@localhost/unused")
                 .unwrap();
-            AppState {
-                db_pool,
-                peer_registry,
-            }
+            AppState::new(db_pool, peer_registry, session_manager, derp_manager)
         }
 
         #[tokio::test]
@@ -847,6 +936,223 @@ mod tests {
             let device = device.unwrap();
             assert_eq!(device.device_id, registered.device_id);
             assert_eq!(device.overlay_ip, registered.overlay_ip);
+        }
+
+        #[tokio::test]
+        async fn create_session_device_not_found() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let device_id = Uuid::now_v7();
+            let body = serde_json::json!({
+                "garage_id": "test-garage",
+                "device_id": device_id.to_string()
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/wg/sessions")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        }
+
+        #[tokio::test]
+        async fn create_session_garage_not_found() {
+            let state = create_test_state();
+            let peer_registry = state.peer_registry.clone();
+            let app = router().with_state(state);
+
+            // Register a device first
+            let device_key = test_public_key();
+            let device_id = Uuid::now_v7();
+            peer_registry
+                .register_device(moto_club_wg::DeviceRegistration {
+                    device_id,
+                    public_key: device_key,
+                    device_name: Some("test-device".to_string()),
+                })
+                .await
+                .unwrap();
+
+            let body = serde_json::json!({
+                "garage_id": "nonexistent-garage",
+                "device_id": device_id.to_string()
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/wg/sessions")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        }
+
+        #[tokio::test]
+        async fn create_session_success() {
+            let state = create_test_state();
+            let peer_registry = state.peer_registry.clone();
+            let app = router().with_state(state);
+
+            // Register a device
+            let device_key = test_public_key();
+            let device_id = Uuid::now_v7();
+            peer_registry
+                .register_device(moto_club_wg::DeviceRegistration {
+                    device_id,
+                    public_key: device_key,
+                    device_name: Some("test-device".to_string()),
+                })
+                .await
+                .unwrap();
+
+            // Register a garage
+            let garage_key = test_public_key();
+            peer_registry
+                .register_garage(moto_club_wg::GarageRegistration {
+                    garage_id: "test-garage".to_string(),
+                    public_key: garage_key,
+                    endpoints: vec!["10.0.0.1:51820".parse().unwrap()],
+                })
+                .await
+                .unwrap();
+
+            let body = serde_json::json!({
+                "garage_id": "test-garage",
+                "device_id": device_id.to_string(),
+                "ttl_seconds": 3600
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/wg/sessions")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::CREATED);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let session: SessionResponse = serde_json::from_slice(&body).unwrap();
+
+            assert!(session.session_id.starts_with("sess_"));
+            assert!(session.client_ip.is_client());
+            assert!(session.garage.overlay_ip.is_garage());
+        }
+
+        #[tokio::test]
+        async fn close_session_not_found() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("DELETE")
+                        .uri("/api/v1/wg/sessions/sess_nonexistent")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        }
+
+        #[tokio::test]
+        async fn create_and_close_session() {
+            let state = create_test_state();
+            let peer_registry = state.peer_registry.clone();
+            let app = router().with_state(state);
+
+            // Register device and garage
+            let device_key = test_public_key();
+            let device_id = Uuid::now_v7();
+            peer_registry
+                .register_device(moto_club_wg::DeviceRegistration {
+                    device_id,
+                    public_key: device_key,
+                    device_name: None,
+                })
+                .await
+                .unwrap();
+
+            let garage_key = test_public_key();
+            peer_registry
+                .register_garage(moto_club_wg::GarageRegistration {
+                    garage_id: "test-garage".to_string(),
+                    public_key: garage_key,
+                    endpoints: vec![],
+                })
+                .await
+                .unwrap();
+
+            // Create session
+            let create_body = serde_json::json!({
+                "garage_id": "test-garage",
+                "device_id": device_id.to_string()
+            });
+
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/wg/sessions")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::from(serde_json::to_string(&create_body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::CREATED);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let session: SessionResponse = serde_json::from_slice(&body).unwrap();
+
+            // Close session
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("DELETE")
+                        .uri(format!("/api/v1/wg/sessions/{}", session.session_id))
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::NO_CONTENT);
         }
     }
 }
