@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
-| Last Updated | 2026-01-22 |
+| Version | 0.5 |
+| Last Updated | 2026-01-28 |
 
 ## Overview
 
@@ -753,6 +753,14 @@ Response 200:
 | Garage peer info | `POST /api/v1/wg/garages` | moto-club must expose endpoint |
 
 The types and logic for these APIs exist in `moto-club-wg`. The moto-club server needs to wire up HTTP handlers that use these crates. See moto-club.md TODO (lines 12-22) for the coordination API work.
+
+## Changelog
+
+### v0.5
+- Fix: `POST /api/v1/wg/devices` must accept `device_id` from client (not server-generated)
+
+### v0.4
+- Initial specification
 
 ## References
 
