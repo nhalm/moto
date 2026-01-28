@@ -4,7 +4,6 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| moto-wgtunnel.md | v0.5 | enter.rs: Spawn SSH session to garage overlay IP after tunnel established | |
 | moto-wgtunnel.md | v0.5 | enter.rs: Device registration via moto-club API | blocked: moto-club API endpoints |
 | moto-wgtunnel.md | v0.5 | enter.rs: Session creation via moto-club API | blocked: moto-club API endpoints |
 | container-system.md | v0.9 | CI workflow: .github/workflows/containers.yml | future |
@@ -17,6 +16,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| moto-wgtunnel.md | v0.5 | enter.rs: Spawn SSH session to garage overlay IP after tunnel established |
 | moto-wgtunnel.md | v0.5 | enter.rs: Wire up DerpClient for DERP relay fallback |
 | moto-wgtunnel.md | v0.5 | enter.rs: Wire up MagicConn for direct UDP connection attempts |
 | moto-wgtunnel.md | v0.5 | enter.rs: Wire up moto-wgtunnel-engine to configure WireGuard tunnel |
