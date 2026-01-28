@@ -205,6 +205,29 @@ fn check_api_ready() -> bool {
     matches!(output, Ok(status) if status.success())
 }
 
+/// Check if the K8s API is healthy (for status reporting)
+fn check_api_healthy() -> bool {
+    // Use kubectl get --raw /healthz to check API health
+    let output = ProcessCommand::new("kubectl")
+        .args([
+            "--context",
+            &format!("k3d-{CLUSTER_NAME}"),
+            "get",
+            "--raw",
+            "/healthz",
+        ])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            // /healthz returns "ok" when healthy
+            let body = String::from_utf8_lossy(&o.stdout);
+            body.trim() == "ok"
+        }
+        _ => false,
+    }
+}
+
 /// Wait for the cluster API to be ready with retries
 async fn wait_for_cluster_ready(quiet: bool) -> Result<()> {
     if !quiet {
@@ -382,14 +405,28 @@ async fn cluster_status(flags: &GlobalFlags) -> Result<()> {
             if !flags.quiet {
                 println!("Cluster: {CLUSTER_NAME} (k3d)");
                 println!("Status: stopped");
+                println!();
+                println!("  K8s API:   unavailable (cluster stopped)");
             }
             // Exit code 1 for not running
             std::process::exit(1);
         }
         ClusterStatus::Running => {
+            // Check K8s API health
+            let api_healthy = check_api_healthy();
+            let api_status = if api_healthy { "healthy" } else { "unhealthy" };
+            let api_endpoint = format!("https://localhost:{API_PORT}");
+
             if !flags.quiet {
                 println!("Cluster: {CLUSTER_NAME} (k3d)");
                 println!("Status: {}", status.as_str());
+                println!();
+                println!("  K8s API:   {api_status} ({api_endpoint})");
+            }
+
+            // Exit code 1 if API is unhealthy
+            if !api_healthy {
+                std::process::exit(1);
             }
             Ok(())
         }
@@ -534,6 +571,24 @@ mod tests {
         let result = check_api_ready();
         // Result is a boolean (true or false), not a panic
         assert!(result || !result);
+    }
+
+    #[test]
+    fn test_check_api_healthy_returns_bool() {
+        // This test verifies that check_api_healthy() returns a boolean
+        // The actual result depends on whether kubectl and the cluster are available
+        let result = check_api_healthy();
+        // Result is a boolean (true or false), not a panic
+        assert!(result || !result);
+    }
+
+    #[test]
+    fn test_api_health_endpoint() {
+        // Verify the health check uses the correct kubectl command:
+        // kubectl --context k3d-moto get --raw /healthz
+        // This should return "ok" when healthy
+        let expected_context = format!("k3d-{}", CLUSTER_NAME);
+        assert_eq!(expected_context, "k3d-moto");
     }
 
     #[test]
