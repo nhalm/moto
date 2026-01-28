@@ -1,5 +1,6 @@
 .PHONY: install build test check fmt lint clean run fix ci
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
+.PHONY: build-bike test-bike
 .PHONY: registry-start registry-stop
 
 # Set up local development environment
@@ -71,6 +72,25 @@ shell-garage:
 		$(MAKE) build-garage; \
 	fi
 	docker run -it --rm moto-garage:latest
+
+# === Container (Bike) ===
+
+# Build the moto-bike base container image using Docker-wrapped Nix
+# This is the minimal production image (CA certs, tzdata, non-root user only)
+build-bike:
+	@echo "Building moto-bike container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
+	docker run --rm \
+		-v $(PWD):/workspace \
+		-v nix-store:/nix \
+		-w /workspace \
+		nixos/nix:latest \
+		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-bike --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
+		| docker load
+
+# Build and run smoke tests on the bike container
+test-bike: build-bike
+	@echo "Running bike smoke tests..."
+	./infra/smoke-test-bike.sh
 
 # === Push ===
 
