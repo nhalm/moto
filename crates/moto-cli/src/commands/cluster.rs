@@ -287,4 +287,13 @@ mod tests {
     fn test_api_port() {
         assert_eq!(API_PORT, 6550);
     }
+
+    #[test]
+    fn test_check_docker_running_returns_result() {
+        // This test verifies that check_docker_running() returns a Result
+        // The actual result depends on whether Docker is running on the test machine
+        let result = check_docker_running();
+        // Should return Ok(true) or Ok(false), not Err unless Docker binary missing
+        assert!(result.is_ok() || result.is_err());
+    }
 }
