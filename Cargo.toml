@@ -65,6 +65,7 @@ secrecy = "0.10"
 
 # Testing
 proptest = "1"
+tempfile = "3"
 tokio-test = "0.4"
 
 # Internal crates

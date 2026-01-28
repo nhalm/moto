@@ -33,3 +33,6 @@ toml.workspace = true
 dirs.workspace = true
 futures-util.workspace = true
 rand.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

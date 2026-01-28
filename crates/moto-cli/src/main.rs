@@ -5,6 +5,7 @@
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+mod bike;
 mod cli;
 mod commands;
 mod config;
@@ -38,6 +39,7 @@ async fn main() {
         .init();
 
     let result = match cli.command {
+        Command::Bike(cmd) => commands::bike::run(cmd, &flags).await,
         Command::Cluster(cmd) => commands::cluster::run(cmd, &flags).await,
         Command::Garage(cmd) => commands::garage::run(cmd, &flags).await,
     };

@@ -4,7 +4,6 @@
 
 | Spec | Version | Item | Status |
 |------|---------|------|--------|
-| moto-cli.md | v0.3 | moto bike build: bike.toml discovery (search up to git root) | |
 | moto-cli.md | v0.3 | moto bike build: Nix build wrapper, docker load | |
 | moto-cli.md | v0.3 | moto bike build: --tag override, --push to registry | |
 | moto-cli.md | v0.3 | moto bike deploy: image selection, K8s Deployment generation | |
@@ -29,6 +28,7 @@
 
 | Spec | Version | Item |
 |------|---------|------|
+| moto-cli.md | v0.3 | moto bike build: bike.toml discovery (search up to git root) |
 | moto-bike.md | v0.3 | infra/pkgs/moto-bike.nix: minimal base image (CA certs, tzdata, non-root user) |
 | moto-bike.md | v0.3 | infra/pkgs/moto-bike.nix: mkBike helper function (base + engine binary) |
 | moto-bike.md | v0.3 | Makefile: build-bike, test-bike targets |
