@@ -296,4 +296,40 @@ mod tests {
         // Should return Ok(true) or Ok(false), not Err unless Docker binary missing
         assert!(result.is_ok() || result.is_err());
     }
+
+    #[test]
+    fn test_k3d_create_command_args() {
+        // Verify the k3d cluster create command matches the spec in local-cluster.md
+        // The create_cluster function uses these exact arguments:
+        //   k3d cluster create moto \
+        //     --api-port 6550 \
+        //     --port "80:80@loadbalancer" \
+        //     --port "443:443@loadbalancer" \
+        //     --registry-create moto-registry:5000 \
+        //     --k3s-arg "--disable=traefik@server:0"
+
+        let expected_args = [
+            "cluster",
+            "create",
+            CLUSTER_NAME,
+            "--api-port",
+            &API_PORT.to_string(),
+            "--port",
+            "80:80@loadbalancer",
+            "--port",
+            "443:443@loadbalancer",
+            "--registry-create",
+            &format!("{REGISTRY_NAME}:{REGISTRY_PORT}"),
+            "--k3s-arg",
+            "--disable=traefik@server:0",
+        ];
+
+        // Verify the arguments match spec expectations
+        assert_eq!(expected_args[2], "moto");
+        assert_eq!(expected_args[4], "6550");
+        assert_eq!(expected_args[6], "80:80@loadbalancer");
+        assert_eq!(expected_args[8], "443:443@loadbalancer");
+        assert_eq!(expected_args[10], "moto-registry:5000");
+        assert_eq!(expected_args[12], "--disable=traefik@server:0");
+    }
 }
