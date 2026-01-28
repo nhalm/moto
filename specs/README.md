@@ -37,25 +37,25 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | Spec | Status | Description |
 |------|--------|-------------|
 | [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
-| [moto-cli](moto-cli.md) | Ready to Rip | CLI commands, args, UX |
+| [moto-cli](moto-cli.md) | Ripping | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
 | [pre-commit](pre-commit.md) | Ripping | Git hooks for fast feedback to agents |
-| [makefile](makefile.md) | Ready to Rip | Makefile targets and conventions |
+| [makefile](makefile.md) | Ripping | Makefile targets and conventions |
 
 ## Phase 1: Infrastructure (The Garage)
 
 | Spec | Status | Description |
 |------|--------|-------------|
 | [moto-club](moto-club.md) | Ripping | Central orchestration, garage management |
-| [keybox](keybox.md) | Ready to Rip | Secrets manager, SPIFFE-based identity |
+| [keybox](keybox.md) | Ripping | Secrets manager, SPIFFE-based identity |
 | [ai-proxy](ai-proxy.md) | Bare Frame | AI provider gateway, injects secrets |
-| [dev-container](dev-container.md) | Ready to Rip | Nix dockerTools container, tooling, environment |
-| [container-system](container-system.md) | Ready to Rip | Build pipeline, registry |
-| [local-cluster](local-cluster.md) | Ready to Rip | Local k3s cluster, moto cluster CLI |
+| [dev-container](dev-container.md) | Ripping | Nix dockerTools container, tooling, environment |
+| [container-system](container-system.md) | Ripping | Build pipeline, registry |
+| [local-cluster](local-cluster.md) | Ripping | Local k3s cluster, moto cluster CLI |
 | [garage-isolation](garage-isolation.md) | Bare Frame | Network policies, resource limits |
 | [garage-local](garage-local.md) | Wrenching | Local K8s operations (no server) |
 | [garage-lifecycle](garage-lifecycle.md) | Wrenching | Full lifecycle with WebSocket, TTL |
-| [moto-bike](moto-bike.md) | Ready to Rip | Bike base image, engine contract |
+| [moto-bike](moto-bike.md) | Ripping | Bike base image, engine contract |
 | [supporting-services](supporting-services.md) | Bare Frame | Postgres, Redis deployment |
 | [moto-cron](moto-cron.md) | Bare Frame | Scheduled tasks (TTL cleanup), K8s CronJobs |
 | [moto-wgtunnel](moto-wgtunnel.md) | Ready to Rip | WireGuard tunnels for terminal/SSH access |
