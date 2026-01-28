@@ -116,6 +116,30 @@ fn check_docker_running() -> Result<bool> {
     }
 }
 
+/// Get the registry from MOTO_REGISTRY env var.
+fn get_registry() -> Option<String> {
+    std::env::var("MOTO_REGISTRY").ok()
+}
+
+/// Push an image to the registry.
+fn push_image(image_ref: &str, quiet: bool) -> Result<()> {
+    if !quiet {
+        eprintln!("Pushing {}...", image_ref);
+    }
+
+    let output = ProcessCommand::new("docker")
+        .args(["push", image_ref])
+        .output()
+        .map_err(|e| CliError::general(format!("failed to push image: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CliError::general(format!("docker push failed: {stderr}")));
+    }
+
+    Ok(())
+}
+
 /// Build the bike container using Docker-wrapped Nix.
 fn build_bike_image(bike_name: &str, tag: &str, quiet: bool) -> Result<()> {
     let linux_target = get_linux_target()?;
@@ -228,16 +252,43 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
             // Build the container image
             build_bike_image(&config.name, &image_tag, flags.quiet)?;
 
-            let image_ref = format!("{}:{}", config.name, image_tag);
+            let local_image_ref = format!("{}:{}", config.name, image_tag);
 
-            // Handle --push flag (not yet implemented, reserved for future)
-            let pushed = if push {
-                if !flags.quiet {
-                    eprintln!("Note: --push not yet implemented");
+            // Handle --push flag
+            let (image_ref, pushed) = if push {
+                let registry = get_registry().ok_or_else(|| {
+                    CliError::general(
+                        "MOTO_REGISTRY environment variable not set.\n\n\
+                         Set it to your container registry, e.g.:\n\
+                         export MOTO_REGISTRY=ghcr.io/myorg\n\
+                         export MOTO_REGISTRY=localhost:5000",
+                    )
+                })?;
+
+                // Full image reference with registry prefix
+                let registry_image_ref = format!("{}/{}:{}", registry, config.name, image_tag);
+
+                // Tag the local image with the registry prefix
+                let tag_output = ProcessCommand::new("docker")
+                    .args(["tag", &local_image_ref, &registry_image_ref])
+                    .output()
+                    .map_err(|e| {
+                        CliError::general(format!("failed to tag image for registry: {e}"))
+                    })?;
+
+                if !tag_output.status.success() {
+                    let stderr = String::from_utf8_lossy(&tag_output.stderr);
+                    return Err(CliError::general(format!(
+                        "failed to tag image for registry: {stderr}"
+                    )));
                 }
-                false
+
+                // Push to registry
+                push_image(&registry_image_ref, flags.quiet)?;
+
+                (registry_image_ref, true)
             } else {
-                false
+                (local_image_ref, false)
             };
 
             // Output results
@@ -299,5 +350,21 @@ mod tests {
 
         let output = serde_json::to_string(&json).unwrap();
         assert!(output.contains("\"pushed\":true"));
+    }
+
+    #[test]
+    fn test_bike_build_json_with_registry_image() {
+        let json = BikeBuildJson {
+            name: "club".to_string(),
+            image: "ghcr.io/moto/club:abc123".to_string(),
+            pushed: true,
+        };
+
+        let output = serde_json::to_string_pretty(&json).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["name"], "club");
+        assert_eq!(parsed["image"], "ghcr.io/moto/club:abc123");
+        assert_eq!(parsed["pushed"], true);
     }
 }
