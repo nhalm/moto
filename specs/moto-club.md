@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
-| Last Updated | 2026-01-23 |
+| Version | 1.0 |
+| Last Updated | 2026-01-28 |
 
 ## Overview
 
@@ -239,33 +239,568 @@ When the identity system is implemented, this will be replaced with proper JWT t
 
 #### Garage Management
 
+##### Create Garage
+
 ```
-POST   /api/v1/garages              Create a garage
-GET    /api/v1/garages              List garages (filtered by owner)
-GET    /api/v1/garages/{name}       Get garage details
-DELETE /api/v1/garages/{name}       Close/delete garage
-POST   /api/v1/garages/{name}/extend  Extend TTL (add seconds)
+POST /api/v1/garages
+Authorization: Bearer <user-token>
+
+Request:
+{
+  "name": "my-feature",              // Optional, auto-generated if omitted (e.g., "bold-mongoose")
+  "branch": "feature/foo",           // Optional, CLI determines from local repo if omitted
+  "ttl_seconds": 14400,              // Optional, default from MOTO_CLUB_DEFAULT_TTL_SECONDS
+  "image": "ghcr.io/custom:v1"       // Optional, override dev container image
+}
+
+Response 201 Created:
+{
+  "id": "uuid-of-garage",
+  "name": "bold-mongoose",
+  "owner": "nick",
+  "branch": "feature/foo",
+  "status": "pending",
+  "image": "ghcr.io/nhalm/moto-dev:latest",
+  "ttl_seconds": 14400,
+  "expires_at": "2026-01-28T20:00:00Z",
+  "created_at": "2026-01-28T16:00:00Z",
+  "updated_at": "2026-01-28T16:00:00Z",
+  "namespace": "moto-garage-uuid-of-garage",
+  "pod_name": "garage"
+}
 ```
+
+**Behavior:**
+- Name is immutable once created
+- Owner extracted from Bearer token
+- Returns immediately with `status: pending`; pod creation is async
+
+**Name generation (if not provided):**
+- Format: `{adjective}-{animal}` (e.g., "bold-mongoose", "swift-falcon")
+- Max length: 63 characters (K8s label limit)
+- Allowed characters: lowercase alphanumeric and hyphens, must start/end with alphanumeric
+- On collision: append random 4-digit suffix (e.g., "bold-mongoose-7x2k")
+- Retry up to 3 times on collision, then fail with `INTERNAL_ERROR`
+
+**Errors:**
+- `GARAGE_ALREADY_EXISTS` (409) - Name already taken
+- `INVALID_TTL` (400) - TTL below minimum (60s) or above maximum (48h default)
+
+##### List Garages
+
+```
+GET /api/v1/garages
+Authorization: Bearer <user-token>
+
+Query Parameters:
+  ?status=running,ready    // Optional, filter by status (comma-separated)
+                           // Valid: pending, running, ready, attached, terminated
+  ?all=true                // Optional, include terminated garages (default: false)
+
+Response 200:
+{
+  "garages": [
+    {
+      "id": "uuid-of-garage",
+      "name": "bold-mongoose",
+      "owner": "nick",
+      "branch": "feature/foo",
+      "status": "ready",
+      "ttl_seconds": 14400,
+      "expires_at": "2026-01-28T20:00:00Z",
+      "created_at": "2026-01-28T16:00:00Z"
+    }
+  ]
+}
+```
+
+**Behavior:**
+- Automatically filtered to requesting user's garages (from Bearer token)
+- By default excludes terminated garages
+- No pagination for v1 (user unlikely to have many active garages)
+- Invalid status values return `INVALID_STATUS` (400) error
+
+**Errors:** `INVALID_STATUS` (400) - Unknown status value in filter
+
+##### Get Garage
+
+```
+GET /api/v1/garages/{name}
+Authorization: Bearer <user-token>
+
+Response 200:
+{
+  "id": "uuid-of-garage",
+  "name": "bold-mongoose",
+  "owner": "nick",
+  "branch": "feature/foo",
+  "status": "ready",
+  "image": "ghcr.io/nhalm/moto-dev:latest",
+  "ttl_seconds": 14400,
+  "expires_at": "2026-01-28T20:00:00Z",
+  "created_at": "2026-01-28T16:00:00Z",
+  "updated_at": "2026-01-28T16:05:00Z",
+  "namespace": "moto-garage-uuid-of-garage",
+  "pod_name": "garage",
+  "terminated_at": null,
+  "termination_reason": null
+}
+```
+
+**Errors:** `GARAGE_NOT_FOUND` (404), `GARAGE_NOT_OWNED` (403)
+
+##### Delete Garage
+
+```
+DELETE /api/v1/garages/{name}
+Authorization: Bearer <user-token>
+
+Response 204 No Content
+```
+
+**Behavior:**
+- Sets status to `terminated`
+- Sets `terminated_at` timestamp
+- Sets `termination_reason` to `user_closed`
+- Deletes K8s namespace (cascades to all resources)
+- Idempotent: deleting already-terminated garage returns 204
+
+**Errors:** `GARAGE_NOT_FOUND` (404), `GARAGE_NOT_OWNED` (403)
+
+##### Extend Garage TTL
+
+```
+POST /api/v1/garages/{name}/extend
+Authorization: Bearer <user-token>
+
+Request:
+{
+  "seconds": 7200                    // Seconds to ADD to current expiry
+}
+
+Response 200:
+{
+  "expires_at": "2026-01-28T22:00:00Z",
+  "ttl_remaining_seconds": 21600
+}
+```
+
+**Behavior:**
+- Adds seconds to current `expires_at` (not to original TTL)
+- Total TTL = `new_expires_at - created_at`. Cannot exceed `MOTO_CLUB_MAX_TTL_SECONDS`.
+- Example: garage created 2h ago with 4h TTL (2h remaining). Extend by 1h. New expiry = now + 3h. Total TTL = 5h.
+
+**Errors:**
+- `GARAGE_NOT_FOUND` (404)
+- `GARAGE_NOT_OWNED` (403)
+- `GARAGE_EXPIRED` (410) - Cannot extend expired garage
+- `GARAGE_TERMINATED` (410) - Cannot extend terminated garage
+- `INVALID_TTL` (400) - Would exceed max TTL or below minimum (1 minute)
 
 #### WireGuard Coordination
 
+##### Register Client Device
+
+Registers a user's device for WireGuard tunnel access. Called on first `moto garage enter` if device not yet registered.
+
+The WireGuard public key IS the device identity (Cloudflare WARP model). No separate device ID.
+
 ```
-POST   /api/v1/wg/devices           Register client device
-GET    /api/v1/wg/devices/{id}      Get device info
-POST   /api/v1/wg/sessions          Create tunnel session
-GET    /api/v1/wg/sessions          List active sessions
-DELETE /api/v1/wg/sessions/{id}     Close session
-POST   /api/v1/wg/garages           Register garage (called by garage pod)
-GET    /api/v1/wg/garages/{id}/peers  Get peer list (garage polls this)
-POST   /api/v1/users/ssh-keys       Register user SSH key
+POST /api/v1/wg/devices
+Authorization: Bearer <user-token>
+
+Request:
+{
+  "public_key": "base64-wg-public-key",    // WireGuard public key (device identity)
+  "device_name": "macbook-pro"             // Optional, for display
+}
+
+Response 201 Created:
+{
+  "public_key": "base64-wg-public-key",
+  "assigned_ip": "fd00:moto:2::1"          // IPv6 overlay address
+}
+
+Response 200 OK (already registered, idempotent):
+{
+  "public_key": "base64-wg-public-key",
+  "assigned_ip": "fd00:moto:2::1"          // Returns existing IP
+}
 ```
+
+**Behavior:**
+- WireGuard public key is the device identifier
+- Same key re-registering returns existing assignment (idempotent)
+- Re-keying (new WG keypair) = new device registration, new IP
+
+**Errors:** `DEVICE_NOT_OWNED` (403) if public key registered to different user
+
+##### Get Device Info
+
+```
+GET /api/v1/wg/devices/{public_key}
+Authorization: Bearer <user-token>
+
+Response 200:
+{
+  "public_key": "base64-wg-public-key",
+  "device_name": "macbook-pro",
+  "assigned_ip": "fd00:moto:2::1",
+  "created_at": "2026-01-21T10:00:00Z"
+}
+```
+
+**Note:** Public key must be URL-encoded in the path.
+
+**Errors:** `DEVICE_NOT_FOUND` (404), `DEVICE_NOT_OWNED` (403)
+
+##### Create Tunnel Session
+
+Creates a tunnel session authorizing a device to connect to a garage.
+
+```
+POST /api/v1/wg/sessions
+Authorization: Bearer <user-token>
+
+Request:
+{
+  "garage_id": "uuid-of-garage",
+  "device_pubkey": "base64-client-wg-public-key",
+  "ttl_seconds": 14400                     // Optional, defaults to garage TTL
+}
+
+Response 201 Created:
+{
+  "session_id": "sess_xyz789",
+  "garage": {
+    "public_key": "base64-garage-wg-public-key",
+    "overlay_ip": "fd00:moto:1::abc1",
+    "endpoints": ["203.0.113.5:51820"]     // Direct UDP endpoints to try
+  },
+  "client_ip": "fd00:moto:2::1",
+  "derp_map": {
+    "regions": {
+      "1": {
+        "name": "primary",
+        "nodes": [
+          { "host": "derp.example.com", "port": 443, "stun_port": 3478 }
+        ]
+      }
+    }
+  },
+  "expires_at": "2026-01-21T16:00:00Z"
+}
+```
+
+**Behavior:**
+- Validates user owns the garage and the device
+- Increments `wg_garages.peer_version` for the target garage
+- Garage discovers new peer on next poll of `GET /api/v1/wg/garages/{id}/peers`
+- Session TTL: defaults to garage's remaining TTL. If requested TTL exceeds garage remaining TTL, it's capped (session can't outlive garage).
+- **TTL capping detection:** Response `expires_at` shows actual expiry. Client can compare with requested `ttl_seconds` to detect if TTL was capped.
+- Returns all info needed for client to establish tunnel
+
+**Errors:**
+- `GARAGE_NOT_FOUND` (404) - Garage doesn't exist
+- `GARAGE_NOT_OWNED` (403) - User doesn't own garage
+- `GARAGE_EXPIRED` (410) - Garage TTL has expired (even if not yet marked terminated)
+- `GARAGE_TERMINATED` (410) - Garage has been terminated
+- `GARAGE_NOT_REGISTERED` (400) - Garage hasn't registered its WireGuard endpoint yet
+- `DEVICE_NOT_FOUND` (404) - Device not registered
+- `DEVICE_NOT_OWNED` (403) - Device belongs to different user
+
+##### List Active Sessions
+
+```
+GET /api/v1/wg/sessions
+Authorization: Bearer <user-token>
+
+Query Parameters:
+  ?garage_id=uuid          // Optional, filter by garage
+  ?all=true                // Optional, include expired/closed sessions (default: false)
+
+Response 200:
+{
+  "sessions": [
+    {
+      "session_id": "sess_xyz789",
+      "garage_id": "uuid-of-garage",
+      "garage_name": "bold-mongoose",
+      "device_pubkey": "base64-client-wg-public-key",
+      "device_name": "macbook-pro",
+      "created_at": "2026-01-21T12:00:00Z",
+      "expires_at": "2026-01-21T16:00:00Z"
+    }
+  ]
+}
+```
+
+**Behavior:**
+- Automatically filtered to requesting user's sessions
+- By default excludes expired sessions (`expires_at < now`) and closed sessions (`closed_at IS NOT NULL`)
+- `?all=true` includes expired and closed sessions
+
+##### Close Session
+
+```
+DELETE /api/v1/wg/sessions/{session_id}
+Authorization: Bearer <user-token>
+
+Response 204 No Content
+```
+
+**Behavior:**
+- Soft delete: sets `closed_at` timestamp on session record (row preserved for audit)
+- Increments `wg_garages.peer_version` for the session's garage
+- Garage removes peer on next poll (detects via version change)
+- Idempotent: closing already-closed session returns 204
+
+**Errors:** `SESSION_NOT_FOUND` (404), `SESSION_NOT_OWNED` (403)
+
+##### Register Garage WireGuard
+
+Called by garage pod on startup to register its WireGuard endpoint.
+
+```
+POST /api/v1/wg/garages
+Authorization: Bearer <k8s-service-account-token>
+
+Request:
+{
+  "garage_id": "uuid-of-garage",
+  "public_key": "base64-garage-wg-public-key",
+  "endpoints": ["10.42.0.5:51820"]         // Pod's reachable endpoints
+}
+
+Response 200:
+{
+  "assigned_ip": "fd00:moto:1::abc1",      // Garage's overlay IP
+  "derp_map": {
+    "regions": { ... }
+  }
+}
+```
+
+**Validation:**
+1. K8s ServiceAccount token validated via TokenReview API
+2. Pod must be in namespace `moto-garage-{garage_id}`
+3. Prevents rogue pods from registering as arbitrary garages
+
+**Behavior:**
+- If garage already registered, updates public_key and endpoints (garage pods generate new keypair on restart)
+- Assigned IP is deterministic (derived from garage_id hash), stays same across re-registration
+- Active sessions remain valid (clients will reconnect with new garage pubkey on next session create)
+
+**Security note:** Re-registration with different pubkey is allowed because:
+1. K8s namespace validation ensures only pods in `moto-garage-{id}` namespace can register
+2. Garage pods generate ephemeral keypairs on startup (no persistent key)
+3. If pod can run in the namespace, it's authorized (namespace = trust boundary)
+
+**Errors:**
+- `GARAGE_NOT_FOUND` (404) - Garage doesn't exist
+- `INVALID_TOKEN` (401) - K8s ServiceAccount token invalid or expired
+- `NAMESPACE_MISMATCH` (403) - Pod not running in expected garage namespace
+
+##### Get Garage WireGuard Registration
+
+Retrieves garage's WireGuard registration (for restart recovery or status check).
+
+```
+GET /api/v1/wg/garages/{garage_id}
+Authorization: Bearer <k8s-service-account-token>
+
+Response 200:
+{
+  "garage_id": "uuid-of-garage",
+  "public_key": "base64-garage-wg-public-key",
+  "assigned_ip": "fd00:moto:1::abc1",
+  "endpoints": ["10.42.0.5:51820"],
+  "peer_version": 42,
+  "derp_map": {
+    "regions": { ... }
+  },
+  "registered_at": "2026-01-28T16:00:00Z"
+}
+
+Response 404 (not registered):
+// Garage exists but hasn't registered WireGuard yet
+```
+
+**Behavior:**
+- Returns current registration including latest DERP map
+- Useful after garage pod restart to recover state
+- Same validation as POST (K8s token, namespace match)
+
+**Errors:**
+- `GARAGE_NOT_FOUND` (404) - Garage doesn't exist or not registered
+- `INVALID_TOKEN` (401) - K8s ServiceAccount token invalid
+- `NAMESPACE_MISMATCH` (403) - Pod not in expected namespace
+
+##### Get Garage Peers (Polling)
+
+Garage polls this endpoint to get current authorized peers.
+
+```
+GET /api/v1/wg/garages/{garage_id}/peers
+Authorization: Bearer <k8s-service-account-token>
+
+Query Parameters:
+  ?version=41              // Optional, return 304 if current version equals this
+
+Response 200 (peers changed or no version param):
+{
+  "peers": [
+    {
+      "public_key": "base64-client-wg-public-key",
+      "allowed_ip": "fd00:moto:2::1/128"
+    }
+  ],
+  "version": 42
+}
+
+Response 304 Not Modified (version matches, no body):
+// Returned when ?version=42 and current version is still 42
+```
+
+**Behavior:**
+- Returns all active sessions for this garage
+- Garage configures WireGuard peers based on this list
+- Poll interval: 5 seconds (garage-side config)
+- **Conditional GET:** Pass `?version=N` to get 304 if nothing changed (reduces bandwidth)
+- `version` field: monotonic counter in `wg_garages.peer_version`, incremented on session create/close
+
+**Recommended polling pattern:**
+1. First poll: `GET /peers` (no version param) → get initial peers + version
+2. Subsequent polls: `GET /peers?version=42` → 304 if unchanged, 200 with new data if changed
+
+**Note:** WebSocket streaming will replace polling in a future version.
+
+##### Register User SSH Key
+
+Registers user's SSH public key for injection into garages.
+
+```
+POST /api/v1/users/ssh-keys
+Authorization: Bearer <user-token>
+
+Request:
+{
+  "public_key": "ssh-ed25519 AAAA... user@host"
+}
+
+Response 201 Created:
+{
+  "id": "uuid-of-key",
+  "fingerprint": "SHA256:...",
+  "created_at": "2026-01-21T10:00:00Z"
+}
+
+Response 200 OK (key already registered, idempotent):
+{
+  "id": "uuid-of-key",
+  "fingerprint": "SHA256:...",
+  "created_at": "2026-01-21T10:00:00Z"
+}
+```
+
+**Behavior:**
+- Key is injected into `authorized_keys` when user's garages are created
+- Multiple keys per user supported
+- Same key re-registered by same user returns 200 with existing record (idempotent)
+- Same fingerprint can be registered by different users (not globally unique)
+- Key format validated: must be valid OpenSSH public key format (e.g., `ssh-ed25519 AAAA...`, `ssh-rsa AAAA...`)
+
+**Errors:** `INVALID_SSH_KEY` (400) - Malformed or unsupported SSH public key format
+
+##### List User SSH Keys
+
+```
+GET /api/v1/users/ssh-keys
+Authorization: Bearer <user-token>
+
+Response 200:
+{
+  "keys": [
+    {
+      "id": "uuid-of-key",
+      "fingerprint": "SHA256:...",
+      "public_key": "ssh-ed25519 AAAA... user@host",
+      "created_at": "2026-01-21T10:00:00Z"
+    }
+  ]
+}
+```
+
+##### Delete User SSH Key
+
+```
+DELETE /api/v1/users/ssh-keys/{key_id}
+Authorization: Bearer <user-token>
+
+Response 204 No Content
+```
+
+**Note:** Does not remove key from already-running garages.
+
+#### DERP Map
+
+##### Get DERP Map
+
+Returns current DERP server map. Clients and garages can poll this to detect DERP server changes.
+
+```
+GET /api/v1/wg/derp-map
+Authorization: Bearer <user-token> OR <k8s-service-account-token>
+
+Response 200:
+{
+  "regions": {
+    "1": {
+      "name": "primary",
+      "nodes": [
+        { "host": "derp.example.com", "port": 443, "stun_port": 3478 }
+      ]
+    }
+  },
+  "version": 5                             // Incremented when DERP config changes
+}
+```
+
+**Behavior:**
+- Returns only healthy DERP servers (`healthy = true`)
+- `version` increments when DERP servers are added/removed/change health status
+- Clients/garages can poll periodically (recommended: every 5 minutes) to detect changes
+- Initial DERP map is provided during session/garage registration; this endpoint is for updates
 
 #### Health/Info
 
+##### Health Check
+
 ```
-GET    /health                      Health check (degrades gracefully)
-GET    /api/v1/info                 Server info, version
+GET /health
 ```
+
+See [Health Check](#health-check) section for response format.
+
+##### Server Info
+
+```
+GET /api/v1/info
+
+Response 200:
+{
+  "name": "moto-club",
+  "version": "0.1.0",
+  "api_version": "v1",
+  "git_sha": "abc1234",              // Build git commit (if available)
+  "features": {
+    "websocket": false,              // WebSocket streaming enabled
+    "derp_regions": 1                // Number of DERP regions available
+  }
+}
+```
+
+No authentication required.
 
 #### WebSocket Endpoints (Deferred)
 
@@ -292,11 +827,15 @@ struct Garage {
     owner: String,              // From Bearer token
     branch: String,
     status: GarageStatus,
+    image: String,              // Dev container image used
     ttl_seconds: u64,
     expires_at: DateTime<Utc>,
     created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
     namespace: String,          // K8s namespace: moto-garage-{id}
     pod_name: String,           // K8s pod name
+    terminated_at: Option<DateTime<Utc>>,
+    termination_reason: Option<String>,  // user_closed, ttl_expired, pod_lost, namespace_missing, error
 }
 
 enum GarageStatus {
@@ -323,6 +862,11 @@ enum GarageStatus {
 11. Return garage details
 ```
 
+**Create failure handling:**
+- If K8s fails after DB insert: mark garage as `terminated` with `termination_reason = "error"`, return `K8S_ERROR`
+- If pod never becomes Ready (timeout): leave as `pending`, reconciler will eventually mark as terminated
+- No rollback of DB record (kept for audit trail); orphaned namespaces cleaned by reconciler
+
 **Extend TTL:**
 ```rust
 struct ExtendTtlRequest {
@@ -345,6 +889,12 @@ struct ExtendTtlRequest {
 3. Set termination_reason
 4. Delete K8s namespace (cascades to all resources)
 ```
+
+**Close failure handling:**
+- DB update is done first (source of truth for "user requested close")
+- If K8s namespace deletion fails: log error, return success anyway (user intent captured)
+- Reconciler will retry namespace deletion on next cycle
+- Idempotent: closing already-terminated garage succeeds (namespace may already be gone)
 
 ### Reconciliation
 
@@ -373,6 +923,12 @@ For each garage in DB with status != Terminated:
 
 **Note:** TTL enforcement (closing expired garages) is NOT done here. That's handled by moto-cron, which calls the DELETE endpoint.
 
+**Session expiry:**
+- `GET /api/v1/wg/garages/{id}/peers` filters out expired sessions (checks `expires_at < now`)
+- Expired sessions remain in database but are effectively inactive
+- moto-cron periodically cleans up expired session records (sets `closed_at`, increments `peer_version`)
+- When a garage is terminated, all its sessions are automatically closed
+
 ### WireGuard Coordination
 
 moto-club coordinates WireGuard connections but never sees traffic.
@@ -384,6 +940,18 @@ moto-club coordinates WireGuard connections but never sees traffic.
 - IP allocation (overlay network: fd00:moto::/48)
 - DERP map distribution
 - User SSH key storage (injected into garages)
+
+**IP allocation algorithm:**
+
+| Subnet | Range | Algorithm |
+|--------|-------|-----------|
+| Garages | `fd00:moto:1::/64` | Deterministic: first 8 bytes of SHA256(garage_id) as host part |
+| Clients | `fd00:moto:2::/64` | Sequential: next available IP, stored in `wg_devices.assigned_ip` |
+
+- Garage IPs are deterministic so same garage always gets same IP (even if re-registered)
+- Client IPs are allocated sequentially and persisted; same device keeps same IP
+- Collision/exhaustion: /64 provides 2^64 addresses (~18 quintillion). Exhaustion is practically impossible.
+  If somehow exhausted or collision occurs, fail with `INTERNAL_ERROR` (operational issue, not user error)
 
 **Garage Registration Validation:**
 
@@ -412,12 +980,33 @@ Response 200:
 
 Garage daemon polls this endpoint every 5 seconds to get current peer list. WebSocket streaming will replace this in a future version.
 
-**DERP monitoring:**
-- DERP servers run as separate service (moto-derp)
-- moto-club monitors DERP health
-- Provides DERP map to clients and garages
+**DERP server management:**
 
-See [moto-wgtunnel.md](moto-wgtunnel.md) for detailed API contracts.
+For v1, DERP servers are configured via config file (not runtime API):
+
+```toml
+# File: /etc/moto-club/derp.toml (or MOTO_CLUB_DERP_CONFIG env var)
+[[regions]]
+id = 1
+name = "primary"
+
+[[regions.nodes]]
+host = "derp.example.com"
+port = 443
+stun_port = 3478
+```
+
+**Config loading:**
+- Path: `MOTO_CLUB_DERP_CONFIG` env var, or `/etc/moto-club/derp.toml` default
+- On startup: sync config to `derp_servers` table (insert/update/delete to match)
+- Health check interval: 30 seconds
+- Unhealthy threshold: 3 consecutive failures
+- Unhealthy servers marked `healthy = false`, excluded from DERP map
+- DERP map provided to clients/garages via session creation and garage registration APIs
+
+**Future:** Admin API for runtime DERP management.
+
+See [moto-wgtunnel.md](moto-wgtunnel.md) for tunnel architecture, connection flow, and client implementation details.
 
 ### Database Schema (PostgreSQL)
 
@@ -429,27 +1018,29 @@ CREATE TABLE garages (
     owner TEXT NOT NULL,
     branch TEXT NOT NULL,
     status TEXT NOT NULL,           -- pending, running, ready, attached, terminated
+    image TEXT NOT NULL,            -- dev container image used
     ttl_seconds INTEGER NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     namespace TEXT NOT NULL,
     pod_name TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    terminated_at TIMESTAMPTZ,
-    termination_reason TEXT         -- user_closed, ttl_expired, pod_lost, namespace_missing, error
+    terminated_at TIMESTAMPTZ,          -- NULL if not terminated, set when status = terminated
+    termination_reason TEXT              -- NULL if not terminated; required when terminated
+                                         -- Values: user_closed, ttl_expired, pod_lost, namespace_missing, error
 );
 
 CREATE INDEX idx_garages_owner ON garages(owner);
 CREATE INDEX idx_garages_status ON garages(status);
 CREATE INDEX idx_garages_expires_at ON garages(expires_at) WHERE status != 'terminated';
-CREATE INDEX idx_garages_name ON garages(name);
+-- Note: idx_garages_name not needed; UNIQUE constraint on 'name' creates implicit index
 
 -- WireGuard devices (client devices)
+-- WireGuard public key IS the device identity (Cloudflare WARP model)
 CREATE TABLE wg_devices (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    public_key TEXT PRIMARY KEY,    -- WG public key is the identifier
     owner TEXT NOT NULL,
     device_name TEXT,               -- optional friendly name
-    public_key TEXT NOT NULL UNIQUE,
     assigned_ip TEXT NOT NULL,      -- fd00:moto:2::xxx
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -459,16 +1050,26 @@ CREATE INDEX idx_wg_devices_owner ON wg_devices(owner);
 -- WireGuard sessions (active tunnel sessions)
 CREATE TABLE wg_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_id UUID NOT NULL REFERENCES wg_devices(id),
+    device_pubkey TEXT NOT NULL REFERENCES wg_devices(public_key),
     garage_id UUID NOT NULL REFERENCES garages(id),
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     closed_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_wg_sessions_device ON wg_sessions(device_id);
+CREATE INDEX idx_wg_sessions_device ON wg_sessions(device_pubkey);
 CREATE INDEX idx_wg_sessions_garage ON wg_sessions(garage_id);
 CREATE INDEX idx_wg_sessions_expires ON wg_sessions(expires_at) WHERE closed_at IS NULL;
+
+-- Garage WireGuard registration (set by garage pod on startup)
+CREATE TABLE wg_garages (
+    garage_id UUID PRIMARY KEY REFERENCES garages(id) ON DELETE CASCADE,
+    public_key TEXT NOT NULL UNIQUE,
+    assigned_ip TEXT NOT NULL,          -- fd00:moto:1::xxx
+    endpoints TEXT[] NOT NULL,          -- pod's reachable endpoints
+    peer_version INTEGER NOT NULL DEFAULT 0,  -- incremented on session create/close
+    registered_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- User SSH keys
 CREATE TABLE user_ssh_keys (
@@ -519,10 +1120,16 @@ All API errors use a standard format:
 | `GARAGE_ALREADY_EXISTS` | 409 | Garage name already taken |
 | `GARAGE_TERMINATED` | 410 | Garage has been terminated |
 | `GARAGE_EXPIRED` | 410 | Garage TTL has expired (cannot extend) |
+| `GARAGE_NOT_REGISTERED` | 400 | Garage hasn't registered its WireGuard endpoint |
 | `INVALID_TTL` | 400 | TTL out of valid range |
-| `DEVICE_NOT_FOUND` | 404 | WireGuard device not found |
+| `INVALID_STATUS` | 400 | Unknown status value in filter |
+| `INVALID_SSH_KEY` | 400 | Malformed or unsupported SSH public key format |
+| `DEVICE_NOT_FOUND` | 404 | WireGuard device (public key) not registered |
+| `DEVICE_NOT_OWNED` | 403 | Device (public key) belongs to different user |
 | `SESSION_NOT_FOUND` | 404 | WireGuard session not found |
-| `SESSION_EXPIRED` | 410 | Session has expired |
+| `SESSION_NOT_OWNED` | 403 | Session belongs to different user |
+| `INVALID_TOKEN` | 401 | K8s ServiceAccount token invalid or expired |
+| `NAMESPACE_MISMATCH` | 403 | Pod not in expected garage namespace |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
 | `K8S_ERROR` | 502 | Kubernetes API error |
 | `DATABASE_ERROR` | 503 | Database connection error |
@@ -589,10 +1196,12 @@ KUBECONFIG="/path/to/kubeconfig"          # Optional, for local dev
 
 # Optional
 MOTO_CLUB_BIND_ADDR="0.0.0.0:8080"
+MOTO_CLUB_MIN_TTL_SECONDS="60"            # 1 minute minimum
 MOTO_CLUB_DEFAULT_TTL_SECONDS="14400"     # 4 hours
 MOTO_CLUB_MAX_TTL_SECONDS="172800"        # 48 hours
 MOTO_CLUB_DEV_CONTAINER_IMAGE="ghcr.io/nhalm/moto-dev:latest"
 MOTO_CLUB_RECONCILE_INTERVAL_SECONDS="30"
+MOTO_CLUB_DERP_CONFIG="/etc/moto-club/derp.toml"  # DERP server config file
 
 # Logging
 RUST_LOG="moto_club=info"
@@ -643,10 +1252,75 @@ Identity system will replace config-based owner identity:
 - OIDC for web UI
 - Service accounts for internal services
 
+## Changelog
+
+### v1.0
+- Removed unused `SESSION_EXPIRED` error code
+- Added `GET /api/v1/wg/garages/{garage_id}` endpoint for garage WG registration retrieval
+- Added conditional GET support for peer polling (`?version=` query param, 304 response)
+- Added `GET /api/v1/wg/derp-map` endpoint for DERP server discovery
+- Clarified TTL capping detection via `ttl_capped` field in session creation response
+- Added moto-cron.md to References section
+
+### v0.9
+- Added `INVALID_SSH_KEY` error code for malformed SSH public keys
+- Added query parameters to List Sessions (`?garage_id=`, `?all=`)
+- Clarified DELETE session is soft delete (sets `closed_at`, idempotent)
+- Added `MOTO_CLUB_DERP_CONFIG` to configuration section
+- Added `GARAGE_EXPIRED` error to session creation (for expired but not-yet-terminated garages)
+- Clarified IP exhaustion behavior (practically impossible with /64 space)
+- Added `updated_at` to Create Garage response for consistency
+- Clarified `termination_reason` nullability in schema comments
+- Removed redundant `idx_garages_name` index (UNIQUE already creates one)
+
+### v0.8
+- Fixed SSH key registration: 200 for idempotent re-registration (not 409)
+- Specified peer_version increment behavior (on session create/close)
+- Added session expiry cleanup specification (moto-cron handles cleanup)
+- Added `INVALID_STATUS` error for invalid status filter values
+- Added TTL validation: min 60s, clarified total TTL calculation for extend
+- Specified garage name generation algorithm (adjective-animal, collision handling)
+- Specified IP allocation algorithm (SHA256 hash for garages, sequential for clients)
+- Added create/close failure handling and rollback behavior
+- Specified DERP config file location and health check parameters
+- Clarified garage WG re-registration allows pubkey update (security via namespace validation)
+- Added new error codes: `GARAGE_NOT_REGISTERED`, `INVALID_STATUS`
+- Added config: `MOTO_CLUB_MIN_TTL_SECONDS`, `MOTO_CLUB_DERP_CONFIG`
+
+### v0.7
+- Added full API specifications for all garage management endpoints (POST, GET, DELETE, extend)
+- Added `image` column to garages table
+- Added `peer_version` column to `wg_garages` table for change detection
+- Aligned Garage struct with database schema (added `image`, `updated_at`, `terminated_at`, `termination_reason`)
+- Added query parameters for `GET /api/v1/garages` (`?status=`, `?all=`)
+
+### v0.6
+- Added `wg_garages` table for garage WireGuard registration
+- Added garage registration error codes: `INVALID_TOKEN`, `NAMESPACE_MISMATCH`
+- Clarified session TTL behavior: capped to garage remaining TTL
+- Added DERP server configuration (via config file for v1)
+- Added `GET /api/v1/info` response format
+
+### v0.5
+- Simplified device identity: WireGuard public key IS the device identifier (Cloudflare WARP model)
+- Removed `device_id` concept - no separate device UUID needed
+- Updated schema: `wg_devices.public_key` is now primary key
+- Updated APIs to use `device_pubkey` instead of `device_id`
+- Removed `DEVICE_ALREADY_EXISTS` error (re-registration is now idempotent 200)
+
+### v0.4
+- Added detailed WireGuard API specifications (request/response bodies, behaviors, errors)
+- Added new error codes: `DEVICE_NOT_OWNED`, `DEVICE_ALREADY_EXISTS`, `SESSION_NOT_OWNED`
+- Added SSH key management endpoints: `GET /api/v1/users/ssh-keys`, `DELETE /api/v1/users/ssh-keys/{id}`
+
+### v0.3
+- Initial specification
+
 ## References
 
 - [garage-lifecycle.md](garage-lifecycle.md) - Garage state machine
 - [moto-wgtunnel.md](moto-wgtunnel.md) - WireGuard tunnel system
 - [moto-club-websocket.md](moto-club-websocket.md) - WebSocket streaming
+- [moto-cron.md](moto-cron.md) - Scheduled tasks (TTL enforcement, session cleanup)
 - [moto-cli.md](moto-cli.md) - CLI commands
 - [keybox.md](keybox.md) - Secrets management

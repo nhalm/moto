@@ -46,7 +46,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [moto-club](moto-club.md) | Ripping | Central orchestration, garage management |
+| [moto-club](moto-club.md) | Ready to Rip | Central orchestration, garage management |
 | [keybox](keybox.md) | Ripping | Secrets manager, SPIFFE-based identity |
 | [ai-proxy](ai-proxy.md) | Bare Frame | AI provider gateway, injects secrets |
 | [dev-container](dev-container.md) | Ripping | Nix dockerTools container, tooling, environment |

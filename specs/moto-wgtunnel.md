@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
+| Version | 0.7 |
 | Last Updated | 2026-01-28 |
 
 ## Overview
@@ -190,8 +190,7 @@ crates/
 **Allocation strategy:**
 
 - **Garages:** IP derived from garage ID (deterministic hash)
-- **Clients:** Allocated per device, persisted. Same device re-registering gets same IP.
-- **Device ID:** Random UUID, generated on first use
+- **Clients:** Allocated per WireGuard public key, persisted. Same key re-registering gets same IP.
 
 **Why IPv6 ULA:**
 - No collision with public IPs
@@ -202,16 +201,18 @@ crates/
 
 **Client WireGuard keys (persistent):**
 
+The WireGuard public key IS the device identity (Cloudflare WARP model). No separate device ID.
+
 ```
 ~/.config/moto/
 ├── wg-private.key      # WireGuard private key (generated once)
-├── wg-public.key       # WireGuard public key
-└── device-id           # UUID, unique device identifier
+└── wg-public.key       # WireGuard public key (this is your device identity)
 ```
 
 - **Permissions:** Files MUST be 0600. CLI fails if permissions are wrong.
 - **Generation:** On first `moto garage enter` if not exists
 - **Override:** `MOTO_WG_KEY_FILE` env var to specify alternate location
+- **Re-keying:** Generating a new keypair = new device identity, new IP assignment
 
 **Client SSH keys (standard location):**
 
@@ -240,16 +241,16 @@ crates/
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ 1. CLI checks local WG key exists                                            │
 │    - If not: generate keypair, register with moto-club                       │
-│    - POST /api/v1/wg/devices { device_id, wg_public_key }                    │
+│    - POST /api/v1/wg/devices { public_key, device_name }                     │
 │    - Retry with backoff (1s, 2s, 4s) on failure, then fail                   │
 └──────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ 2. CLI requests tunnel session                                               │
-│    - POST /api/v1/wg/sessions { garage_id, device_id }                       │
-│    - Server validates user owns garage                                       │
-│    - Server notifies garage of new peer via WebSocket                        │
+│    - POST /api/v1/wg/sessions { garage_id, device_pubkey }                   │
+│    - Server validates user owns garage and device                            │
+│    - Garage discovers new peer on next poll (v1 uses REST polling)           │
 │    - Returns: { garage_wg_pubkey, garage_ip, client_ip, derp_map }           │
 │    - On moto-club unreachable: fail immediately, tell user to retry later    │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -292,134 +293,24 @@ crates/
 
 ### Coordination API (moto-club)
 
-**Register device (first time):**
+The CLI and garage daemon coordinate with moto-club via REST APIs. See [moto-club.md](moto-club.md) for full API specifications.
 
-```
-POST /api/v1/wg/devices
-Authorization: Bearer <user-token>
+**APIs used by CLI:**
 
-{
-  "device_id": "uuid-of-device",
-  "public_key": "base64-encoded-wg-public-key",
-  "device_name": "macbook-pro"  // optional, for display
-}
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/v1/wg/devices` | Register device (first time only) |
+| `POST /api/v1/wg/sessions` | Create tunnel session |
+| `GET /api/v1/wg/sessions` | List active sessions |
+| `DELETE /api/v1/wg/sessions/{id}` | Close session |
+| `POST /api/v1/users/ssh-keys` | Register SSH public key |
 
-Response 201:
-{
-  "device_id": "uuid-of-device",
-  "assigned_ip": "fd00:moto:2::1"
-}
+**APIs used by garage daemon:**
 
-Response 409 (already registered):
-{
-  "device_id": "uuid-of-device",
-  "assigned_ip": "fd00:moto:2::1"  // returns existing IP
-}
-```
-
-**Register user SSH key:**
-
-```
-POST /api/v1/users/ssh-keys
-Authorization: Bearer <user-token>
-
-{
-  "public_key": "ssh-ed25519 AAAA... user@host"
-}
-
-Response 201:
-{
-  "fingerprint": "SHA256:..."
-}
-```
-
-**Create tunnel session:**
-
-```
-POST /api/v1/wg/sessions
-Authorization: Bearer <user-token>
-
-{
-  "garage_id": "abc123",
-  "device_id": "uuid-of-device",
-  "ttl_seconds": 14400  // optional, defaults to garage TTL
-}
-
-Response 201:
-{
-  "session_id": "sess_xyz789",
-  "garage": {
-    "public_key": "base64-encoded-garage-wg-public-key",
-    "overlay_ip": "fd00:moto:1::abc1",
-    "endpoints": [
-      "203.0.113.5:51820"
-    ]
-  },
-  "client_ip": "fd00:moto:2::1",
-  "derp_map": {
-    "regions": {
-      "1": {
-        "name": "primary",
-        "nodes": [
-          { "host": "derp.example.com", "port": 443, "stun_port": 3478 }
-        ]
-      }
-    }
-  },
-  "expires_at": "2026-01-21T16:00:00Z"
-}
-```
-
-**Garage registration (called by garage pod on startup):**
-
-```
-POST /api/v1/wg/garages
-Authorization: Bearer <k8s-service-account-token>
-
-{
-  "garage_id": "abc123",
-  "public_key": "base64-encoded-garage-wg-public-key",
-  "endpoints": ["10.42.0.5:51820"]
-}
-
-Response 200:
-{
-  "assigned_ip": "fd00:moto:1::abc1",
-  "derp_map": { ... }
-}
-```
-
-Note: Garage registration trusts the pod. If a pod can run in the garage namespace, it's authorized.
-
-**List active sessions:**
-
-```
-GET /api/v1/wg/sessions
-Authorization: Bearer <user-token>
-
-Response 200:
-{
-  "sessions": [
-    {
-      "session_id": "sess_xyz789",
-      "garage_id": "abc123",
-      "garage_name": "feature-foo",
-      "device_id": "uuid-of-device",
-      "created_at": "2026-01-21T12:00:00Z",
-      "expires_at": "2026-01-21T16:00:00Z"
-    }
-  ]
-}
-```
-
-**Close session:**
-
-```
-DELETE /api/v1/wg/sessions/{session_id}
-Authorization: Bearer <user-token>
-
-Response 204 No Content
-```
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/v1/wg/garages` | Register garage WireGuard endpoint |
+| `GET /api/v1/wg/garages/{id}/peers` | Poll for authorized peers |
 
 ### Peer Streaming (WebSocket)
 
@@ -744,17 +635,26 @@ Response 200:
 | Wire up DERP relay | `enter.rs` | Use `DerpClient` for relay fallback |
 | SSH session spawning | `enter.rs` | Exec SSH to garage overlay IP after tunnel up |
 
-**Blocked on moto-club.md:**
+**Blocked on moto-club implementation:**
 
 | Task | Blocked By | Description |
 |------|------------|-------------|
-| Device registration | `POST /api/v1/wg/devices` | moto-club must expose endpoint |
-| Session creation | `POST /api/v1/wg/sessions` | moto-club must expose endpoint |
-| Garage peer info | `POST /api/v1/wg/garages` | moto-club must expose endpoint |
+| Device registration | `POST /api/v1/wg/devices` | moto-club must wire up HTTP handler |
+| Session creation | `POST /api/v1/wg/sessions` | moto-club must wire up HTTP handler |
+| Garage peer info | `POST /api/v1/wg/garages` | moto-club must wire up HTTP handler |
 
-The types and logic for these APIs exist in `moto-club-wg`. The moto-club server needs to wire up HTTP handlers that use these crates. See moto-club.md TODO (lines 12-22) for the coordination API work.
+The types and logic for these APIs exist in `moto-club-wg`. The API contracts are fully specified in [moto-club.md](moto-club.md). The moto-club server needs to wire up HTTP handlers that use these crates.
 
 ## Changelog
+
+### v0.7
+- Simplified device identity: WireGuard public key IS the device identifier (Cloudflare WARP model)
+- Removed `device_id` concept and `~/.config/moto/device-id` file
+- Updated connection flow to use `device_pubkey` instead of `device_id`
+
+### v0.6
+- Removed duplicated API specifications; reference moto-club.md for API contracts
+- Updated blocking section to reflect spec completion (implementation still needed)
 
 ### v0.5
 - Fix: `POST /api/v1/wg/devices` must accept `device_id` from client (not server-generated)
