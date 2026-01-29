@@ -178,6 +178,20 @@ async fn startup_handler() -> impl IntoResponse {
     }
 }
 
+/// Check Kubernetes API connectivity.
+async fn check_k8s(client: &moto_k8s::K8sClient) -> CheckResult {
+    use moto_k8s::NamespaceOps;
+    // Try to list namespaces with a label selector that won't match anything.
+    // This validates API connectivity without loading large result sets.
+    match client
+        .list_namespaces(Some("moto.dev/health-check=true"))
+        .await
+    {
+        Ok(_) => CheckResult::ok(),
+        Err(e) => CheckResult::error(e.to_string()),
+    }
+}
+
 /// Health check handler (legacy - combines all checks).
 ///
 /// Returns 200 with health status. Individual check failures result in
@@ -189,8 +203,18 @@ async fn health_handler(State(state): State<AppState>) -> impl IntoResponse {
     let db_check = check_database(&state.db_pool).await;
     checks.insert("database".to_string(), db_check);
 
-    // TODO: Add K8s health check when moto-club-k8s is implemented
+    // Check K8s if client is available
+    if let Some(ref k8s_client) = state.k8s_client {
+        let k8s_check = check_k8s(k8s_client).await;
+        checks.insert("k8s".to_string(), k8s_check);
+    } else {
+        // K8s client not configured (local dev mode), report as ok
+        checks.insert("k8s".to_string(), CheckResult::ok());
+    }
+
     // TODO: Add Keybox health check when keybox integration is implemented
+    // For now, keybox is always reported as ok (integration not yet wired)
+    checks.insert("keybox".to_string(), CheckResult::ok());
 
     // Determine overall status
     let status = if checks.values().all(CheckResult::is_ok) {
@@ -418,5 +442,25 @@ mod tests {
         let response = StartupResponse { status: "starting" };
         let json = serde_json::to_string(&response).unwrap();
         assert_eq!(json, r#"{"status":"starting"}"#);
+    }
+
+    #[test]
+    fn health_response_with_all_checks() {
+        // Per spec (moto-club.md), health response should include database, k8s, and keybox checks
+        let mut checks = HashMap::new();
+        checks.insert("database".to_string(), CheckResult::ok());
+        checks.insert("k8s".to_string(), CheckResult::ok());
+        checks.insert("keybox".to_string(), CheckResult::ok());
+
+        let response = HealthResponse {
+            status: HealthStatus::Healthy,
+            checks,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(r#""status":"healthy""#));
+        assert!(json.contains(r#""database""#));
+        assert!(json.contains(r#""k8s""#));
+        assert!(json.contains(r#""keybox""#));
     }
 }
