@@ -31,6 +31,12 @@ thiserror = { workspace = true }
 # Logging
 tracing = { workspace = true }
 
+# Metrics
+metrics = { workspace = true }
+
+# HTTP middleware (for metrics middleware)
+tower = { workspace = true }
+
 # Database
 sqlx = { workspace = true }
 
@@ -54,4 +60,3 @@ moto-wgtunnel-types = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }
-tower = { workspace = true }

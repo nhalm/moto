@@ -3,6 +3,7 @@
 //! This binary composes all the moto-club library crates and runs the server:
 //! - REST API for garage and `WireGuard` coordination (port 8080)
 //! - Health endpoints for K8s probes (port 8081)
+//! - Prometheus metrics endpoint (port 9090)
 //! - Database connection pool
 //! - Kubernetes client
 //! - Background reconciliation loop
@@ -15,6 +16,7 @@
 //! Optional environment variables:
 //! - `MOTO_CLUB_BIND_ADDR`: Server bind address (default: `0.0.0.0:8080`)
 //! - `MOTO_CLUB_HEALTH_BIND_ADDR`: Health server bind address (default: `0.0.0.0:8081`)
+//! - `MOTO_CLUB_METRICS_BIND_ADDR`: Metrics server bind address (default: `0.0.0.0:9090`)
 //! - `MOTO_CLUB_DEV_CONTAINER_IMAGE`: Dev container image (default: `ghcr.io/moto-dev/moto-garage:latest`)
 //! - `MOTO_CLUB_RECONCILE_INTERVAL_SECONDS`: Reconciliation interval (default: 30)
 //! - `MOTO_CLUB_DERP_CONFIG`: Path to DERP config file (default: `/etc/moto-club/derp.toml`)
@@ -26,6 +28,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -48,6 +51,9 @@ const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
 /// Default bind address for health endpoints.
 const DEFAULT_HEALTH_BIND_ADDR: &str = "0.0.0.0:8081";
 
+/// Default bind address for Prometheus metrics.
+const DEFAULT_METRICS_BIND_ADDR: &str = "0.0.0.0:9090";
+
 /// Default reconciliation interval in seconds.
 const DEFAULT_RECONCILE_INTERVAL_SECS: u64 = 30;
 
@@ -59,6 +65,8 @@ struct Config {
     bind_addr: SocketAddr,
     /// Server bind address for health endpoints.
     health_bind_addr: SocketAddr,
+    /// Server bind address for Prometheus metrics.
+    metrics_bind_addr: SocketAddr,
     /// Dev container image.
     dev_container_image: Option<String>,
     /// Reconciliation interval.
@@ -87,6 +95,13 @@ impl Config {
                 ConfigError::Invalid("MOTO_CLUB_HEALTH_BIND_ADDR", "invalid socket address")
             })?;
 
+        let metrics_bind_addr = env::var("MOTO_CLUB_METRICS_BIND_ADDR")
+            .unwrap_or_else(|_| DEFAULT_METRICS_BIND_ADDR.to_string())
+            .parse()
+            .map_err(|_| {
+                ConfigError::Invalid("MOTO_CLUB_METRICS_BIND_ADDR", "invalid socket address")
+            })?;
+
         let dev_container_image = env::var("MOTO_CLUB_DEV_CONTAINER_IMAGE").ok();
 
         let reconcile_interval = env::var("MOTO_CLUB_RECONCILE_INTERVAL_SECONDS")
@@ -98,6 +113,7 @@ impl Config {
             database_url,
             bind_addr,
             health_bind_addr,
+            metrics_bind_addr,
             dev_container_image,
             reconcile_interval: Duration::from_secs(reconcile_interval),
         })
@@ -151,6 +167,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!(
         bind_addr = %config.bind_addr,
         health_bind_addr = %config.health_bind_addr,
+        metrics_bind_addr = %config.metrics_bind_addr,
         reconcile_interval_secs = config.reconcile_interval.as_secs(),
         "starting moto-club"
     );
@@ -286,6 +303,33 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         if let Err(e) = axum::serve(health_listener, health_app).await {
             error!(error = %e, "health server failed");
+        }
+    });
+
+    // Start Prometheus metrics server on port 9090 (per moto-bike.md Engine Contract)
+    // Exports: http_requests_total, http_request_duration_seconds, process_cpu_seconds_total,
+    // process_resident_memory_bytes (process metrics via metrics-process crate)
+    let metrics_addr = config.metrics_bind_addr;
+    tokio::spawn(async move {
+        // Build and install the Prometheus exporter with HTTP listener
+        let builder = PrometheusBuilder::new().with_http_listener(metrics_addr);
+
+        if let Err(e) = builder.install() {
+            error!(error = %e, "failed to install prometheus exporter");
+            return;
+        }
+
+        info!(addr = %metrics_addr, "metrics server listening");
+
+        // Create process metrics collector for CPU and memory metrics
+        let process_collector = metrics_process::Collector::default();
+        // Register help strings for process metrics
+        process_collector.describe();
+
+        // Periodically collect process metrics (every 5 seconds)
+        loop {
+            process_collector.collect();
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     });
 

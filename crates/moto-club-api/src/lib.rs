@@ -36,12 +36,13 @@
 
 pub mod garages;
 pub mod health;
+pub mod metrics;
 pub mod postgres_stores;
 pub mod wg;
 
 use std::sync::Arc;
 
-use axum::Router;
+use axum::{Router, middleware};
 use moto_club_db::DbPool;
 use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
@@ -200,11 +201,13 @@ impl AppState {
 /// - Health endpoints from [`health::router()`]
 /// - Garage endpoints from [`garages::router()`]
 /// - `WireGuard` endpoints from [`wg::router()`]
+/// - HTTP metrics middleware (records http_requests_total and http_request_duration_seconds)
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(health::router())
         .merge(garages::router())
         .merge(wg::router())
+        .layer(middleware::from_fn(metrics::record_http_metrics))
         .with_state(state)
 }
 

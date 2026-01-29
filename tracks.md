@@ -203,8 +203,8 @@ HOW TO USE THIS FILE:
 - bike.toml for moto-club engine (crates/moto-club/bike.toml)
 - Engine health endpoints: /health/live, /health/ready, /health/startup on port 8081 (moto-club-api health.rs, moto-club main.rs)
 - Final bike images in flake: moto-club-image using mkBike helper (infra/pkgs/moto-club.nix, flake.nix exports packages.{x86_64,aarch64}-linux.moto-club-image)
+- Engine Contract: Prometheus metrics endpoint on port 9090 (moto-club main.rs with metrics-exporter-prometheus, moto-club-api metrics.rs with http_requests_total and http_request_duration_seconds, process metrics via metrics-process)
 
 **Remaining:**
-- Engine Contract: Prometheus metrics endpoint on port 9090
 - Engine Contract: Graceful shutdown (SIGTERM handling, 30s grace period)
 - K8s Deployment generation from bike.toml (future - needs CLI support)

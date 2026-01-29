@@ -48,6 +48,11 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Metrics
+metrics = "0.24"
+metrics-exporter-prometheus = { version = "0.16", default-features = false, features = ["http-listener"] }
+metrics-process = "2.3"
+
 # Time
 chrono = { version = "0.4", features = ["serde"] }
 
