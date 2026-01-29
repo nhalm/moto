@@ -1,7 +1,8 @@
 //! REST API handlers for moto-club.
 //!
 //! This crate provides the HTTP API layer for moto-club, including:
-//! - Health check endpoints (`/health`, `/api/v1/info`)
+//! - Health check endpoints (`/health`, `/api/v1/info`) on main API port 8080
+//! - K8s health probes (`/health/live`, `/health/ready`, `/health/startup`) on port 8081
 //! - Garage management endpoints (`/api/v1/garages/*`)
 //! - `WireGuard` coordination endpoints (`/api/v1/wg/*`)
 //! - Peer streaming WebSocket (`/internal/wg/garages/{id}/peers`)
@@ -51,6 +52,7 @@ use moto_club_wg::{
 };
 use moto_k8s::K8sClient;
 
+pub use health::{health_server_router, is_startup_complete, mark_startup_complete};
 pub use postgres_stores::{PostgresPeerStore, PostgresSessionStore, PostgresSshKeyStore};
 
 /// Type alias for the peer registry used with in-memory storage (for testing).

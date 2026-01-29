@@ -1,7 +1,8 @@
 //! moto-club: Central orchestration server for the moto platform.
 //!
 //! This binary composes all the moto-club library crates and runs the server:
-//! - REST API for garage and `WireGuard` coordination
+//! - REST API for garage and `WireGuard` coordination (port 8080)
+//! - Health endpoints for K8s probes (port 8081)
 //! - Database connection pool
 //! - Kubernetes client
 //! - Background reconciliation loop
@@ -13,6 +14,7 @@
 //!
 //! Optional environment variables:
 //! - `MOTO_CLUB_BIND_ADDR`: Server bind address (default: `0.0.0.0:8080`)
+//! - `MOTO_CLUB_HEALTH_BIND_ADDR`: Health server bind address (default: `0.0.0.0:8081`)
 //! - `MOTO_CLUB_DEV_CONTAINER_IMAGE`: Dev container image (default: `ghcr.io/moto-dev/moto-garage:latest`)
 //! - `MOTO_CLUB_RECONCILE_INTERVAL_SECONDS`: Reconciliation interval (default: 30)
 //! - `MOTO_CLUB_DERP_CONFIG`: Path to DERP config file (default: `/etc/moto-club/derp.toml`)
@@ -28,7 +30,7 @@ use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-use moto_club_api::{AppState, router};
+use moto_club_api::{AppState, health_server_router, mark_startup_complete, router};
 use moto_club_db::{DbPool, derp_server_repo};
 use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
@@ -40,8 +42,11 @@ use moto_club_wg::{
 };
 use moto_k8s::K8sClient;
 
-/// Default bind address.
+/// Default bind address for main API.
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
+
+/// Default bind address for health endpoints.
+const DEFAULT_HEALTH_BIND_ADDR: &str = "0.0.0.0:8081";
 
 /// Default reconciliation interval in seconds.
 const DEFAULT_RECONCILE_INTERVAL_SECS: u64 = 30;
@@ -50,8 +55,10 @@ const DEFAULT_RECONCILE_INTERVAL_SECS: u64 = 30;
 struct Config {
     /// Database connection URL.
     database_url: String,
-    /// Server bind address.
+    /// Server bind address for main API.
     bind_addr: SocketAddr,
+    /// Server bind address for health endpoints.
+    health_bind_addr: SocketAddr,
     /// Dev container image.
     dev_container_image: Option<String>,
     /// Reconciliation interval.
@@ -73,6 +80,13 @@ impl Config {
             .parse()
             .map_err(|_| ConfigError::Invalid("MOTO_CLUB_BIND_ADDR", "invalid socket address"))?;
 
+        let health_bind_addr = env::var("MOTO_CLUB_HEALTH_BIND_ADDR")
+            .unwrap_or_else(|_| DEFAULT_HEALTH_BIND_ADDR.to_string())
+            .parse()
+            .map_err(|_| {
+                ConfigError::Invalid("MOTO_CLUB_HEALTH_BIND_ADDR", "invalid socket address")
+            })?;
+
         let dev_container_image = env::var("MOTO_CLUB_DEV_CONTAINER_IMAGE").ok();
 
         let reconcile_interval = env::var("MOTO_CLUB_RECONCILE_INTERVAL_SECONDS")
@@ -83,6 +97,7 @@ impl Config {
         Ok(Self {
             database_url,
             bind_addr,
+            health_bind_addr,
             dev_container_image,
             reconcile_interval: Duration::from_secs(reconcile_interval),
         })
@@ -135,6 +150,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(
         bind_addr = %config.bind_addr,
+        health_bind_addr = %config.health_bind_addr,
         reconcile_interval_secs = config.reconcile_interval.as_secs(),
         "starting moto-club"
     );
@@ -258,11 +274,28 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     )
     .with_garage_k8s(api_garage_k8s)
     .with_garage_service(garage_service);
-    let app = router(state);
+    let app = router(state.clone());
 
-    // Start server
+    // Create health server router for K8s probes (port 8081)
+    let health_app = health_server_router().with_state(state);
+
+    // Start health server in background
+    let health_listener = TcpListener::bind(config.health_bind_addr).await?;
+    info!(addr = %config.health_bind_addr, "health server listening");
+
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(health_listener, health_app).await {
+            error!(error = %e, "health server failed");
+        }
+    });
+
+    // Start main API server
     let listener = TcpListener::bind(config.bind_addr).await?;
     info!(addr = %config.bind_addr, "moto-club listening");
+
+    // Mark startup as complete - K8s startup probe will now return 200
+    mark_startup_complete();
+    info!("startup complete");
 
     axum::serve(listener, app).await?;
 
