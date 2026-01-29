@@ -6,8 +6,13 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 
-use k8s_openapi::api::core::v1::{Container, Pod, PodSpec, ResourceRequirements, SecurityContext};
+use k8s_openapi::api::core::v1::{
+    Container, KeyToPath, Pod, PodSpec, ResourceRequirements, SecretVolumeSource, SecurityContext,
+    Volume, VolumeMount,
+};
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
+
+use crate::secrets::{AUTHORIZED_KEYS_KEY, SSH_KEYS_SECRET_NAME};
 use kube::api::{Api, DeleteParams, ObjectMeta, PostParams};
 use tracing::{debug, instrument};
 
@@ -264,6 +269,14 @@ fn build_dev_container_pod(
         },
     ];
 
+    // Volume mount for SSH authorized_keys
+    let ssh_volume_mount = VolumeMount {
+        name: "ssh-keys".to_string(),
+        mount_path: "/home/moto/.ssh".to_string(),
+        read_only: Some(true),
+        ..Default::default()
+    };
+
     let container = Container {
         name: "dev".to_string(),
         image: Some(image.to_string()),
@@ -271,8 +284,26 @@ fn build_dev_container_pod(
         resources: Some(resources),
         security_context: Some(security_context),
         env: Some(env_vars),
+        volume_mounts: Some(vec![ssh_volume_mount]),
         // Keep the container running
         command: Some(vec!["sleep".to_string(), "infinity".to_string()]),
+        ..Default::default()
+    };
+
+    // Volume for SSH keys Secret
+    // Mount authorized_keys file with mode 0600 (octal 384)
+    let ssh_volume = Volume {
+        name: "ssh-keys".to_string(),
+        secret: Some(SecretVolumeSource {
+            secret_name: Some(SSH_KEYS_SECRET_NAME.to_string()),
+            default_mode: Some(0o600),
+            items: Some(vec![KeyToPath {
+                key: AUTHORIZED_KEYS_KEY.to_string(),
+                path: "authorized_keys".to_string(),
+                mode: Some(0o600),
+            }]),
+            ..Default::default()
+        }),
         ..Default::default()
     };
 
@@ -285,6 +316,7 @@ fn build_dev_container_pod(
         },
         spec: Some(PodSpec {
             containers: vec![container],
+            volumes: Some(vec![ssh_volume]),
             restart_policy: Some("Never".to_string()),
             // Use default service account (will get garage-specific SA later)
             ..Default::default()
@@ -380,5 +412,39 @@ mod tests {
         let env = container.env.as_ref().unwrap();
         let branch_env = env.iter().find(|e| e.name == "MOTO_GARAGE_BRANCH");
         assert_eq!(branch_env.unwrap().value, Some("main".to_string()));
+    }
+
+    #[test]
+    fn build_pod_has_ssh_keys_volume() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod = build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels);
+
+        let spec = pod.spec.as_ref().unwrap();
+
+        // Check volume is defined
+        let volumes = spec.volumes.as_ref().unwrap();
+        assert_eq!(volumes.len(), 1);
+        let ssh_volume = &volumes[0];
+        assert_eq!(ssh_volume.name, "ssh-keys");
+
+        let secret = ssh_volume.secret.as_ref().unwrap();
+        assert_eq!(secret.secret_name, Some(SSH_KEYS_SECRET_NAME.to_string()));
+        assert_eq!(secret.default_mode, Some(0o600));
+
+        // Check items mapping
+        let items = secret.items.as_ref().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].key, AUTHORIZED_KEYS_KEY);
+        assert_eq!(items[0].path, "authorized_keys");
+        assert_eq!(items[0].mode, Some(0o600));
+
+        // Check container has volume mount
+        let container = &spec.containers[0];
+        let mounts = container.volume_mounts.as_ref().unwrap();
+        assert_eq!(mounts.len(), 1);
+        let ssh_mount = &mounts[0];
+        assert_eq!(ssh_mount.name, "ssh-keys");
+        assert_eq!(ssh_mount.mount_path, "/home/moto/.ssh");
+        assert_eq!(ssh_mount.read_only, Some(true));
     }
 }

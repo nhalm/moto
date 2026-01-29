@@ -40,9 +40,10 @@ HOW TO USE THIS FILE:
 - moto-club-api: K8s ServiceAccount token validation for garage endpoints (moto-k8s TokenReviewOps trait, validate_garage_token helper)
 - moto-club-api: GET /api/v1/wg/derp-map endpoint (returns DERP map with version for clients and garages)
 - moto-club-api: Conditional GET for peers (?version= param, 304 response)
+- moto-club-k8s: SSH keys Secret creation (secrets.rs: SshKeysSecretOps trait, creates ssh-keys Secret with authorized_keys)
+- moto-club-k8s: Pod SSH keys volume mount (pods.rs: mounts ssh-keys Secret to /home/moto/.ssh with mode 0600)
 
 **Remaining:**
-- moto-club-k8s: SSH keys Secret creation (spec v1.1 - mount authorized_keys to garage pod)
 - moto-club-k8s: Labels must use moto.dev/garage-id not moto.dev/id (check spec line 871)
 - moto-club-garage: Wire up K8s operations in create flow (12 steps per spec)
 - moto-club-garage: Integrate K8s namespace deletion in close flow
