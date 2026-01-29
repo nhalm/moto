@@ -43,11 +43,11 @@ HOW TO USE THIS FILE:
 - moto-club-k8s: SSH keys Secret creation (secrets.rs: SshKeysSecretOps trait, creates ssh-keys Secret with authorized_keys)
 - moto-club-k8s: Pod SSH keys volume mount (pods.rs: mounts ssh-keys Secret to /home/moto/.ssh with mode 0600)
 - moto-k8s: Labels use moto.dev/garage-id and moto.dev/garage-name per spec (labels.rs updated, all usages fixed)
+- moto-club: DERP config file loading from MOTO_CLUB_DERP_CONFIG env var (moto-club-wg DerpConfigFile, load_derp_config; moto-club-db derp_server_repo with sync_from_config; main.rs startup sync)
 
 **Remaining:**
 - moto-club-garage: Wire up K8s operations in create flow (12 steps per spec)
 - moto-club-garage: Integrate K8s namespace deletion in close flow
-- moto-club: DERP config file loading (MOTO_CLUB_DERP_CONFIG env var)
 - moto-club: Structured JSON logging
 
 ---

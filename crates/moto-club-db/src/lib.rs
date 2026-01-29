@@ -29,6 +29,7 @@
 //! let garage = garage_repo::get_by_id(&pool, garage.id).await?;
 //! ```
 
+pub mod derp_server_repo;
 pub mod garage_repo;
 pub mod models;
 pub mod user_ssh_key_repo;

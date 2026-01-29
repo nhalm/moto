@@ -16,6 +16,22 @@
 //!   - Support dynamic updates (add/remove regions)
 //! ```
 //!
+//! # Configuration File
+//!
+//! DERP servers can be configured via a TOML file. Set the `MOTO_CLUB_DERP_CONFIG`
+//! environment variable to the file path, or use the default `/etc/moto-club/derp.toml`.
+//!
+//! ```toml
+//! [[regions]]
+//! id = 1
+//! name = "primary"
+//!
+//! [[regions.nodes]]
+//! host = "derp.example.com"
+//! port = 443
+//! stun_port = 3478
+//! ```
+//!
 //! # Example
 //!
 //! ```
@@ -37,9 +53,19 @@
 //! assert_eq!(map.len(), 1);
 //! ```
 
-use moto_wgtunnel_types::derp::{DerpMap, DerpNode, DerpRegion};
+use moto_wgtunnel_types::derp::{
+    DEFAULT_DERP_PORT, DEFAULT_STUN_PORT, DerpMap, DerpNode, DerpRegion,
+};
+use serde::Deserialize;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Mutex;
+
+/// Default path for DERP config file.
+pub const DEFAULT_DERP_CONFIG_PATH: &str = "/etc/moto-club/derp.toml";
+
+/// Environment variable for DERP config file path.
+pub const DERP_CONFIG_ENV_VAR: &str = "MOTO_CLUB_DERP_CONFIG";
 
 /// Error type for DERP map operations.
 #[derive(Debug, thiserror::Error)]
@@ -55,10 +81,145 @@ pub enum DerpError {
     /// Invalid region configuration.
     #[error("invalid region: {0}")]
     InvalidRegion(String),
+
+    /// Failed to read config file.
+    #[error("failed to read config file: {0}")]
+    ConfigReadError(String),
+
+    /// Failed to parse config file.
+    #[error("failed to parse config file: {0}")]
+    ConfigParseError(String),
 }
 
 /// Result type for DERP map operations.
 pub type Result<T> = std::result::Result<T, DerpError>;
+
+// =============================================================================
+// Config File Types
+// =============================================================================
+
+/// DERP configuration file format (TOML).
+///
+/// This matches the spec format:
+/// ```toml
+/// [[regions]]
+/// id = 1
+/// name = "primary"
+///
+/// [[regions.nodes]]
+/// host = "derp.example.com"
+/// port = 443
+/// stun_port = 3478
+/// ```
+#[derive(Debug, Clone, Deserialize)]
+pub struct DerpConfigFile {
+    /// DERP regions.
+    #[serde(default)]
+    pub regions: Vec<DerpConfigRegion>,
+}
+
+/// A DERP region in the config file.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DerpConfigRegion {
+    /// Unique region identifier.
+    pub id: u16,
+    /// Human-readable region name.
+    pub name: String,
+    /// DERP nodes in this region.
+    #[serde(default)]
+    pub nodes: Vec<DerpConfigNode>,
+}
+
+/// A DERP node in the config file.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DerpConfigNode {
+    /// Hostname or IP address.
+    pub host: String,
+    /// DERP port (default 443).
+    #[serde(default = "default_port")]
+    pub port: u16,
+    /// STUN port (default 3478).
+    #[serde(default = "default_stun_port")]
+    pub stun_port: u16,
+}
+
+const fn default_port() -> u16 {
+    DEFAULT_DERP_PORT
+}
+
+const fn default_stun_port() -> u16 {
+    DEFAULT_STUN_PORT
+}
+
+impl DerpConfigFile {
+    /// Convert config file to a `DerpMap`.
+    ///
+    /// Regions without nodes are skipped (they would fail validation anyway).
+    #[must_use]
+    pub fn to_derp_map(&self) -> DerpMap {
+        let mut map = DerpMap::new();
+        for region in &self.regions {
+            if region.nodes.is_empty() {
+                continue;
+            }
+            let mut derp_region = DerpRegion::new(region.id, &region.name);
+            for node in &region.nodes {
+                derp_region.add_node(DerpNode::new(&node.host, node.port, node.stun_port));
+            }
+            map.add_region(derp_region);
+        }
+        map
+    }
+}
+
+/// Load DERP configuration from the standard path.
+///
+/// Checks `MOTO_CLUB_DERP_CONFIG` environment variable first, then falls back
+/// to `/etc/moto-club/derp.toml`.
+///
+/// # Returns
+///
+/// Returns `Ok(Some(config))` if the file exists and is valid.
+/// Returns `Ok(None)` if the config file does not exist.
+///
+/// # Errors
+///
+/// Returns error if the file exists but cannot be read or parsed.
+pub async fn load_derp_config() -> Result<Option<DerpConfigFile>> {
+    let path =
+        std::env::var(DERP_CONFIG_ENV_VAR).unwrap_or_else(|_| DEFAULT_DERP_CONFIG_PATH.to_string());
+    load_derp_config_from_path(&path).await
+}
+
+/// Load DERP configuration from a specific path.
+///
+/// # Returns
+///
+/// Returns `Ok(Some(config))` if the file exists and is valid.
+/// Returns `Ok(None)` if the file does not exist.
+///
+/// # Errors
+///
+/// Returns error if the file exists but cannot be read or parsed.
+pub async fn load_derp_config_from_path(path: &str) -> Result<Option<DerpConfigFile>> {
+    let path = Path::new(path);
+
+    // Check if file exists
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    // Read file contents
+    let contents = tokio::fs::read_to_string(path)
+        .await
+        .map_err(|e| DerpError::ConfigReadError(format!("{}: {}", path.display(), e)))?;
+
+    // Parse TOML
+    let config: DerpConfigFile = toml::from_str(&contents)
+        .map_err(|e| DerpError::ConfigParseError(format!("{}: {}", path.display(), e)))?;
+
+    Ok(Some(config))
+}
 
 /// Storage backend for DERP map management.
 ///
@@ -572,5 +733,147 @@ mod tests {
         let count = manager.region_count().unwrap();
         assert!(count <= 3);
         assert!(count > 0);
+    }
+
+    // Config file tests
+    mod config {
+        use super::*;
+
+        #[test]
+        fn parse_toml_config() {
+            let toml = r#"
+[[regions]]
+id = 1
+name = "primary"
+
+[[regions.nodes]]
+host = "derp.example.com"
+port = 443
+stun_port = 3478
+"#;
+            let config: DerpConfigFile = toml::from_str(toml).unwrap();
+
+            assert_eq!(config.regions.len(), 1);
+            assert_eq!(config.regions[0].id, 1);
+            assert_eq!(config.regions[0].name, "primary");
+            assert_eq!(config.regions[0].nodes.len(), 1);
+            assert_eq!(config.regions[0].nodes[0].host, "derp.example.com");
+            assert_eq!(config.regions[0].nodes[0].port, 443);
+            assert_eq!(config.regions[0].nodes[0].stun_port, 3478);
+        }
+
+        #[test]
+        fn parse_toml_config_default_ports() {
+            let toml = r#"
+[[regions]]
+id = 1
+name = "primary"
+
+[[regions.nodes]]
+host = "derp.example.com"
+"#;
+            let config: DerpConfigFile = toml::from_str(toml).unwrap();
+
+            assert_eq!(config.regions[0].nodes[0].port, 443);
+            assert_eq!(config.regions[0].nodes[0].stun_port, 3478);
+        }
+
+        #[test]
+        fn parse_toml_config_multiple_regions() {
+            let toml = r#"
+[[regions]]
+id = 1
+name = "us-west"
+
+[[regions.nodes]]
+host = "derp1.us-west.example.com"
+
+[[regions.nodes]]
+host = "derp2.us-west.example.com"
+
+[[regions]]
+id = 2
+name = "eu-central"
+
+[[regions.nodes]]
+host = "derp1.eu.example.com"
+port = 8443
+stun_port = 3479
+"#;
+            let config: DerpConfigFile = toml::from_str(toml).unwrap();
+
+            assert_eq!(config.regions.len(), 2);
+
+            assert_eq!(config.regions[0].id, 1);
+            assert_eq!(config.regions[0].name, "us-west");
+            assert_eq!(config.regions[0].nodes.len(), 2);
+
+            assert_eq!(config.regions[1].id, 2);
+            assert_eq!(config.regions[1].name, "eu-central");
+            assert_eq!(config.regions[1].nodes.len(), 1);
+            assert_eq!(config.regions[1].nodes[0].port, 8443);
+        }
+
+        #[test]
+        fn config_to_derp_map() {
+            let toml = r#"
+[[regions]]
+id = 1
+name = "primary"
+
+[[regions.nodes]]
+host = "derp.example.com"
+port = 443
+stun_port = 3478
+"#;
+            let config: DerpConfigFile = toml::from_str(toml).unwrap();
+            let map = config.to_derp_map();
+
+            assert_eq!(map.len(), 1);
+            let region = map.get_region(1).unwrap();
+            assert_eq!(region.name, "primary");
+            assert_eq!(region.nodes.len(), 1);
+            assert_eq!(region.nodes[0].host, "derp.example.com");
+        }
+
+        #[test]
+        fn config_to_derp_map_skips_empty_regions() {
+            let toml = r#"
+[[regions]]
+id = 1
+name = "empty"
+
+[[regions]]
+id = 2
+name = "non-empty"
+
+[[regions.nodes]]
+host = "derp.example.com"
+"#;
+            let config: DerpConfigFile = toml::from_str(toml).unwrap();
+            let map = config.to_derp_map();
+
+            // Only one region should be in the map (empty ones skipped)
+            assert_eq!(map.len(), 1);
+            assert!(map.get_region(1).is_none());
+            assert!(map.get_region(2).is_some());
+        }
+
+        #[test]
+        fn parse_empty_config() {
+            let toml = "";
+            let config: DerpConfigFile = toml::from_str(toml).unwrap();
+
+            assert!(config.regions.is_empty());
+            let map = config.to_derp_map();
+            assert!(map.is_empty());
+        }
+
+        #[tokio::test]
+        async fn load_nonexistent_config_returns_none() {
+            let result = load_derp_config_from_path("/nonexistent/path/derp.toml").await;
+            assert!(result.is_ok());
+            assert!(result.unwrap().is_none());
+        }
     }
 }

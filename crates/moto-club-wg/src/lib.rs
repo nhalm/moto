@@ -67,7 +67,11 @@ pub mod sessions;
 pub mod ssh_keys;
 
 pub use broadcaster::{PeerAction, PeerBroadcaster, PeerEvent};
-pub use derp::{DerpError, DerpMapManager, DerpStore, InMemoryDerpStore};
+pub use derp::{
+    DEFAULT_DERP_CONFIG_PATH, DERP_CONFIG_ENV_VAR, DerpConfigFile, DerpConfigNode,
+    DerpConfigRegion, DerpError, DerpMapManager, DerpStore, InMemoryDerpStore, load_derp_config,
+    load_derp_config_from_path,
+};
 pub use ipam::{InMemoryStore, Ipam, IpamError, IpamStore};
 pub use peers::{
     DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerError, PeerRegistry, PeerStore,

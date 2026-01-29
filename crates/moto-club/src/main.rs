@@ -15,6 +15,7 @@
 //! - `MOTO_CLUB_BIND_ADDR`: Server bind address (default: `0.0.0.0:8080`)
 //! - `MOTO_CLUB_DEV_CONTAINER_IMAGE`: Dev container image (default: `ghcr.io/moto-dev/moto-garage:latest`)
 //! - `MOTO_CLUB_RECONCILE_INTERVAL_SECONDS`: Reconciliation interval (default: 30)
+//! - `MOTO_CLUB_DERP_CONFIG`: Path to DERP config file (default: `/etc/moto-club/derp.toml`)
 //! - `KUBECONFIG`: Path to kubeconfig file (auto-detected in-cluster)
 //! - `RUST_LOG`: Log filter (default: `moto_club=info`)
 
@@ -24,17 +25,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::net::TcpListener;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use moto_club_api::{AppState, router};
-use moto_club_db::DbPool;
+use moto_club_db::{DbPool, derp_server_repo};
 use moto_club_k8s::GarageK8s;
 use moto_club_reconcile::{GarageReconciler, ReconcileConfig};
 use moto_club_wg::{
-    DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
-    InMemorySshKeyStore, InMemoryStore, Ipam, PeerBroadcaster, PeerRegistry, SessionManager,
-    SshKeyManager,
+    DERP_CONFIG_ENV_VAR, DerpMapManager, InMemoryDerpStore, InMemoryPeerStore,
+    InMemorySessionStore, InMemorySshKeyStore, InMemoryStore, Ipam, PeerBroadcaster, PeerRegistry,
+    SessionManager, SshKeyManager, load_derp_config,
 };
 use moto_k8s::K8sClient;
 
@@ -137,6 +138,58 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!("connecting to database");
     let db_pool: DbPool = moto_club_db::connect(&config.database_url).await?;
     info!("database connected");
+
+    // Load and sync DERP config
+    let derp_config_path = env::var(DERP_CONFIG_ENV_VAR).ok();
+    match load_derp_config().await {
+        Ok(Some(config_file)) => {
+            let servers: Vec<derp_server_repo::UpsertDerpServer> = config_file
+                .regions
+                .iter()
+                .flat_map(|region| {
+                    region
+                        .nodes
+                        .iter()
+                        .map(|node| derp_server_repo::UpsertDerpServer {
+                            region_id: i32::from(region.id),
+                            region_name: region.name.clone(),
+                            host: node.host.clone(),
+                            port: i32::from(node.port),
+                            stun_port: i32::from(node.stun_port),
+                        })
+                })
+                .collect();
+
+            let server_count = servers.len();
+            let result = derp_server_repo::sync_from_config(&db_pool, servers).await?;
+
+            info!(
+                config_path = derp_config_path
+                    .as_deref()
+                    .unwrap_or("/etc/moto-club/derp.toml"),
+                servers = server_count,
+                inserted = result.inserted,
+                updated = result.updated,
+                deleted = result.deleted,
+                "DERP config synced to database"
+            );
+        }
+        Ok(None) => {
+            info!(
+                config_path = derp_config_path
+                    .as_deref()
+                    .unwrap_or("/etc/moto-club/derp.toml"),
+                "DERP config file not found, using in-memory defaults"
+            );
+        }
+        Err(e) => {
+            warn!(
+                error = %e,
+                config_path = derp_config_path.as_deref().unwrap_or("/etc/moto-club/derp.toml"),
+                "Failed to load DERP config, using in-memory defaults"
+            );
+        }
+    }
 
     // Create K8s client
     info!("initializing kubernetes client");
