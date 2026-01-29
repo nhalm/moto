@@ -53,6 +53,17 @@ pub struct ExtendTtlRequest {
     pub seconds: i32,
 }
 
+/// Response for extending a garage's TTL.
+///
+/// Per spec (moto-club.md lines 379-386), returns just the new expiry info.
+#[derive(Debug, Clone, Serialize)]
+pub struct ExtendTtlResponse {
+    /// When the garage expires after extension.
+    pub expires_at: DateTime<Utc>,
+    /// Seconds remaining until expiry.
+    pub ttl_remaining_seconds: i64,
+}
+
 /// Query parameters for listing garages.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListGaragesQuery {
@@ -706,7 +717,16 @@ async fn extend_garage_ttl(
             )
         })?;
 
-    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(GarageResponse::from(garage))))
+    // Calculate remaining TTL in seconds
+    let now = Utc::now();
+    let ttl_remaining_seconds = (garage.expires_at - now).num_seconds().max(0);
+
+    let response = ExtendTtlResponse {
+        expires_at: garage.expires_at,
+        ttl_remaining_seconds,
+    };
+
+    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
 /// Creates the garage router.
@@ -756,6 +776,25 @@ mod tests {
         let json = r#"{"seconds": 3600}"#;
         let req: ExtendTtlRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.seconds, 3600);
+    }
+
+    #[test]
+    fn extend_ttl_response_serialization() {
+        use chrono::TimeZone;
+
+        let response = ExtendTtlResponse {
+            expires_at: Utc.with_ymd_and_hms(2026, 1, 28, 22, 0, 0).unwrap(),
+            ttl_remaining_seconds: 21600,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        // Should only contain expires_at and ttl_remaining_seconds per spec
+        assert!(json.contains(r#""expires_at":"2026-01-28T22:00:00Z""#));
+        assert!(json.contains(r#""ttl_remaining_seconds":21600"#));
+        // Should NOT contain garage details
+        assert!(!json.contains("name"));
+        assert!(!json.contains("owner"));
+        assert!(!json.contains("status"));
     }
 
     #[test]
