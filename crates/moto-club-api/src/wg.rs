@@ -17,11 +17,11 @@ use std::net::SocketAddr;
 use axum::{
     Json, Router,
     extract::{
-        Path, State,
+        Path, Query, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
 use chrono::{DateTime, Utc};
@@ -202,6 +202,9 @@ pub struct GarageWgRegistrationResponse {
 pub struct PeerListResponse {
     /// Peers authorized to connect to this garage.
     pub peers: Vec<PeerInfo>,
+    /// Version counter (incremented on session create/close).
+    /// Used for conditional GET with `?version=N` query param.
+    pub version: i32,
 }
 
 /// Information about an authorized peer.
@@ -211,6 +214,17 @@ pub struct PeerInfo {
     pub public_key: WgPublicKey,
     /// Peer's allowed IP (their overlay IP).
     pub allowed_ip: String,
+}
+
+/// Query parameters for `GET /api/v1/wg/garages/{id}/peers`.
+///
+/// Supports conditional GET with `?version=N` query parameter.
+/// If the current version equals N, returns 304 Not Modified.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GetPeersParams {
+    /// Optional version for conditional GET.
+    /// If provided and matches current version, returns 304 Not Modified.
+    pub version: Option<i32>,
 }
 
 /// Response for DERP map endpoint.
@@ -840,28 +854,141 @@ async fn get_garage_wg_registration(
 ///
 /// GET /api/v1/wg/garages/{id}/peers
 ///
+/// Query Parameters:
+///   ?version=41 - Optional, return 304 if current version equals this
+///
 /// Authorization: Bearer <k8s-service-account-token>
 ///
 /// Validates:
 /// 1. K8s ServiceAccount token via TokenReview API
 /// 2. Pod must be in namespace `moto-garage-{garage_id}`
+///
+/// Returns 304 Not Modified if `?version=N` is provided and matches current version.
+/// Otherwise returns 200 with peers and current version.
 async fn get_garage_peers(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(garage_id): Path<String>,
-) -> impl IntoResponse {
+    Query(params): Query<GetPeersParams>,
+) -> Response {
     // Validate K8s ServiceAccount token and namespace
-    validate_garage_token(&state, &headers, &garage_id).await?;
+    if let Err(err) = validate_garage_token(&state, &headers, &garage_id).await {
+        return err.into_response();
+    }
 
-    // TODO: Use actual SessionManager from AppState to get active sessions
-    // and return peers for this garage
-    // For now, return empty peer list
-    let response = PeerListResponse { peers: vec![] };
+    // Get current peer_version from database
+    let current_version = match get_peer_version_from_db(&state, &garage_id).await {
+        Ok(v) => v,
+        Err(err) => return err.into_response(),
+    };
 
-    // Log for debugging
-    tracing::debug!(garage_id = %garage_id, "Garage polling for peers");
+    // Conditional GET: return 304 if version matches
+    if let Some(client_version) = params.version {
+        if client_version == current_version {
+            tracing::debug!(
+                garage_id = %garage_id,
+                version = client_version,
+                "Peer list unchanged, returning 304"
+            );
+            // 304 Not Modified has no body per HTTP spec
+            return StatusCode::NOT_MODIFIED.into_response();
+        }
+    }
 
-    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
+    // Get active sessions for this garage and build peer list
+    let peers = match build_peer_list(&state, &garage_id) {
+        Ok(p) => p,
+        Err(err) => return err.into_response(),
+    };
+
+    tracing::debug!(
+        garage_id = %garage_id,
+        peer_count = peers.len(),
+        version = current_version,
+        "Returning peer list"
+    );
+
+    let response = PeerListResponse {
+        peers,
+        version: current_version,
+    };
+
+    (StatusCode::OK, Json(response)).into_response()
+}
+
+/// Get the current `peer_version` for a garage from the database.
+///
+/// For in-memory stores (testing), returns 0 as a default.
+/// For `PostgreSQL`, queries the `wg_garages` table.
+async fn get_peer_version_from_db(
+    state: &AppState,
+    garage_id: &str,
+) -> Result<i32, (StatusCode, Json<ApiError>)> {
+    // Try to parse as UUID for database lookup
+    let garage_uuid = match garage_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            // For non-UUID garage IDs (in-memory testing), return 0
+            return Ok(0);
+        }
+    };
+
+    // Query the database for peer_version
+    let result = moto_club_db::wg_garage_repo::get_peer_version(&state.db_pool, garage_uuid).await;
+
+    match result {
+        Ok(version) => Ok(version),
+        Err(moto_club_db::DbError::NotFound { .. }) => {
+            // Garage not registered yet, return 0
+            Ok(0)
+        }
+        Err(e) => {
+            tracing::error!(garage_id = %garage_id, error = %e, "Failed to get peer version");
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    format!("Failed to get peer version: {e}"),
+                )),
+            ))
+        }
+    }
+}
+
+/// Build the peer list from active sessions for a garage.
+fn build_peer_list(
+    state: &AppState,
+    garage_id: &str,
+) -> Result<Vec<PeerInfo>, (StatusCode, Json<ApiError>)> {
+    // Get active sessions for this garage
+    let sessions = state
+        .session_manager
+        .list_sessions_for_garage(garage_id)
+        .map_err(|e| {
+            tracing::error!(garage_id = %garage_id, error = %e, "Failed to list sessions");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    format!("Failed to list sessions: {e}"),
+                )),
+            )
+        })?;
+
+    // Convert sessions to peer info
+    let mut peers = Vec::with_capacity(sessions.len());
+    for session in sessions {
+        // Look up the device to get its overlay IP
+        if let Ok(Some(device)) = state.peer_registry.get_device(&session.device_pubkey) {
+            let overlay_ip = device.overlay_ip;
+            peers.push(PeerInfo {
+                public_key: device.public_key,
+                allowed_ip: format!("{overlay_ip}/128"),
+            });
+        }
+    }
+
+    Ok(peers)
 }
 
 /// Get DERP server map.
@@ -1250,9 +1377,13 @@ mod tests {
 
     #[test]
     fn peer_list_response_serialize() {
-        let response = PeerListResponse { peers: vec![] };
+        let response = PeerListResponse {
+            peers: vec![],
+            version: 42,
+        };
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("peers"));
+        assert!(json.contains(r#""version":42"#));
     }
 
     #[test]
@@ -2089,6 +2220,111 @@ mod tests {
                 .unwrap();
 
             assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn get_garage_peers_returns_version() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/wg/garages/test-garage/peers")
+                        .header(header::AUTHORIZATION, "Bearer k8s-service-account")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+            // Should have peers array and version field
+            assert!(result["peers"].is_array());
+            assert!(result["version"].is_number());
+        }
+
+        #[tokio::test]
+        async fn get_garage_peers_conditional_304() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            // First request without version param
+            let response1 = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/wg/garages/test-garage/peers")
+                        .header(header::AUTHORIZATION, "Bearer k8s-service-account")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response1.status(), StatusCode::OK);
+
+            let body = axum::body::to_bytes(response1.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            let version = result["version"].as_i64().unwrap();
+
+            // Second request with matching version should return 304
+            let response2 = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri(format!(
+                            "/api/v1/wg/garages/test-garage/peers?version={}",
+                            version
+                        ))
+                        .header(header::AUTHORIZATION, "Bearer k8s-service-account")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response2.status(), StatusCode::NOT_MODIFIED);
+        }
+
+        #[tokio::test]
+        async fn get_garage_peers_conditional_200_on_version_mismatch() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            // Request with a different version should return 200
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/wg/garages/test-garage/peers?version=999")
+                        .header(header::AUTHORIZATION, "Bearer k8s-service-account")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+            // Should have peers and version
+            assert!(result["peers"].is_array());
+            assert!(result["version"].is_number());
         }
     }
 }
