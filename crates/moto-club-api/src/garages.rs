@@ -262,7 +262,7 @@ async fn create_garage(
                         Json(ApiError::new(error_codes::DATABASE_ERROR, "Database error")),
                     )
                 }
-                DbError::NotFound { .. } => {
+                DbError::NotFound { .. } | DbError::NotOwned { .. } => {
                     // Shouldn't happen for create
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -335,7 +335,7 @@ async fn get_garage(
                     Json(ApiError::new(error_codes::DATABASE_ERROR, "Database error")),
                 )
             }
-            DbError::AlreadyExists { .. } => {
+            DbError::AlreadyExists { .. } | DbError::NotOwned { .. } => {
                 // Shouldn't happen for get
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -587,6 +587,7 @@ mod tests {
             name: "bold-mongoose".to_string(),
             owner: "nick".to_string(),
             branch: "main".to_string(),
+            image: "ghcr.io/example/dev:latest".to_string(),
             status: GarageStatus::Ready,
             ttl_seconds: 14400,
             expires_at: Utc::now(),
@@ -616,6 +617,7 @@ mod tests {
             name: "old-garage".to_string(),
             owner: "nick".to_string(),
             branch: "main".to_string(),
+            image: "ghcr.io/example/dev:latest".to_string(),
             status: GarageStatus::Terminated,
             ttl_seconds: 14400,
             expires_at: Utc::now(),

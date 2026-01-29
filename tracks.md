@@ -35,9 +35,9 @@ HOW TO USE THIS FILE:
 - moto-club-db: wg_sessions repository with garage_id ON DELETE CASCADE (wg_session_repo.rs)
 - moto-club-db: wg_garages repository with deterministic IP allocation (wg_garage_repo.rs)
 - moto-club-db: user_ssh_keys repository (user_ssh_key_repo.rs)
+- moto-club-api: PostgreSQL storage implementations (postgres_stores.rs: PostgresPeerStore, PostgresSessionStore, PostgresSshKeyStore)
 
 **Remaining:
-- moto-club-api: Wire up PostgreSQL storage (replace in-memory registries)
 - moto-club-api: K8s ServiceAccount token validation for garage endpoints
 - moto-club-api: GET /api/v1/wg/garages/{garage_id} endpoint
 - moto-club-api: GET /api/v1/wg/derp-map endpoint

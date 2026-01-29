@@ -35,6 +35,7 @@
 
 pub mod garages;
 pub mod health;
+pub mod postgres_stores;
 pub mod wg;
 
 use std::sync::Arc;
@@ -44,19 +45,42 @@ use moto_club_db::DbPool;
 use moto_club_wg::{
     DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
     InMemorySshKeyStore, InMemoryStore, PeerBroadcaster, PeerRegistry, SessionManager,
-    SshKeyManager,
+    SshKeyManager, ipam::Ipam,
 };
 
+pub use postgres_stores::{PostgresPeerStore, PostgresSessionStore, PostgresSshKeyStore};
+
+/// Type alias for the peer registry used with in-memory storage (for testing).
+pub type InMemoryWgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>;
+
+/// Type alias for the session manager used with in-memory storage (for testing).
+pub type InMemoryWgSessionManager = SessionManager<InMemorySessionStore>;
+
+/// Type alias for the SSH key manager used with in-memory storage (for testing).
+pub type InMemoryWgSshKeyManager = SshKeyManager<InMemorySshKeyStore>;
+
+/// Type alias for the peer registry used with PostgreSQL storage (for production).
+pub type PostgresWgPeerRegistry = PeerRegistry<PostgresPeerStore, InMemoryStore>;
+
+/// Type alias for the session manager used with PostgreSQL storage (for production).
+pub type PostgresWgSessionManager = SessionManager<PostgresSessionStore>;
+
+/// Type alias for the SSH key manager used with PostgreSQL storage (for production).
+pub type PostgresWgSshKeyManager = SshKeyManager<PostgresSshKeyStore>;
+
 /// Type alias for the peer registry used in production.
+/// Currently defaults to in-memory; will be switched to PostgreSQL when fully wired.
 pub type WgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>;
 
 /// Type alias for the session manager used in production.
+/// Currently defaults to in-memory; will be switched to PostgreSQL when fully wired.
 pub type WgSessionManager = SessionManager<InMemorySessionStore>;
 
 /// Type alias for the DERP map manager used in production.
 pub type WgDerpMapManager = DerpMapManager<InMemoryDerpStore>;
 
 /// Type alias for the SSH key manager used in production.
+/// Currently defaults to in-memory; will be switched to PostgreSQL when fully wired.
 pub type WgSshKeyManager = SshKeyManager<InMemorySshKeyStore>;
 
 /// Shared application state.
@@ -89,6 +113,34 @@ impl AppState {
         ssh_key_manager: Arc<WgSshKeyManager>,
         peer_broadcaster: Arc<PeerBroadcaster>,
     ) -> Self {
+        Self {
+            db_pool,
+            peer_registry,
+            session_manager,
+            derp_manager,
+            ssh_key_manager,
+            peer_broadcaster,
+        }
+    }
+
+    /// Creates a new `AppState` with in-memory storage (for testing).
+    ///
+    /// This uses in-memory stores that don't persist data across restarts.
+    #[must_use]
+    pub fn with_in_memory_storage(db_pool: DbPool) -> Self {
+        let ipam_store = InMemoryStore::new();
+        let peer_store = InMemoryPeerStore::new();
+        let session_store = InMemorySessionStore::new();
+        let derp_store = InMemoryDerpStore::with_default_map();
+        let ssh_key_store = InMemorySshKeyStore::new();
+
+        let ipam = Ipam::new(ipam_store);
+        let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
+        let session_manager = Arc::new(SessionManager::new(session_store));
+        let derp_manager = Arc::new(DerpMapManager::new(derp_store));
+        let ssh_key_manager = Arc::new(SshKeyManager::new(ssh_key_store));
+        let peer_broadcaster = Arc::new(PeerBroadcaster::new());
+
         Self {
             db_pool,
             peer_registry,
