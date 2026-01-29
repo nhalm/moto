@@ -241,7 +241,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Create peer broadcaster for garage WebSocket connections
     let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 
-    // Create API router
+    // Create API router with GarageK8s for namespace operations
+    let api_garage_k8s = garage_k8s.clone();
     let state = AppState::new(
         db_pool,
         peer_registry,
@@ -249,7 +250,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         derp_manager,
         ssh_key_manager,
         peer_broadcaster,
-    );
+    )
+    .with_garage_k8s(api_garage_k8s);
     let app = router(state);
 
     // Start server

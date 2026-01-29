@@ -23,6 +23,8 @@ use uuid::Uuid;
 
 use crate::{ApiError, AppState, error_codes};
 use moto_club_db::{DbError, Garage, GarageStatus, TerminationReason, garage_repo};
+use moto_club_k8s::GarageNamespaceOps;
+use moto_club_types::GarageId;
 
 /// Default TTL in seconds (4 hours).
 const DEFAULT_TTL_SECONDS: i32 = 14400;
@@ -364,6 +366,14 @@ async fn get_garage(
 /// Delete (close) a garage.
 ///
 /// DELETE /api/v1/garages/{name}
+///
+/// Close flow (per spec lines 903-907):
+/// 1. Update database status to Terminated
+/// 2. Set terminated_at timestamp
+/// 3. Set termination_reason
+/// 4. Delete K8s namespace (cascades to all resources)
+///
+/// Idempotent: deleting already-terminated garage returns 204.
 async fn delete_garage(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -401,19 +411,13 @@ async fn delete_garage(
         ));
     }
 
-    // Check if already terminated
+    // Idempotent: if already terminated, return 204 success
     if garage.status == GarageStatus::Terminated {
-        return Err((
-            StatusCode::GONE,
-            Json(ApiError::new(
-                error_codes::GARAGE_TERMINATED,
-                format!("Garage '{name}' has already been terminated"),
-            )),
-        ));
+        return Ok(StatusCode::NO_CONTENT);
     }
 
-    // Terminate the garage
-    let garage = garage_repo::terminate(&state.db_pool, garage.id, TerminationReason::UserClosed)
+    // Terminate the garage in database first (source of truth for "user requested close")
+    garage_repo::terminate(&state.db_pool, garage.id, TerminationReason::UserClosed)
         .await
         .map_err(|e| {
             tracing::error!("Database error terminating garage: {e}");
@@ -423,10 +427,23 @@ async fn delete_garage(
             )
         })?;
 
-    // TODO: Delete K8s namespace (moto-club-k8s crate)
-    // This will cascade delete all resources in the namespace
+    // Delete K8s namespace (cascades to all resources)
+    // Per spec: if deletion fails, log error and return success anyway
+    // Reconciler will retry namespace deletion on next cycle
+    if let Some(ref garage_k8s) = state.garage_k8s {
+        let garage_id = GarageId::from_uuid(garage.id);
+        if let Err(e) = garage_k8s.delete_garage_namespace(&garage_id).await {
+            tracing::warn!(
+                garage_id = %garage.id,
+                garage_name = %name,
+                error = %e,
+                "failed to delete K8s namespace (may already be deleted)"
+            );
+            // Don't fail - user intent captured, reconciler will clean up
+        }
+    }
 
-    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(GarageResponse::from(garage))))
+    Ok::<_, (StatusCode, Json<ApiError>)>(StatusCode::NO_CONTENT)
 }
 
 /// Extend a garage's TTL.

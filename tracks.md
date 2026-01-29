@@ -46,9 +46,10 @@ HOW TO USE THIS FILE:
 - moto-club: DERP config file loading from MOTO_CLUB_DERP_CONFIG env var (moto-club-wg DerpConfigFile, load_derp_config; moto-club-db derp_server_repo with sync_from_config; main.rs startup sync)
 - moto-club: Structured JSON logging (main.rs: flatten_event=true for flat JSON output per spec lines 1183-1194)
 - moto-club-garage: SSH keys Secret creation wired into create flow (step 8 per spec lines 866-879; queries user_ssh_key_repo, creates Secret before pod deployment)
+- moto-club-api: K8s namespace deletion in close flow (DELETE /api/v1/garages/{name} calls GarageK8s.delete_garage_namespace per spec lines 903-913)
 
 **Remaining:**
-- moto-club-garage: Integrate K8s namespace deletion in close flow
+(none - moto-club.md v1.1 implementation complete)
 
 ---
 

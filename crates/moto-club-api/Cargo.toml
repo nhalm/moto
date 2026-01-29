@@ -45,6 +45,8 @@ uuid = { workspace = true }
 
 # Internal crates
 moto-club-db = { workspace = true }
+moto-club-k8s = { workspace = true }
+moto-club-types = { workspace = true }
 moto-club-wg = { workspace = true }
 moto-k8s = { workspace = true }
 moto-wgtunnel-types = { workspace = true }

@@ -42,6 +42,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use moto_club_db::DbPool;
+use moto_club_k8s::GarageK8s;
 use moto_club_wg::{
     DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
     InMemorySshKeyStore, InMemoryStore, PeerBroadcaster, PeerRegistry, SessionManager,
@@ -104,6 +105,9 @@ pub struct AppState {
     /// Kubernetes client for ServiceAccount token validation.
     /// When `None`, token validation is skipped (for testing/local dev).
     pub k8s_client: Option<K8sClient>,
+    /// Garage K8s operations for namespace and pod management.
+    /// When `None`, K8s operations are skipped (for testing/local dev).
+    pub garage_k8s: Option<GarageK8s>,
 }
 
 impl AppState {
@@ -125,6 +129,7 @@ impl AppState {
             ssh_key_manager,
             peer_broadcaster,
             k8s_client: None,
+            garage_k8s: None,
         }
     }
 
@@ -135,10 +140,17 @@ impl AppState {
         self
     }
 
+    /// Creates a new `AppState` with a garage K8s client for namespace operations.
+    #[must_use]
+    pub fn with_garage_k8s(mut self, garage_k8s: GarageK8s) -> Self {
+        self.garage_k8s = Some(garage_k8s);
+        self
+    }
+
     /// Creates a new `AppState` with in-memory storage (for testing).
     ///
     /// This uses in-memory stores that don't persist data across restarts.
-    /// K8s token validation is disabled (k8s_client is None).
+    /// K8s operations are disabled (k8s_client and garage_k8s are None).
     #[must_use]
     pub fn with_in_memory_storage(db_pool: DbPool) -> Self {
         let ipam_store = InMemoryStore::new();
@@ -162,6 +174,7 @@ impl AppState {
             ssh_key_manager,
             peer_broadcaster,
             k8s_client: None,
+            garage_k8s: None,
         }
     }
 }
