@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.0 |
+| Version | 1.1 |
 | Last Updated | 2026-01-28 |
 
 ## Overview
@@ -294,7 +294,7 @@ Authorization: Bearer <user-token>
 
 Query Parameters:
   ?status=running,ready    // Optional, filter by status (comma-separated)
-                           // Valid: pending, running, ready, attached, terminated
+                           // Valid: pending, running, ready, terminated
   ?all=true                // Optional, include terminated garages (default: false)
 
 Response 200:
@@ -704,7 +704,7 @@ Response 200 OK (key already registered, idempotent):
 ```
 
 **Behavior:**
-- Key is injected into `authorized_keys` when user's garages are created
+- Key stored in database, injected into garages at creation time (see SSH Key Injection below)
 - Multiple keys per user supported
 - Same key re-registered by same user returns 200 with existing record (idempotent)
 - Same fingerprint can be registered by different users (not globally unique)
@@ -741,6 +741,22 @@ Response 204 No Content
 ```
 
 **Note:** Does not remove key from already-running garages.
+
+##### SSH Key Injection
+
+When a garage is created, moto-club injects the user's SSH public keys into the garage pod:
+
+1. Query `user_ssh_keys` for all keys belonging to the garage owner
+2. Create K8s Secret `ssh-keys` in the garage namespace containing:
+   - `authorized_keys`: concatenated public keys (one per line)
+3. Mount secret as `/home/moto/.ssh/authorized_keys` in the garage pod (read-only, mode 0600)
+
+**Limitations (v1):**
+- Keys added after garage creation are NOT automatically synced to running garages
+- User must create a new garage to pick up newly-registered keys
+- Key deletion does not revoke access to running garages
+
+**Future:** A sidecar or periodic sync could update keys in running garages.
 
 #### DERP Map
 
@@ -842,7 +858,6 @@ enum GarageStatus {
     Pending,      // Pod scheduled, pulling images
     Running,      // Container started, initializing
     Ready,        // Garage ready for use
-    Attached,     // User connected via WireGuard tunnel
     Terminated,   // Closed/cleaned up
 }
 ```
@@ -856,10 +871,11 @@ enum GarageStatus {
 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
 6. Apply NetworkPolicy, ResourceQuota
 7. Create ServiceAccount (for keybox auth)
-8. Deploy dev container pod
-9. Wait for pod Ready
-10. Update database (Ready)
-11. Return garage details
+8. Create SSH keys Secret (user's public keys as authorized_keys)
+9. Deploy dev container pod (mounts SSH keys secret)
+10. Wait for pod Ready
+11. Update database (Ready)
+12. Return garage details
 ```
 
 **Create failure handling:**
@@ -1017,7 +1033,7 @@ CREATE TABLE garages (
     name TEXT NOT NULL UNIQUE,
     owner TEXT NOT NULL,
     branch TEXT NOT NULL,
-    status TEXT NOT NULL,           -- pending, running, ready, attached, terminated
+    status TEXT NOT NULL,           -- pending, running, ready, terminated
     image TEXT NOT NULL,            -- dev container image used
     ttl_seconds INTEGER NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -1051,7 +1067,7 @@ CREATE INDEX idx_wg_devices_owner ON wg_devices(owner);
 CREATE TABLE wg_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     device_pubkey TEXT NOT NULL REFERENCES wg_devices(public_key),
-    garage_id UUID NOT NULL REFERENCES garages(id),
+    garage_id UUID NOT NULL REFERENCES garages(id) ON DELETE CASCADE,
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     closed_at TIMESTAMPTZ
@@ -1253,6 +1269,12 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v1.1
+- Added `ON DELETE CASCADE` to `wg_sessions.garage_id` FK (prevents orphaned records)
+- Removed unreachable `Attached` garage status (no mechanism to detect WireGuard connection)
+- Specified SSH key injection mechanism (K8s Secret mounted to garage pod)
+- Updated garage creation flow to include SSH keys secret creation
 
 ### v1.0
 - Removed unused `SESSION_EXPIRED` error code
