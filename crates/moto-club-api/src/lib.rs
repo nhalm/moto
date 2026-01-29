@@ -47,6 +47,7 @@ use moto_club_wg::{
     InMemorySshKeyStore, InMemoryStore, PeerBroadcaster, PeerRegistry, SessionManager,
     SshKeyManager, ipam::Ipam,
 };
+use moto_k8s::K8sClient;
 
 pub use postgres_stores::{PostgresPeerStore, PostgresSessionStore, PostgresSshKeyStore};
 
@@ -100,10 +101,13 @@ pub struct AppState {
     pub ssh_key_manager: Arc<WgSshKeyManager>,
     /// Peer event broadcaster for garage WebSocket connections.
     pub peer_broadcaster: Arc<PeerBroadcaster>,
+    /// Kubernetes client for ServiceAccount token validation.
+    /// When `None`, token validation is skipped (for testing/local dev).
+    pub k8s_client: Option<K8sClient>,
 }
 
 impl AppState {
-    /// Creates a new `AppState` with the given database pool, peer registry, session manager, DERP manager, SSH key manager, and peer broadcaster.
+    /// Creates a new `AppState` with the given dependencies.
     #[must_use]
     pub const fn new(
         db_pool: DbPool,
@@ -120,12 +124,21 @@ impl AppState {
             derp_manager,
             ssh_key_manager,
             peer_broadcaster,
+            k8s_client: None,
         }
+    }
+
+    /// Creates a new `AppState` with a K8s client for token validation.
+    #[must_use]
+    pub fn with_k8s_client(mut self, k8s_client: K8sClient) -> Self {
+        self.k8s_client = Some(k8s_client);
+        self
     }
 
     /// Creates a new `AppState` with in-memory storage (for testing).
     ///
     /// This uses in-memory stores that don't persist data across restarts.
+    /// K8s token validation is disabled (k8s_client is None).
     #[must_use]
     pub fn with_in_memory_storage(db_pool: DbPool) -> Self {
         let ipam_store = InMemoryStore::new();
@@ -148,6 +161,7 @@ impl AppState {
             derp_manager,
             ssh_key_manager,
             peer_broadcaster,
+            k8s_client: None,
         }
     }
 }
@@ -245,6 +259,10 @@ pub mod error_codes {
     pub const DATABASE_ERROR: &str = "DATABASE_ERROR";
     /// Invalid SSH public key.
     pub const INVALID_SSH_KEY: &str = "INVALID_SSH_KEY";
+    /// K8s ServiceAccount token is invalid or expired.
+    pub const INVALID_TOKEN: &str = "INVALID_TOKEN";
+    /// Pod not running in expected garage namespace.
+    pub const NAMESPACE_MISMATCH: &str = "NAMESPACE_MISMATCH";
 }
 
 #[cfg(test)]

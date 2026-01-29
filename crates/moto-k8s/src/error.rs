@@ -88,6 +88,14 @@ pub enum Error {
     /// Failed to list deployments.
     #[error("failed to list deployments: {0}")]
     DeploymentList(#[source] kube::Error),
+
+    /// Failed to perform token review.
+    #[error("failed to perform token review: {0}")]
+    TokenReview(#[source] kube::Error),
+
+    /// Token not authenticated (invalid or expired).
+    #[error("token not authenticated")]
+    TokenNotAuthenticated,
 }
 
 /// Result type alias for K8s operations.

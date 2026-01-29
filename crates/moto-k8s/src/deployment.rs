@@ -283,8 +283,7 @@ impl DeploymentOps for K8sClient {
                 let age_seconds = metadata
                     .creation_timestamp
                     .as_ref()
-                    .map(|ts| (now - ts.0).num_seconds())
-                    .unwrap_or(0);
+                    .map_or(0, |ts| (now - ts.0).num_seconds());
 
                 // Get image from first container
                 let image = spec

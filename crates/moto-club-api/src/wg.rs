@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{ApiError, AppState, error_codes};
+use moto_k8s::TokenReviewOps;
 
 // ============================================================================
 // Request/Response types
@@ -293,6 +294,143 @@ fn extract_owner(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiErr
     Ok(token.to_string())
 }
 
+/// Extract Bearer token from Authorization header (without validation).
+fn extract_bearer_token(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiError>)> {
+    let auth_header = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new(
+                    error_codes::INVALID_TOKEN,
+                    "Missing Authorization header",
+                )),
+            )
+        })?;
+
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .or_else(|| auth_header.strip_prefix("bearer "))
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new(
+                    error_codes::INVALID_TOKEN,
+                    "Invalid Authorization header format, expected 'Bearer <token>'",
+                )),
+            )
+        })?;
+
+    if token.is_empty() {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new(
+                error_codes::INVALID_TOKEN,
+                "Empty Bearer token",
+            )),
+        ));
+    }
+
+    Ok(token.to_string())
+}
+
+/// Validates K8s ServiceAccount token and verifies the pod is in the expected namespace.
+///
+/// Per spec (lines 585-603):
+/// 1. K8s ServiceAccount token validated via TokenReview API
+/// 2. Pod must be in namespace `moto-garage-{garage_id}`
+/// 3. Prevents rogue pods from registering as arbitrary garages
+///
+/// # Arguments
+///
+/// * `state` - Application state containing the K8s client
+/// * `headers` - HTTP headers containing the Authorization header
+/// * `garage_id` - Expected garage ID (namespace must be `moto-garage-{garage_id}`)
+///
+/// # Returns
+///
+/// Returns `Ok(())` if validation passes, or an appropriate error if:
+/// - No K8s client configured (skips validation in test/local dev mode)
+/// - Token is invalid or expired (returns `INVALID_TOKEN`)
+/// - Token namespace doesn't match expected garage namespace (returns `NAMESPACE_MISMATCH`)
+async fn validate_garage_token(
+    state: &AppState,
+    headers: &HeaderMap,
+    garage_id: &str,
+) -> Result<(), (StatusCode, Json<ApiError>)> {
+    // If no K8s client configured, skip validation (test/local dev mode)
+    let k8s_client = match &state.k8s_client {
+        Some(client) => client,
+        None => {
+            tracing::debug!(garage_id = %garage_id, "K8s token validation skipped (no client configured)");
+            return Ok(());
+        }
+    };
+
+    // Extract the bearer token
+    let token = extract_bearer_token(headers)?;
+
+    // Validate the token via K8s TokenReview API
+    let validated = k8s_client.validate_token(&token).await.map_err(|e| {
+        tracing::warn!(garage_id = %garage_id, error = %e, "K8s token validation failed");
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new(
+                error_codes::INVALID_TOKEN,
+                "K8s ServiceAccount token invalid or expired",
+            )),
+        )
+    })?;
+
+    // Expected namespace format: moto-garage-{garage_id}
+    let expected_namespace = format!("moto-garage-{garage_id}");
+
+    // Check that the service account is in the correct namespace
+    let actual_namespace = validated.service_account_namespace().ok_or_else(|| {
+        tracing::warn!(
+            garage_id = %garage_id,
+            username = %validated.username,
+            "Token doesn't belong to a service account"
+        );
+        (
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::NAMESPACE_MISMATCH,
+                "Token must belong to a K8s ServiceAccount",
+            )),
+        )
+    })?;
+
+    if actual_namespace != expected_namespace {
+        tracing::warn!(
+            garage_id = %garage_id,
+            expected = %expected_namespace,
+            actual = %actual_namespace,
+            "Namespace mismatch"
+        );
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::NAMESPACE_MISMATCH,
+                format!(
+                    "Pod not running in expected namespace: expected '{}', got '{}'",
+                    expected_namespace, actual_namespace
+                ),
+            )),
+        ));
+    }
+
+    tracing::debug!(
+        garage_id = %garage_id,
+        namespace = %actual_namespace,
+        username = %validated.username,
+        "K8s token validated successfully"
+    );
+
+    Ok(())
+}
+
 // ============================================================================
 // Handlers
 // ============================================================================
@@ -540,15 +678,19 @@ async fn close_session(
 /// Register a garage (called by garage pod).
 ///
 /// POST /api/v1/wg/garages
+///
+/// Authorization: Bearer <k8s-service-account-token>
+///
+/// Validates:
+/// 1. K8s ServiceAccount token via TokenReview API
+/// 2. Pod must be in namespace `moto-garage-{garage_id}`
 async fn register_garage(
     State(state): State<AppState>,
-    // Note: Garage registration uses K8s ServiceAccount token, not user Bearer token
-    // For now, we'll accept any authentication
     headers: HeaderMap,
     Json(req): Json<RegisterGarageRequest>,
 ) -> impl IntoResponse {
-    // TODO: Validate K8s ServiceAccount token via TokenReview API
-    let _ = headers.get("authorization");
+    // Validate K8s ServiceAccount token and namespace
+    validate_garage_token(&state, &headers, &req.garage_id).await?;
 
     let registration = GarageRegistration {
         garage_id: req.garage_id.clone(),
@@ -603,17 +745,22 @@ async fn register_garage(
 ///
 /// GET /api/v1/wg/garages/{garage_id}
 ///
+/// Authorization: Bearer <k8s-service-account-token>
+///
 /// Returns garage's WireGuard registration info including public key, assigned IP,
 /// endpoints, peer version, and DERP map. Used by garage pods to recover state
 /// after restart or check registration status.
+///
+/// Validates:
+/// 1. K8s ServiceAccount token via TokenReview API
+/// 2. Pod must be in namespace `moto-garage-{garage_id}`
 async fn get_garage_wg_registration(
     State(state): State<AppState>,
-    // Note: Garage uses K8s ServiceAccount token
     headers: HeaderMap,
     Path(garage_id): Path<String>,
 ) -> impl IntoResponse {
-    // TODO: Validate K8s ServiceAccount token via TokenReview API
-    let _ = headers.get("authorization");
+    // Validate K8s ServiceAccount token and namespace
+    validate_garage_token(&state, &headers, &garage_id).await?;
 
     // Look up the garage registration
     let garage = state
@@ -675,14 +822,19 @@ async fn get_garage_wg_registration(
 /// Get peer list for a garage (garage polls this).
 ///
 /// GET /api/v1/wg/garages/{id}/peers
+///
+/// Authorization: Bearer <k8s-service-account-token>
+///
+/// Validates:
+/// 1. K8s ServiceAccount token via TokenReview API
+/// 2. Pod must be in namespace `moto-garage-{garage_id}`
 async fn get_garage_peers(
-    State(_state): State<AppState>,
-    // Note: Garage uses K8s ServiceAccount token
+    State(state): State<AppState>,
     headers: HeaderMap,
     Path(garage_id): Path<String>,
 ) -> impl IntoResponse {
-    // TODO: Validate K8s ServiceAccount token
-    let _ = headers.get("authorization");
+    // Validate K8s ServiceAccount token and namespace
+    validate_garage_token(&state, &headers, &garage_id).await?;
 
     // TODO: Use actual SessionManager from AppState to get active sessions
     // and return peers for this garage
@@ -769,20 +921,26 @@ async fn register_ssh_key(
 ///
 /// GET /internal/wg/garages/{id}/peers (WebSocket upgrade)
 ///
+/// Authorization: Bearer <k8s-service-account-token>
+///
 /// Garages maintain a persistent WebSocket connection to receive real-time
 /// peer updates when sessions are created or closed.
+///
+/// Validates:
+/// 1. K8s ServiceAccount token via TokenReview API
+/// 2. Pod must be in namespace `moto-garage-{garage_id}`
 async fn peers_websocket(
     State(state): State<AppState>,
     Path(garage_id): Path<String>,
     headers: HeaderMap,
     ws: WebSocketUpgrade,
-) -> impl IntoResponse {
-    // TODO: Validate K8s ServiceAccount token via TokenReview API
-    let _ = headers.get("authorization");
+) -> Result<axum::response::Response, (StatusCode, Json<ApiError>)> {
+    // Validate K8s ServiceAccount token and namespace BEFORE upgrading
+    validate_garage_token(&state, &headers, &garage_id).await?;
 
     tracing::info!(garage_id = %garage_id, "Garage connecting to peer WebSocket");
 
-    ws.on_upgrade(move |socket| handle_peers_socket(socket, garage_id, state))
+    Ok(ws.on_upgrade(move |socket| handle_peers_socket(socket, garage_id, state)))
 }
 
 /// Handle the WebSocket connection for peer streaming.
