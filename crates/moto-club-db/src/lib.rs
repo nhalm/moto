@@ -31,6 +31,7 @@
 
 pub mod garage_repo;
 pub mod models;
+pub mod user_ssh_key_repo;
 pub mod wg_device_repo;
 pub mod wg_garage_repo;
 pub mod wg_session_repo;
