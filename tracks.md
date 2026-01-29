@@ -17,7 +17,7 @@ HOW TO USE THIS FILE:
 
 ## moto-club.md v1.1
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - moto-club-types crate: GarageId, GarageState, GarageInfo
@@ -48,9 +48,10 @@ HOW TO USE THIS FILE:
 - moto-club-garage: SSH keys Secret creation wired into create flow (step 8 per spec lines 866-879; queries user_ssh_key_repo, creates Secret before pod deployment)
 - moto-club-api: K8s namespace deletion in close flow (DELETE /api/v1/garages/{name} calls GarageK8s.delete_garage_namespace per spec lines 903-913)
 - moto-club-api: GET /api/v1/users/ssh-keys endpoint (list user's SSH keys per spec lines 715-730)
+- moto-club-api: DELETE /api/v1/users/ssh-keys/{key_id} endpoint (delete SSH key per spec lines 734-743)
 
 **Remaining:**
-- moto-club-api: DELETE /api/v1/users/ssh-keys/{key_id} endpoint (delete SSH key)
+(none - moto-club.md v1.1 implementation complete)
 
 ---
 

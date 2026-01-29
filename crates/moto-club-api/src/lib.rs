@@ -272,6 +272,10 @@ pub mod error_codes {
     pub const DATABASE_ERROR: &str = "DATABASE_ERROR";
     /// Invalid SSH public key.
     pub const INVALID_SSH_KEY: &str = "INVALID_SSH_KEY";
+    /// SSH key not found.
+    pub const SSH_KEY_NOT_FOUND: &str = "SSH_KEY_NOT_FOUND";
+    /// SSH key not owned by the requesting user.
+    pub const SSH_KEY_NOT_OWNED: &str = "SSH_KEY_NOT_OWNED";
     /// K8s ServiceAccount token is invalid or expired.
     pub const INVALID_TOKEN: &str = "INVALID_TOKEN";
     /// Pod not running in expected garage namespace.

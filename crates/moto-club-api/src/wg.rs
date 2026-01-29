@@ -10,6 +10,7 @@
 //! - `GET /api/v1/wg/garages/{id}/peers` - Get peer list (garage polls this)
 //! - `POST /api/v1/users/ssh-keys` - Register user SSH key
 //! - `GET /api/v1/users/ssh-keys` - List user's SSH keys
+//! - `DELETE /api/v1/users/ssh-keys/{key_id}` - Delete user SSH key
 //! - `GET /api/v1/wg/derp-map` - Get DERP server map
 //! - `WS /internal/wg/garages/{id}/peers` - WebSocket for real-time peer streaming
 
@@ -1168,6 +1169,84 @@ async fn list_ssh_keys(State(state): State<AppState>, headers: HeaderMap) -> imp
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
+/// Delete a user's SSH key.
+///
+/// DELETE /api/v1/users/ssh-keys/{key_id}
+///
+/// Note: Does not remove key from already-running garages.
+async fn delete_ssh_key(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(key_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let owner = extract_owner(&headers)?;
+
+    // Derive user ID from bearer token (same as register/list)
+    let user_id = derive_user_id(&owner);
+
+    // First get the key to verify it exists and check ownership
+    let key = state
+        .ssh_key_manager
+        .get_key(key_id)
+        .map_err(|e| {
+            tracing::error!(key_id = %key_id, error = %e, "Failed to get SSH key");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    format!("Failed to get SSH key: {e}"),
+                )),
+            )
+        })?
+        .ok_or_else(|| {
+            tracing::debug!(key_id = %key_id, "SSH key not found");
+            (
+                StatusCode::NOT_FOUND,
+                Json(ApiError::new(
+                    error_codes::SSH_KEY_NOT_FOUND,
+                    format!("SSH key '{key_id}' not found"),
+                )),
+            )
+        })?;
+
+    // Verify ownership
+    if key.user_id != user_id {
+        tracing::debug!(
+            key_id = %key_id,
+            owner = %key.user_id,
+            requester = %user_id,
+            "SSH key not owned by requester"
+        );
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::SSH_KEY_NOT_OWNED,
+                format!("SSH key '{key_id}' not owned by you"),
+            )),
+        ));
+    }
+
+    // Delete the key
+    state.ssh_key_manager.remove_key(key_id).map_err(|e| {
+        tracing::error!(key_id = %key_id, error = %e, "Failed to delete SSH key");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError::new(
+                error_codes::INTERNAL_ERROR,
+                format!("Failed to delete SSH key: {e}"),
+            )),
+        )
+    })?;
+
+    tracing::info!(
+        key_id = %key_id,
+        user_id = %user_id,
+        "SSH key deleted"
+    );
+
+    Ok::<_, (StatusCode, Json<ApiError>)>(StatusCode::NO_CONTENT)
+}
+
 // ============================================================================
 // WebSocket Handler
 // ============================================================================
@@ -1296,6 +1375,7 @@ async fn handle_peers_socket(socket: WebSocket, garage_id: String, state: AppSta
 /// - `GET /api/v1/wg/derp-map` - Get DERP server map
 /// - `POST /api/v1/users/ssh-keys` - Register SSH key
 /// - `GET /api/v1/users/ssh-keys` - List user's SSH keys
+/// - `DELETE /api/v1/users/ssh-keys/{key_id}` - Delete SSH key
 /// - `WS /internal/wg/garages/{id}/peers` - Peer streaming WebSocket
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -1321,6 +1401,7 @@ pub fn router() -> Router<AppState> {
             "/api/v1/users/ssh-keys",
             post(register_ssh_key).get(list_ssh_keys),
         )
+        .route("/api/v1/users/ssh-keys/{key_id}", delete(delete_ssh_key))
 }
 
 #[cfg(test)]
@@ -2334,6 +2415,177 @@ mod tests {
                     Request::builder()
                         .method("GET")
                         .uri("/api/v1/users/ssh-keys")
+                        // No authorization header
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        #[tokio::test]
+        async fn delete_ssh_key_success() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            // First register a key
+            let body = serde_json::json!({
+                "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
+            });
+
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/users/ssh-keys")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::CREATED);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let result: SshKeyRegResponse = serde_json::from_slice(&body).unwrap();
+            let key_id = result.id;
+
+            // Now delete the key
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("DELETE")
+                        .uri(format!("/api/v1/users/ssh-keys/{key_id}"))
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+            // Verify the key is gone by listing keys
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/users/ssh-keys")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert!(result["keys"].as_array().unwrap().is_empty());
+        }
+
+        #[tokio::test]
+        async fn delete_ssh_key_not_found() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let nonexistent_id = Uuid::now_v7();
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("DELETE")
+                        .uri(format!("/api/v1/users/ssh-keys/{nonexistent_id}"))
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(result["error"]["code"], "SSH_KEY_NOT_FOUND");
+        }
+
+        #[tokio::test]
+        async fn delete_ssh_key_not_owned() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            // User 1 registers a key
+            let body = serde_json::json!({
+                "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
+            });
+
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/users/ssh-keys")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::AUTHORIZATION, "Bearer user1")
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::CREATED);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let result: SshKeyRegResponse = serde_json::from_slice(&body).unwrap();
+            let key_id = result.id;
+
+            // User 2 tries to delete it
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("DELETE")
+                        .uri(format!("/api/v1/users/ssh-keys/{key_id}"))
+                        .header(header::AUTHORIZATION, "Bearer user2")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(result["error"]["code"], "SSH_KEY_NOT_OWNED");
+        }
+
+        #[tokio::test]
+        async fn delete_ssh_key_requires_auth() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let some_id = Uuid::now_v7();
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("DELETE")
+                        .uri(format!("/api/v1/users/ssh-keys/{some_id}"))
                         // No authorization header
                         .body(Body::empty())
                         .unwrap(),
