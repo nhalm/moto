@@ -45,8 +45,8 @@ pub trait GarageNamespaceOps {
     ///
     /// The namespace is named `moto-garage-{short_id}` and includes labels:
     /// - `moto.dev/type: garage`
-    /// - `moto.dev/id: {id}`
-    /// - `moto.dev/name: {name}`
+    /// - `moto.dev/garage-id: {id}`
+    /// - `moto.dev/garage-name: {name}`
     /// - `moto.dev/owner: {owner}`
     /// - `moto.dev/expires-at: {expires_at}` (optional)
     /// - `moto.dev/engine: {engine}` (optional)

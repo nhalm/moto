@@ -84,8 +84,8 @@ pub trait GaragePodOps {
     ///
     /// The pod is named `dev-container` and includes labels:
     /// - `moto.dev/type: garage`
-    /// - `moto.dev/id: {id}`
-    /// - `moto.dev/name: {name}`
+    /// - `moto.dev/garage-id: {id}`
+    /// - `moto.dev/garage-name: {name}`
     /// - `moto.dev/owner: {owner}`
     ///
     /// # Errors

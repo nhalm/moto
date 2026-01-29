@@ -259,7 +259,7 @@ impl DeploymentOps for K8sClient {
                 let name = metadata
                     .labels
                     .as_ref()
-                    .and_then(|l| l.get(Labels::NAME))
+                    .and_then(|l| l.get(Labels::BIKE_NAME))
                     .cloned()
                     .unwrap_or_else(|| {
                         // Fall back to deployment name without "moto-" prefix

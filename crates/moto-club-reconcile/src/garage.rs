@@ -147,7 +147,7 @@ impl GarageReconciler {
                 ns.metadata
                     .labels
                     .as_ref()
-                    .and_then(|labels| labels.get(Labels::ID).cloned())
+                    .and_then(|labels| labels.get(Labels::GARAGE_ID).cloned())
             })
             .collect();
 
@@ -170,7 +170,7 @@ impl GarageReconciler {
             let Some(labels) = &ns.metadata.labels else {
                 continue;
             };
-            let Some(id_str) = labels.get(Labels::ID) else {
+            let Some(id_str) = labels.get(Labels::GARAGE_ID) else {
                 continue;
             };
 

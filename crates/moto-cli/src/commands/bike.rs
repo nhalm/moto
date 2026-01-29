@@ -619,7 +619,7 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                 "{}={},{}={}",
                 Labels::TYPE,
                 Labels::TYPE_BIKE,
-                Labels::NAME,
+                Labels::BIKE_NAME,
                 name
             );
 

@@ -11,11 +11,17 @@ impl Labels {
     /// Label key for resource type ("garage" or "bike").
     pub const TYPE: &'static str = "moto.dev/type";
 
-    /// Label key for resource ID (UUID).
-    pub const ID: &'static str = "moto.dev/id";
+    /// Label key for garage ID (UUID).
+    pub const GARAGE_ID: &'static str = "moto.dev/garage-id";
 
-    /// Label key for human-friendly name.
-    pub const NAME: &'static str = "moto.dev/name";
+    /// Label key for garage human-friendly name.
+    pub const GARAGE_NAME: &'static str = "moto.dev/garage-name";
+
+    /// Label key for bike ID (UUID).
+    pub const BIKE_ID: &'static str = "moto.dev/bike-id";
+
+    /// Label key for bike human-friendly name.
+    pub const BIKE_NAME: &'static str = "moto.dev/bike-name";
 
     /// Label key for owner identifier.
     pub const OWNER: &'static str = "moto.dev/owner";
@@ -55,8 +61,8 @@ impl Labels {
     ) -> BTreeMap<String, String> {
         let mut labels = BTreeMap::new();
         labels.insert(Self::TYPE.to_string(), Self::TYPE_GARAGE.to_string());
-        labels.insert(Self::ID.to_string(), id.to_string());
-        labels.insert(Self::NAME.to_string(), name.to_string());
+        labels.insert(Self::GARAGE_ID.to_string(), id.to_string());
+        labels.insert(Self::GARAGE_NAME.to_string(), name.to_string());
         if let Some(owner) = owner {
             labels.insert(Self::OWNER.to_string(), owner.to_string());
         }
@@ -74,8 +80,8 @@ impl Labels {
     pub fn for_bike(id: &str, name: &str, owner: Option<&str>) -> BTreeMap<String, String> {
         let mut labels = BTreeMap::new();
         labels.insert(Self::TYPE.to_string(), Self::TYPE_BIKE.to_string());
-        labels.insert(Self::ID.to_string(), id.to_string());
-        labels.insert(Self::NAME.to_string(), name.to_string());
+        labels.insert(Self::BIKE_ID.to_string(), id.to_string());
+        labels.insert(Self::BIKE_NAME.to_string(), name.to_string());
         if let Some(owner) = owner {
             labels.insert(Self::OWNER.to_string(), owner.to_string());
         }
@@ -101,8 +107,11 @@ mod tests {
     fn for_garage_without_owner() {
         let labels = Labels::for_garage("abc-123", "my-project", None, None, None);
         assert_eq!(labels.get(Labels::TYPE), Some(&"garage".to_string()));
-        assert_eq!(labels.get(Labels::ID), Some(&"abc-123".to_string()));
-        assert_eq!(labels.get(Labels::NAME), Some(&"my-project".to_string()));
+        assert_eq!(labels.get(Labels::GARAGE_ID), Some(&"abc-123".to_string()));
+        assert_eq!(
+            labels.get(Labels::GARAGE_NAME),
+            Some(&"my-project".to_string())
+        );
         assert!(labels.get(Labels::OWNER).is_none());
         assert!(labels.get(Labels::EXPIRES_AT).is_none());
         assert!(labels.get(Labels::ENGINE).is_none());
@@ -139,8 +148,8 @@ mod tests {
     fn for_bike_without_owner() {
         let labels = Labels::for_bike("def-456", "prod-app", None);
         assert_eq!(labels.get(Labels::TYPE), Some(&"bike".to_string()));
-        assert_eq!(labels.get(Labels::ID), Some(&"def-456".to_string()));
-        assert_eq!(labels.get(Labels::NAME), Some(&"prod-app".to_string()));
+        assert_eq!(labels.get(Labels::BIKE_ID), Some(&"def-456".to_string()));
+        assert_eq!(labels.get(Labels::BIKE_NAME), Some(&"prod-app".to_string()));
         assert!(labels.get(Labels::OWNER).is_none());
     }
 }

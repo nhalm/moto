@@ -376,8 +376,8 @@ fn namespace_to_garage_info(ns: &k8s_openapi::api::core::v1::Namespace) -> Optio
     let labels = metadata.labels.as_ref()?;
 
     // Required labels
-    let id_str = labels.get(Labels::ID)?;
-    let name = labels.get(Labels::NAME)?;
+    let id_str = labels.get(Labels::GARAGE_ID)?;
+    let name = labels.get(Labels::GARAGE_NAME)?;
 
     let id: GarageId = id_str.parse().ok()?;
     let namespace = metadata.name.clone()?;
