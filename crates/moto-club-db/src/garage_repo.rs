@@ -18,6 +18,8 @@ pub struct CreateGarage {
     pub owner: String,
     /// Git branch being worked on.
     pub branch: String,
+    /// Dev container image to use.
+    pub image: String,
     /// Time-to-live in seconds.
     pub ttl_seconds: i32,
     /// Kubernetes namespace name.
@@ -72,8 +74,8 @@ pub async fn create(pool: &DbPool, input: CreateGarage) -> DbResult<Garage> {
 
     let result = sqlx::query_as::<_, Garage>(
         r"
-        INSERT INTO garages (id, name, owner, branch, status, ttl_seconds, expires_at, namespace, pod_name, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        INSERT INTO garages (id, name, owner, branch, status, image, ttl_seconds, expires_at, namespace, pod_name, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *
         ",
     )
@@ -82,6 +84,7 @@ pub async fn create(pool: &DbPool, input: CreateGarage) -> DbResult<Garage> {
     .bind(&input.owner)
     .bind(&input.branch)
     .bind(GarageStatus::Pending)
+    .bind(&input.image)
     .bind(input.ttl_seconds)
     .bind(expires_at)
     .bind(&input.namespace)
@@ -338,6 +341,7 @@ mod tests {
             name: "bold-mongoose".to_string(),
             owner: "nick".to_string(),
             branch: "main".to_string(),
+            image: "ghcr.io/nhalm/moto-dev:latest".to_string(),
             ttl_seconds: 14400,
             namespace: "moto-garage-abc123".to_string(),
             pod_name: "dev-container".to_string(),
@@ -345,5 +349,6 @@ mod tests {
 
         assert_eq!(input.name, "bold-mongoose");
         assert_eq!(input.ttl_seconds, 14400);
+        assert_eq!(input.image, "ghcr.io/nhalm/moto-dev:latest");
     }
 }

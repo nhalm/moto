@@ -11,6 +11,7 @@ use uuid::Uuid;
 /// Garage status in the database.
 ///
 /// Maps to the `status` TEXT column in the `garages` table.
+/// Note: `Attached` status was removed in spec v1.1 (no mechanism to detect WireGuard connection).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
@@ -21,8 +22,6 @@ pub enum GarageStatus {
     Running,
     /// Garage ready for use.
     Ready,
-    /// User connected via `WireGuard` tunnel.
-    Attached,
     /// Closed/cleaned up.
     Terminated,
 }
@@ -33,7 +32,6 @@ impl std::fmt::Display for GarageStatus {
             Self::Pending => "pending",
             Self::Running => "running",
             Self::Ready => "ready",
-            Self::Attached => "attached",
             Self::Terminated => "terminated",
         };
         write!(f, "{s}")
@@ -48,7 +46,6 @@ impl std::str::FromStr for GarageStatus {
             "pending" => Ok(Self::Pending),
             "running" => Ok(Self::Running),
             "ready" => Ok(Self::Ready),
-            "attached" => Ok(Self::Attached),
             "terminated" => Ok(Self::Terminated),
             _ => Err(ParseGarageStatusError(s.to_string())),
         }
@@ -129,6 +126,8 @@ pub struct Garage {
     pub branch: String,
     /// Current status.
     pub status: GarageStatus,
+    /// Dev container image used.
+    pub image: String,
     /// Time-to-live in seconds.
     pub ttl_seconds: i32,
     /// When the garage expires.
@@ -150,17 +149,16 @@ pub struct Garage {
 /// A `WireGuard` device (client device) from the database.
 ///
 /// Maps to the `wg_devices` table schema.
+/// The WireGuard public key IS the device identity (Cloudflare WARP model).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromRow)]
 pub struct WgDevice {
-    /// Unique identifier.
-    pub id: Uuid,
+    /// `WireGuard` public key (primary key / device identity).
+    pub public_key: String,
     /// Owner identifier.
     pub owner: String,
     /// Optional friendly name for the device.
     pub device_name: Option<String>,
-    /// `WireGuard` public key.
-    pub public_key: String,
-    /// Assigned overlay IP address.
+    /// Assigned overlay IP address (fd00:moto:2::xxx).
     pub assigned_ip: String,
     /// When the device was registered.
     pub created_at: DateTime<Utc>,
@@ -173,9 +171,9 @@ pub struct WgDevice {
 pub struct WgSession {
     /// Unique identifier.
     pub id: Uuid,
-    /// Device this session belongs to.
-    pub device_id: Uuid,
-    /// Garage this session connects to.
+    /// Device public key this session belongs to.
+    pub device_pubkey: String,
+    /// Garage this session connects to (FK with ON DELETE CASCADE).
     pub garage_id: Uuid,
     /// When the session expires.
     pub expires_at: DateTime<Utc>,
@@ -200,6 +198,26 @@ pub struct UserSshKey {
     pub fingerprint: String,
     /// When the key was registered.
     pub created_at: DateTime<Utc>,
+}
+
+/// A garage `WireGuard` registration from the database.
+///
+/// Maps to the `wg_garages` table schema.
+/// Created when a garage pod registers its WireGuard endpoint on startup.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromRow)]
+pub struct WgGarage {
+    /// Garage ID (primary key, FK to garages with ON DELETE CASCADE).
+    pub garage_id: Uuid,
+    /// Garage's `WireGuard` public key.
+    pub public_key: String,
+    /// Garage's overlay IP address (fd00:moto:1::xxx).
+    pub assigned_ip: String,
+    /// Pod's reachable endpoints.
+    pub endpoints: Vec<String>,
+    /// Peer version, incremented on session create/close.
+    pub peer_version: i32,
+    /// When the garage registered.
+    pub registered_at: DateTime<Utc>,
 }
 
 /// A DERP server from the database.
@@ -236,7 +254,6 @@ mod tests {
         assert_eq!(GarageStatus::Pending.to_string(), "pending");
         assert_eq!(GarageStatus::Running.to_string(), "running");
         assert_eq!(GarageStatus::Ready.to_string(), "ready");
-        assert_eq!(GarageStatus::Attached.to_string(), "attached");
         assert_eq!(GarageStatus::Terminated.to_string(), "terminated");
     }
 
@@ -255,10 +272,6 @@ mod tests {
             GarageStatus::Ready
         );
         assert_eq!(
-            "attached".parse::<GarageStatus>().unwrap(),
-            GarageStatus::Attached
-        );
-        assert_eq!(
             "terminated".parse::<GarageStatus>().unwrap(),
             GarageStatus::Terminated
         );
@@ -271,7 +284,6 @@ mod tests {
             GarageStatus::Pending,
             GarageStatus::Running,
             GarageStatus::Ready,
-            GarageStatus::Attached,
             GarageStatus::Terminated,
         ] {
             let json = serde_json::to_string(&status).unwrap();

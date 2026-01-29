@@ -17,7 +17,7 @@ use moto_club_k8s::{
 use moto_club_types::GarageId;
 
 use crate::lifecycle::{GarageLifecycle, LifecycleError};
-use crate::{DEFAULT_TTL_SECONDS, MAX_TTL_SECONDS, MIN_TTL_SECONDS};
+use crate::{DEFAULT_IMAGE, DEFAULT_TTL_SECONDS, MAX_TTL_SECONDS, MIN_TTL_SECONDS};
 
 /// Errors from garage service operations.
 #[derive(Debug, Error)]
@@ -170,11 +170,16 @@ impl GarageService {
         let pod_name = DEV_CONTAINER_POD_NAME.to_string();
 
         // Create database record
+        let image = input
+            .image
+            .clone()
+            .unwrap_or_else(|| DEFAULT_IMAGE.to_string());
         let db_input = garage_repo::CreateGarage {
             id,
             name: name.clone(),
             owner: owner.to_string(),
             branch: input.branch.clone(),
+            image,
             ttl_seconds,
             namespace: namespace.clone(),
             pod_name: pod_name.clone(),

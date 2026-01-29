@@ -334,13 +334,10 @@ impl GarageReconciler {
 ///
 /// We avoid some transitions that don't make sense:
 /// - Ready → Running (would be a downgrade)
-/// - Attached → Running/Ready (would lose attachment info)
 fn should_update_status(current: GarageStatus, new: GarageStatus) -> bool {
     match (current, new) {
         // Don't downgrade from Ready to Running
         (GarageStatus::Ready, GarageStatus::Running) => false,
-        // Don't change Attached status based on pod status
-        (GarageStatus::Attached, GarageStatus::Running | GarageStatus::Ready) => false,
         // All other transitions are allowed
         _ => true,
     }
@@ -391,10 +388,6 @@ mod tests {
             GarageStatus::Running,
             GarageStatus::Ready
         ));
-        assert!(should_update_status(
-            GarageStatus::Ready,
-            GarageStatus::Attached
-        ));
     }
 
     #[test]
@@ -403,15 +396,6 @@ mod tests {
         assert!(!should_update_status(
             GarageStatus::Ready,
             GarageStatus::Running
-        ));
-        // Don't change Attached based on pod status
-        assert!(!should_update_status(
-            GarageStatus::Attached,
-            GarageStatus::Running
-        ));
-        assert!(!should_update_status(
-            GarageStatus::Attached,
-            GarageStatus::Ready
         ));
     }
 

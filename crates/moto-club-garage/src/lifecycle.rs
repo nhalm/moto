@@ -32,15 +32,16 @@ pub enum LifecycleError {
 /// Validates state transitions according to the garage lifecycle rules:
 ///
 /// ```text
-/// Pending → Running → Ready ↔ Attached
-///    ↓         ↓        ↓         ↓
-///    └─────────┴────────┴─────────┴──→ Terminated
+/// Pending → Running → Ready
+///    ↓         ↓        ↓
+///    └─────────┴────────┴──→ Terminated
 /// ```
 ///
 /// - Any state can transition to `Terminated`
 /// - `Pending` can transition to `Running`
 /// - `Running` can transition to `Ready`
-/// - `Ready` and `Attached` can transition between each other
+///
+/// Note: `Attached` status was removed in spec v1.1 (no mechanism to detect WireGuard connection).
 pub struct GarageLifecycle;
 
 impl GarageLifecycle {
@@ -70,9 +71,7 @@ impl GarageLifecycle {
             (from, to),
             // Forward progress
             (GarageStatus::Pending, GarageStatus::Running)
-                | (GarageStatus::Running | GarageStatus::Attached, GarageStatus::Ready)
-                // User can attach
-                | (GarageStatus::Ready, GarageStatus::Attached)
+                | (GarageStatus::Running, GarageStatus::Ready)
         )
     }
 
@@ -118,17 +117,14 @@ impl GarageLifecycle {
         match current {
             GarageStatus::Pending => Some(GarageStatus::Running),
             GarageStatus::Running => Some(GarageStatus::Ready),
-            GarageStatus::Ready | GarageStatus::Attached | GarageStatus::Terminated => None,
+            GarageStatus::Ready | GarageStatus::Terminated => None,
         }
     }
 
     /// Checks if a state is terminal (no forward progress expected).
     #[must_use]
     pub const fn is_terminal(status: GarageStatus) -> bool {
-        matches!(
-            status,
-            GarageStatus::Ready | GarageStatus::Attached | GarageStatus::Terminated
-        )
+        matches!(status, GarageStatus::Ready | GarageStatus::Terminated)
     }
 
     /// Checks if a state is active (not terminated).
@@ -148,7 +144,6 @@ mod tests {
             GarageStatus::Pending,
             GarageStatus::Running,
             GarageStatus::Ready,
-            GarageStatus::Attached,
             GarageStatus::Terminated,
         ] {
             assert!(GarageLifecycle::can_transition(status, status));
@@ -168,24 +163,11 @@ mod tests {
     }
 
     #[test]
-    fn attach_detach_transitions_are_valid() {
-        assert!(GarageLifecycle::can_transition(
-            GarageStatus::Ready,
-            GarageStatus::Attached
-        ));
-        assert!(GarageLifecycle::can_transition(
-            GarageStatus::Attached,
-            GarageStatus::Ready
-        ));
-    }
-
-    #[test]
     fn any_state_can_terminate() {
         for status in [
             GarageStatus::Pending,
             GarageStatus::Running,
             GarageStatus::Ready,
-            GarageStatus::Attached,
         ] {
             assert!(GarageLifecycle::can_transition(
                 status,
@@ -200,7 +182,6 @@ mod tests {
             GarageStatus::Pending,
             GarageStatus::Running,
             GarageStatus::Ready,
-            GarageStatus::Attached,
         ] {
             assert!(!GarageLifecycle::can_transition(
                 GarageStatus::Terminated,
@@ -231,10 +212,6 @@ mod tests {
             GarageStatus::Pending,
             GarageStatus::Ready
         ));
-        assert!(!GarageLifecycle::can_transition(
-            GarageStatus::Pending,
-            GarageStatus::Attached
-        ));
     }
 
     #[test]
@@ -263,7 +240,6 @@ mod tests {
         assert!(GarageLifecycle::can_extend_ttl(GarageStatus::Pending));
         assert!(GarageLifecycle::can_extend_ttl(GarageStatus::Running));
         assert!(GarageLifecycle::can_extend_ttl(GarageStatus::Ready));
-        assert!(GarageLifecycle::can_extend_ttl(GarageStatus::Attached));
         assert!(!GarageLifecycle::can_extend_ttl(GarageStatus::Terminated));
     }
 
@@ -272,7 +248,6 @@ mod tests {
         assert!(GarageLifecycle::can_close(GarageStatus::Pending));
         assert!(GarageLifecycle::can_close(GarageStatus::Running));
         assert!(GarageLifecycle::can_close(GarageStatus::Ready));
-        assert!(GarageLifecycle::can_close(GarageStatus::Attached));
         assert!(!GarageLifecycle::can_close(GarageStatus::Terminated));
     }
 
@@ -287,7 +262,6 @@ mod tests {
             Some(GarageStatus::Ready)
         );
         assert_eq!(GarageLifecycle::next_state(GarageStatus::Ready), None);
-        assert_eq!(GarageLifecycle::next_state(GarageStatus::Attached), None);
         assert_eq!(GarageLifecycle::next_state(GarageStatus::Terminated), None);
     }
 
@@ -296,7 +270,6 @@ mod tests {
         assert!(!GarageLifecycle::is_terminal(GarageStatus::Pending));
         assert!(!GarageLifecycle::is_terminal(GarageStatus::Running));
         assert!(GarageLifecycle::is_terminal(GarageStatus::Ready));
-        assert!(GarageLifecycle::is_terminal(GarageStatus::Attached));
         assert!(GarageLifecycle::is_terminal(GarageStatus::Terminated));
     }
 
@@ -305,7 +278,6 @@ mod tests {
         assert!(GarageLifecycle::is_active(GarageStatus::Pending));
         assert!(GarageLifecycle::is_active(GarageStatus::Running));
         assert!(GarageLifecycle::is_active(GarageStatus::Ready));
-        assert!(GarageLifecycle::is_active(GarageStatus::Attached));
         assert!(!GarageLifecycle::is_active(GarageStatus::Terminated));
     }
 }

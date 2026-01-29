@@ -42,3 +42,6 @@ pub const MAX_TTL_SECONDS: i32 = 172_800;
 
 /// Minimum TTL in seconds (5 minutes).
 pub const MIN_TTL_SECONDS: i32 = 300;
+
+/// Default dev container image.
+pub const DEFAULT_IMAGE: &str = "ghcr.io/nhalm/moto-dev:latest";

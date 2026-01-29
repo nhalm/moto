@@ -71,6 +71,8 @@ pub struct GarageResponse {
     pub branch: String,
     /// Current status.
     pub status: GarageStatus,
+    /// Dev container image used.
+    pub image: String,
     /// Time-to-live in seconds.
     pub ttl_seconds: i32,
     /// When the garage expires.
@@ -97,6 +99,7 @@ impl From<Garage> for GarageResponse {
             owner: g.owner,
             branch: g.branch,
             status: g.status,
+            image: g.image,
             ttl_seconds: g.ttl_seconds,
             expires_at: g.expires_at,
             namespace: g.namespace,
@@ -224,6 +227,10 @@ async fn create_garage(
     let namespace = format!("moto-garage-{id}");
     let pod_name = "dev-container".to_string();
     let branch = req.branch.unwrap_or_else(|| "main".to_string());
+    // Default image can be overridden via request
+    let image = req
+        .image
+        .unwrap_or_else(|| "ghcr.io/nhalm/moto-dev:latest".to_string());
 
     // Create in database
     let input = garage_repo::CreateGarage {
@@ -231,6 +238,7 @@ async fn create_garage(
         name: name.clone(),
         owner,
         branch,
+        image,
         ttl_seconds,
         namespace,
         pod_name,

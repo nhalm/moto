@@ -18,6 +18,7 @@
 //!     name: "bold-mongoose".to_string(),
 //!     owner: "nick".to_string(),
 //!     branch: "main".to_string(),
+//!     image: "ghcr.io/nhalm/moto-dev:latest".to_string(),
 //!     ttl_seconds: 14400,
 //!     namespace: "moto-garage-abc123".to_string(),
 //!     pod_name: "dev-container".to_string(),
@@ -35,7 +36,7 @@ use thiserror::Error;
 
 pub use models::{
     DerpServer, Garage, GarageStatus, ParseGarageStatusError, ParseTerminationReasonError,
-    TerminationReason, UserSshKey, WgDevice, WgSession,
+    TerminationReason, UserSshKey, WgDevice, WgGarage, WgSession,
 };
 
 // Re-export TerminationReason::ErrorReason as Error for convenience

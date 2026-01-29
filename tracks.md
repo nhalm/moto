@@ -29,9 +29,10 @@ HOW TO USE THIS FILE:
 - moto-club-reconcile crate: lib.rs, garage.rs (scaffolding)
 - moto-club binary: main.rs (scaffolding)
 - Device identity model: WireGuard public_key as primary key (spec lines 406, 1040-1046)
-
-**Remaining:**
 - moto-club-db: PostgreSQL migrations for all tables (garages, wg_devices, wg_sessions, wg_garages, user_ssh_keys, derp_servers)
+- moto-club-db: models updated for spec v1.1 (removed Attached status, WgDevice uses public_key as PK, added WgGarage model, Garage has image field)
+
+**Remaining:
 - moto-club-db: wg_devices repository using public_key as primary key
 - moto-club-db: wg_sessions repository with garage_id ON DELETE CASCADE
 - moto-club-db: wg_garages repository (garage WireGuard registration)
