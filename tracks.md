@@ -67,11 +67,12 @@ HOW TO USE THIS FILE:
 - enter.rs: MagicConn for direct UDP
 - enter.rs: DerpClient for DERP relay fallback
 - enter.rs: SSH session spawning
+- client.rs: Device registration via moto-club API (POST /api/v1/wg/devices using WG public key as device identity per spec v0.7)
+- client.rs: Session creation via moto-club API (GET garage by name, POST session with garage UUID and device pubkey per spec)
+- client.rs: Get garage details for session creation (GET /api/v1/garages/{name} returns garage UUID needed for session)
 
 **Remaining:**
-- enter.rs: Device registration via moto-club API (blocked: moto-club API PostgreSQL storage)
-- enter.rs: Session creation via moto-club API (blocked: moto-club API)
-- enter.rs: Get garage peer info via moto-club API (blocked: moto-club API)
+(none - moto-wgtunnel.md v0.7 CLI integration complete)
 
 ---
 

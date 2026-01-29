@@ -43,7 +43,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
-use uuid::Uuid;
 
 use crate::client::{ClientError, MotoClubClient, MotoClubConfig};
 use crate::{TunnelError, TunnelManager, TunnelSession, TunnelStatus};
@@ -708,14 +707,26 @@ pub async fn enter_garage(
 
     // Step 1: Register device with moto-club
     progress.step_start("Registering device");
-    let device_id = register_device_with_club(manager, &client, progress).await?;
+    let device_pubkey = register_device_with_club(manager, &client, progress).await?;
     progress.step_done("Registering device");
 
-    // Step 2: Create session with moto-club
+    // Step 2: Look up garage by name to get UUID
+    progress.step_start("Looking up garage");
+    let garage_details = client.get_garage(garage_name).await.map_err(|e| match e {
+        ClientError::GarageNotFound(msg) => EnterError::GarageNotFound(msg),
+        ClientError::NotAuthorized(msg) => EnterError::NotAuthorized(msg),
+        ClientError::Unreachable { url, reason } => {
+            EnterError::ClubUnreachable(format!("{url}: {reason}"))
+        }
+        other => EnterError::SessionCreation(other.to_string()),
+    })?;
+    progress.step_done("Looking up garage");
+
+    // Step 3: Create session with moto-club (using garage UUID and device public key)
     progress.step_start("Creating session");
     let ttl_seconds = config.session_ttl.map(|t| t as u32);
     let api_response = client
-        .create_session(garage_name, device_id, ttl_seconds)
+        .create_session(garage_details.id, &device_pubkey, ttl_seconds)
         .await
         .map_err(|e| match e {
             ClientError::GarageNotFound(msg) => EnterError::GarageNotFound(msg),
@@ -883,17 +894,19 @@ async fn create_connection_state(
 /// allocates an overlay IP address. If the device is already registered,
 /// moto-club returns the existing allocation.
 ///
+/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// No separate device ID is used.
+///
 /// # Returns
 ///
-/// The device ID (UUID) to use for session creation.
+/// The device's WireGuard public key (device identity) for session creation.
 async fn register_device_with_club(
     manager: &TunnelManager,
     client: &MotoClubClient,
     _progress: &dyn EnterProgress,
-) -> Result<Uuid, EnterError> {
+) -> Result<WgPublicKey, EnterError> {
     let device_info = manager.device_info();
     debug!(
-        device_id = %device_info.device_id,
         public_key = %device_info.public_key,
         "registering device with moto-club"
     );
@@ -910,12 +923,12 @@ async fn register_device_with_club(
         })?;
 
     info!(
-        device_id = %response.device_id,
+        public_key = %response.public_key,
         overlay_ip = %response.overlay_ip,
         "device registered with moto-club"
     );
 
-    Ok(response.device_id)
+    Ok(response.public_key)
 }
 
 /// Parse the session response into typed values.

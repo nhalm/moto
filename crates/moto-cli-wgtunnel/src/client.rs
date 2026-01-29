@@ -224,7 +224,7 @@ impl MotoClubClient {
             match self.post_json::<_, DeviceResponse>(&url, &request).await {
                 Ok(response) => {
                     debug!(
-                        device_id = %response.device_id,
+                        public_key = %response.public_key,
                         overlay_ip = %response.overlay_ip,
                         "device registered successfully"
                     );
@@ -256,8 +256,8 @@ impl MotoClubClient {
     ///
     /// # Arguments
     ///
-    /// * `garage_id` - Garage name or ID
-    /// * `device_id` - Device UUID (from registration)
+    /// * `garage_id` - Garage UUID
+    /// * `device_pubkey` - Device's WireGuard public key (device identity)
     /// * `ttl_seconds` - Optional session TTL (defaults to garage TTL)
     ///
     /// # Returns
@@ -272,15 +272,15 @@ impl MotoClubClient {
     /// - User is not authorized
     pub async fn create_session(
         &self,
-        garage_id: &str,
-        device_id: Uuid,
+        garage_id: Uuid,
+        device_pubkey: &WgPublicKey,
         ttl_seconds: Option<u32>,
     ) -> Result<SessionResponse, ClientError> {
         let url = format!("{}/api/v1/wg/sessions", self.config.base_url);
 
         let request = CreateSessionRequest {
-            garage_id: garage_id.to_string(),
-            device_id,
+            garage_id,
+            device_pubkey: device_pubkey.clone(),
             ttl_seconds,
         };
 
@@ -331,6 +331,33 @@ impl MotoClubClient {
         } else {
             self.handle_error_response(response).await
         }
+    }
+
+    /// Get garage details by name.
+    ///
+    /// # Arguments
+    ///
+    /// * `garage_name` - Garage name
+    ///
+    /// # Returns
+    ///
+    /// Garage details including the UUID needed for session creation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - moto-club is unreachable
+    /// - Garage is not found
+    /// - User is not authorized to access the garage
+    pub async fn get_garage(
+        &self,
+        garage_name: &str,
+    ) -> Result<GarageDetailsResponse, ClientError> {
+        let url = format!("{}/api/v1/garages/{}", self.config.base_url, garage_name);
+
+        debug!(url = %url, garage = %garage_name, "getting garage details");
+
+        self.get_json(&url).await
     }
 
     /// Send a POST request with JSON body and parse JSON response.
@@ -438,23 +465,29 @@ struct RegisterDeviceRequest {
 }
 
 /// Response for device registration.
+///
+/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// No separate device ID - the public key is the identifier.
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeviceResponse {
-    /// Unique device identifier.
-    pub device_id: Uuid,
+    /// Device's WireGuard public key (this IS the device identity).
+    pub public_key: WgPublicKey,
     /// Assigned overlay IP address.
+    #[serde(rename = "assigned_ip")]
     pub overlay_ip: OverlayIp,
     /// Optional human-readable device name.
     pub device_name: Option<String>,
 }
 
 /// Request to create a tunnel session.
+///
+/// Per spec (moto-club.md v1.1): Uses `device_pubkey` (WireGuard public key IS the device identity).
 #[derive(Debug, Clone, Serialize)]
 struct CreateSessionRequest {
-    /// Garage to connect to (name or ID).
-    garage_id: String,
-    /// Device requesting the connection.
-    device_id: Uuid,
+    /// Garage to connect to (UUID).
+    garage_id: Uuid,
+    /// Device's WireGuard public key (this IS the device identity).
+    device_pubkey: WgPublicKey,
     /// Optional session TTL in seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     ttl_seconds: Option<u32>,
@@ -509,6 +542,33 @@ pub struct SessionInfo {
     pub expires_at: String,
 }
 
+/// Response for getting garage details.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GarageDetailsResponse {
+    /// Unique identifier (UUID).
+    pub id: Uuid,
+    /// Human-friendly name.
+    pub name: String,
+    /// Owner identifier.
+    pub owner: String,
+    /// Git branch.
+    pub branch: String,
+    /// Current status.
+    pub status: String,
+    /// Dev container image used.
+    pub image: String,
+    /// Time-to-live in seconds.
+    pub ttl_seconds: i32,
+    /// When the garage expires (ISO 8601).
+    pub expires_at: String,
+    /// Kubernetes namespace.
+    pub namespace: String,
+    /// Kubernetes pod name.
+    pub pod_name: String,
+    /// When the garage was created (ISO 8601).
+    pub created_at: String,
+}
+
 /// API error response format.
 #[derive(Debug, Clone, Deserialize)]
 struct ApiErrorResponse {
@@ -546,13 +606,17 @@ mod tests {
 
     #[test]
     fn device_response_deserialize() {
+        // WireGuard public key IS the device identity (Cloudflare WARP model)
+        // API returns public_key, not device_id
         let json = r#"{
-            "device_id": "01234567-89ab-cdef-0123-456789abcdef",
-            "overlay_ip": "fd00:6d6f:746f:2::1",
+            "public_key": "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=",
+            "assigned_ip": "fd00:6d6f:746f:2::1",
             "device_name": "my-laptop"
         }"#;
         let response: DeviceResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.device_name, Some("my-laptop".to_string()));
+        // Verify the overlay IP was parsed correctly
+        assert!(response.overlay_ip.is_client());
     }
 
     #[test]
