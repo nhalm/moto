@@ -1,15 +1,20 @@
-Implement ONE item from the Remaining table in tracks.md.
+Study AGENTS.md for guidelines.
+Study specs/README.md to find specs with status "Ready to Rip".
+Study tracks.md - it has instructions and tracks what's Implemented vs Remaining.
 
-**IMPORTANT**
+Your task is to implement ONE item from a "Remaining" list, then validate it works.
 
-- Do **NOT** use todo lists
-- **Only chose ONE** item from tracks.md to work on.
-- Skip blocked and future items
-- Read the spec file for that item
-- Use Sonnet agents for codebase exploration when possible
-- Follow existing code patterns
+IMPORTANT:
 
-Move completed item from Remaining to Implemented table. Commit your changes.
+- Read AGENTS.md first - specs are the source of truth, not existing code
+- Only implement specs with status "Ready to Rip"
+- NEVER change spec status in specs/README.md or individual spec files
+- Follow the instructions in tracks.md
+- If code contradicts the spec, fix the code first (see AGENTS.md)
+- Check the spec Changelog for recent changes that might affect existing code
+- Commit your changes
+- Do NOT use TodoWrite - just do the work
+- Do NOT do multiple things - ONE thing per iteration
 
 Output `TASK_COMPLETE: true` when done.
-Output `LOOP_COMPLETE: true` if all remaining items are blocked or future.
+Output `LOOP_COMPLETE: true` if "Remaining" is empty (only blocked items left).

@@ -1,60 +1,85 @@
 # Moto Implementation Tracking
 
-## Remaining
+<!--
+HOW TO USE THIS FILE:
 
-| Spec | Version | Item | Status |
-|------|---------|------|--------|
-| moto-club.md | v1.1 | moto-club-db: PostgreSQL migrations (garages, wg_devices, wg_sessions, wg_garages, user_ssh_keys, derp_servers tables) | |
-| moto-club.md | v1.1 | moto-club-db: wg_devices repository (CRUD operations for WireGuard devices) | |
-| moto-club.md | v1.1 | moto-club-db: wg_sessions repository (CRUD operations for tunnel sessions) | |
-| moto-club.md | v1.1 | moto-club-db: wg_garages repository (garage WireGuard registration) | |
-| moto-club.md | v1.1 | moto-club-db: user_ssh_keys repository (SSH key storage) | |
-| moto-club.md | v1.1 | moto-club-db: derp_servers repository (DERP server config) | |
-| moto-club.md | v1.1 | moto-club-k8s: garage namespace creation (labels, ServiceAccount, NetworkPolicy, ResourceQuota) | |
-| moto-club.md | v1.1 | moto-club-k8s: SSH keys Secret creation (authorized_keys mounted to garage pod) | |
-| moto-club.md | v1.1 | moto-club-k8s: dev container pod deployment | |
-| moto-club.md | v1.1 | moto-club-k8s: namespace deletion on garage close | |
-| moto-club.md | v1.1 | moto-club-garage: wire up K8s operations in garage service (create namespace, deploy pod, inject SSH keys) | |
-| moto-club.md | v1.1 | moto-club-api/garages.rs: integrate K8s namespace creation in create_garage | |
-| moto-club.md | v1.1 | moto-club-api/garages.rs: integrate K8s namespace deletion in delete_garage | |
-| moto-club.md | v1.1 | moto-club-api/wg.rs: wire up PostgreSQL storage for devices (replace in-memory) | |
-| moto-club.md | v1.1 | moto-club-api/wg.rs: wire up PostgreSQL storage for sessions (replace in-memory) | |
-| moto-club.md | v1.1 | moto-club-api/wg.rs: wire up PostgreSQL storage for garage WG registration (replace in-memory) | |
-| moto-club.md | v1.1 | moto-club-api/wg.rs: wire up PostgreSQL storage for SSH keys (replace in-memory) | |
-| moto-club.md | v1.1 | moto-club-api/wg.rs: implement K8s ServiceAccount token validation for garage endpoints | |
-| moto-club.md | v1.1 | moto-club-api/wg.rs: get_garage_peers - return active sessions from session manager | |
-| moto-club.md | v1.1 | moto-club-api/wg.rs: list_sessions - implement device_id query param filtering | |
-| moto-club.md | v1.1 | moto-club-api: GET /api/v1/wg/garages/{garage_id} endpoint (garage WG registration retrieval) | |
-| moto-club.md | v1.1 | moto-club-api: GET /api/v1/wg/derp-map endpoint | |
-| moto-club.md | v1.1 | moto-club-api: GET /api/v1/users/ssh-keys endpoint (list user SSH keys) | |
-| moto-club.md | v1.1 | moto-club-api: DELETE /api/v1/users/ssh-keys/{key_id} endpoint | |
-| moto-club.md | v1.1 | moto-club-api: GET /api/v1/info endpoint (server info) | |
-| moto-club.md | v1.1 | moto-club: DERP config file loading (/etc/moto-club/derp.toml or MOTO_CLUB_DERP_CONFIG) | |
-| moto-club.md | v1.1 | moto-club: DERP health check loop (30s interval, mark unhealthy after 3 failures) | |
-| container-system.md | v0.9 | CI workflow: .github/workflows/containers.yml | future |
-| container-system.md | v0.9 | Image signing: cosign keyless signing in CI | future |
-| container-system.md | v0.9 | SBOM generation: trivy SBOM + cosign attestation | future |
-
-## Implemented
-
-<!-- Items completed during this loop run. Bookkeeping agent will move these to tracks-history.md -->
-
-| Spec | Version | Item |
-|------|---------|------|
+1. Section header = "## spec-name.md vX.Y" - must match current spec version
+2. If spec version > section version: check spec changelog, add new items to Remaining, update header
+3. If no section exists: compare spec to code, create section with Implemented and Remaining lists
+4. Pick ONE item from Remaining (skip blocked items)
+5. Implement it, verify with tests
+6. Move item from Remaining to Implemented
+7. SPEC IS SOURCE OF TRUTH - if code contradicts spec, that's a Remaining item to fix (see AGENTS.md)
+8. Check spec Changelog for changes that invalidate existing code
+-->
 
 ---
 
-## Workflow
+## moto-club.md v1.1
 
-1. Pick first non-blocked, non-future item from Remaining
-2. Read the spec file, implement it, verify with tests
-3. Move the row from Remaining to Implemented
-4. Commit changes
+**Status:** In Progress
 
-**If only blocked/future items remain:** Output `LOOP_COMPLETE: true`
+**Implemented:**
+- moto-club-types crate: GarageId, GarageState, GarageInfo
+- moto-club-wg crate: lib.rs, ipam.rs, peers.rs, sessions.rs, ssh_keys.rs, derp.rs (in-memory)
+- moto-club-db crate: lib.rs, models.rs, garage_repo.rs (scaffolding)
+- moto-club-api crate: lib.rs, health.rs, garages.rs, wg.rs (scaffolding)
+- moto-club-k8s crate: lib.rs, namespace.rs, pods.rs (scaffolding)
+- moto-club-garage crate: lib.rs, service.rs, lifecycle.rs (scaffolding)
+- moto-club-reconcile crate: lib.rs, garage.rs (scaffolding)
+- moto-club binary: main.rs (scaffolding)
 
-## Notes
+**Remaining:**
+- REFACTOR: Device identity model - change from UUID device_id to WireGuard public_key as primary key (spec lines 406, 1040-1046). Code uses `device_id: Uuid` but spec says "WireGuard public key IS the device identity"
+- moto-club-db: PostgreSQL migrations for all tables (garages, wg_devices, wg_sessions, wg_garages, user_ssh_keys, derp_servers)
+- moto-club-db: wg_devices repository using public_key as primary key
+- moto-club-db: wg_sessions repository with garage_id ON DELETE CASCADE
+- moto-club-db: wg_garages repository (garage WireGuard registration)
+- moto-club-db: user_ssh_keys repository
+- moto-club-api: Wire up PostgreSQL storage (replace in-memory registries)
+- moto-club-api: K8s ServiceAccount token validation for garage endpoints
+- moto-club-api: GET /api/v1/wg/garages/{garage_id} endpoint
+- moto-club-api: GET /api/v1/wg/derp-map endpoint
+- moto-club-api: Conditional GET for peers (?version= param, 304 response)
+- moto-club-k8s: SSH keys Secret creation (spec v1.1 - mount authorized_keys to garage pod)
+- moto-club-k8s: Labels must use moto.dev/garage-id not moto.dev/id (check spec line 871)
+- moto-club-garage: Wire up K8s operations in create flow (12 steps per spec)
+- moto-club-garage: Integrate K8s namespace deletion in close flow
+- moto-club: DERP config file loading (MOTO_CLUB_DERP_CONFIG env var)
+- moto-club: Structured JSON logging
 
-- **Blocked:** Skip. Dependency must reach "Ready to Rip" first.
-- **Future:** Skip. Belongs to a later phase.
-- **Version mismatch:** If spec version > table version, check changelog for new items.
+---
+
+## moto-wgtunnel.md v0.7
+
+**Status:** In Progress
+
+**Implemented:**
+- moto-wgtunnel-types crate: keys.rs, ip.rs, peer.rs, derp.rs
+- moto-wgtunnel-derp crate: protocol.rs, client.rs, map.rs
+- moto-wgtunnel-conn crate: stun.rs, endpoint.rs, path.rs, magic.rs
+- moto-wgtunnel-engine crate: config.rs, tunnel.rs, platform/
+- moto-cli-wgtunnel crate: tunnel.rs, status.rs, enter.rs (partial)
+- moto-garage-wgtunnel crate: register.rs, health.rs, daemon.rs, ssh.rs
+- enter.rs: MagicConn for direct UDP
+- enter.rs: DerpClient for DERP relay fallback
+- enter.rs: SSH session spawning
+
+**Remaining:**
+- enter.rs: Device registration via moto-club API (blocked: moto-club device identity refactor)
+- enter.rs: Session creation via moto-club API (blocked: moto-club API)
+- enter.rs: Get garage peer info via moto-club API (blocked: moto-club API)
+
+---
+
+## container-system.md v0.9
+
+**Status:** In Progress
+
+**Implemented:**
+- (see tracks-history.md)
+
+**Remaining:**
+- CI workflow: .github/workflows/containers.yml (future)
+- Image signing: cosign keyless signing in CI (future)
+- SBOM generation: trivy SBOM + cosign attestation (future)
