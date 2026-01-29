@@ -110,12 +110,16 @@ impl std::error::Error for ConfigError {}
 
 #[tokio::main]
 async fn main() {
-    // Initialize logging
+    // Initialize structured JSON logging to stdout per spec (moto-club.md lines 1183-1194)
+    // - timestamp, level, message at top level
+    // - custom fields (garage_id, owner, etc.) flattened into root object
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("moto_club=info")),
         )
         .json()
+        .flatten_event(true)
+        .with_current_span(false)
         .init();
 
     if let Err(e) = run().await {
