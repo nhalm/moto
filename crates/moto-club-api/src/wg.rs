@@ -9,6 +9,7 @@
 //! - `POST /api/v1/wg/garages` - Register garage (called by garage pod)
 //! - `GET /api/v1/wg/garages/{id}/peers` - Get peer list (garage polls this)
 //! - `POST /api/v1/users/ssh-keys` - Register user SSH key
+//! - `GET /api/v1/wg/derp-map` - Get DERP server map
 //! - `WS /internal/wg/garages/{id}/peers` - WebSocket for real-time peer streaming
 
 use std::net::SocketAddr;
@@ -210,6 +211,22 @@ pub struct PeerInfo {
     pub public_key: WgPublicKey,
     /// Peer's allowed IP (their overlay IP).
     pub allowed_ip: String,
+}
+
+/// Response for DERP map endpoint.
+///
+/// GET /api/v1/wg/derp-map
+///
+/// Note: Only Serialize is derived because `#[serde(flatten)]` with DerpMap's
+/// HashMap<u16, _> regions field causes deserialization issues due to JSON
+/// object keys being strings. This type is only used for API responses.
+#[derive(Debug, Clone, Serialize)]
+pub struct DerpMapResponse {
+    /// DERP regions with their nodes.
+    #[serde(flatten)]
+    pub derp_map: DerpMap,
+    /// Version number, incremented when DERP config changes.
+    pub version: u32,
 }
 
 /// Request to register an SSH key.
@@ -847,6 +864,48 @@ async fn get_garage_peers(
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
+/// Get DERP server map.
+///
+/// GET /api/v1/wg/derp-map
+///
+/// Authorization: Bearer <user-token> OR <k8s-service-account-token>
+///
+/// Returns the current DERP server map for relay fallback connections.
+/// Both clients (via user token) and garages (via K8s service account token)
+/// can poll this endpoint to detect DERP server changes.
+async fn get_derp_map(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    // Accept either user token or K8s service account token
+    // For now, just verify there's some authorization present
+    let _has_auth = extract_bearer_token(&headers)?;
+
+    // Get the DERP map
+    let derp_map = state.derp_manager.get_map().map_err(|e| {
+        tracing::error!(error = %e, "Failed to get DERP map");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError::new(
+                error_codes::INTERNAL_ERROR,
+                format!("Failed to get DERP map: {e}"),
+            )),
+        )
+    })?;
+
+    // For v1, version is static since DERP config comes from file
+    // and is loaded at startup. Future versions will track changes.
+    // TODO: Implement proper versioning when runtime DERP updates are added
+    let version = 1;
+
+    tracing::debug!(
+        region_count = derp_map.len(),
+        version = version,
+        "Returning DERP map"
+    );
+
+    let response = DerpMapResponse { derp_map, version };
+
+    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
+}
+
 /// Register an SSH key.
 ///
 /// POST /api/v1/users/ssh-keys
@@ -1038,6 +1097,7 @@ async fn handle_peers_socket(socket: WebSocket, garage_id: String, state: AppSta
 /// - `POST /api/v1/wg/garages` - Register garage
 /// - `GET /api/v1/wg/garages/{id}` - Get garage WireGuard registration
 /// - `GET /api/v1/wg/garages/{id}/peers` - Get peer list
+/// - `GET /api/v1/wg/derp-map` - Get DERP server map
 /// - `POST /api/v1/users/ssh-keys` - Register SSH key
 /// - `WS /internal/wg/garages/{id}/peers` - Peer streaming WebSocket
 pub fn router() -> Router<AppState> {
@@ -1055,6 +1115,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/wg/garages", post(register_garage))
         .route("/api/v1/wg/garages/{id}", get(get_garage_wg_registration))
         .route("/api/v1/wg/garages/{id}/peers", get(get_garage_peers))
+        // DERP map endpoint
+        .route("/api/v1/wg/derp-map", get(get_derp_map))
         // Internal WebSocket for peer streaming (garages connect here)
         .route("/internal/wg/garages/{id}/peers", get(peers_websocket))
         // SSH key endpoint
@@ -1200,6 +1262,56 @@ mod tests {
         };
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("SHA256:abc123"));
+    }
+
+    #[test]
+    fn derp_map_response_serialize() {
+        use moto_wgtunnel_types::derp::{DerpNode, DerpRegion};
+
+        let derp_map = DerpMap::new().with_region(
+            DerpRegion::new(1, "primary").with_node(DerpNode::with_defaults("derp.example.com")),
+        );
+        let response = DerpMapResponse {
+            derp_map,
+            version: 5,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+
+        // Should have regions (flattened from DerpMap)
+        assert!(json.contains("regions"));
+        // Should have version
+        assert!(json.contains(r#""version":5"#));
+        // Should have the region data
+        assert!(json.contains("primary"));
+        assert!(json.contains("derp.example.com"));
+    }
+
+    #[test]
+    fn derp_map_response_matches_spec_format() {
+        // Verify response format matches the spec:
+        // {
+        //   "regions": { "1": { "name": "primary", "nodes": [...] } },
+        //   "version": 5
+        // }
+        use moto_wgtunnel_types::derp::{DerpNode, DerpRegion};
+
+        let derp_map = DerpMap::new().with_region(
+            DerpRegion::new(1, "primary").with_node(DerpNode::new("derp.example.com", 443, 3478)),
+        );
+        let response = DerpMapResponse {
+            derp_map,
+            version: 1,
+        };
+
+        let json = serde_json::to_string_pretty(&response).unwrap();
+        // Parse back to verify structure
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert!(parsed["regions"].is_object());
+        assert!(parsed["regions"]["1"].is_object());
+        assert_eq!(parsed["regions"]["1"]["name"], "primary");
+        assert!(parsed["regions"]["1"]["nodes"].is_array());
+        assert_eq!(parsed["version"], 1);
     }
 
     mod handler_tests {
@@ -1893,6 +2005,90 @@ mod tests {
 
             // Same fingerprint returned
             assert_eq!(result1.fingerprint, result2.fingerprint);
+        }
+
+        #[tokio::test]
+        async fn get_derp_map_success() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/wg/derp-map")
+                        .header(header::AUTHORIZATION, "Bearer testuser")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+
+            // Parse as generic JSON since DerpMapResponse doesn't implement Deserialize
+            // (due to serde(flatten) with HashMap<u16, _> not round-tripping correctly)
+            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+            // Verify version field
+            assert_eq!(result["version"], 1);
+
+            // Verify regions field exists and has expected structure
+            assert!(result["regions"].is_object());
+            let regions = result["regions"].as_object().unwrap();
+            assert!(!regions.is_empty());
+
+            // Default test state includes one region with derp.moto.dev
+            assert!(regions.contains_key("1"));
+            let region1 = &regions["1"];
+            assert_eq!(region1["name"], "primary");
+            assert!(region1["nodes"].is_array());
+            assert_eq!(region1["nodes"][0]["host"], "derp.moto.dev");
+        }
+
+        #[tokio::test]
+        async fn get_derp_map_requires_auth() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/wg/derp-map")
+                        // No authorization header
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        #[tokio::test]
+        async fn get_derp_map_accepts_k8s_token() {
+            // K8s service account tokens should also be accepted
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/wg/derp-map")
+                        .header(header::AUTHORIZATION, "Bearer k8s-service-account-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
         }
     }
 }

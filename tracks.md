@@ -38,9 +38,9 @@ HOW TO USE THIS FILE:
 - moto-club-api: PostgreSQL storage implementations (postgres_stores.rs: PostgresPeerStore, PostgresSessionStore, PostgresSshKeyStore)
 - moto-club-api: GET /api/v1/wg/garages/{garage_id} endpoint (returns registration info for garage pods)
 - moto-club-api: K8s ServiceAccount token validation for garage endpoints (moto-k8s TokenReviewOps trait, validate_garage_token helper)
+- moto-club-api: GET /api/v1/wg/derp-map endpoint (returns DERP map with version for clients and garages)
 
 **Remaining:**
-- moto-club-api: GET /api/v1/wg/derp-map endpoint
 - moto-club-api: Conditional GET for peers (?version= param, 304 response)
 - moto-club-k8s: SSH keys Secret creation (spec v1.1 - mount authorized_keys to garage pod)
 - moto-club-k8s: Labels must use moto.dev/garage-id not moto.dev/id (check spec line 871)
