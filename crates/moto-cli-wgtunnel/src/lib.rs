@@ -1,12 +1,12 @@
-//! CLI `WireGuard` tunnel integration for moto.
+//! CLI WireGuard tunnel integration for moto.
 //!
 //! This crate provides the client-side tunnel management for moto's
-//! `WireGuard`-based connectivity to garages. It handles:
+//! WireGuard-based connectivity to garages. It handles:
 //!
 //! - [`enter`]: Garage enter command (establish tunnel and SSH session)
 //! - [`tunnel`]: Tunnel lifecycle management (create, connect, close)
 //! - [`status`]: Connection status display
-//! - Key management (device keypair, device ID)
+//! - Key management (device keypair - the public key IS the device identity)
 //! - Configuration file handling
 //!
 //! # Architecture
@@ -16,7 +16,7 @@
 //! │                          moto-cli-wgtunnel                                   │
 //! │  ┌─────────────────────────────────────────────────────────────────────┐    │
 //! │  │  TunnelManager                                                       │    │
-//! │  │  - Device identity (WG keypair, device ID)                          │    │
+//! │  │  - Device identity (WG public key IS the identifier)                │    │
 //! │  │  - Active tunnel sessions                                           │    │
 //! │  │  - Key file management (~/.config/moto/)                            │    │
 //! │  └─────────────────────────────────────────────────────────────────────┘    │
@@ -25,7 +25,7 @@
 //! │  ┌─────────────────────────────────────────────────────────────────────┐    │
 //! │  │  TunnelSession                                                       │    │
 //! │  │  - Connection to a single garage                                    │    │
-//! │  │  - `WireGuard` tunnel state                                         │    │
+//! │  │  - WireGuard tunnel state                                           │    │
 //! │  │  - Path status (direct/DERP)                                        │    │
 //! │  └─────────────────────────────────────────────────────────────────────┘    │
 //! └─────────────────────────────────────────────────────────────────────────────┘
@@ -33,11 +33,13 @@
 //!
 //! # Key Files
 //!
+//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//! There is no separate device ID file.
+//!
 //! ```text
 //! ~/.config/moto/
 //! ├── wg-private.key      # WireGuard private key (generated once)
-//! ├── wg-public.key       # WireGuard public key
-//! └── device-id           # UUID, unique device identifier
+//! └── wg-public.key       # WireGuard public key (device identity)
 //! ```
 //!
 //! # Example

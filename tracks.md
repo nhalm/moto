@@ -79,6 +79,7 @@ HOW TO USE THIS FILE:
 - client.rs: Device registration via moto-club API (POST /api/v1/wg/devices using WG public key as device identity per spec v0.7)
 - client.rs: Session creation via moto-club API (GET garage by name, POST session with garage UUID and device pubkey per spec)
 - client.rs: Get garage details for session creation (GET /api/v1/garages/{name} returns garage UUID needed for session)
+- tunnel.rs: Remove device_id from DeviceIdentity (per spec v0.7: WG public key IS device identity)
 
 **Remaining:**
 (none - moto-wgtunnel.md v0.7 CLI integration complete)

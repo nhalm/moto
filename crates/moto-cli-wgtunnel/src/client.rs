@@ -15,12 +15,12 @@
 //! let config = MotoClubConfig::new("http://localhost:8080", "my-username");
 //! let client = MotoClubClient::new(config)?;
 //!
-//! // Register a device
+//! // Register a device (WG public key IS the device identity)
 //! let device = client.register_device(&public_key, Some("my-laptop")).await?;
-//! println!("Device registered: {}", device.device_id);
+//! println!("Device registered with IP: {}", device.overlay_ip);
 //!
-//! // Create a session
-//! let session = client.create_session("my-garage", device.device_id, None).await?;
+//! // Create a session using the garage UUID and device public key
+//! let session = client.create_session(garage_id, &public_key, None).await?;
 //! println!("Session created: {}", session.session_id);
 //! ```
 

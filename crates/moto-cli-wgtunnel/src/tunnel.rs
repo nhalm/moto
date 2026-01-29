@@ -6,9 +6,11 @@
 //! # Key Management
 //!
 //! Device keys are stored in `~/.config/moto/`:
-//! - `wg-private.key`: `WireGuard` private key (0600 permissions)
-//! - `wg-public.key`: `WireGuard` public key (0644 permissions)
-//! - `device-id`: Device UUID (0644 permissions)
+//! - `wg-private.key`: WireGuard private key (0600 permissions)
+//! - `wg-public.key`: WireGuard public key (0644 permissions)
+//!
+//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//! There is no separate device ID - the public key serves as the identifier.
 //!
 //! Keys are generated on first use and reused across sessions.
 //!
@@ -26,8 +28,8 @@
 //! // Create manager (loads or generates device identity)
 //! let manager = TunnelManager::new().await?;
 //!
-//! // Get device info for moto-club registration
-//! let info = manager.device_info();
+//! // Get device public key for moto-club registration
+//! let public_key = manager.public_key();
 //! ```
 
 // Allow similar names like garage_id and garage_ip which are distinct in context
@@ -46,7 +48,6 @@ use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPrivateKey, WgPublicKey};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
-use uuid::Uuid;
 
 /// Environment variable to override WireGuard key file location.
 pub const ENV_WG_KEY_FILE: &str = "MOTO_WG_KEY_FILE";
@@ -62,9 +63,6 @@ const PRIVATE_KEY_FILE: &str = "wg-private.key";
 
 /// Public key filename.
 const PUBLIC_KEY_FILE: &str = "wg-public.key";
-
-/// Device ID filename.
-const DEVICE_ID_FILE: &str = "device-id";
 
 /// Errors that can occur during tunnel operations.
 #[derive(Debug, Error)]
@@ -104,10 +102,6 @@ pub enum TunnelError {
     #[error("connection failed: {0}")]
     ConnectionFailed(String),
 
-    /// Invalid device ID.
-    #[error("invalid device ID: {0}")]
-    InvalidDeviceId(String),
-
     /// WireGuard tunnel error.
     #[error("WireGuard tunnel error: {0}")]
     WireGuard(#[from] WgTunnelError),
@@ -115,25 +109,19 @@ pub enum TunnelError {
 
 /// Device identity for WireGuard connections.
 ///
-/// This represents the local device's identity, consisting of a persistent
-/// WireGuard keypair and a unique device UUID.
+/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// There is no separate device ID - the public key serves as the unique identifier.
 #[derive(Debug, Clone)]
 pub struct DeviceIdentity {
-    /// Unique device identifier (UUID v7).
-    pub device_id: Uuid,
-
-    /// Device's WireGuard public key.
+    /// Device's WireGuard public key (this IS the device identity).
     pub public_key: WgPublicKey,
 }
 
 impl DeviceIdentity {
-    /// Create a new device identity.
+    /// Create a new device identity from a WireGuard public key.
     #[must_use]
-    pub fn new(device_id: Uuid, public_key: WgPublicKey) -> Self {
-        Self {
-            device_id,
-            public_key,
-        }
+    pub fn new(public_key: WgPublicKey) -> Self {
+        Self { public_key }
     }
 }
 
@@ -561,14 +549,12 @@ impl TunnelManager {
         // Ensure config directory exists with correct permissions
         ensure_dir_exists(&config_dir)?;
 
-        // Load or generate device identity
+        // Load or generate device identity (WG public key IS the identity)
         let (private_key, public_key) = load_or_generate_keypair(&config_dir).await?;
-        let device_id = load_or_generate_device_id(&config_dir).await?;
 
-        let identity = DeviceIdentity::new(device_id, public_key);
+        let identity = DeviceIdentity::new(public_key);
 
         info!(
-            device_id = %identity.device_id,
             public_key = %identity.public_key,
             "tunnel manager initialized"
         );
@@ -585,12 +571,6 @@ impl TunnelManager {
     #[must_use]
     pub fn device_info(&self) -> &DeviceIdentity {
         &self.identity
-    }
-
-    /// Get the device ID.
-    #[must_use]
-    pub fn device_id(&self) -> Uuid {
-        self.identity.device_id
     }
 
     /// Get the device's WireGuard public key.
@@ -924,28 +904,6 @@ async fn load_or_generate_keypair(
     }
 }
 
-/// Load or generate the device ID.
-async fn load_or_generate_device_id(config_dir: &Path) -> Result<Uuid, TunnelError> {
-    let path = config_dir.join(DEVICE_ID_FILE);
-
-    if path.exists() {
-        let content = tokio::fs::read_to_string(&path).await?;
-        let device_id = Uuid::parse_str(content.trim())
-            .map_err(|e| TunnelError::InvalidDeviceId(e.to_string()))?;
-
-        debug!(device_id = %device_id, "loaded existing device ID");
-        Ok(device_id)
-    } else {
-        // Generate new UUID v7 (time-ordered)
-        let device_id = Uuid::now_v7();
-
-        tokio::fs::write(&path, device_id.to_string()).await?;
-
-        info!(device_id = %device_id, "generated new device ID");
-        Ok(device_id)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -963,8 +921,7 @@ mod tests {
     async fn create_manager() {
         let (manager, _temp) = test_manager().await;
 
-        // Should have valid device identity
-        assert!(!manager.device_id().is_nil());
+        // Should have valid device identity (WG public key IS the identity)
         assert!(!manager.public_key().to_base64().is_empty());
     }
 
@@ -977,14 +934,12 @@ mod tests {
         let manager1 = TunnelManager::with_config_dir(config_dir.clone())
             .await
             .unwrap();
-        let device_id1 = manager1.device_id();
         let public_key1 = manager1.public_key().clone();
 
         // Create second manager with same directory
         let manager2 = TunnelManager::with_config_dir(config_dir).await.unwrap();
 
-        // Should have same identity
-        assert_eq!(device_id1, manager2.device_id());
+        // Should have same identity (WG public key IS the identity)
         assert_eq!(public_key1, *manager2.public_key());
     }
 
@@ -1139,12 +1094,11 @@ mod tests {
 
     #[test]
     fn device_identity_creation() {
-        let device_id = Uuid::now_v7();
         let public_key = WgPrivateKey::generate().public_key();
 
-        let identity = DeviceIdentity::new(device_id, public_key.clone());
+        // WG public key IS the device identity (per spec v0.7)
+        let identity = DeviceIdentity::new(public_key.clone());
 
-        assert_eq!(identity.device_id, device_id);
         assert_eq!(identity.public_key, public_key);
     }
 
