@@ -41,7 +41,7 @@ pub enum LifecycleError {
 /// - `Pending` can transition to `Running`
 /// - `Running` can transition to `Ready`
 ///
-/// Note: `Attached` status was removed in spec v1.1 (no mechanism to detect WireGuard connection).
+/// Note: `Attached` status was removed in spec v1.1 (no mechanism to detect `WireGuard` connection).
 pub struct GarageLifecycle;
 
 impl GarageLifecycle {
