@@ -52,6 +52,7 @@ HOW TO USE THIS FILE:
 - moto-club-api: GET /api/v1/info includes api_version, git_sha, features fields per spec lines 803-817
 - moto-club-api: POST /api/v1/garages uses GarageService for full K8s integration (create flow steps 4-12: namespace, SSH keys Secret, pod deployment per spec lines 866-879)
 - moto-club-api: Removed unused SESSION_EXPIRED error code (spec v1.0 changelog)
+- moto-club-api: GET /api/v1/wg/sessions endpoint with ?garage_id and ?all query params per spec lines 514-540
 
 **Remaining:**
 (none - moto-club.md v1.1 implementation complete)

@@ -116,6 +116,16 @@ impl From<CreateSessionResponse> for SessionResponse {
     }
 }
 
+/// Query parameters for listing sessions.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ListSessionsQuery {
+    /// Filter by garage ID (optional).
+    pub garage_id: Option<Uuid>,
+    /// Include expired/closed sessions (default: false).
+    #[serde(default)]
+    pub all: bool,
+}
+
 /// Response for listing sessions.
 #[derive(Debug, Clone, Serialize)]
 pub struct ListSessionsResponse {
@@ -709,17 +719,56 @@ async fn create_session(
 ///
 /// GET /api/v1/wg/sessions
 ///
-/// Note: This endpoint requires a `device_id` query parameter to filter sessions.
-/// For now, we return all sessions for the authenticated user (simplified).
-async fn list_sessions(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    let _owner = extract_owner(&headers)?;
+/// Lists sessions for the authenticated user.
+/// Query parameters:
+/// - `garage_id`: Optional filter by garage UUID
+/// - `all`: Include expired/closed sessions (default: false)
+async fn list_sessions(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<ListSessionsQuery>,
+) -> impl IntoResponse {
+    let owner = extract_owner(&headers)?;
 
-    // For a complete implementation, we would filter by device_id or user ownership.
-    // For now, return an empty list since we don't have a device_id parameter.
-    // The sessions can still be accessed via the session_manager directly.
-    let _ = &state.session_manager;
-    let response = ListSessionsResponse { sessions: vec![] };
+    // Build filter from query parameters
+    let filter = moto_club_db::ListSessionsFilter {
+        garage_id: query.garage_id,
+        include_all: query.all,
+    };
 
+    // Query database for sessions owned by this user
+    let db_sessions =
+        moto_club_db::wg_session_repo::list_by_owner_with_details(&state.db_pool, &owner, filter)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to list sessions");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new(
+                        error_codes::DATABASE_ERROR,
+                        "Failed to list sessions".to_string(),
+                    )),
+                )
+            })?;
+
+    // Convert to response type
+    let sessions: Vec<SessionInfo> = db_sessions
+        .into_iter()
+        .filter_map(|s| {
+            let device_pubkey = WgPublicKey::from_base64(&s.device_pubkey).ok()?;
+            Some(SessionInfo {
+                session_id: format!("sess_{}", s.id.simple()),
+                garage_id: s.garage_id.to_string(),
+                garage_name: s.garage_name,
+                device_pubkey,
+                device_name: s.device_name,
+                created_at: s.created_at,
+                expires_at: s.expires_at,
+            })
+        })
+        .collect();
+
+    let response = ListSessionsResponse { sessions };
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
@@ -1527,6 +1576,41 @@ mod tests {
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("sessions"));
         assert!(json.contains("[]"));
+    }
+
+    #[test]
+    fn list_sessions_query_defaults() {
+        let query: ListSessionsQuery = serde_json::from_str("{}").unwrap();
+        assert!(query.garage_id.is_none());
+        assert!(!query.all);
+    }
+
+    #[test]
+    fn list_sessions_query_with_garage_id() {
+        let json = r#"{"garage_id": "01234567-89ab-cdef-0123-456789abcdef"}"#;
+        let query: ListSessionsQuery = serde_json::from_str(json).unwrap();
+        assert!(query.garage_id.is_some());
+        assert_eq!(
+            query.garage_id.unwrap().to_string(),
+            "01234567-89ab-cdef-0123-456789abcdef"
+        );
+        assert!(!query.all);
+    }
+
+    #[test]
+    fn list_sessions_query_with_all() {
+        let json = r#"{"all": true}"#;
+        let query: ListSessionsQuery = serde_json::from_str(json).unwrap();
+        assert!(query.garage_id.is_none());
+        assert!(query.all);
+    }
+
+    #[test]
+    fn list_sessions_query_with_both() {
+        let json = r#"{"garage_id": "01234567-89ab-cdef-0123-456789abcdef", "all": true}"#;
+        let query: ListSessionsQuery = serde_json::from_str(json).unwrap();
+        assert!(query.garage_id.is_some());
+        assert!(query.all);
     }
 
     #[test]

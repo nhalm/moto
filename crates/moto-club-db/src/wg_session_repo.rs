@@ -5,9 +5,34 @@
 //! Sessions have the `garage_id` FK with `ON DELETE CASCADE` to prevent orphaned records.
 
 use chrono::{DateTime, Utc};
+use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::{DbError, DbPool, DbResult, WgSession};
+
+/// Session with additional details from joined tables.
+///
+/// Used by `list_by_owner_with_details` to return enriched session data
+/// including garage name and device name.
+#[derive(Debug, Clone, FromRow)]
+pub struct WgSessionWithDetails {
+    /// Unique identifier.
+    pub id: Uuid,
+    /// Device public key this session belongs to.
+    pub device_pubkey: String,
+    /// Garage this session connects to.
+    pub garage_id: Uuid,
+    /// When the session expires.
+    pub expires_at: DateTime<Utc>,
+    /// When the session was created.
+    pub created_at: DateTime<Utc>,
+    /// When the session was closed (if applicable).
+    pub closed_at: Option<DateTime<Utc>>,
+    /// Human-readable garage name.
+    pub garage_name: String,
+    /// Optional device name for display.
+    pub device_name: Option<String>,
+}
 
 /// Input for creating a new `WireGuard` session.
 #[derive(Debug, Clone)]
@@ -203,6 +228,96 @@ pub async fn list_by_owner(
             r"
             SELECT s.* FROM wg_sessions s
             JOIN wg_devices d ON s.device_pubkey = d.public_key
+            WHERE d.owner = $1
+              AND s.closed_at IS NULL
+              AND s.expires_at > now()
+            ORDER BY s.created_at DESC
+            ",
+        )
+        .bind(owner)
+        .fetch_all(pool)
+        .await?
+    };
+
+    Ok(sessions)
+}
+
+/// List sessions for an owner with enriched details (garage name, device name).
+///
+/// Sessions are filtered to those belonging to devices owned by the user.
+/// By default, only active sessions (not expired, not closed) are returned.
+/// Use `filter.include_all = true` to include expired/closed sessions.
+///
+/// Returns sessions ordered by `created_at` descending (newest first).
+///
+/// # Errors
+///
+/// Returns a database error if the query fails.
+pub async fn list_by_owner_with_details(
+    pool: &DbPool,
+    owner: &str,
+    filter: ListSessionsFilter,
+) -> DbResult<Vec<WgSessionWithDetails>> {
+    let sessions = if filter.include_all {
+        if let Some(garage_id) = filter.garage_id {
+            sqlx::query_as::<_, WgSessionWithDetails>(
+                r"
+                SELECT s.id, s.device_pubkey, s.garage_id, s.expires_at, s.created_at, s.closed_at,
+                       g.name AS garage_name, d.device_name
+                FROM wg_sessions s
+                JOIN wg_devices d ON s.device_pubkey = d.public_key
+                JOIN garages g ON s.garage_id = g.id
+                WHERE d.owner = $1 AND s.garage_id = $2
+                ORDER BY s.created_at DESC
+                ",
+            )
+            .bind(owner)
+            .bind(garage_id)
+            .fetch_all(pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, WgSessionWithDetails>(
+                r"
+                SELECT s.id, s.device_pubkey, s.garage_id, s.expires_at, s.created_at, s.closed_at,
+                       g.name AS garage_name, d.device_name
+                FROM wg_sessions s
+                JOIN wg_devices d ON s.device_pubkey = d.public_key
+                JOIN garages g ON s.garage_id = g.id
+                WHERE d.owner = $1
+                ORDER BY s.created_at DESC
+                ",
+            )
+            .bind(owner)
+            .fetch_all(pool)
+            .await?
+        }
+    } else if let Some(garage_id) = filter.garage_id {
+        sqlx::query_as::<_, WgSessionWithDetails>(
+            r"
+            SELECT s.id, s.device_pubkey, s.garage_id, s.expires_at, s.created_at, s.closed_at,
+                   g.name AS garage_name, d.device_name
+            FROM wg_sessions s
+            JOIN wg_devices d ON s.device_pubkey = d.public_key
+            JOIN garages g ON s.garage_id = g.id
+            WHERE d.owner = $1
+              AND s.garage_id = $2
+              AND s.closed_at IS NULL
+              AND s.expires_at > now()
+            ORDER BY s.created_at DESC
+            ",
+        )
+        .bind(owner)
+        .bind(garage_id)
+        .fetch_all(pool)
+        .await?
+    } else {
+        sqlx::query_as::<_, WgSessionWithDetails>(
+            r"
+            SELECT s.id, s.device_pubkey, s.garage_id, s.expires_at, s.created_at, s.closed_at,
+                   g.name AS garage_name, d.device_name
+            FROM wg_sessions s
+            JOIN wg_devices d ON s.device_pubkey = d.public_key
+            JOIN garages g ON s.garage_id = g.id
             WHERE d.owner = $1
               AND s.closed_at IS NULL
               AND s.expires_at > now()

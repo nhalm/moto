@@ -43,6 +43,7 @@ pub use models::{
     DerpServer, Garage, GarageStatus, ParseGarageStatusError, ParseTerminationReasonError,
     TerminationReason, UserSshKey, WgDevice, WgGarage, WgSession,
 };
+pub use wg_session_repo::{ListSessionsFilter, WgSessionWithDetails};
 
 // Re-export TerminationReason::ErrorReason as Error for convenience
 // (the variant is named ErrorReason internally to avoid conflict with Error trait)
