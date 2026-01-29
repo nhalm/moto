@@ -32,6 +32,7 @@
 pub mod garage_repo;
 pub mod models;
 pub mod wg_device_repo;
+pub mod wg_session_repo;
 
 use thiserror::Error;
 
