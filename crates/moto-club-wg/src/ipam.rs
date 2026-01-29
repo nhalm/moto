@@ -3,7 +3,7 @@
 //! This module provides IP address management (IPAM) for both garages and clients:
 //!
 //! - **Garages:** IP derived deterministically from garage ID (hash-based)
-//! - **Clients:** IP allocated sequentially and persisted per device
+//! - **Clients:** IP allocated sequentially and persisted per device (keyed by public key)
 //!
 //! # Architecture
 //!
@@ -11,11 +11,13 @@
 //! trait defines the storage interface, allowing different backends (in-memory for tests,
 //! Postgres for production).
 //!
+//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//!
 //! # Example
 //!
 //! ```
 //! use moto_club_wg::ipam::{Ipam, InMemoryStore};
-//! use uuid::Uuid;
+//! use moto_wgtunnel_types::WgPrivateKey;
 //!
 //! # tokio_test::block_on(async {
 //! let store = InMemoryStore::new();
@@ -29,20 +31,19 @@
 //! let garage_ip2 = ipam.allocate_garage(garage_id).await.unwrap();
 //! assert_eq!(garage_ip, garage_ip2);
 //!
-//! // Allocate IP for a client device (persisted)
-//! let device_id = Uuid::now_v7();
-//! let client_ip = ipam.allocate_client(device_id).await.unwrap();
+//! // Allocate IP for a client device (keyed by public key)
+//! let device_key = WgPrivateKey::generate().public_key();
+//! let client_ip = ipam.allocate_client(&device_key).await.unwrap();
 //!
-//! // Same device always gets same IP
-//! let client_ip2 = ipam.allocate_client(device_id).await.unwrap();
+//! // Same public key always gets same IP
+//! let client_ip2 = ipam.allocate_client(&device_key).await.unwrap();
 //! assert_eq!(client_ip, client_ip2);
 //! # });
 //! ```
 
-use moto_wgtunnel_types::OverlayIp;
+use moto_wgtunnel_types::{OverlayIp, WgPublicKey};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use uuid::Uuid;
 
 /// Error type for IPAM operations.
 #[derive(Debug, thiserror::Error)]
@@ -67,19 +68,23 @@ pub type Result<T> = std::result::Result<T, IpamError>;
 /// This trait abstracts the persistence layer, allowing different backends
 /// for testing vs production.
 pub trait IpamStore: Send + Sync {
-    /// Get the IP allocated to a client device, if any.
+    /// Get the IP allocated to a client device by public key, if any.
+    ///
+    /// The WireGuard public key IS the device identity (Cloudflare WARP model).
     ///
     /// # Errors
     ///
     /// Returns error if the storage operation fails.
-    fn get_client_ip(&self, device_id: Uuid) -> Result<Option<OverlayIp>>;
+    fn get_client_ip(&self, public_key: &WgPublicKey) -> Result<Option<OverlayIp>>;
 
     /// Store a client device IP allocation.
     ///
+    /// The WireGuard public key IS the device identity.
+    ///
     /// # Errors
     ///
     /// Returns error if the storage operation fails.
-    fn set_client_ip(&self, device_id: Uuid, ip: OverlayIp) -> Result<()>;
+    fn set_client_ip(&self, public_key: &WgPublicKey, ip: OverlayIp) -> Result<()>;
 
     /// Get the next available client host ID for allocation.
     ///
@@ -122,16 +127,17 @@ impl<S: IpamStore> Ipam<S> {
 
     /// Allocate an overlay IP for a client device.
     ///
-    /// If the device already has an allocated IP, returns the existing one.
+    /// The WireGuard public key IS the device identity (Cloudflare WARP model).
+    /// If the device (public key) already has an allocated IP, returns the existing one.
     /// Otherwise, allocates a new IP and persists it.
     ///
     /// # Errors
     ///
     /// Returns error if storage operations fail or the IP pool is exhausted.
     #[allow(clippy::unused_async)] // Async for future database operations
-    pub async fn allocate_client(&self, device_id: Uuid) -> Result<OverlayIp> {
+    pub async fn allocate_client(&self, public_key: &WgPublicKey) -> Result<OverlayIp> {
         // Check if device already has an IP
-        if let Some(ip) = self.store.get_client_ip(device_id)? {
+        if let Some(ip) = self.store.get_client_ip(public_key)? {
             return Ok(ip);
         }
 
@@ -142,21 +148,22 @@ impl<S: IpamStore> Ipam<S> {
         let host_id = if host_id == 0 { 1 } else { host_id };
 
         let ip = OverlayIp::client(host_id);
-        self.store.set_client_ip(device_id, ip)?;
+        self.store.set_client_ip(public_key, ip)?;
 
         Ok(ip)
     }
 
     /// Get the IP allocated to a client device without allocating.
     ///
+    /// The WireGuard public key IS the device identity.
     /// Returns `None` if the device has no allocated IP.
     ///
     /// # Errors
     ///
     /// Returns error if the storage operation fails.
     #[allow(clippy::unused_async)] // Async for future database operations
-    pub async fn get_client_ip(&self, device_id: Uuid) -> Result<Option<OverlayIp>> {
-        self.store.get_client_ip(device_id)
+    pub async fn get_client_ip(&self, public_key: &WgPublicKey) -> Result<Option<OverlayIp>> {
+        self.store.get_client_ip(public_key)
     }
 }
 
@@ -217,8 +224,9 @@ pub struct InMemoryStore {
 }
 
 struct InMemoryStoreInner {
-    /// Device ID -> allocated IP
-    client_ips: HashMap<Uuid, OverlayIp>,
+    /// Device public key (base64) -> allocated IP
+    /// WireGuard public key IS the device identity
+    client_ips: HashMap<String, OverlayIp>,
     /// Next host ID to allocate
     next_host_id: u64,
 }
@@ -243,13 +251,17 @@ impl Default for InMemoryStore {
 }
 
 impl IpamStore for InMemoryStore {
-    fn get_client_ip(&self, device_id: Uuid) -> Result<Option<OverlayIp>> {
+    fn get_client_ip(&self, public_key: &WgPublicKey) -> Result<Option<OverlayIp>> {
         let inner = self.inner.lock().unwrap();
-        Ok(inner.client_ips.get(&device_id).copied())
+        Ok(inner.client_ips.get(&public_key.to_base64()).copied())
     }
 
-    fn set_client_ip(&self, device_id: Uuid, ip: OverlayIp) -> Result<()> {
-        self.inner.lock().unwrap().client_ips.insert(device_id, ip);
+    fn set_client_ip(&self, public_key: &WgPublicKey, ip: OverlayIp) -> Result<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .client_ips
+            .insert(public_key.to_base64(), ip);
         Ok(())
     }
 
@@ -265,6 +277,11 @@ impl IpamStore for InMemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use moto_wgtunnel_types::WgPrivateKey;
+
+    fn generate_public_key() -> WgPublicKey {
+        WgPrivateKey::generate().public_key()
+    }
 
     #[tokio::test]
     async fn garage_allocation_is_deterministic() {
@@ -291,13 +308,13 @@ mod tests {
         let store = InMemoryStore::new();
         let ipam = Ipam::new(store);
 
-        let device1 = Uuid::now_v7();
-        let device2 = Uuid::now_v7();
+        let key1 = generate_public_key();
+        let key2 = generate_public_key();
 
-        let ip1 = ipam.allocate_client(device1).await.unwrap();
-        let ip2 = ipam.allocate_client(device2).await.unwrap();
+        let ip1 = ipam.allocate_client(&key1).await.unwrap();
+        let ip2 = ipam.allocate_client(&key2).await.unwrap();
 
-        // Different devices get different IPs
+        // Different devices (public keys) get different IPs
         assert_ne!(ip1, ip2);
 
         // All are client IPs
@@ -310,12 +327,12 @@ mod tests {
         let store = InMemoryStore::new();
         let ipam = Ipam::new(store);
 
-        let device = Uuid::now_v7();
+        let key = generate_public_key();
 
-        let ip1 = ipam.allocate_client(device).await.unwrap();
-        let ip2 = ipam.allocate_client(device).await.unwrap();
+        let ip1 = ipam.allocate_client(&key).await.unwrap();
+        let ip2 = ipam.allocate_client(&key).await.unwrap();
 
-        // Same device always gets same IP
+        // Same public key always gets same IP
         assert_eq!(ip1, ip2);
     }
 
@@ -324,15 +341,15 @@ mod tests {
         let store = InMemoryStore::new();
         let ipam = Ipam::new(store);
 
-        let device = Uuid::now_v7();
+        let key = generate_public_key();
 
         // No allocation yet
-        let ip = ipam.get_client_ip(device).await.unwrap();
+        let ip = ipam.get_client_ip(&key).await.unwrap();
         assert!(ip.is_none());
 
         // After allocation
-        let allocated = ipam.allocate_client(device).await.unwrap();
-        let ip = ipam.get_client_ip(device).await.unwrap();
+        let allocated = ipam.allocate_client(&key).await.unwrap();
+        let ip = ipam.get_client_ip(&key).await.unwrap();
         assert_eq!(ip, Some(allocated));
     }
 

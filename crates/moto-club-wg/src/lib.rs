@@ -15,6 +15,9 @@
 //! sees tunnel traffic. The traffic flows directly peer-to-peer (or via DERP relay
 //! when NAT blocks direct connections).
 //!
+//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//! No separate device ID is needed.
+//!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────────────┐
 //! │                           moto-club                                  │
@@ -35,7 +38,6 @@
 //! use moto_club_wg::ipam::{Ipam, InMemoryStore};
 //! use moto_club_wg::peers::{PeerRegistry, InMemoryPeerStore, DeviceRegistration};
 //! use moto_wgtunnel_types::keys::WgPrivateKey;
-//! use uuid::Uuid;
 //!
 //! # tokio_test::block_on(async {
 //! // Create IPAM and peer registry
@@ -44,12 +46,10 @@
 //! let ipam = Ipam::new(ipam_store);
 //! let registry = PeerRegistry::new(peer_store, ipam);
 //!
-//! // Register a device
-//! let device_id = Uuid::now_v7();
+//! // Register a device - public key IS the device identity
 //! let private_key = WgPrivateKey::generate();
 //!
 //! let registration = DeviceRegistration {
-//!     device_id,
 //!     public_key: private_key.public_key(),
 //!     device_name: Some("my-laptop".to_string()),
 //! };

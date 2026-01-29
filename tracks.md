@@ -28,9 +28,9 @@ HOW TO USE THIS FILE:
 - moto-club-garage crate: lib.rs, service.rs, lifecycle.rs (scaffolding)
 - moto-club-reconcile crate: lib.rs, garage.rs (scaffolding)
 - moto-club binary: main.rs (scaffolding)
+- Device identity model: WireGuard public_key as primary key (spec lines 406, 1040-1046)
 
 **Remaining:**
-- REFACTOR: Device identity model - change from UUID device_id to WireGuard public_key as primary key (spec lines 406, 1040-1046). Code uses `device_id: Uuid` but spec says "WireGuard public key IS the device identity"
 - moto-club-db: PostgreSQL migrations for all tables (garages, wg_devices, wg_sessions, wg_garages, user_ssh_keys, derp_servers)
 - moto-club-db: wg_devices repository using public_key as primary key
 - moto-club-db: wg_sessions repository with garage_id ON DELETE CASCADE
@@ -66,7 +66,7 @@ HOW TO USE THIS FILE:
 - enter.rs: SSH session spawning
 
 **Remaining:**
-- enter.rs: Device registration via moto-club API (blocked: moto-club device identity refactor)
+- enter.rs: Device registration via moto-club API (blocked: moto-club API PostgreSQL storage)
 - enter.rs: Session creation via moto-club API (blocked: moto-club API)
 - enter.rs: Get garage peer info via moto-club API (blocked: moto-club API)
 

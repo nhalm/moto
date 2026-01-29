@@ -9,11 +9,12 @@
 //!
 //! # Architecture
 //!
-//! Sessions are created by the CLI when entering a garage:
+//! Sessions are created by the CLI when entering a garage. The device is identified
+//! by its WireGuard public key (Cloudflare WARP model):
 //!
 //! ```text
 //! Session Creation:
-//!   POST /api/v1/wg/sessions { garage_id, device_id, ttl_seconds }
+//!   POST /api/v1/wg/sessions { garage_id, device_pubkey, ttl_seconds }
 //!   → { session_id, garage { public_key, overlay_ip, endpoints }, client_ip, derp_map, expires_at }
 //!
 //! List Sessions:
@@ -33,7 +34,6 @@
 //! use moto_club_wg::ipam::{Ipam, InMemoryStore};
 //! use moto_wgtunnel_types::keys::WgPrivateKey;
 //! use moto_wgtunnel_types::derp::{DerpMap, DerpRegion, DerpNode};
-//! use uuid::Uuid;
 //!
 //! # tokio_test::block_on(async {
 //! // Create stores and registry
@@ -46,10 +46,8 @@
 //! let manager = SessionManager::new(session_store);
 //!
 //! // Register a device and garage
-//! let device_id = Uuid::now_v7();
 //! let device_key = WgPrivateKey::generate();
 //! let device = registry.register_device(DeviceRegistration {
-//!     device_id,
 //!     public_key: device_key.public_key(),
 //!     device_name: Some("laptop".to_string()),
 //! }).await.unwrap();
@@ -68,7 +66,7 @@
 //!
 //! let request = CreateSessionRequest {
 //!     garage_id: "feature-foo".to_string(),
-//!     device_id,
+//!     device_pubkey: device_key.public_key(),
 //!     ttl_seconds: Some(3600),
 //! };
 //!
@@ -93,6 +91,8 @@ use uuid::Uuid;
 
 use crate::peers::{RegisteredDevice, RegisteredGarage};
 
+// Note: WgPublicKey is re-exported for use in Session type
+
 /// Default session TTL in seconds (4 hours).
 pub const DEFAULT_SESSION_TTL_SECS: u32 = 14400;
 
@@ -110,9 +110,9 @@ pub enum SessionError {
     #[error("session not found: {0}")]
     NotFound(String),
 
-    /// Device not registered.
+    /// Device not registered (identified by WireGuard public key).
     #[error("device not registered: {0}")]
-    DeviceNotRegistered(Uuid),
+    DeviceNotRegistered(String),
 
     /// Garage not registered.
     #[error("garage not registered: {0}")]
@@ -128,8 +128,8 @@ pub struct CreateSessionRequest {
     /// Garage to connect to.
     pub garage_id: String,
 
-    /// Device requesting the connection.
-    pub device_id: Uuid,
+    /// Device requesting the connection (WireGuard public key IS the device identity).
+    pub device_pubkey: WgPublicKey,
 
     /// Optional session TTL in seconds. Defaults to garage TTL or 4 hours.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -180,8 +180,8 @@ pub struct Session {
     /// Human-readable garage name (same as `garage_id` for now).
     pub garage_name: String,
 
-    /// Device that created this session.
-    pub device_id: Uuid,
+    /// Device that created this session (WireGuard public key IS the device identity).
+    pub device_pubkey: WgPublicKey,
 
     /// When this session was created.
     pub created_at: DateTime<Utc>,
@@ -241,12 +241,14 @@ pub trait SessionStore: Send + Sync {
     /// Returns error if the storage operation fails.
     fn remove_session(&self, session_id: &str) -> Result<Option<Session>>;
 
-    /// List all sessions for a device.
+    /// List all sessions for a device (by public key).
+    ///
+    /// The WireGuard public key IS the device identity.
     ///
     /// # Errors
     ///
     /// Returns error if the storage operation fails.
-    fn list_sessions_by_device(&self, device_id: Uuid) -> Result<Vec<Session>>;
+    fn list_sessions_by_device(&self, device_pubkey: &WgPublicKey) -> Result<Vec<Session>>;
 
     /// List all sessions for a garage.
     ///
@@ -318,7 +320,7 @@ impl<S: SessionStore> SessionManager<S> {
             session_id: session_id.clone(),
             garage_id: garage.garage_id.clone(),
             garage_name: garage.garage_id.clone(), // Same for now
-            device_id: device.device_id,
+            device_pubkey: device.public_key.clone(),
             created_at: now,
             expires_at,
         };
@@ -358,15 +360,16 @@ impl<S: SessionStore> SessionManager<S> {
             .ok_or_else(|| SessionError::NotFound(session_id.to_string()))
     }
 
-    /// List sessions for a device.
+    /// List sessions for a device (by public key).
     ///
+    /// The WireGuard public key IS the device identity.
     /// Excludes expired sessions.
     ///
     /// # Errors
     ///
     /// Returns error if storage operation fails.
-    pub fn list_sessions(&self, device_id: Uuid) -> Result<Vec<Session>> {
-        let sessions = self.store.list_sessions_by_device(device_id)?;
+    pub fn list_sessions(&self, device_pubkey: &WgPublicKey) -> Result<Vec<Session>> {
+        let sessions = self.store.list_sessions_by_device(device_pubkey)?;
         Ok(sessions.into_iter().filter(|s| !s.is_expired()).collect())
     }
 
@@ -458,14 +461,14 @@ impl SessionStore for InMemorySessionStore {
         Ok(self.inner.lock().unwrap().sessions.remove(session_id))
     }
 
-    fn list_sessions_by_device(&self, device_id: Uuid) -> Result<Vec<Session>> {
+    fn list_sessions_by_device(&self, device_pubkey: &WgPublicKey) -> Result<Vec<Session>> {
         let sessions = self
             .inner
             .lock()
             .unwrap()
             .sessions
             .values()
-            .filter(|s| s.device_id == device_id)
+            .filter(|s| s.device_pubkey == *device_pubkey)
             .cloned()
             .collect();
         Ok(sessions)
@@ -529,6 +532,10 @@ mod tests {
     use crate::peers::{DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerRegistry};
     use moto_wgtunnel_types::{DerpNode, DerpRegion, WgPrivateKey};
 
+    fn generate_public_key() -> WgPublicKey {
+        WgPrivateKey::generate().public_key()
+    }
+
     fn create_registry() -> PeerRegistry<InMemoryPeerStore, InMemoryStore> {
         let ipam_store = InMemoryStore::new();
         let peer_store = InMemoryPeerStore::new();
@@ -538,10 +545,6 @@ mod tests {
 
     fn create_manager() -> SessionManager<InMemorySessionStore> {
         SessionManager::new(InMemorySessionStore::new())
-    }
-
-    fn generate_public_key() -> WgPublicKey {
-        WgPrivateKey::generate().public_key()
     }
 
     fn create_derp_map() -> DerpMap {
@@ -557,11 +560,10 @@ mod tests {
         let derp_map = create_derp_map();
 
         // Register device and garage
-        let device_id = Uuid::now_v7();
+        let device_key = generate_public_key();
         let device = registry
             .register_device(DeviceRegistration {
-                device_id,
-                public_key: generate_public_key(),
+                public_key: device_key.clone(),
                 device_name: None,
             })
             .await
@@ -579,7 +581,7 @@ mod tests {
         // Create session
         let request = CreateSessionRequest {
             garage_id: "test-garage".to_string(),
-            device_id,
+            device_pubkey: device_key,
             ttl_seconds: Some(3600),
         };
 
@@ -601,11 +603,10 @@ mod tests {
         let manager = create_manager();
         let derp_map = create_derp_map();
 
-        let device_id = Uuid::now_v7();
+        let device_key = generate_public_key();
         let device = registry
             .register_device(DeviceRegistration {
-                device_id,
-                public_key: generate_public_key(),
+                public_key: device_key.clone(),
                 device_name: None,
             })
             .await
@@ -622,7 +623,7 @@ mod tests {
 
         let request = CreateSessionRequest {
             garage_id: "test-garage".to_string(),
-            device_id,
+            device_pubkey: device_key,
             ttl_seconds: None,
         };
 
@@ -644,11 +645,10 @@ mod tests {
         let manager = create_manager();
         let derp_map = create_derp_map();
 
-        let device_id = Uuid::now_v7();
+        let device_key = generate_public_key();
         let device = registry
             .register_device(DeviceRegistration {
-                device_id,
-                public_key: generate_public_key(),
+                public_key: device_key.clone(),
                 device_name: None,
             })
             .await
@@ -669,7 +669,7 @@ mod tests {
         // Create session
         let request = CreateSessionRequest {
             garage_id: "test-garage".to_string(),
-            device_id,
+            device_pubkey: device_key.clone(),
             ttl_seconds: None,
         };
 
@@ -682,7 +682,7 @@ mod tests {
         let session = manager.get_session(&response.session_id).unwrap().unwrap();
         assert_eq!(session.session_id, response.session_id);
         assert_eq!(session.garage_id, "test-garage");
-        assert_eq!(session.device_id, device_id);
+        assert_eq!(session.device_pubkey, device_key);
     }
 
     #[tokio::test]
@@ -691,11 +691,10 @@ mod tests {
         let manager = create_manager();
         let derp_map = create_derp_map();
 
-        let device_id = Uuid::now_v7();
+        let device_key = generate_public_key();
         let device = registry
             .register_device(DeviceRegistration {
-                device_id,
-                public_key: generate_public_key(),
+                public_key: device_key.clone(),
                 device_name: None,
             })
             .await
@@ -712,7 +711,7 @@ mod tests {
 
         let request = CreateSessionRequest {
             garage_id: "test-garage".to_string(),
-            device_id,
+            device_pubkey: device_key,
             ttl_seconds: None,
         };
 
@@ -739,11 +738,10 @@ mod tests {
         let manager = create_manager();
         let derp_map = create_derp_map();
 
-        let device_id = Uuid::now_v7();
+        let device_key = generate_public_key();
         let device = registry
             .register_device(DeviceRegistration {
-                device_id,
-                public_key: generate_public_key(),
+                public_key: device_key.clone(),
                 device_name: None,
             })
             .await
@@ -762,7 +760,7 @@ mod tests {
 
             let request = CreateSessionRequest {
                 garage_id: format!("garage-{i}"),
-                device_id,
+                device_pubkey: device_key.clone(),
                 ttl_seconds: Some(3600),
             };
 
@@ -772,7 +770,7 @@ mod tests {
                 .unwrap();
         }
 
-        let sessions = manager.list_sessions(device_id).unwrap();
+        let sessions = manager.list_sessions(&device_key).unwrap();
         assert_eq!(sessions.len(), 3);
     }
 
@@ -793,11 +791,10 @@ mod tests {
 
         // Create sessions from multiple devices
         for _ in 0..3 {
-            let device_id = Uuid::now_v7();
+            let device_key = generate_public_key();
             let device = registry
                 .register_device(DeviceRegistration {
-                    device_id,
-                    public_key: generate_public_key(),
+                    public_key: device_key.clone(),
                     device_name: None,
                 })
                 .await
@@ -805,7 +802,7 @@ mod tests {
 
             let request = CreateSessionRequest {
                 garage_id: "test-garage".to_string(),
-                device_id,
+                device_pubkey: device_key,
                 ttl_seconds: Some(3600),
             };
 
@@ -836,11 +833,10 @@ mod tests {
 
         // Create sessions
         for _ in 0..3 {
-            let device_id = Uuid::now_v7();
+            let device_key = generate_public_key();
             let device = registry
                 .register_device(DeviceRegistration {
-                    device_id,
-                    public_key: generate_public_key(),
+                    public_key: device_key.clone(),
                     device_name: None,
                 })
                 .await
@@ -848,7 +844,7 @@ mod tests {
 
             let request = CreateSessionRequest {
                 garage_id: "test-garage".to_string(),
-                device_id,
+                device_pubkey: device_key,
                 ttl_seconds: Some(3600),
             };
 
@@ -876,7 +872,7 @@ mod tests {
             session_id: "sess_test".to_string(),
             garage_id: "garage".to_string(),
             garage_name: "garage".to_string(),
-            device_id: Uuid::now_v7(),
+            device_pubkey: generate_public_key(),
             created_at: now,
             expires_at: now + Duration::hours(1),
         };
@@ -888,7 +884,7 @@ mod tests {
             session_id: "sess_test".to_string(),
             garage_id: "garage".to_string(),
             garage_name: "garage".to_string(),
-            device_id: Uuid::now_v7(),
+            device_pubkey: generate_public_key(),
             created_at: now - Duration::hours(2),
             expires_at: now - Duration::hours(1),
         };
@@ -902,11 +898,10 @@ mod tests {
         let manager = create_manager();
         let derp_map = create_derp_map();
 
-        let device_id = Uuid::now_v7();
+        let device_key = generate_public_key();
         let device = registry
             .register_device(DeviceRegistration {
-                device_id,
-                public_key: generate_public_key(),
+                public_key: device_key.clone(),
                 device_name: None,
             })
             .await
@@ -924,7 +919,7 @@ mod tests {
         // Create an active session
         let request = CreateSessionRequest {
             garage_id: "test-garage".to_string(),
-            device_id,
+            device_pubkey: device_key.clone(),
             ttl_seconds: Some(3600),
         };
         let active = manager
@@ -937,7 +932,7 @@ mod tests {
             session_id: "sess_expired".to_string(),
             garage_id: "test-garage".to_string(),
             garage_name: "test-garage".to_string(),
-            device_id,
+            device_pubkey: device_key,
             created_at: Utc::now() - Duration::hours(5),
             expires_at: Utc::now() - Duration::hours(1),
         };
@@ -962,7 +957,7 @@ mod tests {
     fn create_session_request_serde() {
         let request = CreateSessionRequest {
             garage_id: "test-garage".to_string(),
-            device_id: Uuid::now_v7(),
+            device_pubkey: generate_public_key(),
             ttl_seconds: Some(3600),
         };
 
@@ -970,7 +965,7 @@ mod tests {
         let parsed: CreateSessionRequest = serde_json::from_str(&json).unwrap();
 
         assert_eq!(request.garage_id, parsed.garage_id);
-        assert_eq!(request.device_id, parsed.device_id);
+        assert_eq!(request.device_pubkey, parsed.device_pubkey);
         assert_eq!(request.ttl_seconds, parsed.ttl_seconds);
     }
 
@@ -979,7 +974,7 @@ mod tests {
         // TTL should be omitted when None
         let request = CreateSessionRequest {
             garage_id: "test-garage".to_string(),
-            device_id: Uuid::now_v7(),
+            device_pubkey: generate_public_key(),
             ttl_seconds: None,
         };
 
@@ -993,7 +988,7 @@ mod tests {
             session_id: "sess_test123".to_string(),
             garage_id: "test-garage".to_string(),
             garage_name: "test-garage".to_string(),
-            device_id: Uuid::now_v7(),
+            device_pubkey: generate_public_key(),
             created_at: Utc::now(),
             expires_at: Utc::now() + Duration::hours(1),
         };
@@ -1003,6 +998,6 @@ mod tests {
 
         assert_eq!(session.session_id, parsed.session_id);
         assert_eq!(session.garage_id, parsed.garage_id);
-        assert_eq!(session.device_id, parsed.device_id);
+        assert_eq!(session.device_pubkey, parsed.device_pubkey);
     }
 }

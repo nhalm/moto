@@ -50,13 +50,14 @@ pub struct RegisterDeviceRequest {
 }
 
 /// Response for device registration.
+///
+/// The WireGuard public key IS the device identity (Cloudflare WARP model).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceResponse {
-    /// Unique device identifier.
-    pub device_id: Uuid,
-    /// Device's `WireGuard` public key.
+    /// Device's `WireGuard` public key (IS the device identity).
     pub public_key: WgPublicKey,
     /// Assigned overlay IP address.
+    #[serde(rename = "assigned_ip")]
     pub overlay_ip: OverlayIp,
     /// Optional human-readable device name.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -66,7 +67,6 @@ pub struct DeviceResponse {
 impl From<RegisteredDevice> for DeviceResponse {
     fn from(d: RegisteredDevice) -> Self {
         Self {
-            device_id: d.device_id,
             public_key: d.public_key,
             overlay_ip: d.overlay_ip,
             device_name: d.device_name,
@@ -78,9 +78,9 @@ impl From<RegisteredDevice> for DeviceResponse {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateSessionRequest {
     /// Garage to connect to (name or ID).
-    pub garage_id: String,
-    /// Device requesting the connection.
-    pub device_id: Uuid,
+    pub garage_id: Uuid,
+    /// Device requesting the connection (WireGuard public key IS the device identity).
+    pub device_pubkey: WgPublicKey,
     /// Optional session TTL in seconds. Defaults to garage TTL or 4 hours.
     pub ttl_seconds: Option<u32>,
 }
@@ -128,6 +128,11 @@ pub struct SessionInfo {
     pub garage_id: String,
     /// Human-readable garage name.
     pub garage_name: String,
+    /// Device public key (WireGuard public key IS the device identity).
+    pub device_pubkey: WgPublicKey,
+    /// Optional device name for display.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_name: Option<String>,
     /// When this session was created.
     pub created_at: DateTime<Utc>,
     /// When this session expires.
@@ -140,6 +145,8 @@ impl From<Session> for SessionInfo {
             session_id: s.session_id,
             garage_id: s.garage_id,
             garage_name: s.garage_name,
+            device_pubkey: s.device_pubkey,
+            device_name: None, // Would need to look up from device registry
             created_at: s.created_at,
             expires_at: s.expires_at,
         }
@@ -272,6 +279,9 @@ fn extract_owner(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiErr
 /// Register a client device.
 ///
 /// POST /api/v1/wg/devices
+///
+/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// Re-registration with the same key is idempotent.
 async fn register_device(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -279,11 +289,8 @@ async fn register_device(
 ) -> impl IntoResponse {
     let _owner = extract_owner(&headers)?;
 
-    // Generate a device ID for new registrations
-    let device_id = Uuid::now_v7();
-
+    // Public key IS the device identity - no separate device_id needed
     let registration = DeviceRegistration {
-        device_id,
         public_key: req.public_key,
         device_name: req.device_name,
     };
@@ -311,17 +318,30 @@ async fn register_device(
 
 /// Get device info.
 ///
-/// GET /api/v1/wg/devices/{id}
+/// GET /api/v1/wg/devices/{public_key}
+///
+/// Note: Public key must be URL-encoded in the path.
 async fn get_device(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(device_id): Path<Uuid>,
+    Path(public_key_base64): Path<String>,
 ) -> impl IntoResponse {
     let _owner = extract_owner(&headers)?;
 
+    // Parse the public key from base64
+    let public_key = WgPublicKey::from_base64(&public_key_base64).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new(
+                "INVALID_PUBLIC_KEY",
+                "Invalid public key format",
+            )),
+        )
+    })?;
+
     // Look up the device in the peer registry
-    let device = state.peer_registry.get_device(device_id).map_err(|e| {
-        tracing::error!(error = %e, device_id = %device_id, "Failed to get device");
+    let device = state.peer_registry.get_device(&public_key).map_err(|e| {
+        tracing::error!(error = %e, public_key = %public_key_base64, "Failed to get device");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError::new(
@@ -337,7 +357,7 @@ async fn get_device(
                 StatusCode::NOT_FOUND,
                 Json(ApiError::new(
                     error_codes::DEVICE_NOT_FOUND,
-                    format!("Device '{device_id}' not found"),
+                    format!("Device with public key '{}' not found", public_key_base64),
                 )),
             ))
         },
@@ -358,12 +378,12 @@ async fn create_session(
 ) -> impl IntoResponse {
     let _owner = extract_owner(&headers)?;
 
-    // Look up the device
+    // Look up the device by public key (public key IS the device identity)
     let device = state
         .peer_registry
-        .get_device(req.device_id)
+        .get_device(&req.device_pubkey)
         .map_err(|e| {
-            tracing::error!(error = %e, device_id = %req.device_id, "Failed to get device");
+            tracing::error!(error = %e, device_pubkey = %req.device_pubkey.to_base64(), "Failed to get device");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ApiError::new(
@@ -377,15 +397,16 @@ async fn create_session(
                 StatusCode::NOT_FOUND,
                 Json(ApiError::new(
                     error_codes::DEVICE_NOT_FOUND,
-                    format!("Device '{}' not found", req.device_id),
+                    format!("Device with public key '{}' not found", req.device_pubkey.to_base64()),
                 )),
             )
         })?;
 
-    // Look up the garage
+    // Look up the garage by ID
+    let garage_id_str = req.garage_id.to_string();
     let garage = state
         .peer_registry
-        .get_garage(&req.garage_id)
+        .get_garage(&garage_id_str)
         .map_err(|e| {
             tracing::error!(error = %e, garage_id = %req.garage_id, "Failed to get garage");
             (
@@ -423,8 +444,8 @@ async fn create_session(
 
     // Create the session
     let wg_request = WgCreateSessionRequest {
-        garage_id: req.garage_id.clone(),
-        device_id: req.device_id,
+        garage_id: garage_id_str,
+        device_pubkey: req.device_pubkey,
         ttl_seconds: req.ttl_seconds,
     };
 
@@ -682,7 +703,7 @@ async fn handle_peers_socket(socket: WebSocket, garage_id: String, state: AppSta
     // Send current peers (sessions) to the garage on connect
     if let Ok(sessions) = state.session_manager.list_sessions_for_garage(&garage_id) {
         for session in sessions {
-            if let Ok(Some(device)) = state.peer_registry.get_device(session.device_id) {
+            if let Ok(Some(device)) = state.peer_registry.get_device(&session.device_pubkey) {
                 let event = PeerEvent::add(device.public_key, device.overlay_ip);
                 if let Ok(json) = event.to_json() {
                     if sender.send(Message::Text(json.into())).await.is_err() {
@@ -758,7 +779,7 @@ async fn handle_peers_socket(socket: WebSocket, garage_id: String, state: AppSta
 ///
 /// Includes:
 /// - `POST /api/v1/wg/devices` - Register client device
-/// - `GET /api/v1/wg/devices/{id}` - Get device info
+/// - `GET /api/v1/wg/devices/{public_key}` - Get device info (public key is URL-encoded)
 /// - `POST /api/v1/wg/sessions` - Create tunnel session
 /// - `GET /api/v1/wg/sessions` - List active sessions
 /// - `DELETE /api/v1/wg/sessions/{id}` - Close session
@@ -770,7 +791,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         // Device endpoints
         .route("/api/v1/wg/devices", post(register_device))
-        .route("/api/v1/wg/devices/{id}", get(get_device))
+        .route("/api/v1/wg/devices/{public_key}", get(get_device))
         // Session endpoints
         .route(
             "/api/v1/wg/sessions",
@@ -820,30 +841,34 @@ mod tests {
 
     #[test]
     fn create_session_request_deserialize() {
-        let device_id = Uuid::now_v7();
+        let garage_id = Uuid::now_v7();
+        let device_key = test_public_key();
         let json = format!(
             r#"{{
-                "garage_id": "bold-mongoose",
-                "device_id": "{}",
+                "garage_id": "{}",
+                "device_pubkey": "{}",
                 "ttl_seconds": 3600
             }}"#,
-            device_id
+            garage_id,
+            device_key.to_base64()
         );
         let req: CreateSessionRequest = serde_json::from_str(&json).unwrap();
-        assert_eq!(req.garage_id, "bold-mongoose");
-        assert_eq!(req.device_id, device_id);
+        assert_eq!(req.garage_id, garage_id);
+        assert_eq!(req.device_pubkey, device_key);
         assert_eq!(req.ttl_seconds, Some(3600));
     }
 
     #[test]
     fn create_session_request_optional_ttl() {
-        let device_id = Uuid::now_v7();
+        let garage_id = Uuid::now_v7();
+        let device_key = test_public_key();
         let json = format!(
             r#"{{
-                "garage_id": "bold-mongoose",
-                "device_id": "{}"
+                "garage_id": "{}",
+                "device_pubkey": "{}"
             }}"#,
-            device_id
+            garage_id,
+            device_key.to_base64()
         );
         let req: CreateSessionRequest = serde_json::from_str(&json).unwrap();
         assert!(req.ttl_seconds.is_none());
@@ -890,14 +915,13 @@ mod tests {
     fn device_response_serialize() {
         let key = test_public_key();
         let response = DeviceResponse {
-            device_id: Uuid::nil(),
             public_key: key,
             overlay_ip: OverlayIp::client(1),
             device_name: Some("test".to_string()),
         };
         let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains("device_id"));
-        assert!(json.contains("overlay_ip"));
+        assert!(json.contains("public_key"));
+        assert!(json.contains("assigned_ip")); // Note: renamed from overlay_ip
     }
 
     #[test]
@@ -1068,12 +1092,20 @@ mod tests {
             let state = create_test_state();
             let app = router().with_state(state);
 
-            let device_id = Uuid::now_v7();
+            // Use a non-existent public key (base64 is URL-safe except for + and /)
+            // We'll percent-encode the key manually for the test
+            let nonexistent_key = test_public_key();
+            let key_base64 = nonexistent_key.to_base64();
+            // URL-encode the base64 string (replace + with %2B, / with %2F, = with %3D)
+            let key_encoded = key_base64
+                .replace('+', "%2B")
+                .replace('/', "%2F")
+                .replace('=', "%3D");
             let response = app
                 .oneshot(
                     Request::builder()
                         .method("GET")
-                        .uri(format!("/api/v1/wg/devices/{device_id}"))
+                        .uri(format!("/api/v1/wg/devices/{}", key_encoded))
                         .header(header::AUTHORIZATION, "Bearer testuser")
                         .body(Body::empty())
                         .unwrap(),
@@ -1119,10 +1151,10 @@ mod tests {
             let registered: DeviceResponse = serde_json::from_slice(&body).unwrap();
 
             // Now get the device - use the peer_registry directly since we need state
-            let device = peer_registry.get_device(registered.device_id).unwrap();
+            let device = peer_registry.get_device(&registered.public_key).unwrap();
             assert!(device.is_some());
             let device = device.unwrap();
-            assert_eq!(device.device_id, registered.device_id);
+            assert_eq!(device.public_key, registered.public_key);
             assert_eq!(device.overlay_ip, registered.overlay_ip);
         }
 
@@ -1131,10 +1163,12 @@ mod tests {
             let state = create_test_state();
             let app = router().with_state(state);
 
-            let device_id = Uuid::now_v7();
+            // Use an unregistered device public key
+            let device_key = test_public_key();
+            let garage_id = Uuid::now_v7();
             let body = serde_json::json!({
-                "garage_id": "test-garage",
-                "device_id": device_id.to_string()
+                "garage_id": garage_id.to_string(),
+                "device_pubkey": device_key.to_base64()
             });
 
             let response = app
@@ -1161,19 +1195,18 @@ mod tests {
 
             // Register a device first
             let device_key = test_public_key();
-            let device_id = Uuid::now_v7();
             peer_registry
                 .register_device(moto_club_wg::DeviceRegistration {
-                    device_id,
-                    public_key: device_key,
+                    public_key: device_key.clone(),
                     device_name: Some("test-device".to_string()),
                 })
                 .await
                 .unwrap();
 
+            let nonexistent_garage_id = Uuid::now_v7();
             let body = serde_json::json!({
-                "garage_id": "nonexistent-garage",
-                "device_id": device_id.to_string()
+                "garage_id": nonexistent_garage_id.to_string(),
+                "device_pubkey": device_key.to_base64()
             });
 
             let response = app
@@ -1200,21 +1233,20 @@ mod tests {
 
             // Register a device
             let device_key = test_public_key();
-            let device_id = Uuid::now_v7();
             peer_registry
                 .register_device(moto_club_wg::DeviceRegistration {
-                    device_id,
-                    public_key: device_key,
+                    public_key: device_key.clone(),
                     device_name: Some("test-device".to_string()),
                 })
                 .await
                 .unwrap();
 
-            // Register a garage
+            // Register a garage (using UUID as garage_id)
+            let garage_id = Uuid::now_v7();
             let garage_key = test_public_key();
             peer_registry
                 .register_garage(moto_club_wg::GarageRegistration {
-                    garage_id: "test-garage".to_string(),
+                    garage_id: garage_id.to_string(),
                     public_key: garage_key,
                     endpoints: vec!["10.0.0.1:51820".parse().unwrap()],
                 })
@@ -1222,8 +1254,8 @@ mod tests {
                 .unwrap();
 
             let body = serde_json::json!({
-                "garage_id": "test-garage",
-                "device_id": device_id.to_string(),
+                "garage_id": garage_id.to_string(),
+                "device_pubkey": device_key.to_base64(),
                 "ttl_seconds": 3600
             });
 
@@ -1318,20 +1350,19 @@ mod tests {
 
             // Register device and garage
             let device_key = test_public_key();
-            let device_id = Uuid::now_v7();
             peer_registry
                 .register_device(moto_club_wg::DeviceRegistration {
-                    device_id,
-                    public_key: device_key,
+                    public_key: device_key.clone(),
                     device_name: None,
                 })
                 .await
                 .unwrap();
 
+            let garage_id = Uuid::now_v7();
             let garage_key = test_public_key();
             peer_registry
                 .register_garage(moto_club_wg::GarageRegistration {
-                    garage_id: "test-garage".to_string(),
+                    garage_id: garage_id.to_string(),
                     public_key: garage_key,
                     endpoints: vec![],
                 })
@@ -1340,8 +1371,8 @@ mod tests {
 
             // Create session
             let create_body = serde_json::json!({
-                "garage_id": "test-garage",
-                "device_id": device_id.to_string()
+                "garage_id": garage_id.to_string(),
+                "device_pubkey": device_key.to_base64()
             });
 
             let response = app

@@ -7,12 +7,13 @@
 //!
 //! # Architecture
 //!
-//! Peer registration is the first step in establishing a tunnel:
+//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//! No separate device ID is needed. Peer registration is the first step in establishing a tunnel:
 //!
 //! ```text
 //! Device Registration:
-//!   POST /api/v1/wg/devices { device_id, public_key }
-//!   → { device_id, assigned_ip }
+//!   POST /api/v1/wg/devices { public_key, device_name }
+//!   → { public_key, assigned_ip }
 //!
 //! Garage Registration:
 //!   POST /api/v1/wg/garages { garage_id, public_key, endpoints }
@@ -25,7 +26,6 @@
 //! use moto_club_wg::peers::{PeerRegistry, InMemoryPeerStore, DeviceRegistration, GarageRegistration};
 //! use moto_club_wg::ipam::{Ipam, InMemoryStore};
 //! use moto_wgtunnel_types::keys::WgPrivateKey;
-//! use uuid::Uuid;
 //!
 //! # tokio_test::block_on(async {
 //! // Create stores
@@ -36,13 +36,11 @@
 //! let ipam = Ipam::new(ipam_store);
 //! let registry = PeerRegistry::new(peer_store, ipam);
 //!
-//! // Register a device
-//! let device_id = Uuid::now_v7();
+//! // Register a device - public key IS the device identity
 //! let private_key = WgPrivateKey::generate();
 //! let public_key = private_key.public_key();
 //!
 //! let registration = DeviceRegistration {
-//!     device_id,
 //!     public_key: public_key.clone(),
 //!     device_name: Some("macbook-pro".to_string()),
 //! };
@@ -57,7 +55,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Mutex;
-use uuid::Uuid;
 
 use crate::ipam::{Ipam, IpamStore};
 
@@ -72,9 +69,9 @@ pub enum PeerError {
     #[error("storage error: {0}")]
     Storage(String),
 
-    /// Device not found.
+    /// Device not found (identified by WireGuard public key).
     #[error("device not found: {0}")]
-    DeviceNotFound(Uuid),
+    DeviceNotFound(String),
 
     /// Garage not found.
     #[error("garage not found: {0}")]
@@ -85,12 +82,12 @@ pub enum PeerError {
 pub type Result<T> = std::result::Result<T, PeerError>;
 
 /// Request to register a device.
+///
+/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// No separate device ID is needed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceRegistration {
-    /// Unique device identifier.
-    pub device_id: Uuid,
-
-    /// Device's `WireGuard` public key.
+    /// Device's `WireGuard` public key (IS the device identity).
     pub public_key: WgPublicKey,
 
     /// Optional human-readable device name (e.g., "macbook-pro").
@@ -99,12 +96,11 @@ pub struct DeviceRegistration {
 }
 
 /// Registered device information.
+///
+/// The WireGuard public key IS the device identity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisteredDevice {
-    /// Unique device identifier.
-    pub device_id: Uuid,
-
-    /// Device's `WireGuard` public key.
+    /// Device's `WireGuard` public key (IS the device identity).
     pub public_key: WgPublicKey,
 
     /// Assigned overlay IP address.
@@ -150,12 +146,14 @@ pub struct RegisteredGarage {
 /// This trait abstracts the persistence layer, allowing different backends
 /// for testing vs production.
 pub trait PeerStore: Send + Sync {
-    /// Get a registered device by ID.
+    /// Get a registered device by public key.
+    ///
+    /// The WireGuard public key IS the device identity.
     ///
     /// # Errors
     ///
     /// Returns error if the storage operation fails.
-    fn get_device(&self, device_id: Uuid) -> Result<Option<RegisteredDevice>>;
+    fn get_device(&self, public_key: &WgPublicKey) -> Result<Option<RegisteredDevice>>;
 
     /// Store a device registration.
     ///
@@ -210,29 +208,28 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
 
     /// Register a device.
     ///
-    /// If the device is already registered, returns the existing registration
-    /// with the updated public key.
+    /// The WireGuard public key IS the device identity (Cloudflare WARP model).
+    /// If the device (public key) is already registered, returns the existing registration.
+    /// Re-registration is idempotent.
     ///
     /// # Errors
     ///
     /// Returns error if storage or IPAM operations fail.
     pub async fn register_device(&self, req: DeviceRegistration) -> Result<RegisteredDevice> {
-        // Check if device is already registered
-        if let Some(mut existing) = self.store.get_device(req.device_id)? {
-            // Update public key if it changed (key rotation)
-            if existing.public_key != req.public_key {
-                existing.public_key = req.public_key;
+        // Check if device is already registered (by public key)
+        if let Some(mut existing) = self.store.get_device(&req.public_key)? {
+            // Update device name if it changed (idempotent)
+            if existing.device_name != req.device_name {
                 existing.device_name = req.device_name;
                 self.store.set_device(existing.clone())?;
             }
             return Ok(existing);
         }
 
-        // Allocate IP for new device
-        let overlay_ip = self.ipam.allocate_client(req.device_id).await?;
+        // Allocate IP for new device (keyed by public key)
+        let overlay_ip = self.ipam.allocate_client(&req.public_key).await?;
 
         let device = RegisteredDevice {
-            device_id: req.device_id,
             public_key: req.public_key,
             overlay_ip,
             device_name: req.device_name,
@@ -242,13 +239,15 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
         Ok(device)
     }
 
-    /// Get a registered device.
+    /// Get a registered device by public key.
+    ///
+    /// The WireGuard public key IS the device identity.
     ///
     /// # Errors
     ///
     /// Returns error if storage operation fails.
-    pub fn get_device(&self, device_id: Uuid) -> Result<Option<RegisteredDevice>> {
-        self.store.get_device(device_id)
+    pub fn get_device(&self, public_key: &WgPublicKey) -> Result<Option<RegisteredDevice>> {
+        self.store.get_device(public_key)
     }
 
     /// Register a garage.
@@ -311,7 +310,9 @@ pub struct InMemoryPeerStore {
 }
 
 struct InMemoryPeerStoreInner {
-    devices: HashMap<Uuid, RegisteredDevice>,
+    /// Devices keyed by public key (base64 encoded).
+    /// WireGuard public key IS the device identity.
+    devices: HashMap<String, RegisteredDevice>,
     garages: HashMap<String, RegisteredGarage>,
 }
 
@@ -335,9 +336,9 @@ impl Default for InMemoryPeerStore {
 }
 
 impl PeerStore for InMemoryPeerStore {
-    fn get_device(&self, device_id: Uuid) -> Result<Option<RegisteredDevice>> {
+    fn get_device(&self, public_key: &WgPublicKey) -> Result<Option<RegisteredDevice>> {
         let inner = self.inner.lock().unwrap();
-        Ok(inner.devices.get(&device_id).cloned())
+        Ok(inner.devices.get(&public_key.to_base64()).cloned())
     }
 
     fn set_device(&self, device: RegisteredDevice) -> Result<()> {
@@ -345,7 +346,7 @@ impl PeerStore for InMemoryPeerStore {
             .lock()
             .unwrap()
             .devices
-            .insert(device.device_id, device);
+            .insert(device.public_key.to_base64(), device);
         Ok(())
     }
 
@@ -393,18 +394,15 @@ mod tests {
     #[tokio::test]
     async fn register_device() {
         let registry = create_registry();
-        let device_id = Uuid::now_v7();
         let public_key = generate_public_key();
 
         let registration = DeviceRegistration {
-            device_id,
             public_key: public_key.clone(),
             device_name: Some("test-device".to_string()),
         };
 
         let device = registry.register_device(registration).await.unwrap();
 
-        assert_eq!(device.device_id, device_id);
         assert_eq!(device.public_key, public_key);
         assert!(device.overlay_ip.is_client());
         assert_eq!(device.device_name, Some("test-device".to_string()));
@@ -413,11 +411,9 @@ mod tests {
     #[tokio::test]
     async fn device_registration_is_idempotent() {
         let registry = create_registry();
-        let device_id = Uuid::now_v7();
         let public_key = generate_public_key();
 
         let registration = DeviceRegistration {
-            device_id,
             public_key: public_key.clone(),
             device_name: None,
         };
@@ -428,60 +424,56 @@ mod tests {
             .unwrap();
         let device2 = registry.register_device(registration).await.unwrap();
 
-        // Same device gets same IP
+        // Same public key gets same IP (idempotent)
         assert_eq!(device1.overlay_ip, device2.overlay_ip);
         assert_eq!(device1.public_key, device2.public_key);
     }
 
     #[tokio::test]
-    async fn device_key_rotation() {
+    async fn new_key_is_new_device() {
+        // Per spec: "Re-keying (new WG keypair) = new device registration, new IP"
         let registry = create_registry();
-        let device_id = Uuid::now_v7();
-        let old_key = generate_public_key();
-        let new_key = generate_public_key();
+        let key1 = generate_public_key();
+        let key2 = generate_public_key();
 
-        // Register with old key
+        // Register with first key
         let registration1 = DeviceRegistration {
-            device_id,
-            public_key: old_key.clone(),
+            public_key: key1.clone(),
             device_name: None,
         };
         let device1 = registry.register_device(registration1).await.unwrap();
 
-        // Re-register with new key
+        // Register with new key (this is a NEW device)
         let registration2 = DeviceRegistration {
-            device_id,
-            public_key: new_key.clone(),
+            public_key: key2.clone(),
             device_name: None,
         };
         let device2 = registry.register_device(registration2).await.unwrap();
 
-        // IP stays the same
-        assert_eq!(device1.overlay_ip, device2.overlay_ip);
-        // Key is updated
-        assert_eq!(device2.public_key, new_key);
+        // Different keys = different devices = different IPs
+        assert_ne!(device1.overlay_ip, device2.overlay_ip);
+        assert_ne!(device1.public_key, device2.public_key);
     }
 
     #[tokio::test]
     async fn get_device() {
         let registry = create_registry();
-        let device_id = Uuid::now_v7();
+        let public_key = generate_public_key();
 
         // Not registered yet
-        assert!(registry.get_device(device_id).unwrap().is_none());
+        assert!(registry.get_device(&public_key).unwrap().is_none());
 
         // Register
         let registration = DeviceRegistration {
-            device_id,
-            public_key: generate_public_key(),
+            public_key: public_key.clone(),
             device_name: None,
         };
         registry.register_device(registration).await.unwrap();
 
         // Now found
-        let device = registry.get_device(device_id).unwrap();
+        let device = registry.get_device(&public_key).unwrap();
         assert!(device.is_some());
-        assert_eq!(device.unwrap().device_id, device_id);
+        assert_eq!(device.unwrap().public_key, public_key);
     }
 
     #[tokio::test]
@@ -598,7 +590,6 @@ mod tests {
     #[test]
     fn device_registration_serde() {
         let registration = DeviceRegistration {
-            device_id: Uuid::now_v7(),
             public_key: generate_public_key(),
             device_name: Some("test".to_string()),
         };
@@ -606,7 +597,6 @@ mod tests {
         let json = serde_json::to_string(&registration).unwrap();
         let parsed: DeviceRegistration = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(registration.device_id, parsed.device_id);
         assert_eq!(registration.public_key, parsed.public_key);
         assert_eq!(registration.device_name, parsed.device_name);
     }
