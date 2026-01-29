@@ -11,7 +11,7 @@ use uuid::Uuid;
 /// Garage status in the database.
 ///
 /// Maps to the `status` TEXT column in the `garages` table.
-/// Note: `Attached` status was removed in spec v1.1 (no mechanism to detect WireGuard connection).
+/// Note: `Attached` status was removed in spec v1.1 (no mechanism to detect `WireGuard` connection).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
@@ -149,7 +149,7 @@ pub struct Garage {
 /// A `WireGuard` device (client device) from the database.
 ///
 /// Maps to the `wg_devices` table schema.
-/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromRow)]
 pub struct WgDevice {
     /// `WireGuard` public key (primary key / device identity).
@@ -158,7 +158,7 @@ pub struct WgDevice {
     pub owner: String,
     /// Optional friendly name for the device.
     pub device_name: Option<String>,
-    /// Assigned overlay IP address (fd00:moto:2::xxx).
+    /// Assigned overlay IP address (`fd00:moto:2::xxx`).
     pub assigned_ip: String,
     /// When the device was registered.
     pub created_at: DateTime<Utc>,
@@ -203,14 +203,14 @@ pub struct UserSshKey {
 /// A garage `WireGuard` registration from the database.
 ///
 /// Maps to the `wg_garages` table schema.
-/// Created when a garage pod registers its WireGuard endpoint on startup.
+/// Created when a garage pod registers its `WireGuard` endpoint on startup.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromRow)]
 pub struct WgGarage {
     /// Garage ID (primary key, FK to garages with ON DELETE CASCADE).
     pub garage_id: Uuid,
     /// Garage's `WireGuard` public key.
     pub public_key: String,
-    /// Garage's overlay IP address (fd00:moto:1::xxx).
+    /// Garage's overlay IP address (`fd00:moto:1::xxx`).
     pub assigned_ip: String,
     /// Pod's reachable endpoints.
     pub endpoints: Vec<String>,

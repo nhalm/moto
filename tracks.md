@@ -33,9 +33,9 @@ HOW TO USE THIS FILE:
 - moto-club-db: models updated for spec v1.1 (removed Attached status, WgDevice uses public_key as PK, added WgGarage model, Garage has image field)
 - moto-club-db: wg_devices repository using public_key as primary key (wg_device_repo.rs)
 - moto-club-db: wg_sessions repository with garage_id ON DELETE CASCADE (wg_session_repo.rs)
+- moto-club-db: wg_garages repository with deterministic IP allocation (wg_garage_repo.rs)
 
 **Remaining:
-- moto-club-db: wg_garages repository (garage WireGuard registration)
 - moto-club-db: user_ssh_keys repository
 - moto-club-api: Wire up PostgreSQL storage (replace in-memory registries)
 - moto-club-api: K8s ServiceAccount token validation for garage endpoints
