@@ -275,8 +275,6 @@ pub mod error_codes {
     pub const DEVICE_NOT_FOUND: &str = "DEVICE_NOT_FOUND";
     /// `WireGuard` session not found.
     pub const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
-    /// Session has expired.
-    pub const SESSION_EXPIRED: &str = "SESSION_EXPIRED";
     /// Internal server error.
     pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
     /// Kubernetes API error.
