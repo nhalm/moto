@@ -56,9 +56,11 @@ pub struct ExtendTtlRequest {
 /// Query parameters for listing garages.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListGaragesQuery {
+    /// Filter by status (comma-separated). Valid: pending, running, ready, terminated.
+    pub status: Option<String>,
     /// Include terminated garages (default: false).
     #[serde(default)]
-    pub include_terminated: bool,
+    pub all: bool,
 }
 
 /// Response for a garage.
@@ -392,9 +394,24 @@ fn map_garage_service_error(e: GarageServiceError) -> (StatusCode, Json<ApiError
     }
 }
 
+/// Parse a status string into GarageStatus.
+fn parse_status(s: &str) -> Option<GarageStatus> {
+    match s.trim().to_lowercase().as_str() {
+        "pending" => Some(GarageStatus::Pending),
+        "running" => Some(GarageStatus::Running),
+        "ready" => Some(GarageStatus::Ready),
+        "terminated" => Some(GarageStatus::Terminated),
+        _ => None,
+    }
+}
+
 /// List garages for the authenticated owner.
 ///
 /// GET /api/v1/garages
+///
+/// Query parameters per spec lines 295-300:
+/// - `?status=running,ready` - filter by status (comma-separated)
+/// - `?all=true` - include terminated garages (default: false)
 async fn list_garages(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -402,7 +419,29 @@ async fn list_garages(
 ) -> impl IntoResponse {
     let owner = extract_owner(&headers)?;
 
-    let garages = garage_repo::list_by_owner(&state.db_pool, &owner, query.include_terminated)
+    // Parse status filter if provided
+    let status_filter: Option<Vec<GarageStatus>> = if let Some(ref status_str) = query.status {
+        let mut statuses = Vec::new();
+        for s in status_str.split(',') {
+            match parse_status(s) {
+                Some(status) => statuses.push(status),
+                None => {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(ApiError::new(
+                            error_codes::INVALID_STATUS,
+                            format!("Unknown status value: '{}'", s.trim()),
+                        )),
+                    ));
+                }
+            }
+        }
+        Some(statuses)
+    } else {
+        None
+    };
+
+    let garages = garage_repo::list_by_owner(&state.db_pool, &owner, query.all)
         .await
         .map_err(|e| {
             tracing::error!("Database error listing garages: {e}");
@@ -412,8 +451,21 @@ async fn list_garages(
             )
         })?;
 
+    // Apply status filter if provided
+    let filtered_garages: Vec<Garage> = if let Some(statuses) = status_filter {
+        garages
+            .into_iter()
+            .filter(|g| statuses.contains(&g.status))
+            .collect()
+    } else {
+        garages
+    };
+
     let response = ListGaragesResponse {
-        garages: garages.into_iter().map(GarageResponse::from).collect(),
+        garages: filtered_garages
+            .into_iter()
+            .map(GarageResponse::from)
+            .collect(),
     };
 
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
@@ -766,7 +818,33 @@ mod tests {
     #[test]
     fn list_garages_query_defaults() {
         let query: ListGaragesQuery = serde_json::from_str("{}").unwrap();
-        assert!(!query.include_terminated);
+        assert!(!query.all);
+        assert!(query.status.is_none());
+    }
+
+    #[test]
+    fn list_garages_query_with_status() {
+        let query: ListGaragesQuery =
+            serde_json::from_str(r#"{"status": "running,ready", "all": true}"#).unwrap();
+        assert!(query.all);
+        assert_eq!(query.status, Some("running,ready".to_string()));
+    }
+
+    #[test]
+    fn parse_status_valid() {
+        assert_eq!(parse_status("pending"), Some(GarageStatus::Pending));
+        assert_eq!(parse_status("running"), Some(GarageStatus::Running));
+        assert_eq!(parse_status("ready"), Some(GarageStatus::Ready));
+        assert_eq!(parse_status("terminated"), Some(GarageStatus::Terminated));
+        // Case insensitive
+        assert_eq!(parse_status("RUNNING"), Some(GarageStatus::Running));
+        assert_eq!(parse_status(" running "), Some(GarageStatus::Running));
+    }
+
+    #[test]
+    fn parse_status_invalid() {
+        assert_eq!(parse_status("invalid"), None);
+        assert_eq!(parse_status(""), None);
     }
 
     #[test]

@@ -54,6 +54,7 @@ HOW TO USE THIS FILE:
 - moto-club-api: Removed unused SESSION_EXPIRED error code (spec v1.0 changelog)
 - moto-club-api: GET /api/v1/wg/sessions endpoint with ?garage_id and ?all query params per spec lines 514-540
 - moto-club-api: GET /health endpoint includes database, k8s, and keybox checks per spec lines 1153-1179
+- moto-club-api: GET /api/v1/garages query params ?status= and ?all= per spec lines 295-300 (with INVALID_STATUS error code)
 
 **Remaining:**
 (none - moto-club.md v1.1 implementation complete)

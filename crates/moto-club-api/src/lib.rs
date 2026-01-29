@@ -276,6 +276,8 @@ pub mod error_codes {
     pub const GARAGE_EXPIRED: &str = "GARAGE_EXPIRED";
     /// Invalid TTL value.
     pub const INVALID_TTL: &str = "INVALID_TTL";
+    /// Unknown status value in filter.
+    pub const INVALID_STATUS: &str = "INVALID_STATUS";
     /// `WireGuard` device not found.
     pub const DEVICE_NOT_FOUND: &str = "DEVICE_NOT_FOUND";
     /// `WireGuard` session not found.
