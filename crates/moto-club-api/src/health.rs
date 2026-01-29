@@ -116,13 +116,43 @@ pub struct InfoResponse {
     pub name: &'static str,
     /// Server version.
     pub version: &'static str,
+    /// API version.
+    pub api_version: &'static str,
+    /// Build git commit (if available).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git_sha: Option<&'static str>,
+    /// Feature flags.
+    pub features: InfoFeatures,
+}
+
+/// Feature flags for the server info response.
+#[derive(Debug, Clone, Serialize)]
+pub struct InfoFeatures {
+    /// Whether WebSocket streaming is enabled.
+    pub websocket: bool,
+    /// Number of DERP regions available.
+    pub derp_regions: u32,
 }
 
 /// Server info handler.
-async fn info_handler() -> impl IntoResponse {
+#[allow(clippy::cast_possible_truncation)] // DERP region count won't exceed u32::MAX
+async fn info_handler(State(state): State<AppState>) -> impl IntoResponse {
+    // Count DERP regions from the DERP manager
+    let derp_regions = state
+        .derp_manager
+        .region_count()
+        .map(|c| c as u32)
+        .unwrap_or(0);
+
     let response = InfoResponse {
         name: "moto-club",
         version: env!("CARGO_PKG_VERSION"),
+        api_version: "v1",
+        git_sha: option_env!("GIT_SHA"),
+        features: InfoFeatures {
+            websocket: false, // WebSocket streaming deferred to future version
+            derp_regions,
+        },
     };
 
     (StatusCode::OK, Json(response))
@@ -199,10 +229,38 @@ mod tests {
         let response = InfoResponse {
             name: "moto-club",
             version: "0.1.0",
+            api_version: "v1",
+            git_sha: Some("abc1234"),
+            features: InfoFeatures {
+                websocket: false,
+                derp_regions: 1,
+            },
         };
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains(r#""name":"moto-club""#));
         assert!(json.contains(r#""version":"0.1.0""#));
+        assert!(json.contains(r#""api_version":"v1""#));
+        assert!(json.contains(r#""git_sha":"abc1234""#));
+        assert!(json.contains(r#""websocket":false"#));
+        assert!(json.contains(r#""derp_regions":1"#));
+    }
+
+    #[test]
+    fn info_response_without_git_sha() {
+        let response = InfoResponse {
+            name: "moto-club",
+            version: "0.1.0",
+            api_version: "v1",
+            git_sha: None,
+            features: InfoFeatures {
+                websocket: false,
+                derp_regions: 0,
+            },
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(r#""name":"moto-club""#));
+        assert!(!json.contains("git_sha")); // Should be omitted when None
     }
 }
