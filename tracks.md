@@ -87,3 +87,99 @@ HOW TO USE THIS FILE:
 - CI workflow: .github/workflows/containers.yml (future)
 - Image signing: cosign keyless signing in CI (future)
 - SBOM generation: trivy SBOM + cosign attestation (future)
+
+---
+
+## moto-cli.md v0.3
+
+**Status:** Complete
+
+**Implemented:**
+- Global flags: --json/-j, --verbose/-v (counted), --quiet/-q, --context/-c, --help/-h, --version/-V
+- ColorMode: auto/always/never with MOTO_NO_COLOR env var support
+- Configuration: XDG config path, TOML parsing, precedence (CLI > env > config > defaults)
+- moto garage open: --owner, --ttl (duration parsing, min/max validation), --engine, name auto-generation
+- moto garage enter: WireGuard tunnel via moto-cli-wgtunnel, SSH session spawning
+- moto garage logs: --follow/-f, --tail/-n, --since (duration parsing)
+- moto garage list: --context (supports "all" for multi-context), table output with context column
+- moto garage close: --force, confirmation prompt
+- moto bike build: --tag (default: git sha), --push (MOTO_REGISTRY env var), Docker-wrapped Nix
+- moto bike deploy: --image, --replicas, --wait, --wait-timeout, --namespace/-n
+- moto bike list: --namespace/-n, table output
+- moto bike logs: --follow/-f, --tail/-n, --since, --namespace
+- moto cluster init: --force, k3d cluster creation, idempotent, registry setup
+- moto cluster status: API health check, registry health check, JSON output
+- Exit codes: 0 (success), 1 (general), 2 (not found), 3 (invalid input)
+- Actionable error messages with suggestions
+
+**Remaining:**
+(none - moto-cli.md v0.3 implementation complete)
+
+---
+
+## dev-container.md v0.12
+
+**Status:** Complete
+
+**Implemented:**
+- Nix dockerTools.buildLayeredImage with buildEnv wrapper
+- Modular structure: infra/pkgs/moto-garage.nix, infra/modules/{base,dev-tools,ssh,wireguard}.nix
+- Root flake at moto/flake.nix exports moto-garage package
+- Multi-arch via eachDefaultSystem (x86_64-linux, aarch64-linux)
+- Rust 1.85 stable toolchain with extensions (rust-src, rust-analyzer)
+- All Rust tools: cargo-watch, cargo-nextest, cargo-audit, cargo-deny, cargo-edit, cargo-expand, mold, sccache, sqlx-cli
+- System libraries: pkg-config, openssl, postgresql.lib, clang
+- Version control: git, jujutsu, gh
+- Database clients: postgresql, redis
+- General tools: curl, jq, yq, ripgrep, fd, bat, htop, tree
+- Kubernetes: kubectl, k9s, kubernetes-helm
+- Node.js 22.x LTS
+- Connectivity: wireguard-tools, openssh
+- Environment variables: WORKSPACE, CARGO_HOME, CARGO_TARGET_DIR, RUST_BACKTRACE, RUST_LOG, RUSTC_WRAPPER, RUSTFLAGS, NIX_PATH, SSL_CERT_FILE, DO_NOT_TRACK
+- Container config: /bin/bash cmd, /workspace workdir, volumes, port 22 exposed
+- Smoke tests: infra/smoke-test.sh (core tools, env vars, Rust compilation)
+
+**Remaining:**
+(none - dev-container.md v0.12 implementation complete)
+
+---
+
+## local-cluster.md v0.1
+
+**Status:** Complete
+
+**Implemented:**
+- moto cluster init: k3d cluster creation with moto name
+- k3d create args: --api-port 6550, --port 80:80, --port 443:443, --registry-create moto-registry:5000, --disable=traefik
+- Idempotent: returns success if cluster already exists (unless --force)
+- Docker running check
+- Wait for API ready
+- moto cluster status: cluster info, API health, registry health
+- JSON output format with name, type, status, api, registry
+- Status values: running, stopped, not_found
+- Exit codes: 0 running, 1 not running/error
+- --force flag to delete and recreate
+
+**Remaining:**
+(none - local-cluster.md v0.1 implementation complete)
+
+---
+
+## makefile.md v0.5
+
+**Status:** Complete
+
+**Implemented:**
+- Setup targets: install (git hooks)
+- Development targets: build, test, check, fmt, lint, clean, run, fix, ci
+- Container targets: build-garage, test-garage, shell-garage, push-garage, scan-garage, clean-images, clean-nix-cache
+- Bike targets: build-bike, test-bike
+- Registry targets: registry-start, registry-stop
+- Docker-wrapped Nix build (NIX_LINUX_SYSTEM auto-detection)
+- nix-store volume for caching
+- REGISTRY env var support (default: localhost:5000)
+- SHA tagging from git
+- .PHONY declarations for all targets
+
+**Remaining:**
+(none - makefile.md v0.5 implementation complete)
