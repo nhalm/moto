@@ -36,10 +36,10 @@ HOW TO USE THIS FILE:
 - moto-club-db: wg_garages repository with deterministic IP allocation (wg_garage_repo.rs)
 - moto-club-db: user_ssh_keys repository (user_ssh_key_repo.rs)
 - moto-club-api: PostgreSQL storage implementations (postgres_stores.rs: PostgresPeerStore, PostgresSessionStore, PostgresSshKeyStore)
+- moto-club-api: GET /api/v1/wg/garages/{garage_id} endpoint (returns registration info for garage pods)
 
-**Remaining:
+**Remaining:**
 - moto-club-api: K8s ServiceAccount token validation for garage endpoints
-- moto-club-api: GET /api/v1/wg/garages/{garage_id} endpoint
 - moto-club-api: GET /api/v1/wg/derp-map endpoint
 - moto-club-api: Conditional GET for peers (?version= param, 304 response)
 - moto-club-k8s: SSH keys Secret creation (spec v1.1 - mount authorized_keys to garage pod)

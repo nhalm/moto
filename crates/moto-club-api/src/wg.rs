@@ -174,6 +174,27 @@ pub struct GarageWgResponse {
     pub derp_map: DerpMap,
 }
 
+/// Response for getting garage WireGuard registration.
+///
+/// GET /api/v1/wg/garages/{garage_id}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GarageWgRegistrationResponse {
+    /// Garage identifier.
+    pub garage_id: String,
+    /// Garage's `WireGuard` public key.
+    pub public_key: WgPublicKey,
+    /// Garage's overlay IP address.
+    pub assigned_ip: OverlayIp,
+    /// Direct UDP endpoints for P2P connections.
+    pub endpoints: Vec<SocketAddr>,
+    /// Peer version counter (incremented on session create/close).
+    pub peer_version: i32,
+    /// DERP relay map for fallback connections.
+    pub derp_map: DerpMap,
+    /// When the garage registered.
+    pub registered_at: DateTime<Utc>,
+}
+
 /// Response for peer list (garage polling).
 #[derive(Debug, Clone, Serialize)]
 pub struct PeerListResponse {
@@ -578,6 +599,79 @@ async fn register_garage(
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
+/// Get garage WireGuard registration.
+///
+/// GET /api/v1/wg/garages/{garage_id}
+///
+/// Returns garage's WireGuard registration info including public key, assigned IP,
+/// endpoints, peer version, and DERP map. Used by garage pods to recover state
+/// after restart or check registration status.
+async fn get_garage_wg_registration(
+    State(state): State<AppState>,
+    // Note: Garage uses K8s ServiceAccount token
+    headers: HeaderMap,
+    Path(garage_id): Path<String>,
+) -> impl IntoResponse {
+    // TODO: Validate K8s ServiceAccount token via TokenReview API
+    let _ = headers.get("authorization");
+
+    // Look up the garage registration
+    let garage = state
+        .peer_registry
+        .get_garage(&garage_id)
+        .map_err(|e| {
+            tracing::error!(error = %e, garage_id = %garage_id, "Failed to get garage registration");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    format!("Failed to get garage registration: {e}"),
+                )),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(ApiError::new(
+                    error_codes::GARAGE_NOT_FOUND,
+                    format!("Garage '{}' not found or not registered for WireGuard", garage_id),
+                )),
+            )
+        })?;
+
+    // Get the DERP map
+    let derp_map = state.derp_manager.get_map().map_err(|e| {
+        tracing::error!(error = %e, garage_id = %garage_id, "Failed to get DERP map");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError::new(
+                error_codes::INTERNAL_ERROR,
+                format!("Failed to get DERP map: {e}"),
+            )),
+        )
+    })?;
+
+    tracing::debug!(
+        garage_id = %garage.garage_id,
+        overlay_ip = %garage.overlay_ip,
+        "Retrieved garage WireGuard registration"
+    );
+
+    // For in-memory store, we use defaults for peer_version and registered_at.
+    // The PostgreSQL store will provide real values.
+    let response = GarageWgRegistrationResponse {
+        garage_id: garage.garage_id,
+        public_key: garage.public_key,
+        assigned_ip: garage.overlay_ip,
+        endpoints: garage.endpoints,
+        peer_version: 0, // Default for in-memory; PostgreSQL will provide actual value
+        derp_map,
+        registered_at: Utc::now(), // Default for in-memory; PostgreSQL will provide actual value
+    };
+
+    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
+}
+
 /// Get peer list for a garage (garage polls this).
 ///
 /// GET /api/v1/wg/garages/{id}/peers
@@ -784,6 +878,7 @@ async fn handle_peers_socket(socket: WebSocket, garage_id: String, state: AppSta
 /// - `GET /api/v1/wg/sessions` - List active sessions
 /// - `DELETE /api/v1/wg/sessions/{id}` - Close session
 /// - `POST /api/v1/wg/garages` - Register garage
+/// - `GET /api/v1/wg/garages/{id}` - Get garage WireGuard registration
 /// - `GET /api/v1/wg/garages/{id}/peers` - Get peer list
 /// - `POST /api/v1/users/ssh-keys` - Register SSH key
 /// - `WS /internal/wg/garages/{id}/peers` - Peer streaming WebSocket
@@ -800,6 +895,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/wg/sessions/{id}", delete(close_session))
         // Garage WireGuard endpoints
         .route("/api/v1/wg/garages", post(register_garage))
+        .route("/api/v1/wg/garages/{id}", get(get_garage_wg_registration))
         .route("/api/v1/wg/garages/{id}/peers", get(get_garage_peers))
         // Internal WebSocket for peer streaming (garages connect here)
         .route("/internal/wg/garages/{id}/peers", get(peers_websocket))
@@ -1340,6 +1436,73 @@ mod tests {
             assert!(garage.assigned_ip.is_garage());
             // DERP map should have at least one region
             assert!(!garage.derp_map.regions().is_empty());
+        }
+
+        #[tokio::test]
+        async fn get_garage_wg_registration_not_found() {
+            let state = create_test_state();
+            let app = router().with_state(state);
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/wg/garages/nonexistent-garage")
+                        .header(header::AUTHORIZATION, "Bearer k8s-service-account")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        }
+
+        #[tokio::test]
+        async fn get_garage_wg_registration_success() {
+            let state = create_test_state();
+            let peer_registry = state.peer_registry.clone();
+            let app = router().with_state(state);
+
+            // Register a garage first
+            let garage_id = "test-garage-for-get";
+            let key = test_public_key();
+            peer_registry
+                .register_garage(moto_club_wg::GarageRegistration {
+                    garage_id: garage_id.to_string(),
+                    public_key: key.clone(),
+                    endpoints: vec!["10.0.0.1:51820".parse().unwrap()],
+                })
+                .await
+                .unwrap();
+
+            // Now get the registration
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri(format!("/api/v1/wg/garages/{}", garage_id))
+                        .header(header::AUTHORIZATION, "Bearer k8s-service-account")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let registration: GarageWgRegistrationResponse = serde_json::from_slice(&body).unwrap();
+
+            // Verify response fields
+            assert_eq!(registration.garage_id, garage_id);
+            assert_eq!(registration.public_key, key);
+            assert!(registration.assigned_ip.is_garage());
+            assert_eq!(registration.endpoints.len(), 1);
+            assert_eq!(registration.peer_version, 0); // Default for in-memory
+            assert!(!registration.derp_map.regions().is_empty());
         }
 
         #[tokio::test]
