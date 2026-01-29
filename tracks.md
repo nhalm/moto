@@ -189,3 +189,22 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 (none - makefile.md v0.5 implementation complete)
+
+---
+
+## moto-bike.md v0.3
+
+**Status:** In Progress
+
+**Implemented:**
+- Bike base image (infra/pkgs/moto-bike.nix): CA certs, tzdata, non-root user (1000:1000), security context
+- mkBike helper function for building final images from bike base + engine binary
+- Flake exports moto-bike package and mkBike lib helper
+- bike.toml for moto-club engine (crates/moto-club/bike.toml)
+
+**Remaining:**
+- Engine health endpoints: /health/live, /health/ready, /health/startup (current code only has /health)
+- Final bike images in flake: moto-club-image using mkBike helper
+- Engine Contract: Prometheus metrics endpoint on port 9090
+- Engine Contract: Graceful shutdown (SIGTERM handling, 30s grace period)
+- K8s Deployment generation from bike.toml (future - needs CLI support)
