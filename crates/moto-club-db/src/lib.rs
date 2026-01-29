@@ -31,6 +31,7 @@
 
 pub mod garage_repo;
 pub mod models;
+pub mod wg_device_repo;
 
 use thiserror::Error;
 
@@ -64,6 +65,15 @@ pub enum DbError {
     /// Duplicate record.
     #[error("{entity} already exists: {id}")]
     AlreadyExists {
+        /// Entity type.
+        entity: &'static str,
+        /// Entity identifier.
+        id: String,
+    },
+
+    /// Entity owned by different user.
+    #[error("{entity} not owned: {id}")]
+    NotOwned {
         /// Entity type.
         entity: &'static str,
         /// Entity identifier.
@@ -116,5 +126,11 @@ mod tests {
             id: "xyz789".to_string(),
         };
         assert_eq!(err.to_string(), "device already exists: xyz789");
+
+        let err = DbError::NotOwned {
+            entity: "device",
+            id: "pubkey123".to_string(),
+        };
+        assert_eq!(err.to_string(), "device not owned: pubkey123");
     }
 }
