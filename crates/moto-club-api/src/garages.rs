@@ -23,6 +23,7 @@ use uuid::Uuid;
 
 use crate::{ApiError, AppState, error_codes};
 use moto_club_db::{DbError, Garage, GarageStatus, TerminationReason, garage_repo};
+use moto_club_garage::{CreateGarageInput, GarageServiceError};
 use moto_club_k8s::GarageNamespaceOps;
 use moto_club_types::GarageId;
 
@@ -188,12 +189,44 @@ fn generate_garage_name() -> String {
 /// Create a new garage.
 ///
 /// POST /api/v1/garages
+///
+/// When `GarageService` is configured, this creates the full K8s resources:
+/// - K8s namespace with labels
+/// - SSH keys Secret with user's public keys
+/// - Dev container pod
+///
+/// When `GarageService` is not configured (testing/local dev without K8s),
+/// only the database record is created.
 async fn create_garage(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<CreateGarageRequest>,
 ) -> impl IntoResponse {
     let owner = extract_owner(&headers)?;
+
+    // If GarageService is available, use it for full K8s integration
+    if let Some(ref garage_service) = state.garage_service {
+        let input = CreateGarageInput {
+            name: req.name,
+            branch: req.branch.unwrap_or_else(|| "main".to_string()),
+            ttl_seconds: req.ttl_seconds,
+            image: req.image,
+            engine: None,
+        };
+
+        let garage = garage_service
+            .create(&owner, input)
+            .await
+            .map_err(|e| map_garage_service_error(e))?;
+
+        return Ok((StatusCode::CREATED, Json(GarageResponse::from(garage))));
+    }
+
+    // Fallback: database-only creation (no K8s resources)
+    // This path is used when K8s is not configured (testing, local dev)
+    tracing::warn!(
+        "GarageService not configured, creating database record only (no K8s resources)"
+    );
 
     // Validate TTL
     let ttl_seconds = req.ttl_seconds.unwrap_or(DEFAULT_TTL_SECONDS);
@@ -277,10 +310,86 @@ async fn create_garage(
             }
         })?;
 
-    // TODO: Create K8s namespace and deploy pod (moto-club-k8s crate)
-    // For now, just return the database record
-
     Ok((StatusCode::CREATED, Json(GarageResponse::from(garage))))
+}
+
+/// Maps `GarageServiceError` to HTTP response.
+fn map_garage_service_error(e: GarageServiceError) -> (StatusCode, Json<ApiError>) {
+    match e {
+        GarageServiceError::AlreadyExists(name) => (
+            StatusCode::CONFLICT,
+            Json(ApiError::new(
+                error_codes::GARAGE_ALREADY_EXISTS,
+                format!("Garage name '{name}' is already taken"),
+            )),
+        ),
+        GarageServiceError::NotFound(name) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiError::new(
+                error_codes::GARAGE_NOT_FOUND,
+                format!("Garage '{name}' not found"),
+            )),
+        ),
+        GarageServiceError::NotOwned { name, .. } => (
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::GARAGE_NOT_OWNED,
+                format!("Garage '{name}' exists but is owned by another user"),
+            )),
+        ),
+        GarageServiceError::Terminated(name) => (
+            StatusCode::GONE,
+            Json(ApiError::new(
+                error_codes::GARAGE_TERMINATED,
+                format!("Garage '{name}' has been terminated"),
+            )),
+        ),
+        GarageServiceError::Expired(name) => (
+            StatusCode::GONE,
+            Json(ApiError::new(
+                error_codes::GARAGE_EXPIRED,
+                format!("Garage '{name}' has expired"),
+            )),
+        ),
+        GarageServiceError::InvalidTtl { message } => (
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new(error_codes::INVALID_TTL, message)),
+        ),
+        GarageServiceError::NameGenerationFailed { attempts } => {
+            tracing::error!(attempts, "failed to generate unique garage name");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    "Failed to generate unique garage name",
+                )),
+            )
+        }
+        GarageServiceError::Database(e) => {
+            tracing::error!("Database error: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(error_codes::DATABASE_ERROR, "Database error")),
+            )
+        }
+        GarageServiceError::Kubernetes(e) => {
+            tracing::error!("Kubernetes error: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::K8S_ERROR,
+                    "Kubernetes operation failed",
+                )),
+            )
+        }
+        GarageServiceError::Lifecycle(e) => {
+            tracing::error!("Lifecycle error: {e}");
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new(error_codes::INTERNAL_ERROR, e.to_string())),
+            )
+        }
+    }
 }
 
 /// List garages for the authenticated owner.

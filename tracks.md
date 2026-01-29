@@ -50,6 +50,7 @@ HOW TO USE THIS FILE:
 - moto-club-api: GET /api/v1/users/ssh-keys endpoint (list user's SSH keys per spec lines 715-730)
 - moto-club-api: DELETE /api/v1/users/ssh-keys/{key_id} endpoint (delete SSH key per spec lines 734-743)
 - moto-club-api: GET /api/v1/info includes api_version, git_sha, features fields per spec lines 803-817
+- moto-club-api: POST /api/v1/garages uses GarageService for full K8s integration (create flow steps 4-12: namespace, SSH keys Secret, pod deployment per spec lines 866-879)
 
 **Remaining:**
 (none - moto-club.md v1.1 implementation complete)

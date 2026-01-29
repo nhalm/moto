@@ -30,6 +30,7 @@ use tracing_subscriber::EnvFilter;
 
 use moto_club_api::{AppState, router};
 use moto_club_db::{DbPool, derp_server_repo};
+use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
 use moto_club_reconcile::{GarageReconciler, ReconcileConfig};
 use moto_club_wg::{
@@ -241,7 +242,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Create peer broadcaster for garage WebSocket connections
     let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 
-    // Create API router with GarageK8s for namespace operations
+    // Create GarageService for full K8s integration in garage create flow
+    let garage_service = GarageService::new(db_pool.clone(), garage_k8s.clone());
+    info!("garage service initialized with full K8s integration");
+
+    // Create API router with GarageService and GarageK8s for operations
     let api_garage_k8s = garage_k8s.clone();
     let state = AppState::new(
         db_pool,
@@ -251,7 +256,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         ssh_key_manager,
         peer_broadcaster,
     )
-    .with_garage_k8s(api_garage_k8s);
+    .with_garage_k8s(api_garage_k8s)
+    .with_garage_service(garage_service);
     let app = router(state);
 
     // Start server

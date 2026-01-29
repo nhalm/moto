@@ -42,6 +42,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use moto_club_db::DbPool;
+use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
 use moto_club_wg::{
     DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
@@ -108,6 +109,9 @@ pub struct AppState {
     /// Garage K8s operations for namespace and pod management.
     /// When `None`, K8s operations are skipped (for testing/local dev).
     pub garage_k8s: Option<GarageK8s>,
+    /// Garage service for garage lifecycle management with full K8s integration.
+    /// When `None`, garage create only writes to database (no K8s resources).
+    pub garage_service: Option<GarageService>,
 }
 
 impl AppState {
@@ -130,6 +134,7 @@ impl AppState {
             peer_broadcaster,
             k8s_client: None,
             garage_k8s: None,
+            garage_service: None,
         }
     }
 
@@ -147,10 +152,17 @@ impl AppState {
         self
     }
 
+    /// Creates a new `AppState` with a garage service for full K8s integration.
+    #[must_use]
+    pub fn with_garage_service(mut self, garage_service: GarageService) -> Self {
+        self.garage_service = Some(garage_service);
+        self
+    }
+
     /// Creates a new `AppState` with in-memory storage (for testing).
     ///
     /// This uses in-memory stores that don't persist data across restarts.
-    /// K8s operations are disabled (k8s_client and garage_k8s are None).
+    /// K8s operations are disabled (k8s_client, garage_k8s, and garage_service are None).
     #[must_use]
     pub fn with_in_memory_storage(db_pool: DbPool) -> Self {
         let ipam_store = InMemoryStore::new();
@@ -175,6 +187,7 @@ impl AppState {
             peer_broadcaster,
             k8s_client: None,
             garage_k8s: None,
+            garage_service: None,
         }
     }
 }
