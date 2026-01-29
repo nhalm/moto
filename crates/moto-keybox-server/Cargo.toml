@@ -1,0 +1,27 @@
+[package]
+name = "moto-keybox-server"
+description = "Secrets manager server with SPIFFE-inspired identity and ABAC"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "moto-keybox"
+path = "src/main.rs"
+
+[dependencies]
+moto-keybox.workspace = true
+moto-keybox-db.workspace = true
+
+axum.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["json"] }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

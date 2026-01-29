@@ -208,3 +208,30 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 - K8s Deployment generation from bike.toml (future - needs CLI support)
+
+---
+
+## keybox.md v0.2
+
+**Status:** In Progress
+
+**Implemented:**
+- moto-keybox library: SPIFFE ID types (garage/bike/service), SVID claims, SvidIssuer, SvidValidator
+- moto-keybox: Envelope encryption (MasterKey, DataEncryptionKey, EncryptedDek, EncryptedSecret)
+- moto-keybox: ABAC PolicyEngine with hardcoded policies per spec (MVP)
+- moto-keybox: SecretRepository (in-memory) with CRUD operations per scope
+- moto-keybox: REST API handlers (POST /auth/token, GET/POST/DELETE /secrets/{scope}/{name}, GET /secrets/{scope}, GET /audit/logs)
+- moto-keybox-db: models (Secret, SecretVersion, EncryptedDek, AuditLogEntry)
+- moto-keybox-db: PostgreSQL migrations (initial schema)
+- moto-keybox-db: connect, run_migrations, MIGRATIONS embedded
+- moto-keybox-client: KeyboxClient with K8s mode and local mode support
+- moto-keybox-client: SvidCache with automatic refresh
+- moto-keybox-cli: init command (generates KEK and SVID signing key)
+- moto-keybox-cli: issue-dev-svid command (24h dev SVID for local testing)
+- moto-keybox-cli: set/get/list secret commands
+- moto-keybox-server: Server binary (main.rs) with config from env vars, graceful shutdown, JSON logging
+
+**Remaining:**
+- POST /admin/rotate-dek/{name} endpoint (future)
+- K8s ServiceAccount JWT validation via TokenReview API (future - MVP accepts principal info directly)
+- PostgreSQL-backed repository (future - currently in-memory)

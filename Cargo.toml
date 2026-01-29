@@ -96,6 +96,7 @@ moto-keybox = { path = "crates/moto-keybox" }
 moto-keybox-db = { path = "crates/moto-keybox-db" }
 moto-keybox-client = { path = "crates/moto-keybox-client" }
 moto-keybox-cli = { path = "crates/moto-keybox-cli" }
+moto-keybox-server = { path = "crates/moto-keybox-server" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
