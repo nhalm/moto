@@ -30,6 +30,7 @@ use std::time::Duration;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio::net::TcpListener;
+use tokio::signal;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
@@ -56,6 +57,9 @@ const DEFAULT_METRICS_BIND_ADDR: &str = "0.0.0.0:9090";
 
 /// Default reconciliation interval in seconds.
 const DEFAULT_RECONCILE_INTERVAL_SECS: u64 = 30;
+
+/// Graceful shutdown grace period in seconds (per moto-bike.md Engine Contract).
+const SHUTDOWN_GRACE_PERIOD_SECS: u64 = 30;
 
 /// Configuration parsed from environment variables.
 struct Config {
@@ -341,7 +345,55 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     mark_startup_complete();
     info!("startup complete");
 
-    axum::serve(listener, app).await?;
+    // Graceful shutdown on SIGTERM (per moto-bike.md Engine Contract):
+    // - Handle SIGTERM
+    // - Stop accepting new requests
+    // - Complete in-flight requests
+    // - 30-second grace period
+    // - Exit cleanly
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+
+    info!("moto-club shutdown complete");
 
     Ok(())
+}
+
+/// Waits for SIGTERM (Unix) or Ctrl+C to initiate graceful shutdown.
+///
+/// Per moto-bike.md Engine Contract, engines must handle SIGTERM to allow
+/// in-flight requests to complete before termination.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {
+            info!(
+                grace_period_secs = SHUTDOWN_GRACE_PERIOD_SECS,
+                "received Ctrl+C, initiating graceful shutdown"
+            );
+        }
+        () = terminate => {
+            info!(
+                grace_period_secs = SHUTDOWN_GRACE_PERIOD_SECS,
+                "received SIGTERM, initiating graceful shutdown"
+            );
+        }
+    }
 }
