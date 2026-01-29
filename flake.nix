@@ -27,6 +27,7 @@
         packages = if pkgs.stdenv.isLinux then {
           moto-garage = infraPkgs.moto-garage;
           moto-bike = infraPkgs.moto-bike;
+          moto-club-image = infraPkgs.moto-club-image;
           default = infraPkgs.moto-garage;
         } else {};
 
