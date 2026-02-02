@@ -14,6 +14,7 @@ moto-k8s.workspace = true
 chrono.workspace = true
 k8s-openapi.workspace = true
 kube.workspace = true
+rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

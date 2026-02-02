@@ -34,6 +34,7 @@ mod network_policy;
 mod pods;
 mod pvc;
 mod resource_quota;
+mod supporting_services;
 
 pub use limit_range::{GARAGE_LIMITS_NAME, GarageLimitRangeOps};
 pub use namespace::{GarageNamespaceInput, GarageNamespaceOps};
@@ -41,6 +42,10 @@ pub use network_policy::{GARAGE_ISOLATION_POLICY_NAME, GarageNetworkPolicyOps};
 pub use pods::{DEV_CONTAINER_POD_NAME, GaragePodInput, GaragePodOps, GaragePodStatus, RepoConfig};
 pub use pvc::{GarageWorkspacePvcOps, WORKSPACE_PVC_NAME};
 pub use resource_quota::{GARAGE_QUOTA_NAME, GarageResourceQuotaOps};
+pub use supporting_services::{
+    GaragePostgresOps, POSTGRES_CREDENTIALS_SECRET_NAME, POSTGRES_DEPLOYMENT_NAME, POSTGRES_PORT,
+    POSTGRES_SERVICE_NAME, SUPPORTING_SERVICE_LABEL,
+};
 
 use moto_k8s::K8sClient;
 

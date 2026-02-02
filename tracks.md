@@ -289,9 +289,9 @@ HOW TO USE THIS FILE:
 **Implemented:**
 - CLI flags: `--with-postgres` and `--with-redis` on `moto garage open` command
 - API: `with_postgres` and `with_redis` fields in `CreateGarageRequest` and `CreateGarageInput`
+- K8s: PostgreSQL Deployment, Service, and credentials Secret (moto-club-k8s/supporting_services.rs: GaragePostgresOps trait, build_postgres_deployment, build_postgres_service, build_postgres_credentials_secret)
 
 **Remaining:**
-- K8s: PostgreSQL Deployment, Service, and credentials Secret
 - K8s: Redis Deployment, Service, and credentials Secret
 - Garage pod: Inject Postgres env vars (POSTGRES_HOST, POSTGRES_PORT, DATABASE_URL, etc.)
 - Garage pod: Inject Redis env vars (REDIS_HOST, REDIS_PORT, REDIS_URL, etc.)
