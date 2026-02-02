@@ -57,7 +57,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-wgtunnel.md v0.7
+## moto-wgtunnel.md v0.8
 
 **Status:** In Progress
 
@@ -66,18 +66,19 @@ HOW TO USE THIS FILE:
 - moto-wgtunnel-derp crate: protocol.rs, client.rs, map.rs
 - moto-wgtunnel-conn crate: stun.rs, endpoint.rs, path.rs, magic.rs
 - moto-wgtunnel-engine crate: config.rs, tunnel.rs, platform/
-- moto-cli-wgtunnel crate: tunnel.rs, status.rs, enter.rs (partial)
-- moto-garage-wgtunnel crate: register.rs, health.rs, daemon.rs, ssh.rs
+- moto-cli-wgtunnel crate: tunnel.rs, status.rs, enter.rs (partial), ttyd.rs
+- moto-garage-wgtunnel crate: register.rs, health.rs, daemon.rs
 - enter.rs: MagicConn for direct UDP
 - enter.rs: DerpClient for DERP relay fallback
-- enter.rs: SSH session spawning
+- enter.rs: ttyd WebSocket terminal connection (replaces SSH per spec v0.8)
 - client.rs: Device registration via moto-club API (POST /api/v1/wg/devices using WG public key as device identity per spec v0.7)
 - client.rs: Session creation via moto-club API (GET garage by name, POST session with garage UUID and device pubkey per spec)
 - client.rs: Get garage details for session creation (GET /api/v1/garages/{name} returns garage UUID needed for session)
 - tunnel.rs: Remove device_id from DeviceIdentity (per spec v0.7: WG public key IS device identity)
+- Remove SSH key management from moto-garage-wgtunnel (spec v0.8: ttyd+WireGuard tunnel is sole auth boundary)
 
 **Remaining:**
-(none - moto-wgtunnel.md v0.7 CLI integration complete)
+(none - moto-wgtunnel.md v0.8 implementation complete)
 
 ---
 
