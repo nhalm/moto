@@ -61,18 +61,6 @@ CREATE TABLE wg_garages (
     registered_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- User SSH keys
-CREATE TABLE user_ssh_keys (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    owner TEXT NOT NULL,
-    public_key TEXT NOT NULL,
-    fingerprint TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(owner, fingerprint)
-);
-
-CREATE INDEX idx_user_ssh_keys_owner ON user_ssh_keys(owner);
-
 -- DERP servers (monitored by moto-club)
 CREATE TABLE derp_servers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
