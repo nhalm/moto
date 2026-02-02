@@ -18,14 +18,16 @@ while true; do
         | tee "$OUTPUT_FILE" \
         | npx repomirror visualize
 
-    if grep -q '"text":"[^"]*LOOP_COMPLETE: true' "$OUTPUT_FILE"; then
-        echo "=== All tasks complete ==="
+    # Check for LOOP_COMPLETE (all remaining items are blocked/future)
+    if grep -q 'LOOP_COMPLETE: true' "$OUTPUT_FILE"; then
+        echo "=== All tasks complete (nothing left to implement) ==="
         exit 0
     fi
 
-    if grep -q '"text":"[^"]*You'"'"'ve hit your limit' "$OUTPUT_FILE"; then
-        echo "=== API usage limit reached ==="
-        exit 0
+    # Check for rate limit error
+    if grep -q '"error":"rate_limit"' "$OUTPUT_FILE"; then
+        echo "=== API rate limit reached ==="
+        exit 1
     fi
     echo "=== Task ${TASK_NUM} complete, sleeping 2s ==="
     sleep 2
