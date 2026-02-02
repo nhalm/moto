@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use k8s_openapi::api::core::v1::{
-    Container, EmptyDirVolumeSource, Pod, PodSpec, Probe, ResourceRequirements, SecurityContext,
-    TCPSocketAction, Volume, VolumeMount,
+    Capabilities, Container, EmptyDirVolumeSource, Pod, PodSecurityContext, PodSpec, Probe,
+    ResourceRequirements, SeccompProfile, SecurityContext, TCPSocketAction, Volume, VolumeMount,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
@@ -270,11 +270,32 @@ fn build_dev_container_pod(
         ..Default::default()
     };
 
-    // Security context - run as non-root
+    // Security context per garage-isolation.md spec:
+    // - Root inside container (container IS the sandbox)
+    // - Minimal capabilities (drop all, add only what's needed for dev work)
+    // - Read-only root filesystem (writes go to volumes)
+    // - No privilege escalation
+    // - RuntimeDefault seccomp profile
     let security_context = SecurityContext {
-        run_as_non_root: Some(true),
-        run_as_user: Some(1000),
-        run_as_group: Some(1000),
+        run_as_user: Some(0),
+        run_as_group: Some(0),
+        allow_privilege_escalation: Some(false),
+        read_only_root_filesystem: Some(true),
+        seccomp_profile: Some(SeccompProfile {
+            type_: "RuntimeDefault".to_string(),
+            ..Default::default()
+        }),
+        capabilities: Some(Capabilities {
+            drop: Some(vec!["ALL".to_string()]),
+            add: Some(vec![
+                "CHOWN".to_string(),            // Change file ownership
+                "DAC_OVERRIDE".to_string(),     // Bypass file permission checks
+                "FOWNER".to_string(),           // Bypass ownership checks
+                "SETGID".to_string(),           // Set group ID
+                "SETUID".to_string(),           // Set user ID
+                "NET_BIND_SERVICE".to_string(), // Bind to ports < 1024
+            ]),
+        }),
         ..Default::default()
     };
 
@@ -352,6 +373,16 @@ fn build_dev_container_pod(
         )
     });
 
+    // Pod-level security context per garage-isolation.md spec:
+    // - No service account token (garages have no K8s API access)
+    // - Forbidden: hostNetwork, hostPID, hostIPC (defaults to false)
+    let pod_security_context = PodSecurityContext {
+        run_as_user: Some(0),
+        run_as_group: Some(0),
+        fs_group: Some(0),
+        ..Default::default()
+    };
+
     Pod {
         metadata: ObjectMeta {
             name: Some(DEV_CONTAINER_POD_NAME.to_string()),
@@ -364,7 +395,13 @@ fn build_dev_container_pod(
             containers: vec![container],
             volumes: Some(volumes),
             restart_policy: Some("Never".to_string()),
-            // Use default service account (will get garage-specific SA later)
+            // No K8s API access for garage pods per garage-isolation.md
+            automount_service_account_token: Some(false),
+            security_context: Some(pod_security_context),
+            // Forbidden settings (all default to false, but explicit for clarity)
+            host_network: Some(false),
+            host_pid: Some(false),
+            host_ipc: Some(false),
             ..Default::default()
         }),
         ..Default::default()
@@ -658,5 +695,77 @@ mod tests {
         let mounts = container.volume_mounts.as_ref().unwrap();
         let workspace_mount = mounts.iter().find(|m| m.name == "workspace").unwrap();
         assert_eq!(workspace_mount.mount_path, "/workspace");
+    }
+
+    #[test]
+    fn build_pod_has_security_context_per_spec() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod =
+            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
+
+        let spec = pod.spec.as_ref().unwrap();
+
+        // Check pod-level security context
+        let pod_sec = spec
+            .security_context
+            .as_ref()
+            .expect("pod security_context should be set");
+        assert_eq!(pod_sec.run_as_user, Some(0), "pod should run as root");
+        assert_eq!(pod_sec.run_as_group, Some(0));
+
+        // Check automountServiceAccountToken is disabled (no K8s API access)
+        assert_eq!(
+            spec.automount_service_account_token,
+            Some(false),
+            "service account token should not be mounted"
+        );
+
+        // Check forbidden host settings
+        assert_eq!(spec.host_network, Some(false));
+        assert_eq!(spec.host_pid, Some(false));
+        assert_eq!(spec.host_ipc, Some(false));
+
+        // Check container security context
+        let container = &spec.containers[0];
+        let sec = container
+            .security_context
+            .as_ref()
+            .expect("container security_context should be set");
+
+        assert_eq!(sec.run_as_user, Some(0), "container should run as root");
+        assert_eq!(sec.run_as_group, Some(0));
+        assert_eq!(
+            sec.allow_privilege_escalation,
+            Some(false),
+            "privilege escalation should be disabled"
+        );
+        assert_eq!(
+            sec.read_only_root_filesystem,
+            Some(true),
+            "root filesystem should be read-only"
+        );
+
+        // Check seccomp profile
+        let seccomp = sec
+            .seccomp_profile
+            .as_ref()
+            .expect("seccomp_profile should be set");
+        assert_eq!(seccomp.type_, "RuntimeDefault");
+
+        // Check capabilities
+        let caps = sec
+            .capabilities
+            .as_ref()
+            .expect("capabilities should be set");
+        assert_eq!(caps.drop, Some(vec!["ALL".to_string()]));
+
+        let add = caps.add.as_ref().expect("capabilities.add should be set");
+        assert!(add.contains(&"CHOWN".to_string()));
+        assert!(add.contains(&"DAC_OVERRIDE".to_string()));
+        assert!(add.contains(&"FOWNER".to_string()));
+        assert!(add.contains(&"SETGID".to_string()));
+        assert!(add.contains(&"SETUID".to_string()));
+        assert!(add.contains(&"NET_BIND_SERVICE".to_string()));
+        assert_eq!(add.len(), 6, "should have exactly 6 capabilities added");
     }
 }
