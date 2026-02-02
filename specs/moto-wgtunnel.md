@@ -415,7 +415,7 @@ ttyd -p 7681 -W tmux new-session -A -s garage
 | Port | 7681 |
 | WebSocket URL | `ws://[garage_ip]:7681/` |
 | Shell | tmux (session name: "garage") |
-| Working directory | `/workspace/<repo-name>/` |
+| Working directory | `/workspace/<repo-name>/` (set by startup script after clone) |
 
 **Session persistence:**
 - First connect → creates tmux session, attaches
@@ -485,7 +485,8 @@ AllowedIPs configuration ensures:
 
 **Direct connection:**
 - 3 second timeout
-- On timeout, fall back to DERP (no error to user, just slower path)
+- On timeout, silently fall back to DERP (user sees "Using DERP relay..." in output)
+- If all DERP regions also fail, error is shown to user
 
 **DERP connection:**
 - 10 second timeout per region

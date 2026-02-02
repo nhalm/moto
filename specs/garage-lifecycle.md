@@ -23,23 +23,30 @@ See [moto-wgtunnel.md](moto-wgtunnel.md) for WireGuard spec.
 ### Garage States
 
 ```
-┌─────────┐     ┌─────────┐     ┌─────────┐
-│ Pending │ ──▶ │ Running │ ──▶ │  Ready  │
-└─────────┘     └─────────┘     └─────────┘
-     │               │               │
-     │               │               │
-     ▼               ▼               ▼
-┌───────────────────────────────────────────┐
-│                 Terminated                 │
-└───────────────────────────────────────────┘
+┌─────────┐     ┌──────────────┐     ┌─────────┐
+│ Pending │ ──▶ │ Initializing │ ──▶ │  Ready  │
+└─────────┘     └──────────────┘     └─────────┘
+     │                 │                  │
+     ▼                 ▼                  ▼
+┌──────────┐   ┌───────────────────────────────┐
+│  Failed  │   │          Terminated           │
+└──────────┘   └───────────────────────────────┘
 ```
 
 | State | Description |
 |-------|-------------|
 | **Pending** | Pod scheduled, pulling images |
-| **Running** | Container started, initializing |
+| **Initializing** | Pod running, cloning repo, starting services |
 | **Ready** | Garage ready for use (see Ready criteria below) |
+| **Failed** | Startup failed (clone error, bad credentials, etc.) |
 | **Terminated** | Garage closed/cleaned up |
+
+**Failed state:** Garage transitions to Failed if:
+- Init container fails (clone error, credentials invalid)
+- Pod fails to start after timeout (image pull failure, resource limits)
+- WireGuard registration fails
+
+Failed garages can be inspected with `moto garage logs <name>` and cleaned up with `moto garage close <name>`.
 
 ### Ready Criteria
 
@@ -83,15 +90,33 @@ Creates a new wrenching environment.
 1. Generate garage ID (UUID)
 2. Create K8s namespace: moto-garage-{id}
 3. Apply resource quotas and network policies
-4. Deploy dev container pod
+4. Deploy dev container pod with repo config (URL, branch) as env vars
 5. Wait for pod Running
-6. Clone repository to /workspace/<repo-name>/
-   - URL injected into garage
-   - Credentials pulled from keybox
-   - Create working branch
+6. Init container clones repository (see Repository Cloning below)
 7. Wait for Ready state (all criteria met)
 8. If not --no-attach, connect via WireGuard tunnel
 ```
+
+### Repository Cloning
+
+Handled by an init container before the main garage container starts:
+
+```
+1. Init container starts with git credentials mounted from keybox
+2. Clone: git clone --depth=1 <repo-url> /workspace/<repo-name>/
+3. Checkout: git checkout -b <branch> origin/<branch> (or create new branch)
+4. Set working directory marker for ttyd
+5. Init container exits, main container starts
+```
+
+**Environment variables (injected by moto-club):**
+- `REPO_URL` - Repository clone URL
+- `REPO_BRANCH` - Branch to checkout
+- `REPO_NAME` - Directory name under /workspace/
+
+**Credentials:** Git credentials (token or SSH key) fetched from keybox, mounted as a Secret. Cleaned up when garage terminates.
+
+**Failure handling:** If clone fails after 3 retries, init container fails and garage transitions to Failed state.
 
 **Output:**
 ```
@@ -124,6 +149,8 @@ Connect to an existing garage's terminal.
 - Multiple clients → all attach to same tmux session (mirrored view)
 
 **Detach:** Close the connection or use tmux detach (`Ctrl+B, D`). Garage keeps running.
+
+**Authentication:** The WireGuard tunnel is the sole authentication boundary. If you can establish the tunnel (which requires a valid session from moto-club), you have full terminal access. No additional SSH keys or passwords needed.
 
 See [moto-wgtunnel.md](moto-wgtunnel.md) for connection details.
 
@@ -230,8 +257,9 @@ Garage can fetch:
 ## Changelog
 
 ### v0.3
-- Remove "Attached" state (4 states now: Pending → Running → Ready → Terminated)
+- Rename "Running" to "Initializing", add "Failed" state (5 states: Pending → Initializing → Ready/Failed → Terminated)
 - Replace SSH with ttyd + tmux for terminal access
+- Add Repository Cloning section (init container, credentials from keybox)
 - Add Ready criteria section (pod running, ttyd up, WireGuard registered, repo cloned)
 - Update connectivity model for ttyd
 - Add repo cloning details (`/workspace/<repo-name>/`, credentials from keybox)

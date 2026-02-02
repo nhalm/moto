@@ -292,8 +292,8 @@ GET /api/v1/garages
 Authorization: Bearer <user-token>
 
 Query Parameters:
-  ?status=running,ready    // Optional, filter by status (comma-separated)
-                           // Valid: pending, running, ready, terminated
+  ?status=initializing,ready  // Optional, filter by status (comma-separated)
+                              // Valid: pending, initializing, ready, failed, terminated
   ?all=true                // Optional, include terminated garages (default: false)
 
 Response 200:
@@ -358,6 +358,7 @@ Response 204 No Content
 ```
 
 **Behavior:**
+- Works on any garage status (Pending, Initializing, Ready, Failed)
 - Sets status to `terminated`
 - Sets `terminated_at` timestamp
 - Sets `termination_reason` to `user_closed`
@@ -771,10 +772,11 @@ struct Garage {
 }
 
 enum GarageStatus {
-    Pending,      // Pod scheduled, pulling images
-    Running,      // Container started, initializing
-    Ready,        // Garage ready for use
-    Terminated,   // Closed/cleaned up
+    Pending,       // Pod scheduled, pulling images
+    Initializing,  // Pod running, cloning repo, starting services
+    Ready,         // Garage ready for use
+    Failed,        // Startup failed (clone error, bad credentials, etc.)
+    Terminated,    // Closed/cleaned up
 }
 ```
 
@@ -947,7 +949,7 @@ CREATE TABLE garages (
     name TEXT NOT NULL UNIQUE,
     owner TEXT NOT NULL,
     branch TEXT NOT NULL,
-    status TEXT NOT NULL,           -- pending, running, ready, terminated
+    status TEXT NOT NULL,           -- pending, initializing, ready, failed, terminated
     image TEXT NOT NULL,            -- dev container image used
     ttl_seconds INTEGER NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -1172,6 +1174,8 @@ Identity system will replace config-based owner identity:
 ## Changelog
 
 ### v1.2
+- Rename "Running" to "Initializing" garage status (clearer meaning)
+- Add "Failed" garage status (for clone errors, bad credentials, startup failures)
 - Replace SSH with ttyd + tmux for terminal access (tunnel is sole auth boundary)
 - Remove SSH key management entirely:
   - Remove ssh_keys.rs from crate structure

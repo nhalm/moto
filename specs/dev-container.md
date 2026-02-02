@@ -196,13 +196,19 @@ The container includes these services (configured in Dockerfile):
 
 **Terminal Daemon (ttyd + tmux):**
 - ttyd listens on port 7681 (WebSocket)
-- Spawns tmux for session persistence: `ttyd -p 7681 -W tmux new-session -A -s garage`
-- Working directory: `/workspace`
+- Spawns tmux for session persistence
+- Working directory: `/workspace/<repo-name>/` (set after repo clone)
 - Runs as: root
 - Process management: systemd service, restarts on failure
 - Health check: TCP probe on port 7681
 - No authentication required (WireGuard tunnel is auth boundary)
 - See [moto-wgtunnel.md](moto-wgtunnel.md) for connection details
+
+**Session persistence:**
+- First connect → creates tmux session, attaches
+- Disconnect → tmux session keeps running (processes survive)
+- Reconnect → reattaches to existing tmux session
+- Multiple clients → all attach to same tmux session (mirrored view)
 
 **WireGuard (configured by moto-garage-wgtunnel daemon):**
 - Daemon registers with moto-club on startup
