@@ -2,9 +2,7 @@
 
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
-use moto_cli_wgtunnel::{
-    ConsoleProgress, EnterConfig, EnterError, SshConfig, TunnelManager, enter_garage,
-};
+use moto_cli_wgtunnel::{ConsoleProgress, EnterConfig, EnterError, TunnelManager, enter_garage};
 use moto_garage::GarageClient;
 use moto_k8s::K8sClient;
 use serde::Serialize;
@@ -389,7 +387,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 })?;
 
             if flags.json {
-                // JSON mode: output session info without spawning SSH
+                // JSON mode: output session info without connecting
                 let json = GarageEnterJson {
                     name: session.garage_name().to_string(),
                     session_id: session.session_id().to_string(),
@@ -400,43 +398,21 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
             } else {
-                // Interactive mode: spawn SSH session
+                // Interactive mode: connect to ttyd terminal
                 if !flags.quiet {
-                    eprintln!("  Opening SSH session... done");
+                    eprintln!("  Opening terminal session... done");
                     eprintln!();
                 }
 
-                // Configure SSH with defaults (moto user, /workspace dir)
-                let ssh_config = SshConfig::default();
-
-                // Spawn SSH - this blocks until the SSH session ends
-                let status = session.spawn_ssh(ssh_config).map_err(|e| match e {
-                    EnterError::SshNotFound => CliError::general(
-                        "SSH not found. Please install OpenSSH.\n\n\
-                         On macOS: ssh is pre-installed\n\
-                         On Linux: apt install openssh-client",
-                    ),
-                    EnterError::SshFailed(msg) => CliError::general(format!(
-                        "SSH connection failed: {msg}\n\nTry: moto garage logs {name}"
+                // Connect to ttyd - this blocks until the terminal session ends
+                session.connect_ttyd().await.map_err(|e| match e {
+                    EnterError::TtydFailed(msg) => CliError::general(format!(
+                        "Terminal connection failed: {msg}\n\n\
+                         This may happen if the garage is still starting up.\n\
+                         Try: moto garage logs {name}"
                     )),
                     _ => CliError::general(e.to_string()),
                 })?;
-
-                // Report non-zero exit codes
-                if !status.success() {
-                    if let Some(code) = status.code() {
-                        // Exit code 255 usually means connection failed
-                        if code == 255 {
-                            return Err(CliError::general(format!(
-                                "SSH connection to garage '{name}' failed.\n\n\
-                                 This may happen if the garage is still starting up.\n\
-                                 Try: moto garage logs {name}"
-                            )));
-                        }
-                        // Other non-zero codes - just exit with that code
-                        std::process::exit(code);
-                    }
-                }
             }
         }
         GarageAction::Close { name, force } => {

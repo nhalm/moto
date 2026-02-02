@@ -3,7 +3,8 @@
 //! This crate provides the client-side tunnel management for moto's
 //! WireGuard-based connectivity to garages. It handles:
 //!
-//! - [`enter`]: Garage enter command (establish tunnel and SSH session)
+//! - [`enter`]: Garage enter command (establish tunnel and terminal session)
+//! - [`ttyd`]: WebSocket client for ttyd terminal access
 //! - [`tunnel`]: Tunnel lifecycle management (create, connect, close)
 //! - [`status`]: Connection status display
 //! - Key management (device keypair - the public key IS the device identity)
@@ -55,8 +56,8 @@
 //! let progress = ConsoleProgress::new(false);
 //! let session = enter_garage(&manager, "my-garage", config, &progress).await?;
 //!
-//! // SSH target is available
-//! println!("SSH target: {}", session.ssh_target());
+//! // Connect to terminal via ttyd
+//! session.connect_ttyd().await?;
 //! ```
 //!
 //! # Configuration
@@ -77,6 +78,7 @@
 pub mod client;
 pub mod enter;
 pub mod status;
+pub mod ttyd;
 pub mod tunnel;
 
 pub use client::{
@@ -88,6 +90,7 @@ pub use enter::{
     GarageWgInfo, SessionResponse, SilentProgress, SshConfig, enter_garage, get_existing_session,
 };
 pub use status::{TunnelStatusInfo, TunnelStatusResponse, format_status_table, get_tunnel_status};
+pub use ttyd::{DEFAULT_TTYD_PORT, TtydClient, TtydConfig, TtydError};
 pub use tunnel::{
     DEFAULT_KEEPALIVE_SECS, DeviceIdentity, ENV_WG_KEY_FILE, KEY_DIR_PERMISSIONS,
     KEY_FILE_PERMISSIONS, TunnelError, TunnelManager, TunnelSession, TunnelStatus,

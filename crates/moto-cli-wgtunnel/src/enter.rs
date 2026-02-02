@@ -1,17 +1,19 @@
 //! Garage enter command implementation.
 //!
 //! This module provides the `moto garage enter <name>` command, which
-//! establishes a `WireGuard` tunnel to a garage and opens an SSH session.
+//! establishes a `WireGuard` tunnel to a garage and opens a terminal session
+//! via ttyd WebSocket.
 //!
 //! # Connection Flow
 //!
-//! 1. Ensure device identity exists (WG keypair, device ID)
+//! 1. Ensure device identity exists (WG keypair)
 //! 2. Register device with moto-club (if not already registered)
 //! 3. Request tunnel session from moto-club
 //! 4. Configure `WireGuard` tunnel
 //! 5. Attempt direct UDP connection (3s timeout) via `MagicConn`
 //! 6. Fall back to DERP relay if direct fails
-//! 7. Open SSH session over the tunnel
+//! 7. Connect to ttyd via WebSocket (port 7681)
+//! 8. Attach to tmux session
 //!
 //! # Example Output
 //!
@@ -23,7 +25,7 @@
 //!   Configuring tunnel... done
 //!   Attempting direct connection... timeout
 //!   Using DERP relay (primary)... connected
-//!   Opening SSH session... done
+//!   Opening terminal session... done
 //!
 //! moto@feature-foo:/workspace$
 //! ```
@@ -45,6 +47,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use crate::client::{ClientError, MotoClubClient, MotoClubConfig};
+use crate::ttyd::{DEFAULT_TTYD_PORT, TtydClient, TtydConfig, TtydError};
 use crate::{TunnelError, TunnelManager, TunnelSession, TunnelStatus};
 
 /// Default timeout for direct UDP connection attempts (seconds).
@@ -96,6 +99,10 @@ pub enum EnterError {
     /// SSH session exited with error.
     #[error("SSH session exited with code {0}")]
     SshExitCode(i32),
+
+    /// ttyd connection failed.
+    #[error("ttyd connection failed: {0}")]
+    TtydFailed(String),
 
     /// moto-club unreachable.
     #[error("moto-club unreachable: {0}")]
@@ -642,6 +649,66 @@ impl GarageSession {
         }
 
         args
+    }
+
+    /// Connect to the garage terminal via ttyd WebSocket.
+    ///
+    /// This establishes a WebSocket connection to the ttyd daemon running
+    /// in the garage pod on port 7681. The connection provides interactive
+    /// terminal access with tmux session persistence.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - ttyd connection fails
+    /// - WebSocket handshake fails
+    /// - Terminal I/O error occurs
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let session = enter_garage(&manager, "my-garage", config, &progress).await?;
+    /// session.connect_ttyd().await?;
+    /// ```
+    pub async fn connect_ttyd(&self) -> Result<(), EnterError> {
+        info!(
+            garage = %self.garage_name,
+            garage_ip = %self.garage_ip,
+            port = DEFAULT_TTYD_PORT,
+            "connecting to garage via ttyd"
+        );
+
+        let ttyd_config = TtydConfig::new(self.garage_ip, DEFAULT_TTYD_PORT);
+        let client = TtydClient::new(ttyd_config);
+
+        client.run_interactive().await.map_err(|e| match e {
+            TtydError::Connection(msg) => {
+                EnterError::TtydFailed(format!("connection failed: {msg}"))
+            }
+            TtydError::WebSocket(e) => EnterError::TtydFailed(format!("websocket error: {e}")),
+            TtydError::Protocol(msg) => EnterError::TtydFailed(format!("protocol error: {msg}")),
+            TtydError::Io(e) => EnterError::TtydFailed(format!("I/O error: {e}")),
+            TtydError::Closed => {
+                EnterError::TtydFailed("connection closed unexpectedly".to_string())
+            }
+            TtydError::Timeout => EnterError::TtydFailed("connection timeout".to_string()),
+        })?;
+
+        info!(
+            garage = %self.garage_name,
+            "ttyd session ended"
+        );
+
+        Ok(())
+    }
+
+    /// Get the ttyd WebSocket URL for this garage.
+    ///
+    /// Returns the URL that can be used to connect to the garage's ttyd
+    /// terminal daemon.
+    #[must_use]
+    pub fn ttyd_url(&self) -> String {
+        format!("ws://[{}]:{}/ws", self.garage_ip, DEFAULT_TTYD_PORT)
     }
 }
 

@@ -23,6 +23,12 @@ tower = "0.5"
 # HTTP client
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
+# WebSocket
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+
+# Terminal
+crossterm = "0.28"
+
 # Kubernetes
 kube = { version = "0.99", features = ["runtime", "derive"] }
 k8s-openapi = { version = "0.24", features = ["latest"] }

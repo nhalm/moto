@@ -20,6 +20,9 @@ tracing.workspace = true
 dirs.workspace = true
 uuid.workspace = true
 reqwest.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+crossterm.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

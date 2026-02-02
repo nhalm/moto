@@ -10,7 +10,8 @@
       "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && head -10 {}')",
       "Bash(cargo test:*)",
       "Bash(ls:*)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(git grep:*)"
     ]
   }
 }
