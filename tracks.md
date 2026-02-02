@@ -271,10 +271,10 @@ HOW TO USE THIS FILE:
 - Pod spec: automountServiceAccountToken: false, host_network/host_pid/host_ipc: false
 - Pod resource limits: 3 CPU / 7Gi per spec (requests: 100m CPU / 256Mi)
 - Pod volumes: writable emptyDir mounts for tmp, var-tmp, home, nix, cargo, var-lib-apt, var-cache-apt, usr-local
+- Workspace PVC: workspace volume uses PersistentVolumeClaim per spec (moto-k8s PvcOps trait, moto-club-k8s GarageWorkspacePvcOps trait, pods.rs uses PVC for /workspace mount)
 
 **Remaining:**
 - Pod volumes: wireguard-config ConfigMap mount, wireguard-keys Secret mount, garage-svid Secret mount
-- Workspace PVC: change from emptyDir to PersistentVolumeClaim
 - NetworkPolicy: garage-isolation policy per spec (DNS, keybox, same-namespace, internet egress)
 - ResourceQuota: garage-quota per spec (4 CPU, 8Gi, 10 pods, 1 PVC)
 - LimitRange: garage-limits per spec (default/max container limits)

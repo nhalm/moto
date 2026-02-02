@@ -30,9 +30,11 @@
 
 mod namespace;
 mod pods;
+mod pvc;
 
 pub use namespace::{GarageNamespaceInput, GarageNamespaceOps};
 pub use pods::{DEV_CONTAINER_POD_NAME, GaragePodInput, GaragePodOps, GaragePodStatus, RepoConfig};
+pub use pvc::{GarageWorkspacePvcOps, WORKSPACE_PVC_NAME};
 
 use moto_k8s::K8sClient;
 

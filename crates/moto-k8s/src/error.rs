@@ -100,6 +100,26 @@ pub enum Error {
     /// Failed to patch namespace.
     #[error("failed to patch namespace: {0}")]
     NamespacePatch(#[source] kube::Error),
+
+    /// Failed to create PVC.
+    #[error("failed to create PVC: {0}")]
+    PvcCreate(#[source] kube::Error),
+
+    /// PVC already exists.
+    #[error("PVC already exists: {0}")]
+    PvcExists(String),
+
+    /// PVC not found.
+    #[error("PVC not found: {0}")]
+    PvcNotFound(String),
+
+    /// Failed to get PVC.
+    #[error("failed to get PVC: {0}")]
+    PvcGet(#[source] kube::Error),
+
+    /// Failed to delete PVC.
+    #[error("failed to delete PVC: {0}")]
+    PvcDelete(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.

@@ -2,15 +2,15 @@
 
 use std::collections::BTreeMap;
 
-use k8s_openapi::api::core::v1::Namespace;
+use k8s_openapi::api::core::v1::{Namespace, PersistentVolumeClaim};
 use kube::{
     Client, Config,
-    api::{Api, ListParams, ObjectMeta, Patch, PatchParams, PostParams},
+    api::{Api, DeleteParams, ListParams, ObjectMeta, Patch, PatchParams, PostParams},
     config::{KubeConfigOptions, Kubeconfig},
 };
 use tracing::{debug, instrument};
 
-use crate::{Error, NamespaceOps, Result};
+use crate::{Error, NamespaceOps, PvcOps, Result};
 
 /// A wrapper around `kube::Client` providing moto-specific operations.
 ///
@@ -252,6 +252,73 @@ impl NamespaceOps for K8sClient {
             .map_err(Error::NamespacePatch)?;
 
         Ok(patched)
+    }
+}
+
+impl PvcOps for K8sClient {
+    #[instrument(skip(self, pvc), fields(namespace = %namespace, pvc_name = ?pvc.metadata.name))]
+    async fn create_pvc(
+        &self,
+        namespace: &str,
+        pvc: &PersistentVolumeClaim,
+    ) -> Result<PersistentVolumeClaim> {
+        let api: Api<PersistentVolumeClaim> = Api::namespaced(self.client.clone(), namespace);
+        let name = pvc.metadata.name.as_deref().unwrap_or("unknown");
+
+        // Check if PVC already exists
+        if self.pvc_exists(namespace, name).await? {
+            return Err(Error::PvcExists(format!("{namespace}/{name}")));
+        }
+
+        debug!("creating PVC");
+        let created = api
+            .create(&PostParams::default(), pvc)
+            .await
+            .map_err(Error::PvcCreate)?;
+
+        Ok(created)
+    }
+
+    #[instrument(skip(self), fields(namespace = %namespace, pvc_name = %name))]
+    async fn get_pvc(&self, namespace: &str, name: &str) -> Result<PersistentVolumeClaim> {
+        let api: Api<PersistentVolumeClaim> = Api::namespaced(self.client.clone(), namespace);
+
+        debug!("getting PVC");
+        api.get(name).await.map_err(|e| {
+            if is_not_found(&e) {
+                Error::PvcNotFound(format!("{namespace}/{name}"))
+            } else {
+                Error::PvcGet(e)
+            }
+        })
+    }
+
+    #[instrument(skip(self), fields(namespace = %namespace, pvc_name = %name))]
+    async fn delete_pvc(&self, namespace: &str, name: &str) -> Result<()> {
+        let api: Api<PersistentVolumeClaim> = Api::namespaced(self.client.clone(), namespace);
+
+        // Check if PVC exists first
+        if !self.pvc_exists(namespace, name).await? {
+            return Err(Error::PvcNotFound(format!("{namespace}/{name}")));
+        }
+
+        debug!("deleting PVC");
+        api.delete(name, &DeleteParams::default())
+            .await
+            .map_err(Error::PvcDelete)?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(namespace = %namespace, pvc_name = %name))]
+    async fn pvc_exists(&self, namespace: &str, name: &str) -> Result<bool> {
+        let api: Api<PersistentVolumeClaim> = Api::namespaced(self.client.clone(), namespace);
+
+        match api.get(name).await {
+            Ok(_) => Ok(true),
+            Err(e) if is_not_found(&e) => Ok(false),
+            Err(e) => Err(Error::PvcGet(e)),
+        }
     }
 }
 

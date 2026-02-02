@@ -7,9 +7,12 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use k8s_openapi::api::core::v1::{
-    Capabilities, Container, EmptyDirVolumeSource, Pod, PodSecurityContext, PodSpec, Probe,
-    ResourceRequirements, SeccompProfile, SecurityContext, TCPSocketAction, Volume, VolumeMount,
+    Capabilities, Container, EmptyDirVolumeSource, PersistentVolumeClaimVolumeSource, Pod,
+    PodSecurityContext, PodSpec, Probe, ResourceRequirements, SeccompProfile, SecurityContext,
+    TCPSocketAction, Volume, VolumeMount,
 };
+
+use crate::pvc::WORKSPACE_PVC_NAME;
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::api::{Api, DeleteParams, ObjectMeta, PostParams};
@@ -402,13 +405,16 @@ fn build_dev_container_pod(
     };
 
     // Volumes per garage-isolation.md spec:
-    // - workspace: persistent (shared between init container and main container)
+    // - workspace: PersistentVolumeClaim (survives pod restarts per spec)
     // - tmp, var-tmp, home, nix, cargo: ephemeral writable paths
     // - var-lib-apt, var-cache-apt, usr-local: for apt package installation
     let volumes = vec![
         Volume {
             name: "workspace".to_string(),
-            empty_dir: Some(EmptyDirVolumeSource::default()),
+            persistent_volume_claim: Some(PersistentVolumeClaimVolumeSource {
+                claim_name: WORKSPACE_PVC_NAME.to_string(),
+                read_only: Some(false),
+            }),
             ..Default::default()
         },
         Volume {
@@ -778,9 +784,9 @@ mod tests {
         let container = &spec.containers[0];
         let mounts = container.volume_mounts.as_ref().unwrap();
 
-        // Expected volumes and their mount paths per garage-isolation.md spec
-        let expected_volumes = [
-            ("workspace", "/workspace"),
+        // Expected emptyDir volumes and their mount paths per garage-isolation.md spec
+        // Note: workspace is now a PVC, not emptyDir
+        let expected_emptydir_volumes = [
             ("tmp", "/tmp"),
             ("var-tmp", "/var/tmp"),
             ("home", "/root"),
@@ -791,8 +797,28 @@ mod tests {
             ("usr-local", "/usr/local"),
         ];
 
-        // Check all volumes exist and are emptyDir
-        for (vol_name, _) in &expected_volumes {
+        // Check workspace volume is a PVC per garage-isolation.md spec
+        let workspace_vol = volumes
+            .iter()
+            .find(|v| v.name == "workspace")
+            .expect("workspace volume should exist");
+        assert!(
+            workspace_vol.persistent_volume_claim.is_some(),
+            "workspace should be a PersistentVolumeClaim"
+        );
+        let pvc = workspace_vol.persistent_volume_claim.as_ref().unwrap();
+        assert_eq!(pvc.claim_name, WORKSPACE_PVC_NAME);
+        assert_eq!(pvc.read_only, Some(false));
+
+        // Check workspace mount
+        let workspace_mount = mounts
+            .iter()
+            .find(|m| m.name == "workspace")
+            .expect("workspace mount should exist");
+        assert_eq!(workspace_mount.mount_path, "/workspace");
+
+        // Check all emptyDir volumes exist
+        for (vol_name, _) in &expected_emptydir_volumes {
             let volume = volumes
                 .iter()
                 .find(|v| v.name == *vol_name)
@@ -805,7 +831,7 @@ mod tests {
         }
 
         // Check all volume mounts exist with correct paths
-        for (vol_name, mount_path) in &expected_volumes {
+        for (vol_name, mount_path) in &expected_emptydir_volumes {
             let mount = mounts
                 .iter()
                 .find(|m| m.name == *vol_name)
@@ -817,19 +843,9 @@ mod tests {
             );
         }
 
-        // Verify exact count (no extra volumes/mounts)
-        assert_eq!(
-            volumes.len(),
-            expected_volumes.len(),
-            "should have exactly {} volumes",
-            expected_volumes.len()
-        );
-        assert_eq!(
-            mounts.len(),
-            expected_volumes.len(),
-            "should have exactly {} mounts",
-            expected_volumes.len()
-        );
+        // Total volume count: 1 PVC (workspace) + 8 emptyDir = 9
+        assert_eq!(volumes.len(), 9, "should have exactly 9 volumes");
+        assert_eq!(mounts.len(), 9, "should have exactly 9 mounts");
     }
 
     #[test]
