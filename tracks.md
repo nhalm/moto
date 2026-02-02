@@ -51,6 +51,7 @@ HOW TO USE THIS FILE:
 - moto-club-api: GET /api/v1/garages query params ?status= and ?all= per spec lines 295-300 (with INVALID_STATUS error code)
 - moto-club-api: POST /api/v1/garages/{name}/extend returns ExtendTtlResponse {expires_at, ttl_remaining_seconds} per spec lines 379-386
 - Remove SSH key management (v1.2 changelog: ttyd+WireGuard tunnel is sole auth boundary): moto-club-wg/src/ssh_keys.rs, moto-club-db user_ssh_key_repo.rs and user_ssh_keys table, UserSshKey model, SSH key API endpoints, PostgresSshKeyStore, moto-club-k8s secrets.rs (SshKeysSecretOps) and SSH volume mount in pods.rs, SSH key Secret step in garage service, INVALID_SSH_KEY/SSH_KEY_NOT_FOUND/SSH_KEY_NOT_OWNED error codes, ssh_key_manager in AppState
+- Clean up outdated SSH comments in service.rs and garages.rs
 
 **Remaining:**
 (none - moto-club.md v1.2 implementation complete)
@@ -76,6 +77,7 @@ HOW TO USE THIS FILE:
 - client.rs: Get garage details for session creation (GET /api/v1/garages/{name} returns garage UUID needed for session)
 - tunnel.rs: Remove device_id from DeviceIdentity (per spec v0.7: WG public key IS device identity)
 - Remove SSH key management from moto-garage-wgtunnel (spec v0.8: ttyd+WireGuard tunnel is sole auth boundary)
+- Remove dead SSH code from moto-cli-wgtunnel/src/enter.rs (SshConfig, spawn_ssh, etc.)
 
 **Remaining:**
 (none - moto-wgtunnel.md v0.8 implementation complete)
