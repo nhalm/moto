@@ -120,6 +120,26 @@ pub enum Error {
     /// Failed to delete PVC.
     #[error("failed to delete PVC: {0}")]
     PvcDelete(#[source] kube::Error),
+
+    /// Failed to create NetworkPolicy.
+    #[error("failed to create NetworkPolicy: {0}")]
+    NetworkPolicyCreate(#[source] kube::Error),
+
+    /// NetworkPolicy already exists.
+    #[error("NetworkPolicy already exists: {0}")]
+    NetworkPolicyExists(String),
+
+    /// NetworkPolicy not found.
+    #[error("NetworkPolicy not found: {0}")]
+    NetworkPolicyNotFound(String),
+
+    /// Failed to get NetworkPolicy.
+    #[error("failed to get NetworkPolicy: {0}")]
+    NetworkPolicyGet(#[source] kube::Error),
+
+    /// Failed to delete NetworkPolicy.
+    #[error("failed to delete NetworkPolicy: {0}")]
+    NetworkPolicyDelete(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.

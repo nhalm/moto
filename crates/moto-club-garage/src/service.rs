@@ -11,8 +11,8 @@ use uuid::Uuid;
 
 use moto_club_db::{DbError, DbPool, Garage, GarageStatus, TerminationReason, garage_repo};
 use moto_club_k8s::{
-    DEV_CONTAINER_POD_NAME, GarageK8s, GarageNamespaceInput, GarageNamespaceOps, GaragePodInput,
-    GaragePodOps, GaragePodStatus,
+    DEV_CONTAINER_POD_NAME, GarageK8s, GarageNamespaceInput, GarageNamespaceOps,
+    GarageNetworkPolicyOps, GaragePodInput, GaragePodOps, GaragePodStatus,
 };
 use moto_club_types::GarageId;
 
@@ -445,7 +445,7 @@ impl GarageService {
     ///
     /// 4. Create K8s namespace: moto-garage-{id}
     /// 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
-    /// 6. Apply `NetworkPolicy`, `ResourceQuota` (deferred)
+    /// 6. Apply `NetworkPolicy` (per garage-isolation.md spec)
     /// 7. Create `ServiceAccount` (for keybox auth) (deferred)
     /// 8. Deploy dev container pod
     async fn create_k8s_resources(
@@ -470,6 +470,17 @@ impl GarageService {
 
         debug!(namespace = %namespace, "creating K8s namespace");
         self.k8s.create_garage_namespace(&ns_input).await?;
+
+        // Step 6: Apply NetworkPolicy per garage-isolation.md spec
+        debug!(namespace = %namespace, "creating NetworkPolicy");
+        if let Err(e) = self.k8s.create_garage_network_policy(garage_id).await {
+            // Cleanup namespace on NetworkPolicy creation failure
+            warn!(namespace = %namespace, error = %e, "NetworkPolicy creation failed, cleaning up namespace");
+            if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
+                warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
+            }
+            return Err(e.into());
+        }
 
         // Step 8: Deploy pod
         let pod_input = GaragePodInput {

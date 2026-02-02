@@ -6,6 +6,7 @@
 //! - [`PodOps`] - Trait for pod operations (list, logs)
 //! - [`DeploymentOps`] - Trait for deployment operations
 //! - [`PvcOps`] - Trait for `PersistentVolumeClaim` operations
+//! - [`NetworkPolicyOps`] - Trait for `NetworkPolicy` operations
 //! - [`TokenReviewOps`] - Trait for `ServiceAccount` token validation
 //! - [`labels`] - Constants for moto K8s labels
 
@@ -14,6 +15,7 @@ mod deployment;
 mod error;
 mod labels;
 mod namespace;
+mod network_policy;
 mod pod;
 mod pvc;
 mod token_review;
@@ -23,6 +25,7 @@ pub use deployment::{BikeDeploymentConfig, BikeInfo, DeploymentOps};
 pub use error::{Error, Result};
 pub use labels::Labels;
 pub use namespace::NamespaceOps;
+pub use network_policy::NetworkPolicyOps;
 pub use pod::{LogStream, PodLogOptions, PodOps};
 pub use pvc::PvcOps;
 pub use token_review::{TokenReviewOps, ValidatedToken};

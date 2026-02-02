@@ -273,8 +273,8 @@ HOW TO USE THIS FILE:
 - Pod volumes: writable emptyDir mounts for tmp, var-tmp, home, nix, cargo, var-lib-apt, var-cache-apt, usr-local
 - Workspace PVC: workspace volume uses PersistentVolumeClaim per spec (moto-k8s PvcOps trait, moto-club-k8s GarageWorkspacePvcOps trait, pods.rs uses PVC for /workspace mount)
 - Pod volumes: wireguard-config ConfigMap mount, wireguard-keys Secret mount, garage-svid Secret mount (pods.rs volumes and volumeMounts per spec)
+- NetworkPolicy: garage-isolation policy per spec (moto-k8s NetworkPolicyOps trait, moto-club-k8s GarageNetworkPolicyOps trait and build_garage_isolation_policy, integrated into GarageService.create_k8s_resources)
 
 **Remaining:**
-- NetworkPolicy: garage-isolation policy per spec (DNS, keybox, same-namespace, internet egress)
 - ResourceQuota: garage-quota per spec (4 CPU, 8Gi, 10 pods, 1 PVC)
 - LimitRange: garage-limits per spec (default/max container limits)
