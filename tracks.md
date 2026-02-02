@@ -56,7 +56,7 @@ HOW TO USE THIS FILE:
   - ~~Remove moto-club-wg/src/ssh_keys.rs module~~ ✓
   - ~~Remove moto-club-db/src/user_ssh_key_repo.rs module~~ ✓
   - ~~Remove user_ssh_keys table from schema migration~~ ✓
-  - Remove UserSshKey model from moto-club-db/src/models.rs
+  - ~~Remove UserSshKey model from moto-club-db/src/models.rs~~ ✓
   - Remove SSH key endpoints from moto-club-api/src/wg.rs (POST/GET/DELETE /api/v1/users/ssh-keys)
   - Remove PostgresSshKeyStore from moto-club-api/src/postgres_stores.rs
   - Remove SSH key Secret creation from moto-club-k8s/src/secrets.rs (SshKeysSecretOps)

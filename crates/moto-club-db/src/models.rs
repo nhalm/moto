@@ -183,23 +183,6 @@ pub struct WgSession {
     pub closed_at: Option<DateTime<Utc>>,
 }
 
-/// A user SSH key from the database.
-///
-/// Maps to the `user_ssh_keys` table schema.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromRow)]
-pub struct UserSshKey {
-    /// Unique identifier.
-    pub id: Uuid,
-    /// Owner identifier.
-    pub owner: String,
-    /// SSH public key.
-    pub public_key: String,
-    /// Key fingerprint.
-    pub fingerprint: String,
-    /// When the key was registered.
-    pub created_at: DateTime<Utc>,
-}
-
 /// A garage `WireGuard` registration from the database.
 ///
 /// Maps to the `wg_garages` table schema.
