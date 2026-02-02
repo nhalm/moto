@@ -7,9 +7,10 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use k8s_openapi::api::core::v1::{
-    Capabilities, Container, EmptyDirVolumeSource, PersistentVolumeClaimVolumeSource, Pod,
-    PodSecurityContext, PodSpec, Probe, ResourceRequirements, SeccompProfile, SecurityContext,
-    TCPSocketAction, Volume, VolumeMount,
+    Capabilities, ConfigMapVolumeSource, Container, EmptyDirVolumeSource,
+    PersistentVolumeClaimVolumeSource, Pod, PodSecurityContext, PodSpec, Probe,
+    ResourceRequirements, SeccompProfile, SecretVolumeSource, SecurityContext, TCPSocketAction,
+    Volume, VolumeMount,
 };
 
 use crate::pvc::WORKSPACE_PVC_NAME;
@@ -251,6 +252,7 @@ impl GaragePodOps for GarageK8s {
 }
 
 /// Builds a dev container pod spec.
+#[allow(clippy::too_many_lines)]
 fn build_dev_container_pod(
     namespace: &str,
     image: &str,
@@ -368,6 +370,25 @@ fn build_dev_container_pod(
             mount_path: "/usr/local".to_string(),
             ..Default::default()
         },
+        // Secrets (pushed by moto-club) - read-only per garage-isolation.md spec
+        VolumeMount {
+            name: "wireguard-config".to_string(),
+            mount_path: "/etc/wireguard/config".to_string(),
+            read_only: Some(true),
+            ..Default::default()
+        },
+        VolumeMount {
+            name: "wireguard-keys".to_string(),
+            mount_path: "/etc/wireguard/keys".to_string(),
+            read_only: Some(true),
+            ..Default::default()
+        },
+        VolumeMount {
+            name: "garage-svid".to_string(),
+            mount_path: "/var/run/secrets/svid".to_string(),
+            read_only: Some(true),
+            ..Default::default()
+        },
     ];
 
     // Readiness probe: TCP check on ttyd port
@@ -397,7 +418,7 @@ fn build_dev_container_pod(
         resources: Some(resources),
         security_context: Some(security_context.clone()),
         env: Some(env_vars),
-        volume_mounts: Some(volume_mounts.clone()),
+        volume_mounts: Some(volume_mounts),
         // Use container's default entrypoint (garage-entrypoint)
         // which starts ttyd for terminal access
         readiness_probe: Some(readiness_probe),
@@ -455,6 +476,31 @@ fn build_dev_container_pod(
         Volume {
             name: "usr-local".to_string(),
             empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+        // Secrets (pushed by moto-club) per garage-isolation.md spec
+        Volume {
+            name: "wireguard-config".to_string(),
+            config_map: Some(ConfigMapVolumeSource {
+                name: "wireguard-config".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        Volume {
+            name: "wireguard-keys".to_string(),
+            secret: Some(SecretVolumeSource {
+                secret_name: Some("wireguard-keys".to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        Volume {
+            name: "garage-svid".to_string(),
+            secret: Some(SecretVolumeSource {
+                secret_name: Some("garage-svid".to_string()),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     ];
@@ -517,13 +563,12 @@ fn build_repo_clone_init_container(
     security_context: &SecurityContext,
 ) -> Container {
     // Clone script with retry logic per spec (3 retries)
-    let clone_script = format!(
-        r#"#!/bin/sh
+    let clone_script = r#"#!/bin/sh
 set -e
 
-REPO_URL="${{REPO_URL}}"
-REPO_BRANCH="${{REPO_BRANCH}}"
-REPO_NAME="${{REPO_NAME}}"
+REPO_URL="${REPO_URL}"
+REPO_BRANCH="${REPO_BRANCH}"
+REPO_NAME="${REPO_NAME}"
 MAX_RETRIES=3
 RETRY_COUNT=0
 
@@ -543,8 +588,7 @@ done
 
 echo "Clone failed after $MAX_RETRIES attempts"
 exit 1
-"#
-    );
+"#;
 
     // Environment variables per spec (lines 112-115)
     let env_vars = vec![
@@ -570,7 +614,7 @@ exit 1
         image: Some(image.to_string()),
         image_pull_policy: Some("Always".to_string()),
         command: Some(vec!["/bin/sh".to_string(), "-c".to_string()]),
-        args: Some(vec![clone_script]),
+        args: Some(vec![clone_script.to_string()]),
         env: Some(env_vars),
         volume_mounts: Some(vec![workspace_mount.clone()]),
         security_context: Some(security_context.clone()),
@@ -843,9 +887,81 @@ mod tests {
             );
         }
 
-        // Total volume count: 1 PVC (workspace) + 8 emptyDir = 9
-        assert_eq!(volumes.len(), 9, "should have exactly 9 volumes");
-        assert_eq!(mounts.len(), 9, "should have exactly 9 mounts");
+        // Check secret/configmap volumes per garage-isolation.md spec
+        // wireguard-config (ConfigMap), wireguard-keys (Secret), garage-svid (Secret)
+        let wg_config_vol = volumes
+            .iter()
+            .find(|v| v.name == "wireguard-config")
+            .expect("wireguard-config volume should exist");
+        assert!(
+            wg_config_vol.config_map.is_some(),
+            "wireguard-config should be a ConfigMap"
+        );
+        assert_eq!(
+            wg_config_vol.config_map.as_ref().unwrap().name,
+            "wireguard-config"
+        );
+
+        let wg_keys_vol = volumes
+            .iter()
+            .find(|v| v.name == "wireguard-keys")
+            .expect("wireguard-keys volume should exist");
+        assert!(
+            wg_keys_vol.secret.is_some(),
+            "wireguard-keys should be a Secret"
+        );
+        assert_eq!(
+            wg_keys_vol.secret.as_ref().unwrap().secret_name,
+            Some("wireguard-keys".to_string())
+        );
+
+        let svid_vol = volumes
+            .iter()
+            .find(|v| v.name == "garage-svid")
+            .expect("garage-svid volume should exist");
+        assert!(svid_vol.secret.is_some(), "garage-svid should be a Secret");
+        assert_eq!(
+            svid_vol.secret.as_ref().unwrap().secret_name,
+            Some("garage-svid".to_string())
+        );
+
+        // Check secret/configmap mounts are read-only per spec
+        let wg_config_mount = mounts
+            .iter()
+            .find(|m| m.name == "wireguard-config")
+            .expect("wireguard-config mount should exist");
+        assert_eq!(wg_config_mount.mount_path, "/etc/wireguard/config");
+        assert_eq!(
+            wg_config_mount.read_only,
+            Some(true),
+            "wireguard-config should be read-only"
+        );
+
+        let wg_keys_mount = mounts
+            .iter()
+            .find(|m| m.name == "wireguard-keys")
+            .expect("wireguard-keys mount should exist");
+        assert_eq!(wg_keys_mount.mount_path, "/etc/wireguard/keys");
+        assert_eq!(
+            wg_keys_mount.read_only,
+            Some(true),
+            "wireguard-keys should be read-only"
+        );
+
+        let svid_mount = mounts
+            .iter()
+            .find(|m| m.name == "garage-svid")
+            .expect("garage-svid mount should exist");
+        assert_eq!(svid_mount.mount_path, "/var/run/secrets/svid");
+        assert_eq!(
+            svid_mount.read_only,
+            Some(true),
+            "garage-svid should be read-only"
+        );
+
+        // Total volume count: 1 PVC (workspace) + 8 emptyDir + 1 ConfigMap + 2 Secrets = 12
+        assert_eq!(volumes.len(), 12, "should have exactly 12 volumes");
+        assert_eq!(mounts.len(), 12, "should have exactly 12 mounts");
     }
 
     #[test]
