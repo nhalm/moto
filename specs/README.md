@@ -52,8 +52,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [dev-container](dev-container.md) | Ripping | Nix dockerTools container, tooling, environment |
 | [container-system](container-system.md) | Ripping | Build pipeline, registry |
 | [local-cluster](local-cluster.md) | Ripping | Local k3s cluster, moto cluster CLI |
-| [garage-isolation](garage-isolation.md) | Bare Frame | Network policies, resource limits |
-| [garage-local](garage-local.md) | Wrenching | Local K8s operations (no server) |
+| [garage-isolation](garage-isolation.md) | Ready to Rip | Network policies, resource limits |
 | [garage-lifecycle](garage-lifecycle.md) | Ripping | Full lifecycle with ttyd terminal, TTL |
 | [moto-bike](moto-bike.md) | Ripping | Bike base image, engine contract |
 | [supporting-services](supporting-services.md) | Bare Frame | Postgres, Redis deployment |
