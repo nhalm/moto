@@ -54,7 +54,7 @@ HOW TO USE THIS FILE:
 **Remaining:**
 - Remove SSH key management (v1.2 changelog: ttyd+WireGuard tunnel is sole auth boundary):
   - ~~Remove moto-club-wg/src/ssh_keys.rs module~~ ✓
-  - Remove moto-club-db/src/user_ssh_key_repo.rs module
+  - ~~Remove moto-club-db/src/user_ssh_key_repo.rs module~~ ✓
   - Remove user_ssh_keys table from schema migration
   - Remove UserSshKey model from moto-club-db/src/models.rs
   - Remove SSH key endpoints from moto-club-api/src/wg.rs (POST/GET/DELETE /api/v1/users/ssh-keys)

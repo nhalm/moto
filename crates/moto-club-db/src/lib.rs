@@ -32,7 +32,6 @@
 pub mod derp_server_repo;
 pub mod garage_repo;
 pub mod models;
-pub mod user_ssh_key_repo;
 pub mod wg_device_repo;
 pub mod wg_garage_repo;
 pub mod wg_session_repo;
@@ -41,7 +40,7 @@ use thiserror::Error;
 
 pub use models::{
     DerpServer, Garage, GarageStatus, ParseGarageStatusError, ParseTerminationReasonError,
-    TerminationReason, UserSshKey, WgDevice, WgGarage, WgSession,
+    TerminationReason, WgDevice, WgGarage, WgSession,
 };
 pub use wg_session_repo::{ListSessionsFilter, WgSessionWithDetails};
 
