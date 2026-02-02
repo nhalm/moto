@@ -7,10 +7,11 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use k8s_openapi::api::core::v1::{
-    Container, KeyToPath, Pod, PodSpec, ResourceRequirements, SecretVolumeSource, SecurityContext,
-    Volume, VolumeMount,
+    Container, KeyToPath, Pod, PodSpec, Probe, ResourceRequirements, SecretVolumeSource,
+    SecurityContext, TCPSocketAction, Volume, VolumeMount,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
+use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 
 use crate::secrets::{AUTHORIZED_KEYS_KEY, SSH_KEYS_SECRET_NAME};
 use kube::api::{Api, DeleteParams, ObjectMeta, PostParams};
@@ -23,6 +24,10 @@ use crate::GarageK8s;
 
 /// Default pod name for the dev container in a garage.
 pub const DEV_CONTAINER_POD_NAME: &str = "dev-container";
+
+/// Port for ttyd terminal daemon (WebSocket).
+/// The container runs ttyd on this port for terminal access.
+pub const TTYD_PORT: i32 = 7681;
 
 /// Input for creating a garage pod.
 #[derive(Debug, Clone)]
@@ -277,6 +282,26 @@ fn build_dev_container_pod(
         ..Default::default()
     };
 
+    // Readiness probe: TCP check on ttyd port
+    // Container is ready when ttyd is accepting connections
+    let readiness_probe = Probe {
+        tcp_socket: Some(TCPSocketAction {
+            port: IntOrString::Int(TTYD_PORT),
+            ..Default::default()
+        }),
+        // Initial delay to allow ttyd to start
+        initial_delay_seconds: Some(2),
+        // Check every 5 seconds
+        period_seconds: Some(5),
+        // Fail after 3 consecutive failures
+        failure_threshold: Some(3),
+        // Succeed after 1 successful check
+        success_threshold: Some(1),
+        // Timeout for the check
+        timeout_seconds: Some(2),
+        ..Default::default()
+    };
+
     let container = Container {
         name: "dev".to_string(),
         image: Some(image.to_string()),
@@ -285,8 +310,9 @@ fn build_dev_container_pod(
         security_context: Some(security_context),
         env: Some(env_vars),
         volume_mounts: Some(vec![ssh_volume_mount]),
-        // Keep the container running
-        command: Some(vec!["sleep".to_string(), "infinity".to_string()]),
+        // Use container's default entrypoint (garage-entrypoint)
+        // which starts ttyd for terminal access
+        readiness_probe: Some(readiness_probe),
         ..Default::default()
     };
 
@@ -446,5 +472,46 @@ mod tests {
         assert_eq!(ssh_mount.name, "ssh-keys");
         assert_eq!(ssh_mount.mount_path, "/home/moto/.ssh");
         assert_eq!(ssh_mount.read_only, Some(true));
+    }
+
+    #[test]
+    fn build_pod_has_ttyd_readiness_probe() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod = build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels);
+
+        let spec = pod.spec.as_ref().unwrap();
+        let container = &spec.containers[0];
+
+        // Check readiness probe exists
+        let probe = container
+            .readiness_probe
+            .as_ref()
+            .expect("readiness probe should be set");
+
+        // Check it's a TCP socket probe
+        let tcp_socket = probe.tcp_socket.as_ref().expect("tcp_socket should be set");
+        assert_eq!(tcp_socket.port, IntOrString::Int(TTYD_PORT));
+
+        // Check probe timing settings
+        assert_eq!(probe.initial_delay_seconds, Some(2));
+        assert_eq!(probe.period_seconds, Some(5));
+        assert_eq!(probe.failure_threshold, Some(3));
+        assert_eq!(probe.success_threshold, Some(1));
+        assert_eq!(probe.timeout_seconds, Some(2));
+    }
+
+    #[test]
+    fn build_pod_uses_default_entrypoint() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod = build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels);
+
+        let spec = pod.spec.as_ref().unwrap();
+        let container = &spec.containers[0];
+
+        // Container should NOT override command - uses image's default (garage-entrypoint)
+        assert!(
+            container.command.is_none(),
+            "container should use image's default entrypoint"
+        );
     }
 }
