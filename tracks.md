@@ -228,9 +228,10 @@ HOW TO USE THIS FILE:
 - moto garage enter: ttyd WebSocket client (moto-cli-wgtunnel ttyd.rs), replaces SSH with WebSocket to port 7681
 - Ready criteria check: WireGuard registration check in reconciler (garage transitions to Ready only when wg_garages entry exists)
 - Ready criteria check: ttyd accepting connections (K8s TCP readiness probe on port 7681 in garage pod spec)
+- Repo cloning: init container with REPO_URL, REPO_BRANCH, REPO_NAME env vars (moto-club-k8s pods.rs RepoConfig, build_repo_clone_init_container); workspace volume shared between init and main container; 3-retry clone logic
 
 **Remaining:**
-- Repo cloning on garage creation (URL injection, credentials from keybox)
+- Repo cloning: credentials from keybox (future - MVP supports public repos)
 
 ---
 

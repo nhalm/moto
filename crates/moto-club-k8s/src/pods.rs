@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use k8s_openapi::api::core::v1::{
-    Container, KeyToPath, Pod, PodSpec, Probe, ResourceRequirements, SecretVolumeSource,
-    SecurityContext, TCPSocketAction, Volume, VolumeMount,
+    Container, EmptyDirVolumeSource, KeyToPath, Pod, PodSpec, Probe, ResourceRequirements,
+    SecretVolumeSource, SecurityContext, TCPSocketAction, Volume, VolumeMount,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
@@ -29,6 +29,17 @@ pub const DEV_CONTAINER_POD_NAME: &str = "dev-container";
 /// The container runs ttyd on this port for terminal access.
 pub const TTYD_PORT: i32 = 7681;
 
+/// Repository configuration for cloning.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RepoConfig {
+    /// Repository clone URL (e.g., `https://github.com/org/repo.git`).
+    pub url: String,
+    /// Branch to checkout.
+    pub branch: String,
+    /// Directory name under /workspace/ (derived from URL if not set).
+    pub name: String,
+}
+
 /// Input for creating a garage pod.
 #[derive(Debug, Clone)]
 pub struct GaragePodInput {
@@ -42,6 +53,8 @@ pub struct GaragePodInput {
     pub branch: String,
     /// Optional custom image (overrides default).
     pub image: Option<String>,
+    /// Optional repository to clone on startup.
+    pub repo: Option<RepoConfig>,
 }
 
 impl GaragePodInput {
@@ -150,7 +163,13 @@ impl GaragePodOps for GarageK8s {
             None,
         );
 
-        let pod = build_dev_container_pod(&namespace, image, &input.branch, labels);
+        let pod = build_dev_container_pod(
+            &namespace,
+            image,
+            &input.branch,
+            labels,
+            input.repo.as_ref(),
+        );
 
         let api: Api<Pod> = Api::namespaced(self.client.inner().clone(), &namespace);
         let created = api
@@ -236,6 +255,7 @@ fn build_dev_container_pod(
     image: &str,
     branch: &str,
     labels: BTreeMap<String, String>,
+    repo: Option<&RepoConfig>,
 ) -> Pod {
     // Resource requirements
     let mut requests = BTreeMap::new();
@@ -282,6 +302,13 @@ fn build_dev_container_pod(
         ..Default::default()
     };
 
+    // Volume mount for workspace (shared between init container and main container)
+    let workspace_volume_mount = VolumeMount {
+        name: "workspace".to_string(),
+        mount_path: "/workspace".to_string(),
+        ..Default::default()
+    };
+
     // Readiness probe: TCP check on ttyd port
     // Container is ready when ttyd is accepting connections
     let readiness_probe = Probe {
@@ -307,9 +334,9 @@ fn build_dev_container_pod(
         image: Some(image.to_string()),
         image_pull_policy: Some("Always".to_string()),
         resources: Some(resources),
-        security_context: Some(security_context),
+        security_context: Some(security_context.clone()),
         env: Some(env_vars),
-        volume_mounts: Some(vec![ssh_volume_mount]),
+        volume_mounts: Some(vec![ssh_volume_mount, workspace_volume_mount.clone()]),
         // Use container's default entrypoint (garage-entrypoint)
         // which starts ttyd for terminal access
         readiness_probe: Some(readiness_probe),
@@ -333,6 +360,25 @@ fn build_dev_container_pod(
         ..Default::default()
     };
 
+    // Volume for workspace (shared between init container and main container)
+    let workspace_volume = Volume {
+        name: "workspace".to_string(),
+        empty_dir: Some(EmptyDirVolumeSource::default()),
+        ..Default::default()
+    };
+
+    let volumes = vec![ssh_volume, workspace_volume];
+
+    // Build init containers for repo cloning if configured
+    let init_containers = repo.map(|repo_config| {
+        build_repo_clone_init_container(
+            image,
+            repo_config,
+            &workspace_volume_mount,
+            &security_context,
+        )
+    });
+
     Pod {
         metadata: ObjectMeta {
             name: Some(DEV_CONTAINER_POD_NAME.to_string()),
@@ -341,12 +387,87 @@ fn build_dev_container_pod(
             ..Default::default()
         },
         spec: Some(PodSpec {
+            init_containers: init_containers.map(|c| vec![c]),
             containers: vec![container],
-            volumes: Some(vec![ssh_volume]),
+            volumes: Some(volumes),
             restart_policy: Some("Never".to_string()),
             // Use default service account (will get garage-specific SA later)
             ..Default::default()
         }),
+        ..Default::default()
+    }
+}
+
+/// Builds an init container for cloning a repository.
+///
+/// The init container:
+/// 1. Clones the repo with `--depth=1` for faster cloning
+/// 2. Checks out the specified branch
+/// 3. Retries up to 3 times on failure
+fn build_repo_clone_init_container(
+    image: &str,
+    repo: &RepoConfig,
+    workspace_mount: &VolumeMount,
+    security_context: &SecurityContext,
+) -> Container {
+    // Clone script with retry logic per spec (3 retries)
+    let clone_script = format!(
+        r#"#!/bin/sh
+set -e
+
+REPO_URL="${{REPO_URL}}"
+REPO_BRANCH="${{REPO_BRANCH}}"
+REPO_NAME="${{REPO_NAME}}"
+MAX_RETRIES=3
+RETRY_COUNT=0
+
+echo "Cloning $REPO_URL (branch: $REPO_BRANCH) to /workspace/$REPO_NAME/"
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if git clone --depth=1 -b "$REPO_BRANCH" "$REPO_URL" "/workspace/$REPO_NAME"; then
+        echo "Clone successful"
+        # Set working directory marker for ttyd
+        echo "/workspace/$REPO_NAME" > /workspace/.workdir
+        exit 0
+    fi
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    echo "Clone failed, attempt $RETRY_COUNT of $MAX_RETRIES"
+    sleep 2
+done
+
+echo "Clone failed after $MAX_RETRIES attempts"
+exit 1
+"#
+    );
+
+    // Environment variables per spec (lines 112-115)
+    let env_vars = vec![
+        k8s_openapi::api::core::v1::EnvVar {
+            name: "REPO_URL".to_string(),
+            value: Some(repo.url.clone()),
+            ..Default::default()
+        },
+        k8s_openapi::api::core::v1::EnvVar {
+            name: "REPO_BRANCH".to_string(),
+            value: Some(repo.branch.clone()),
+            ..Default::default()
+        },
+        k8s_openapi::api::core::v1::EnvVar {
+            name: "REPO_NAME".to_string(),
+            value: Some(repo.name.clone()),
+            ..Default::default()
+        },
+    ];
+
+    Container {
+        name: "clone-repo".to_string(),
+        image: Some(image.to_string()),
+        image_pull_policy: Some("Always".to_string()),
+        command: Some(vec!["/bin/sh".to_string(), "-c".to_string()]),
+        args: Some(vec![clone_script]),
+        env: Some(env_vars),
+        volume_mounts: Some(vec![workspace_mount.clone()]),
+        security_context: Some(security_context.clone()),
         ..Default::default()
     }
 }
@@ -397,6 +518,7 @@ mod tests {
             owner: "alice".to_string(),
             branch: "main".to_string(),
             image: None,
+            repo: None,
         };
 
         let ns = input.namespace_name();
@@ -417,7 +539,8 @@ mod tests {
     #[test]
     fn build_pod_has_correct_structure() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod = build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels);
+        let pod =
+            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
 
         // Check metadata
         assert_eq!(pod.metadata.name, Some(DEV_CONTAINER_POD_NAME.to_string()));
@@ -443,15 +566,15 @@ mod tests {
     #[test]
     fn build_pod_has_ssh_keys_volume() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod = build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels);
+        let pod =
+            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
 
         let spec = pod.spec.as_ref().unwrap();
 
-        // Check volume is defined
+        // Check volumes are defined (ssh-keys + workspace)
         let volumes = spec.volumes.as_ref().unwrap();
-        assert_eq!(volumes.len(), 1);
-        let ssh_volume = &volumes[0];
-        assert_eq!(ssh_volume.name, "ssh-keys");
+        assert_eq!(volumes.len(), 2);
+        let ssh_volume = volumes.iter().find(|v| v.name == "ssh-keys").unwrap();
 
         let secret = ssh_volume.secret.as_ref().unwrap();
         assert_eq!(secret.secret_name, Some(SSH_KEYS_SECRET_NAME.to_string()));
@@ -464,12 +587,11 @@ mod tests {
         assert_eq!(items[0].path, "authorized_keys");
         assert_eq!(items[0].mode, Some(0o600));
 
-        // Check container has volume mount
+        // Check container has volume mounts (ssh + workspace)
         let container = &spec.containers[0];
         let mounts = container.volume_mounts.as_ref().unwrap();
-        assert_eq!(mounts.len(), 1);
-        let ssh_mount = &mounts[0];
-        assert_eq!(ssh_mount.name, "ssh-keys");
+        assert_eq!(mounts.len(), 2);
+        let ssh_mount = mounts.iter().find(|m| m.name == "ssh-keys").unwrap();
         assert_eq!(ssh_mount.mount_path, "/home/moto/.ssh");
         assert_eq!(ssh_mount.read_only, Some(true));
     }
@@ -477,7 +599,8 @@ mod tests {
     #[test]
     fn build_pod_has_ttyd_readiness_probe() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod = build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels);
+        let pod =
+            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
 
         let spec = pod.spec.as_ref().unwrap();
         let container = &spec.containers[0];
@@ -503,7 +626,8 @@ mod tests {
     #[test]
     fn build_pod_uses_default_entrypoint() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod = build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels);
+        let pod =
+            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
 
         let spec = pod.spec.as_ref().unwrap();
         let container = &spec.containers[0];
@@ -513,5 +637,86 @@ mod tests {
             container.command.is_none(),
             "container should use image's default entrypoint"
         );
+    }
+
+    #[test]
+    fn build_pod_with_repo_has_init_container() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let repo = RepoConfig {
+            url: "https://github.com/example/repo.git".to_string(),
+            branch: "main".to_string(),
+            name: "repo".to_string(),
+        };
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            Some(&repo),
+        );
+
+        let spec = pod.spec.as_ref().unwrap();
+
+        // Check init container exists
+        let init_containers = spec
+            .init_containers
+            .as_ref()
+            .expect("init_containers should be set");
+        assert_eq!(init_containers.len(), 1);
+
+        let init = &init_containers[0];
+        assert_eq!(init.name, "clone-repo");
+        assert_eq!(init.image, Some("test:latest".to_string()));
+
+        // Check env vars are set correctly
+        let env = init.env.as_ref().unwrap();
+        let repo_url = env.iter().find(|e| e.name == "REPO_URL").unwrap();
+        assert_eq!(
+            repo_url.value,
+            Some("https://github.com/example/repo.git".to_string())
+        );
+
+        let repo_branch = env.iter().find(|e| e.name == "REPO_BRANCH").unwrap();
+        assert_eq!(repo_branch.value, Some("main".to_string()));
+
+        let repo_name = env.iter().find(|e| e.name == "REPO_NAME").unwrap();
+        assert_eq!(repo_name.value, Some("repo".to_string()));
+
+        // Check workspace volume mount
+        let mounts = init.volume_mounts.as_ref().unwrap();
+        let workspace_mount = mounts.iter().find(|m| m.name == "workspace").unwrap();
+        assert_eq!(workspace_mount.mount_path, "/workspace");
+    }
+
+    #[test]
+    fn build_pod_without_repo_has_no_init_container() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod =
+            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
+
+        let spec = pod.spec.as_ref().unwrap();
+
+        // No init containers when repo is None
+        assert!(spec.init_containers.is_none());
+    }
+
+    #[test]
+    fn build_pod_has_workspace_volume() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod =
+            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
+
+        let spec = pod.spec.as_ref().unwrap();
+
+        // Check workspace volume is defined
+        let volumes = spec.volumes.as_ref().unwrap();
+        let workspace_volume = volumes.iter().find(|v| v.name == "workspace").unwrap();
+        assert!(workspace_volume.empty_dir.is_some());
+
+        // Check main container has workspace mount
+        let container = &spec.containers[0];
+        let mounts = container.volume_mounts.as_ref().unwrap();
+        let workspace_mount = mounts.iter().find(|m| m.name == "workspace").unwrap();
+        assert_eq!(workspace_mount.mount_path, "/workspace");
     }
 }

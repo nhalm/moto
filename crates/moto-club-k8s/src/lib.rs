@@ -33,7 +33,7 @@ mod pods;
 mod secrets;
 
 pub use namespace::{GarageNamespaceInput, GarageNamespaceOps};
-pub use pods::{DEV_CONTAINER_POD_NAME, GaragePodInput, GaragePodOps, GaragePodStatus};
+pub use pods::{DEV_CONTAINER_POD_NAME, GaragePodInput, GaragePodOps, GaragePodStatus, RepoConfig};
 pub use secrets::{
     AUTHORIZED_KEYS_KEY, SSH_KEYS_SECRET_NAME, SshKeysSecretInput, SshKeysSecretOps,
 };

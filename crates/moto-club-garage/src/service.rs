@@ -91,6 +91,8 @@ pub struct CreateGarageInput {
     pub image: Option<String>,
     /// Engine name (what the garage is working on).
     pub engine: Option<String>,
+    /// Optional repository to clone on startup.
+    pub repo: Option<moto_club_k8s::RepoConfig>,
 }
 
 /// Input for extending a garage's TTL.
@@ -505,6 +507,7 @@ impl GarageService {
             owner: owner.to_string(),
             branch: input.branch.clone(),
             image: input.image.clone(),
+            repo: input.repo.clone(),
         };
 
         debug!(namespace = %namespace, "deploying dev container pod");
@@ -566,11 +569,13 @@ mod tests {
             ttl_seconds: None,
             image: None,
             engine: None,
+            repo: None,
         };
 
         assert!(input.name.is_none());
         assert_eq!(input.branch, "main");
         assert!(input.ttl_seconds.is_none());
+        assert!(input.repo.is_none());
     }
 
     #[test]

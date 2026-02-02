@@ -225,6 +225,7 @@ async fn create_garage(
             ttl_seconds: req.ttl_seconds,
             image: req.image,
             engine: None,
+            repo: None, // TODO: Add repo to API request when needed
         };
 
         let garage = garage_service
