@@ -2,54 +2,65 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
-| Last Updated | 2026-01-22 |
+| Version | 0.3 |
+| Last Updated | 2026-02-02 |
 
 ## Overview
 
-Defines the lifecycle operations for garages (wrenching environments). Covers creation, attachment, detachment, and cleanup. Supports multiple concurrent garages and remote execution via WireGuard.
+Defines the lifecycle operations for garages (wrenching environments). Covers creation, connection, and cleanup. Supports multiple concurrent garages and remote execution via WireGuard.
 
-> **TODO: Update connectivity model**
->
-> Two transports:
-> 1. **WireGuard** - Terminal/SSH access (replaces WebSocket kubectl exec proxy)
-> 2. **WebSocket/SSE** - Streaming logs, TTL warnings, events
->
-> See [moto-wgtunnel.md](moto-wgtunnel.md) for WireGuard spec
+**Connectivity model:**
+
+| Transport | Purpose | Details |
+|-----------|---------|---------|
+| **WireGuard** | Terminal access (ttyd) | Encrypted P2P tunnel, moto-club coordinates only |
+| **WebSocket/SSE** | Streaming logs, TTL warnings, events | Future - see [moto-club-websocket.md](moto-club-websocket.md) |
+
+See [moto-wgtunnel.md](moto-wgtunnel.md) for WireGuard spec.
 
 ## Specification
 
 ### Garage States
 
 ```
-┌─────────┐     ┌─────────┐     ┌─────────┐     ┌──────────┐
-│ Pending │ ──▶ │ Running │ ──▶ │  Ready  │ ──▶ │ Attached │
-└─────────┘     └─────────┘     └─────────┘     └──────────┘
-     │               │               │               │
-     │               │               │               │
-     ▼               ▼               ▼               ▼
-┌─────────────────────────────────────────────────────────┐
-│                      Terminated                         │
-└─────────────────────────────────────────────────────────┘
+┌─────────┐     ┌─────────┐     ┌─────────┐
+│ Pending │ ──▶ │ Running │ ──▶ │  Ready  │
+└─────────┘     └─────────┘     └─────────┘
+     │               │               │
+     │               │               │
+     ▼               ▼               ▼
+┌───────────────────────────────────────────┐
+│                 Terminated                 │
+└───────────────────────────────────────────┘
 ```
 
 | State | Description |
 |-------|-------------|
 | **Pending** | Pod scheduled, pulling images |
 | **Running** | Container started, initializing |
-| **Ready** | Garage ready, Claude Code available |
-| **Attached** | User connected to garage |
+| **Ready** | Garage ready for use (see Ready criteria below) |
 | **Terminated** | Garage closed/cleaned up |
+
+### Ready Criteria
+
+A garage transitions to Ready when ALL of the following are true:
+
+| Check | Description |
+|-------|-------------|
+| Pod running | K8s pod status is Running |
+| Terminal daemon up | ttyd accepting connections on port 7681 |
+| WireGuard registered | Garage has registered with moto-club |
+| Repo cloned | Repository cloned to `/workspace/<repo-name>/` |
 
 ### CLI Commands
 
 ```
 moto garage open [OPTIONS]      Create a new garage
-moto garage enter <id>          Attach to a garage
-moto garage detach              Disconnect but keep garage alive (Ctrl+P, Ctrl+Q)
+moto garage enter <name>        Connect to a garage terminal
 moto garage list                List all garages with status
-moto garage close <id>          Terminate and cleanup garage
-moto garage logs <id>           View garage logs
+moto garage close <name>        Terminate and cleanup garage
+moto garage extend <name>       Extend garage TTL
+moto garage logs <name>         View garage logs
 ```
 
 **Note:** Code sync and PR creation are handled by agents using `jj` and `gh` directly. See [jj-workflow.md](jj-workflow.md) for the workflow.
@@ -64,7 +75,7 @@ Creates a new wrenching environment.
 --branch <branch>       Git branch to work on (default: current)
 --ttl <duration>        Time-to-live (default: 4h, max: 48h)
 --image <image>         Override dev container image
---no-attach             Create but don't attach
+--no-attach             Create but don't connect
 ```
 
 **Flow:**
@@ -73,10 +84,13 @@ Creates a new wrenching environment.
 2. Create K8s namespace: moto-garage-{id}
 3. Apply resource quotas and network policies
 4. Deploy dev container pod
-5. Clone repo / checkout branch inside container
-6. Start supporting services (Postgres, Redis)
-7. Wait for Ready state
-8. If not --no-attach, attach via WebSocket
+5. Wait for pod Running
+6. Clone repository to /workspace/<repo-name>/
+   - URL injected into garage
+   - Credentials pulled from keybox
+   - Create working branch
+7. Wait for Ready state (all criteria met)
+8. If not --no-attach, connect via WireGuard tunnel
 ```
 
 **Output:**
@@ -87,35 +101,31 @@ Garage created: abc123
   TTL:     4h (expires 2026-01-20 02:48:00)
   Status:  Ready
 
-Attaching... (Ctrl+P, Ctrl+Q to detach)
+Connecting... (use `moto garage enter <name>` to reconnect)
 ```
 
 ### `moto garage enter`
 
-Attach to an existing garage.
+Connect to an existing garage's terminal.
 
 **Flow:**
 ```
-1. Lookup garage by ID or name
-2. Verify garage is Ready or Attached
-3. Establish WebSocket connection to garage pod
-4. Relay stdin/stdout bidirectionally
-5. Update state to Attached
+1. Lookup garage by name
+2. Verify garage is Ready
+3. Establish WireGuard tunnel (see moto-wgtunnel.md)
+4. Connect to ttyd via WebSocket
+5. Attach to tmux session
 ```
 
-**Detach:**
-- `Ctrl+P, Ctrl+Q` detaches cleanly
-- Garage keeps running
-- Can reattach later
+**Session behavior:**
+- First connect → creates tmux session, attaches
+- Disconnect → tmux session keeps running (processes survive)
+- Reconnect → reattaches to existing tmux session
+- Multiple clients → all attach to same tmux session (mirrored view)
 
-### `moto garage detach`
+**Detach:** Close the connection or use tmux detach (`Ctrl+B, D`). Garage keeps running.
 
-Disconnect from garage without stopping it.
-
-- Keyboard shortcut: `Ctrl+P, Ctrl+Q`
-- Garage continues running
-- TTL timer continues
-- Can reattach with `moto garage enter <id>`
+See [moto-wgtunnel.md](moto-wgtunnel.md) for connection details.
 
 ### `moto garage list`
 
@@ -124,7 +134,7 @@ List all garages.
 **Output:**
 ```
 ID       NAME                    BRANCH   STATUS    TTL        AGE
-abc123   feature-tokenization    main     Attached  3h 45m     15m
+abc123   feature-tokenization    main     Ready     3h 45m     15m
 def456   fix-proxy-bug           develop  Ready     2h 10m     1h 50m
 ghi789   experiment-caching      main     Pending   4h         30s
 ```
@@ -136,10 +146,8 @@ Terminate and cleanup a garage.
 **Flow:**
 ```
 1. Warn if unsaved changes (prompt to sync first)
-2. Delete dev container pod
-3. Delete supporting service pods
-4. Delete namespace
-5. Remove from garage registry
+2. Delete K8s namespace (cascades to all resources)
+3. Update database status to Terminated
 ```
 
 **Options:**
@@ -147,7 +155,17 @@ Terminate and cleanup a garage.
 --force                 Skip unsaved changes warning
 ```
 
-### TTL and Auto-Cleanup
+### `moto garage extend`
+
+Extend garage TTL.
+
+```
+moto garage extend <name> --ttl 2h
+```
+
+Adds time to current expiry. Cannot exceed max TTL (48h total).
+
+### TTL and Cleanup
 
 Garages have a time-to-live to prevent resource leaks.
 
@@ -155,31 +173,16 @@ Garages have a time-to-live to prevent resource leaks.
 |---------|-------|
 | Default TTL | 4 hours |
 | Maximum TTL | 48 hours |
-| Warning | 15 min before expiry |
-| Grace period | 5 min after warning |
 
-**Auto-cleanup flow:**
-```
-1. TTL timer starts at garage creation
-2. At TTL - 15min: warn user (if attached)
-3. At TTL - 5min: final warning, prompt to extend
-4. At TTL: auto-close (with sync prompt if changes)
-```
-
-**Extend TTL:**
-```
-moto garage extend <id> --ttl 2h
-```
+**Cleanup:** TTL enforcement handled by moto-cron. See [moto-cron.md](moto-cron.md). For now, use `moto garage close` to manually close garages.
 
 ### Connectivity Model
 
-> **TODO: Replace with WireGuard + WebSocket/SSE**
-
-**Terminal access (WireGuard):**
+**Terminal access (WireGuard + ttyd):**
 ```
 ┌──────────────┐     WireGuard      ┌──────────────┐
 │   moto CLI   │ ◀────────────────▶ │  Garage Pod  │
-│   (local)    │   tunnel + SSH     │   (remote)   │
+│   (local)    │   tunnel + ttyd    │   (remote)   │
 └──────────────┘                    └──────────────┘
         │
         │  coordinate
@@ -189,13 +192,14 @@ moto garage extend <id> --ttl 2h
 └──────────────┘
 ```
 
-**Streaming (WebSocket/SSE):**
+**Streaming (future):**
 ```
-/api/v1/garages/{id}/logs    Stream garage logs (SSE)
-/ws/v1/events                TTL warnings, status changes (WebSocket)
+/ws/v1/garages/{name}/logs    Stream garage logs (WebSocket)
+/ws/v1/events                 TTL warnings, status changes (WebSocket)
 ```
 
 See [moto-wgtunnel.md](moto-wgtunnel.md) for WireGuard details.
+See [moto-club-websocket.md](moto-club-websocket.md) for streaming details.
 
 ### Multiple Garages
 
@@ -222,3 +226,27 @@ spiffe://moto.local/garage/{garage-id}
 Garage can fetch:
 - Instance-scoped secrets (its own)
 - Global secrets (AI keys via ai-proxy, etc.)
+
+## Changelog
+
+### v0.3
+- Remove "Attached" state (4 states now: Pending → Running → Ready → Terminated)
+- Replace SSH with ttyd + tmux for terminal access
+- Add Ready criteria section (pod running, ttyd up, WireGuard registered, repo cloned)
+- Update connectivity model for ttyd
+- Add repo cloning details (`/workspace/<repo-name>/`, credentials from keybox)
+- Defer supporting services to future (not in garage open flow)
+- Defer TTL enforcement to moto-cron
+- CLI commands use `<name>` instead of `<id>`
+- Add `garage extend` command
+
+### v0.2
+- Initial specification
+
+## References
+
+- [moto-wgtunnel.md](moto-wgtunnel.md) - WireGuard tunnel system
+- [moto-club.md](moto-club.md) - Garage orchestration
+- [moto-club-websocket.md](moto-club-websocket.md) - WebSocket streaming
+- [moto-cron.md](moto-cron.md) - Scheduled tasks (TTL cleanup)
+- [jj-workflow.md](jj-workflow.md) - Code workflow

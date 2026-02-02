@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.12 |
+| Version | 0.13 |
 | Status | Ready to Rip |
-| Last Updated | 2026-01-26 |
+| Last Updated | 2026-02-02 |
 
 ## Overview
 
@@ -55,7 +55,7 @@ moto/
     ├── modules/                 # Reusable module components
     │   ├── base.nix             # Core system tools (bash, coreutils, etc.)
     │   ├── dev-tools.nix        # Development tooling (Rust, cargo, etc.)
-    │   ├── ssh.nix              # SSH server
+    │   ├── terminal.nix         # Terminal daemon (ttyd + tmux)
     │   └── wireguard.nix        # WireGuard tools
     └── smoke-test.sh            # Container smoke tests
 ```
@@ -167,7 +167,8 @@ This is run during container build. The binary installs to `~/.local/bin/claude`
 | Tool | Nix Package | Purpose |
 |------|-------------|---------|
 | wireguard-tools | `wireguard-tools` | WireGuard client for tunnel |
-| openssh | `openssh` | SSH server for terminal access |
+| ttyd | `ttyd` | WebSocket terminal daemon |
+| tmux | `tmux` | Terminal multiplexer for session persistence |
 
 ### Claude Code Configuration
 
@@ -193,10 +194,15 @@ ANTHROPIC_API_KEY="garage-${GARAGE_ID}"  # Proxy handles real key
 
 The container includes these services (configured in Dockerfile):
 
-**SSH Server:**
-- OpenSSH installed via Nix
-- Configured at container startup if needed
-- Root login enabled for AI access
+**Terminal Daemon (ttyd + tmux):**
+- ttyd listens on port 7681 (WebSocket)
+- Spawns tmux for session persistence: `ttyd -p 7681 -W tmux new-session -A -s garage`
+- Working directory: `/workspace`
+- Runs as: root
+- Process management: systemd service, restarts on failure
+- Health check: TCP probe on port 7681
+- No authentication required (WireGuard tunnel is auth boundary)
+- See [moto-wgtunnel.md](moto-wgtunnel.md) for connection details
 
 **WireGuard (configured by moto-garage-wgtunnel daemon):**
 - Daemon registers with moto-club on startup
@@ -421,11 +427,11 @@ make test-garage
 
 let
   base = import ../modules/base.nix { inherit pkgs; };
-  ssh = import ../modules/ssh.nix { inherit pkgs; };
+  terminal = import ../modules/terminal.nix { inherit pkgs; };
   devTools = import ../modules/dev-tools.nix { inherit pkgs rustToolchain; };
   wireguard = import ../modules/wireguard.nix { inherit pkgs; };
 
-  allContents = base.contents ++ ssh.contents ++ devTools.contents ++ wireguard.contents;
+  allContents = base.contents ++ terminal.contents ++ devTools.contents ++ wireguard.contents;
   allEnv = base.env ++ devTools.env;
 in
 pkgs.dockerTools.buildLayeredImage {
@@ -470,6 +476,13 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.13 (2026-02-02)
+- Replace SSH with ttyd + tmux for terminal access
+- Update module: `ssh.nix` → `terminal.nix`
+- Update connectivity tools: remove openssh, add ttyd + tmux
+- Add terminal daemon details (port 7681, systemd, health check)
+- WireGuard tunnel is the sole auth boundary (no SSH keys needed)
 
 ### v0.12 (2026-01-26)
 - Add "Build Verification (Required)" section with mandatory build testing

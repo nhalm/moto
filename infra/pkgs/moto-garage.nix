@@ -4,12 +4,12 @@
 
 let
   base = import ../modules/base.nix { inherit pkgs; };
-  ssh = import ../modules/ssh.nix { inherit pkgs; };
+  terminal = import ../modules/terminal.nix { inherit pkgs; };
   devTools = import ../modules/dev-tools.nix { inherit pkgs rustToolchain; };
   wireguard = import ../modules/wireguard.nix { inherit pkgs; };
 
   # Combine all contents from modules
-  allContents = base.contents ++ ssh.contents ++ devTools.contents ++ wireguard.contents;
+  allContents = base.contents ++ terminal.contents ++ devTools.contents ++ wireguard.contents;
 
   # Combine all environment variables from modules
   allEnv = base.env ++ devTools.env;
@@ -34,7 +34,7 @@ pkgs.dockerTools.buildLayeredImage {
     WorkingDir = "/workspace";
     Env = allEnv;
     ExposedPorts = {
-      "22/tcp" = {}; # SSH
+      "7681/tcp" = {}; # ttyd (WebSocket terminal)
     };
     Volumes = {
       "/workspace" = {};
@@ -48,7 +48,6 @@ pkgs.dockerTools.buildLayeredImage {
     mkdir -p root
     mkdir -p root/.local/bin
     mkdir -p workspace
-    mkdir -p etc/ssh
     mkdir -p var/run
     mkdir -p tmp
     chmod 1777 tmp

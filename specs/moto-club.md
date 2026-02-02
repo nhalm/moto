@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.1 |
-| Last Updated | 2026-01-28 |
+| Version | 1.2 |
+| Last Updated | 2026-02-02 |
 
 ## Overview
 
@@ -81,7 +81,7 @@ The motorcycle club - central orchestration service for the moto platform. Where
 
 Two transports for different purposes:
 
-1. **WireGuard** - Terminal/SSH access to garages
+1. **WireGuard** - Terminal access to garages (via ttyd)
    - CLI establishes WireGuard tunnel directly to garage pod
    - moto-club coordinates only (peer registration, IP allocation)
    - Traffic never flows through moto-club
@@ -96,7 +96,7 @@ Two transports for different purposes:
 Terminal access (WireGuard):
 ┌──────────────┐     WireGuard      ┌──────────────┐
 │   moto CLI   │ ◀────────────────▶ │  Garage Pod  │
-│   (local)    │   tunnel + SSH     │   (remote)   │
+│   (local)    │   tunnel + ttyd    │   (remote)   │
 └──────────────┘                    └──────────────┘
         │
         │  coordinate (HTTP)
@@ -138,7 +138,6 @@ crates/
 │       ├── peers.rs          # Peer registration
 │       ├── ipam.rs           # IP address allocation
 │       ├── sessions.rs       # Tunnel session management
-│       ├── ssh_keys.rs       # User SSH key management
 │       └── derp.rs           # DERP map management
 │
 ├── moto-club-garage/         # Library: Garage service logic
@@ -675,89 +674,6 @@ Response 304 Not Modified (version matches, no body):
 
 **Note:** WebSocket streaming will replace polling in a future version.
 
-##### Register User SSH Key
-
-Registers user's SSH public key for injection into garages.
-
-```
-POST /api/v1/users/ssh-keys
-Authorization: Bearer <user-token>
-
-Request:
-{
-  "public_key": "ssh-ed25519 AAAA... user@host"
-}
-
-Response 201 Created:
-{
-  "id": "uuid-of-key",
-  "fingerprint": "SHA256:...",
-  "created_at": "2026-01-21T10:00:00Z"
-}
-
-Response 200 OK (key already registered, idempotent):
-{
-  "id": "uuid-of-key",
-  "fingerprint": "SHA256:...",
-  "created_at": "2026-01-21T10:00:00Z"
-}
-```
-
-**Behavior:**
-- Key stored in database, injected into garages at creation time (see SSH Key Injection below)
-- Multiple keys per user supported
-- Same key re-registered by same user returns 200 with existing record (idempotent)
-- Same fingerprint can be registered by different users (not globally unique)
-- Key format validated: must be valid OpenSSH public key format (e.g., `ssh-ed25519 AAAA...`, `ssh-rsa AAAA...`)
-
-**Errors:** `INVALID_SSH_KEY` (400) - Malformed or unsupported SSH public key format
-
-##### List User SSH Keys
-
-```
-GET /api/v1/users/ssh-keys
-Authorization: Bearer <user-token>
-
-Response 200:
-{
-  "keys": [
-    {
-      "id": "uuid-of-key",
-      "fingerprint": "SHA256:...",
-      "public_key": "ssh-ed25519 AAAA... user@host",
-      "created_at": "2026-01-21T10:00:00Z"
-    }
-  ]
-}
-```
-
-##### Delete User SSH Key
-
-```
-DELETE /api/v1/users/ssh-keys/{key_id}
-Authorization: Bearer <user-token>
-
-Response 204 No Content
-```
-
-**Note:** Does not remove key from already-running garages.
-
-##### SSH Key Injection
-
-When a garage is created, moto-club injects the user's SSH public keys into the garage pod:
-
-1. Query `user_ssh_keys` for all keys belonging to the garage owner
-2. Create K8s Secret `ssh-keys` in the garage namespace containing:
-   - `authorized_keys`: concatenated public keys (one per line)
-3. Mount secret as `/home/moto/.ssh/authorized_keys` in the garage pod (read-only, mode 0600)
-
-**Limitations (v1):**
-- Keys added after garage creation are NOT automatically synced to running garages
-- User must create a new garage to pick up newly-registered keys
-- Key deletion does not revoke access to running garages
-
-**Future:** A sidecar or periodic sync could update keys in running garages.
-
 #### DERP Map
 
 ##### Get DERP Map
@@ -871,11 +787,10 @@ enum GarageStatus {
 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
 6. Apply NetworkPolicy, ResourceQuota
 7. Create ServiceAccount (for keybox auth)
-8. Create SSH keys Secret (user's public keys as authorized_keys)
-9. Deploy dev container pod (mounts SSH keys secret)
-10. Wait for pod Ready
-11. Update database (Ready)
-12. Return garage details
+8. Deploy dev container pod
+9. Wait for pod Ready
+10. Update database (Ready)
+11. Return garage details
 ```
 
 **Create failure handling:**
@@ -955,7 +870,6 @@ moto-club coordinates WireGuard connections but never sees traffic.
 - Garage registration (garage public keys, called by garage pods)
 - IP allocation (overlay network: fd00:moto::/48)
 - DERP map distribution
-- User SSH key storage (injected into garages)
 
 **IP allocation algorithm:**
 
@@ -1087,18 +1001,6 @@ CREATE TABLE wg_garages (
     registered_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- User SSH keys
-CREATE TABLE user_ssh_keys (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    owner TEXT NOT NULL,
-    public_key TEXT NOT NULL,
-    fingerprint TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(owner, fingerprint)
-);
-
-CREATE INDEX idx_user_ssh_keys_owner ON user_ssh_keys(owner);
-
 -- DERP servers (monitored by moto-club)
 CREATE TABLE derp_servers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1139,7 +1041,6 @@ All API errors use a standard format:
 | `GARAGE_NOT_REGISTERED` | 400 | Garage hasn't registered its WireGuard endpoint |
 | `INVALID_TTL` | 400 | TTL out of valid range |
 | `INVALID_STATUS` | 400 | Unknown status value in filter |
-| `INVALID_SSH_KEY` | 400 | Malformed or unsupported SSH public key format |
 | `DEVICE_NOT_FOUND` | 404 | WireGuard device (public key) not registered |
 | `DEVICE_NOT_OWNED` | 403 | Device (public key) belongs to different user |
 | `SESSION_NOT_FOUND` | 404 | WireGuard session not found |
@@ -1269,6 +1170,17 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v1.2
+- Replace SSH with ttyd + tmux for terminal access (tunnel is sole auth boundary)
+- Remove SSH key management entirely:
+  - Remove ssh_keys.rs from crate structure
+  - Remove SSH key endpoints (POST/GET/DELETE /api/v1/users/ssh-keys)
+  - Remove SSH Key Injection section
+  - Remove user_ssh_keys table from schema
+  - Remove INVALID_SSH_KEY error code
+- Update garage creation flow (no SSH keys Secret step)
+- Update connectivity model diagram (tunnel + ttyd)
 
 ### v1.1
 - Added `ON DELETE CASCADE` to `wg_sessions.garage_id` FK (prevents orphaned records)

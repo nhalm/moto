@@ -2,17 +2,17 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.7 |
-| Last Updated | 2026-01-28 |
+| Version | 0.8 |
+| Last Updated | 2026-02-02 |
 
 ## Overview
 
-Secure connectivity layer for terminal/SSH access to garages. WireGuard provides encrypted P2P tunnels with DERP relay fallback for NAT traversal. moto-club coordinates peer discovery and IP allocation but never sees traffic.
+Secure connectivity layer for WebSocket terminal (ttyd) access to garages. WireGuard provides encrypted P2P tunnels with DERP relay fallback for NAT traversal. moto-club coordinates peer discovery and IP allocation but never sees traffic.
 
 **This is for terminal access only.** Streaming logs, TTL warnings, and events use WebSocket/SSE (see moto-club.md).
 
 **Key properties:**
-- Real SSH sessions over encrypted WireGuard tunnel
+- WebSocket terminal (ttyd) over encrypted WireGuard tunnel
 - P2P when possible, DERP relay when NAT blocks direct connection
 - Userspace implementation - no sudo/root required on client
 - Server never sees traffic (coordination only)
@@ -72,7 +72,7 @@ Secure connectivity layer for terminal/SSH access to garages. WireGuard provides
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                              │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │  SSH Server (accepts connections from tunnel, user's key injected)   │   │
+│  │  Terminal daemon (ttyd + tmux, no auth - tunnel is auth boundary)    │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                   ▲
@@ -87,7 +87,6 @@ Secure connectivity layer for terminal/SSH access to garages. WireGuard provides
 │  │  ├── Garage WG Registration (POST /api/v1/wg/garages)                │    │
 │  │  ├── Session Creation (POST /api/v1/wg/sessions)                     │    │
 │  │  ├── Peer Streaming WebSocket (/internal/wg/garages/{id}/peers)      │    │
-│  │  ├── User SSH Key Storage (injected into garages)                    │    │
 │  │  ├── IP Allocator (fd00:moto::/48)                                   │    │
 │  │  └── DERP Map Provider                                               │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
@@ -144,7 +143,6 @@ crates/
 │       ├── peers.rs            # Peer registration
 │       ├── ipam.rs             # IP address allocation
 │       ├── sessions.rs         # Tunnel session management
-│       ├── ssh_keys.rs         # User SSH key management
 │       └── derp.rs             # DERP map management
 │
 └── moto-garage-wgtunnel/       # Garage-side daemon
@@ -152,8 +150,7 @@ crates/
         ├── lib.rs
         ├── daemon.rs           # Main daemon loop
         ├── register.rs         # Register with moto-club
-        ├── health.rs           # Health endpoint
-        └── ssh.rs              # SSH server integration
+        └── health.rs           # Health endpoint
 ```
 
 **Dependency graph:**
@@ -214,18 +211,6 @@ The WireGuard public key IS the device identity (Cloudflare WARP model). No sepa
 - **Override:** `MOTO_WG_KEY_FILE` env var to specify alternate location
 - **Re-keying:** Generating a new keypair = new device identity, new IP assignment
 
-**Client SSH keys (standard location):**
-
-```
-~/.ssh/
-├── id_ed25519          # User's SSH private key
-└── id_ed25519.pub      # User's SSH public key (registered with moto-club)
-```
-
-- **Scope:** Per-user (same key for all devices, all garages)
-- **Registration:** User registers SSH public key with moto-club
-- **Injection:** moto-club injects user's public key into garage's `authorized_keys` at creation
-
 **Garage WireGuard keys (ephemeral):**
 
 - Generated when garage pod starts
@@ -276,17 +261,18 @@ The WireGuard public key IS the device identity (Cloudflare WARP model). No sepa
                                     │
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ 5. SSH over WireGuard tunnel                                                 │
-│    - Connect to garage_ip:22                                                 │
-│    - Authenticate with user's SSH key (from ~/.ssh/)                         │
-│    - Key was injected into garage by moto-club at creation                   │
+│ 5. WebSocket terminal over WireGuard tunnel                                  │
+│    - Connect to ws://garage_ip:7681/                                         │
+│    - ttyd serves terminal via WebSocket                                      │
+│    - Attaches to tmux session (creates if not exists)                        │
+│    - No authentication - tunnel establishment is the auth boundary           │
 └──────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ 6. Interactive session                                                       │
-│    - TTY attached to garage shell                                            │
-│    - Ctrl+P, Ctrl+Q to detach (session stays active)                         │
+│    - Terminal attached to tmux session in garage                             │
+│    - Close connection or Ctrl+B, D to detach (tmux session stays active)     │
 │    - Traffic flows directly (or via DERP), never through moto-club           │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -303,7 +289,6 @@ The CLI and garage daemon coordinate with moto-club via REST APIs. See [moto-clu
 | `POST /api/v1/wg/sessions` | Create tunnel session |
 | `GET /api/v1/wg/sessions` | List active sessions |
 | `DELETE /api/v1/wg/sessions/{id}` | Close session |
-| `POST /api/v1/users/ssh-keys` | Register SSH public key |
 
 **APIs used by garage daemon:**
 
@@ -417,26 +402,42 @@ impl MagicConn {
 2. If direct fails, use DERP
 3. No upgrade attempts once on DERP
 
-### SSH Configuration
+### Terminal Daemon
 
-**Garage SSH server:**
+**Garage runs ttyd with tmux:**
 
 ```
-Port 22
-ListenAddress <overlay_ip>
-PubkeyAuthentication yes
-PasswordAuthentication no
-AuthorizedKeysFile /home/moto/.ssh/authorized_keys
+ttyd -p 7681 -W tmux new-session -A -s garage
 ```
 
-- **User:** `moto` (non-root user in garage)
-- **Shell:** `/bin/bash` in workspace directory
-- **Key injection:** moto-club writes user's SSH public key to `authorized_keys` when garage is created
+| Setting | Value |
+|---------|-------|
+| Port | 7681 |
+| WebSocket URL | `ws://[garage_ip]:7681/` |
+| Shell | tmux (session name: "garage") |
+| Working directory | `/workspace/<repo-name>/` |
 
-**Client SSH:**
-- Uses standard `~/.ssh/id_ed25519` (or other key types)
-- User registers public key with moto-club once
-- Same key works for all garages owned by user
+**Session persistence:**
+- First connect → creates tmux session, attaches
+- Disconnect → tmux session keeps running (processes survive)
+- Reconnect → reattaches to existing tmux session
+- Detach: `Ctrl+B, D` or close connection
+
+**Multiple connections:**
+- Multiple clients can connect to the same garage
+- All clients attach to the same tmux session (mirrored view)
+- Use tmux windows/panes for separate workspaces
+
+**Session cleanup:**
+- When garage pod terminates, tmux session and all processes are killed
+- No explicit cleanup needed - pod termination handles it
+
+**Process management:**
+- ttyd runs as systemd service
+- Restarts on failure
+- Health check: TCP probe on port 7681
+
+**No authentication required** - tunnel establishment is the auth boundary.
 
 ### Security Model
 
@@ -446,8 +447,9 @@ AuthorizedKeysFile /home/moto/.ssh/authorized_keys
 |-------|-----------|---------|
 | moto-club API | User auth token | Authorize session creation |
 | Garage registration | K8s namespace (pod can run = authorized) | Prove garage identity |
-| WireGuard | Public key cryptography | Encrypt tunnel |
-| SSH | Public key auth (injected by moto-club) | Authenticate user to shell |
+| WireGuard | Public key cryptography | Encrypt tunnel, **auth boundary** |
+
+**No terminal-level authentication.** Tunnel establishment proves identity - if you can complete the WireGuard handshake, you're authorized to access the garage.
 
 **Network isolation:**
 
@@ -468,7 +470,7 @@ AllowedIPs configuration ensures:
 - Forward secrecy (WireGuard's Noise protocol)
 - No long-lived session keys on server
 - Compromise of moto-club doesn't expose tunnel traffic
-- Tunnel establishment is the auth boundary
+- Tunnel establishment is the sole auth boundary (no SSH keys needed)
 
 ### Error Handling
 
@@ -536,7 +538,7 @@ MOTO_WGTUNNEL_LOG=debug
 ```bash
 # Enter a garage (primary use case)
 moto garage enter <name> [--session-ttl <duration>]
-# Establishes tunnel, opens SSH session
+# Establishes tunnel, connects to terminal daemon
 # --session-ttl: override session TTL (default: match garage TTL)
 
 # Show tunnel status
@@ -557,14 +559,14 @@ Connecting to garage feature-foo...
   Configuring tunnel... done
   Attempting direct connection... timeout
   Using DERP relay (primary)... connected
-  Opening SSH session... done
+  Connecting to terminal... done
 
-moto@feature-foo:/workspace$
+root@feature-foo:/workspace/moto$
 ```
 
-**Detach:** `Ctrl+P, Ctrl+Q` (session stays active)
+**Detach:** Close connection or `Ctrl+B, D` (tmux session stays active)
 
-**Reattach:** `moto garage enter feature-foo` (reconnects to existing session)
+**Reattach:** `moto garage enter feature-foo` (reconnects to existing tmux session)
 
 ### Observability
 
@@ -622,8 +624,8 @@ Response 200:
 | moto-wgtunnel-derp | ✓ Complete | Protocol, client, map |
 | moto-wgtunnel-conn | ✓ Complete | MagicConn, STUN, endpoint selection |
 | moto-wgtunnel-engine | ✓ Complete | Tunnel management, platform TUN |
-| moto-club-wg | ✓ Complete | IPAM, peers, sessions, SSH keys, DERP |
-| moto-garage-wgtunnel | ✓ Complete | Daemon, registration, health, SSH |
+| moto-club-wg | ✓ Complete | IPAM, peers, sessions, DERP |
+| moto-garage-wgtunnel | ✓ Complete | Daemon, registration, health |
 | moto-cli-wgtunnel | Partial | Types complete, integration pending |
 
 **Remaining integration (can implement now):**
@@ -633,7 +635,7 @@ Response 200:
 | Wire up WireGuard engine | `enter.rs` | Connect `moto-wgtunnel-engine` to configure tunnel |
 | Wire up direct UDP | `enter.rs` | Use `MagicConn` for direct connection attempts |
 | Wire up DERP relay | `enter.rs` | Use `DerpClient` for relay fallback |
-| SSH session spawning | `enter.rs` | Exec SSH to garage overlay IP after tunnel up |
+| Terminal connection | `enter.rs` | Connect to ttyd WebSocket after tunnel up |
 
 **Blocked on moto-club implementation:**
 
@@ -646,6 +648,14 @@ Response 200:
 The types and logic for these APIs exist in `moto-club-wg`. The API contracts are fully specified in [moto-club.md](moto-club.md). The moto-club server needs to wire up HTTP handlers that use these crates.
 
 ## Changelog
+
+### v0.8
+- Replace SSH with ttyd + tmux for terminal access
+- Remove SSH key management (no ssh_keys.rs, no SSH key endpoints)
+- Update connection flow: WebSocket to ttyd instead of SSH
+- Add Terminal Daemon section (port 7681, session persistence, multiple connections)
+- Update security model: tunnel establishment is the sole auth boundary
+- Add process management details (systemd, health check)
 
 ### v0.7
 - Simplified device identity: WireGuard public key IS the device identifier (Cloudflare WARP model)

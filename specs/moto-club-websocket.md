@@ -10,7 +10,7 @@
 
 WebSocket streaming endpoints for moto-club. Provides real-time log streaming, event notifications (TTL warnings, status changes), and internal peer coordination for WireGuard.
 
-**This is NOT for terminal access.** Terminal/SSH access uses WireGuard tunnels directly. See [moto-wgtunnel.md](moto-wgtunnel.md).
+**This is NOT for terminal access.** Terminal access uses WireGuard tunnels directly. See [moto-wgtunnel.md](moto-wgtunnel.md).
 
 ## Specification
 
