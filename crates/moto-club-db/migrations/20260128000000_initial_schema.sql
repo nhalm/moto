@@ -7,7 +7,7 @@ CREATE TABLE garages (
     name TEXT NOT NULL UNIQUE,
     owner TEXT NOT NULL,
     branch TEXT NOT NULL,
-    status TEXT NOT NULL,           -- pending, running, ready, terminated
+    status TEXT NOT NULL,           -- pending, initializing, ready, failed, terminated
     image TEXT NOT NULL,            -- dev container image used
     ttl_seconds INTEGER NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,

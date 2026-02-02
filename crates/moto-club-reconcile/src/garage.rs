@@ -281,10 +281,10 @@ impl GarageReconciler {
         //   1. Pod running (containers ready)
         //   2. Terminal daemon up (ttyd on port 7681) - checked via container readiness
         //   3. WireGuard registered - checked below
-        //   4. Repo cloned - checked via init container completion (future)
+        //   4. Repo cloned - checked via init container completion (pod stays Pending until init completes)
         let new_status = match pod_status {
             GaragePodStatus::Pending => GarageStatus::Pending,
-            GaragePodStatus::Running => GarageStatus::Running,
+            GaragePodStatus::Running => GarageStatus::Initializing,
             GaragePodStatus::Ready => {
                 // Pod containers are ready, but we need to check WireGuard registration
                 // before transitioning to Ready status
@@ -294,22 +294,33 @@ impl GarageReconciler {
                 if wg_registered {
                     GarageStatus::Ready
                 } else {
-                    // Pod is ready but WireGuard not registered yet - stay in Running
+                    // Pod is ready but WireGuard not registered yet - stay in Initializing
                     debug!(
                         garage_id = %id_str,
-                        "pod ready but WireGuard not registered, staying in Running"
+                        "pod ready but WireGuard not registered, staying in Initializing"
                     );
-                    GarageStatus::Running
+                    GarageStatus::Initializing
                 }
             }
-            GaragePodStatus::Failed | GaragePodStatus::Succeeded => {
-                // Pod is gone - terminate the garage
+            GaragePodStatus::Failed => {
+                // Pod failed (init container or main container failure)
+                // Per spec: Failed state for startup failures
+                debug!(
+                    garage_id = %id_str,
+                    garage_name = %garage.name,
+                    "pod failed, transitioning to Failed state"
+                );
+                GarageStatus::Failed
+            }
+            GaragePodStatus::Succeeded => {
+                // Pod completed successfully (shouldn't happen for long-running containers)
+                // Treat as terminated
                 garage_repo::terminate(&self.db, uuid, TerminationReason::PodLost).await?;
                 info!(
                     garage_id = %id_str,
                     garage_name = %garage.name,
                     pod_status = %pod_status,
-                    "garage terminated: pod_lost"
+                    "garage terminated: pod_lost (pod succeeded)"
                 );
                 stats.terminated += 1;
                 return Ok(());
@@ -351,11 +362,17 @@ impl GarageReconciler {
 /// Determines if a status update should be applied.
 ///
 /// We avoid some transitions that don't make sense:
-/// - Ready → Running (would be a downgrade)
+/// - Ready → Initializing (would be a downgrade)
+/// - Failed is a terminal state (only moves to Terminated)
 const fn should_update_status(current: GarageStatus, new: GarageStatus) -> bool {
     match (current, new) {
-        // Don't downgrade from Ready to Running
-        (GarageStatus::Ready, GarageStatus::Running) => false,
+        // Don't downgrade from Ready to Initializing
+        (GarageStatus::Ready, GarageStatus::Initializing) => false,
+        // Failed can only transition to Terminated (not back to other states)
+        (
+            GarageStatus::Failed,
+            GarageStatus::Pending | GarageStatus::Initializing | GarageStatus::Ready,
+        ) => false,
         // All other transitions are allowed
         _ => true,
     }
@@ -400,11 +417,20 @@ mod tests {
         // Normal forward progress
         assert!(should_update_status(
             GarageStatus::Pending,
-            GarageStatus::Running
+            GarageStatus::Initializing
         ));
         assert!(should_update_status(
-            GarageStatus::Running,
+            GarageStatus::Initializing,
             GarageStatus::Ready
+        ));
+        // Failure transitions
+        assert!(should_update_status(
+            GarageStatus::Pending,
+            GarageStatus::Failed
+        ));
+        assert!(should_update_status(
+            GarageStatus::Initializing,
+            GarageStatus::Failed
         ));
     }
 
@@ -413,7 +439,20 @@ mod tests {
         // Don't downgrade from Ready
         assert!(!should_update_status(
             GarageStatus::Ready,
-            GarageStatus::Running
+            GarageStatus::Initializing
+        ));
+        // Failed is terminal - can't go back to other states
+        assert!(!should_update_status(
+            GarageStatus::Failed,
+            GarageStatus::Pending
+        ));
+        assert!(!should_update_status(
+            GarageStatus::Failed,
+            GarageStatus::Initializing
+        ));
+        assert!(!should_update_status(
+            GarageStatus::Failed,
+            GarageStatus::Ready
         ));
     }
 
@@ -421,12 +460,21 @@ mod tests {
     fn should_update_status_allows_pending_restart() {
         // Allow going back to Pending (pod restart)
         assert!(should_update_status(
-            GarageStatus::Running,
+            GarageStatus::Initializing,
             GarageStatus::Pending
         ));
         assert!(should_update_status(
             GarageStatus::Ready,
             GarageStatus::Pending
+        ));
+    }
+
+    #[test]
+    fn should_update_status_allows_failed_to_terminated() {
+        // Failed can transition to Terminated (cleanup)
+        assert!(should_update_status(
+            GarageStatus::Failed,
+            GarageStatus::Terminated
         ));
     }
 }

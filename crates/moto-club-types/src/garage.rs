@@ -58,17 +58,20 @@ impl std::str::FromStr for GarageId {
 }
 
 /// The lifecycle state of a garage.
+///
+/// Per garage-lifecycle.md v0.3, the 5 states are:
+/// Pending → Initializing → Ready/Failed → Terminated
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GarageState {
-    /// Garage is being created (namespace exists, pods starting).
+    /// Garage is being created (namespace exists, pods starting, pulling images).
     Pending,
-    /// Garage pods are running but not yet ready.
-    Running,
-    /// Garage is fully ready for use.
+    /// Garage pods are running, initializing (cloning repo, starting services).
+    Initializing,
+    /// Garage is fully ready for use (all ready criteria met).
     Ready,
-    /// Garage is being torn down.
-    Terminating,
+    /// Startup failed (clone error, pod failure, etc.).
+    Failed,
     /// Garage has been terminated.
     Terminated,
 }
@@ -77,9 +80,9 @@ impl std::fmt::Display for GarageState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::Pending => "pending",
-            Self::Running => "running",
+            Self::Initializing => "initializing",
             Self::Ready => "ready",
-            Self::Terminating => "terminating",
+            Self::Failed => "failed",
             Self::Terminated => "terminated",
         };
         write!(f, "{s}")
@@ -180,9 +183,9 @@ mod tests {
     #[test]
     fn garage_state_display() {
         assert_eq!(GarageState::Pending.to_string(), "pending");
-        assert_eq!(GarageState::Running.to_string(), "running");
+        assert_eq!(GarageState::Initializing.to_string(), "initializing");
         assert_eq!(GarageState::Ready.to_string(), "ready");
-        assert_eq!(GarageState::Terminating.to_string(), "terminating");
+        assert_eq!(GarageState::Failed.to_string(), "failed");
         assert_eq!(GarageState::Terminated.to_string(), "terminated");
     }
 
@@ -190,9 +193,9 @@ mod tests {
     fn garage_state_serde_roundtrip() {
         for state in [
             GarageState::Pending,
-            GarageState::Running,
+            GarageState::Initializing,
             GarageState::Ready,
-            GarageState::Terminating,
+            GarageState::Failed,
             GarageState::Terminated,
         ] {
             let json = serde_json::to_string(&state).unwrap();

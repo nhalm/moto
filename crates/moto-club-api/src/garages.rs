@@ -67,7 +67,7 @@ pub struct ExtendTtlResponse {
 /// Query parameters for listing garages.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListGaragesQuery {
-    /// Filter by status (comma-separated). Valid: pending, running, ready, terminated.
+    /// Filter by status (comma-separated). Valid: pending, initializing, ready, failed, terminated.
     pub status: Option<String>,
     /// Include terminated garages (default: false).
     #[serde(default)]
@@ -410,8 +410,9 @@ fn map_garage_service_error(e: GarageServiceError) -> (StatusCode, Json<ApiError
 fn parse_status(s: &str) -> Option<GarageStatus> {
     match s.trim().to_lowercase().as_str() {
         "pending" => Some(GarageStatus::Pending),
-        "running" => Some(GarageStatus::Running),
+        "initializing" => Some(GarageStatus::Initializing),
         "ready" => Some(GarageStatus::Ready),
+        "failed" => Some(GarageStatus::Failed),
         "terminated" => Some(GarageStatus::Terminated),
         _ => None,
     }
@@ -865,20 +866,30 @@ mod tests {
     #[test]
     fn list_garages_query_with_status() {
         let query: ListGaragesQuery =
-            serde_json::from_str(r#"{"status": "running,ready", "all": true}"#).unwrap();
+            serde_json::from_str(r#"{"status": "initializing,ready", "all": true}"#).unwrap();
         assert!(query.all);
-        assert_eq!(query.status, Some("running,ready".to_string()));
+        assert_eq!(query.status, Some("initializing,ready".to_string()));
     }
 
     #[test]
     fn parse_status_valid() {
         assert_eq!(parse_status("pending"), Some(GarageStatus::Pending));
-        assert_eq!(parse_status("running"), Some(GarageStatus::Running));
+        assert_eq!(
+            parse_status("initializing"),
+            Some(GarageStatus::Initializing)
+        );
         assert_eq!(parse_status("ready"), Some(GarageStatus::Ready));
+        assert_eq!(parse_status("failed"), Some(GarageStatus::Failed));
         assert_eq!(parse_status("terminated"), Some(GarageStatus::Terminated));
         // Case insensitive
-        assert_eq!(parse_status("RUNNING"), Some(GarageStatus::Running));
-        assert_eq!(parse_status(" running "), Some(GarageStatus::Running));
+        assert_eq!(
+            parse_status("INITIALIZING"),
+            Some(GarageStatus::Initializing)
+        );
+        assert_eq!(
+            parse_status(" initializing "),
+            Some(GarageStatus::Initializing)
+        );
     }
 
     #[test]

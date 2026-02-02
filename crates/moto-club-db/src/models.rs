@@ -18,10 +18,12 @@ use uuid::Uuid;
 pub enum GarageStatus {
     /// Pod scheduled, pulling images.
     Pending,
-    /// Container started, initializing.
-    Running,
-    /// Garage ready for use.
+    /// Container started, initializing (cloning repo, starting services).
+    Initializing,
+    /// Garage ready for use (all ready criteria met).
     Ready,
+    /// Startup failed (clone error, pod failure, etc.).
+    Failed,
     /// Closed/cleaned up.
     Terminated,
 }
@@ -30,8 +32,9 @@ impl std::fmt::Display for GarageStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::Pending => "pending",
-            Self::Running => "running",
+            Self::Initializing => "initializing",
             Self::Ready => "ready",
+            Self::Failed => "failed",
             Self::Terminated => "terminated",
         };
         write!(f, "{s}")
@@ -44,8 +47,9 @@ impl std::str::FromStr for GarageStatus {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "pending" => Ok(Self::Pending),
-            "running" => Ok(Self::Running),
+            "initializing" => Ok(Self::Initializing),
             "ready" => Ok(Self::Ready),
+            "failed" => Ok(Self::Failed),
             "terminated" => Ok(Self::Terminated),
             _ => Err(ParseGarageStatusError(s.to_string())),
         }
@@ -235,8 +239,9 @@ mod tests {
     #[test]
     fn garage_status_display() {
         assert_eq!(GarageStatus::Pending.to_string(), "pending");
-        assert_eq!(GarageStatus::Running.to_string(), "running");
+        assert_eq!(GarageStatus::Initializing.to_string(), "initializing");
         assert_eq!(GarageStatus::Ready.to_string(), "ready");
+        assert_eq!(GarageStatus::Failed.to_string(), "failed");
         assert_eq!(GarageStatus::Terminated.to_string(), "terminated");
     }
 
@@ -247,12 +252,16 @@ mod tests {
             GarageStatus::Pending
         );
         assert_eq!(
-            "running".parse::<GarageStatus>().unwrap(),
-            GarageStatus::Running
+            "initializing".parse::<GarageStatus>().unwrap(),
+            GarageStatus::Initializing
         );
         assert_eq!(
             "ready".parse::<GarageStatus>().unwrap(),
             GarageStatus::Ready
+        );
+        assert_eq!(
+            "failed".parse::<GarageStatus>().unwrap(),
+            GarageStatus::Failed
         );
         assert_eq!(
             "terminated".parse::<GarageStatus>().unwrap(),
@@ -265,8 +274,9 @@ mod tests {
     fn garage_status_serde_roundtrip() {
         for status in [
             GarageStatus::Pending,
-            GarageStatus::Running,
+            GarageStatus::Initializing,
             GarageStatus::Ready,
+            GarageStatus::Failed,
             GarageStatus::Terminated,
         ] {
             let json = serde_json::to_string(&status).unwrap();

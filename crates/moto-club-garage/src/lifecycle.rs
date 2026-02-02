@@ -32,16 +32,19 @@ pub enum LifecycleError {
 /// Validates state transitions according to the garage lifecycle rules:
 ///
 /// ```text
-/// Pending → Running → Ready
-///    ↓         ↓        ↓
-///    └─────────┴────────┴──→ Terminated
+/// Pending → Initializing → Ready
+///    ↓            ↓          ↓
+///    └────────────┼──────────┴──→ Terminated
+///                 ↓
+///              Failed ──────────→ Terminated
 /// ```
 ///
-/// - Any state can transition to `Terminated`
-/// - `Pending` can transition to `Running`
-/// - `Running` can transition to `Ready`
+/// - Any non-terminal state can transition to `Terminated`
+/// - `Pending` can transition to `Initializing` or `Failed`
+/// - `Initializing` can transition to `Ready` or `Failed`
+/// - `Failed` can only transition to `Terminated`
 ///
-/// Note: `Attached` status was removed in spec v1.1 (no mechanism to detect `WireGuard` connection).
+/// See garage-lifecycle.md v0.3 for the 5-state model.
 pub struct GarageLifecycle;
 
 impl GarageLifecycle {
@@ -57,21 +60,29 @@ impl GarageLifecycle {
             return true;
         }
 
-        // Any state can go to Terminated
-        if to == GarageStatus::Terminated {
-            return from != GarageStatus::Terminated;
-        }
-
-        // Cannot transition from Terminated
+        // Cannot transition from terminal states (except Failed -> Terminated)
         if from == GarageStatus::Terminated {
             return false;
+        }
+
+        // Failed can only go to Terminated
+        if from == GarageStatus::Failed {
+            return to == GarageStatus::Terminated;
+        }
+
+        // Any active state can go to Terminated
+        if to == GarageStatus::Terminated {
+            return true;
         }
 
         matches!(
             (from, to),
             // Forward progress
-            (GarageStatus::Pending, GarageStatus::Running)
-                | (GarageStatus::Running, GarageStatus::Ready)
+            (GarageStatus::Pending, GarageStatus::Initializing)
+                | (GarageStatus::Initializing, GarageStatus::Ready)
+                // Failure transitions
+                | (GarageStatus::Pending, GarageStatus::Failed)
+                | (GarageStatus::Initializing, GarageStatus::Failed)
         )
     }
 
@@ -95,10 +106,10 @@ impl GarageLifecycle {
 
     /// Checks if a garage in the given state can be extended.
     ///
-    /// TTL can be extended for garages that are not terminated.
+    /// TTL can be extended for garages that are not in terminal states.
     #[must_use]
     pub fn can_extend_ttl(status: GarageStatus) -> bool {
-        status != GarageStatus::Terminated
+        !matches!(status, GarageStatus::Terminated | GarageStatus::Failed)
     }
 
     /// Checks if a garage in the given state can be closed.
@@ -115,22 +126,25 @@ impl GarageLifecycle {
     #[must_use]
     pub const fn next_state(current: GarageStatus) -> Option<GarageStatus> {
         match current {
-            GarageStatus::Pending => Some(GarageStatus::Running),
-            GarageStatus::Running => Some(GarageStatus::Ready),
-            GarageStatus::Ready | GarageStatus::Terminated => None,
+            GarageStatus::Pending => Some(GarageStatus::Initializing),
+            GarageStatus::Initializing => Some(GarageStatus::Ready),
+            GarageStatus::Ready | GarageStatus::Failed | GarageStatus::Terminated => None,
         }
     }
 
     /// Checks if a state is terminal (no forward progress expected).
     #[must_use]
     pub const fn is_terminal(status: GarageStatus) -> bool {
-        matches!(status, GarageStatus::Ready | GarageStatus::Terminated)
+        matches!(
+            status,
+            GarageStatus::Ready | GarageStatus::Failed | GarageStatus::Terminated
+        )
     }
 
-    /// Checks if a state is active (not terminated).
+    /// Checks if a state is active (not in a terminal failure or terminated state).
     #[must_use]
     pub fn is_active(status: GarageStatus) -> bool {
-        status != GarageStatus::Terminated
+        !matches!(status, GarageStatus::Terminated | GarageStatus::Failed)
     }
 }
 
@@ -142,8 +156,9 @@ mod tests {
     fn same_state_transition_is_valid() {
         for status in [
             GarageStatus::Pending,
-            GarageStatus::Running,
+            GarageStatus::Initializing,
             GarageStatus::Ready,
+            GarageStatus::Failed,
             GarageStatus::Terminated,
         ] {
             assert!(GarageLifecycle::can_transition(status, status));
@@ -154,20 +169,33 @@ mod tests {
     fn forward_transitions_are_valid() {
         assert!(GarageLifecycle::can_transition(
             GarageStatus::Pending,
-            GarageStatus::Running
+            GarageStatus::Initializing
         ));
         assert!(GarageLifecycle::can_transition(
-            GarageStatus::Running,
+            GarageStatus::Initializing,
             GarageStatus::Ready
         ));
     }
 
     #[test]
-    fn any_state_can_terminate() {
+    fn failure_transitions_are_valid() {
+        assert!(GarageLifecycle::can_transition(
+            GarageStatus::Pending,
+            GarageStatus::Failed
+        ));
+        assert!(GarageLifecycle::can_transition(
+            GarageStatus::Initializing,
+            GarageStatus::Failed
+        ));
+    }
+
+    #[test]
+    fn any_active_state_can_terminate() {
         for status in [
             GarageStatus::Pending,
-            GarageStatus::Running,
+            GarageStatus::Initializing,
             GarageStatus::Ready,
+            GarageStatus::Failed,
         ] {
             assert!(GarageLifecycle::can_transition(
                 status,
@@ -180,8 +208,9 @@ mod tests {
     fn cannot_transition_from_terminated() {
         for status in [
             GarageStatus::Pending,
-            GarageStatus::Running,
+            GarageStatus::Initializing,
             GarageStatus::Ready,
+            GarageStatus::Failed,
         ] {
             assert!(!GarageLifecycle::can_transition(
                 GarageStatus::Terminated,
@@ -191,14 +220,36 @@ mod tests {
     }
 
     #[test]
+    fn failed_can_only_go_to_terminated() {
+        // Failed cannot transition to normal states
+        assert!(!GarageLifecycle::can_transition(
+            GarageStatus::Failed,
+            GarageStatus::Pending
+        ));
+        assert!(!GarageLifecycle::can_transition(
+            GarageStatus::Failed,
+            GarageStatus::Initializing
+        ));
+        assert!(!GarageLifecycle::can_transition(
+            GarageStatus::Failed,
+            GarageStatus::Ready
+        ));
+        // But can terminate
+        assert!(GarageLifecycle::can_transition(
+            GarageStatus::Failed,
+            GarageStatus::Terminated
+        ));
+    }
+
+    #[test]
     fn backward_transitions_are_invalid() {
         assert!(!GarageLifecycle::can_transition(
-            GarageStatus::Running,
+            GarageStatus::Initializing,
             GarageStatus::Pending
         ));
         assert!(!GarageLifecycle::can_transition(
             GarageStatus::Ready,
-            GarageStatus::Running
+            GarageStatus::Initializing
         ));
         assert!(!GarageLifecycle::can_transition(
             GarageStatus::Ready,
@@ -231,23 +282,25 @@ mod tests {
 
         // Valid transition
         let result =
-            GarageLifecycle::validate_transition(GarageStatus::Pending, GarageStatus::Running);
+            GarageLifecycle::validate_transition(GarageStatus::Pending, GarageStatus::Initializing);
         assert!(result.is_ok());
     }
 
     #[test]
     fn can_extend_ttl_for_active_garages() {
         assert!(GarageLifecycle::can_extend_ttl(GarageStatus::Pending));
-        assert!(GarageLifecycle::can_extend_ttl(GarageStatus::Running));
+        assert!(GarageLifecycle::can_extend_ttl(GarageStatus::Initializing));
         assert!(GarageLifecycle::can_extend_ttl(GarageStatus::Ready));
+        assert!(!GarageLifecycle::can_extend_ttl(GarageStatus::Failed));
         assert!(!GarageLifecycle::can_extend_ttl(GarageStatus::Terminated));
     }
 
     #[test]
-    fn can_close_active_garages() {
+    fn can_close_any_non_terminated_garage() {
         assert!(GarageLifecycle::can_close(GarageStatus::Pending));
-        assert!(GarageLifecycle::can_close(GarageStatus::Running));
+        assert!(GarageLifecycle::can_close(GarageStatus::Initializing));
         assert!(GarageLifecycle::can_close(GarageStatus::Ready));
+        assert!(GarageLifecycle::can_close(GarageStatus::Failed));
         assert!(!GarageLifecycle::can_close(GarageStatus::Terminated));
     }
 
@@ -255,29 +308,32 @@ mod tests {
     fn next_state_returns_expected_progression() {
         assert_eq!(
             GarageLifecycle::next_state(GarageStatus::Pending),
-            Some(GarageStatus::Running)
+            Some(GarageStatus::Initializing)
         );
         assert_eq!(
-            GarageLifecycle::next_state(GarageStatus::Running),
+            GarageLifecycle::next_state(GarageStatus::Initializing),
             Some(GarageStatus::Ready)
         );
         assert_eq!(GarageLifecycle::next_state(GarageStatus::Ready), None);
+        assert_eq!(GarageLifecycle::next_state(GarageStatus::Failed), None);
         assert_eq!(GarageLifecycle::next_state(GarageStatus::Terminated), None);
     }
 
     #[test]
     fn is_terminal_identifies_terminal_states() {
         assert!(!GarageLifecycle::is_terminal(GarageStatus::Pending));
-        assert!(!GarageLifecycle::is_terminal(GarageStatus::Running));
+        assert!(!GarageLifecycle::is_terminal(GarageStatus::Initializing));
         assert!(GarageLifecycle::is_terminal(GarageStatus::Ready));
+        assert!(GarageLifecycle::is_terminal(GarageStatus::Failed));
         assert!(GarageLifecycle::is_terminal(GarageStatus::Terminated));
     }
 
     #[test]
     fn is_active_identifies_active_states() {
         assert!(GarageLifecycle::is_active(GarageStatus::Pending));
-        assert!(GarageLifecycle::is_active(GarageStatus::Running));
+        assert!(GarageLifecycle::is_active(GarageStatus::Initializing));
         assert!(GarageLifecycle::is_active(GarageStatus::Ready));
+        assert!(!GarageLifecycle::is_active(GarageStatus::Failed));
         assert!(!GarageLifecycle::is_active(GarageStatus::Terminated));
     }
 }

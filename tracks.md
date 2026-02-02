@@ -226,6 +226,7 @@ HOW TO USE THIS FILE:
 - Ready criteria check: WireGuard registration check in reconciler (garage transitions to Ready only when wg_garages entry exists)
 - Ready criteria check: ttyd accepting connections (K8s TCP readiness probe on port 7681 in garage pod spec)
 - Repo cloning: init container with REPO_URL, REPO_BRANCH, REPO_NAME env vars (moto-club-k8s pods.rs RepoConfig, build_repo_clone_init_container); workspace volume shared between init and main container; 3-retry clone logic
+- 5-state lifecycle: Rename Running to Initializing, add Failed state per spec v0.3 changelog (GarageStatus enum, GarageState enum, lifecycle state machine, reconciler mapping, API status parsing)
 
 **Remaining:**
 - Repo cloning: credentials from keybox (future - MVP supports public repos)

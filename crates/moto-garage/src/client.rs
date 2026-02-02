@@ -489,10 +489,13 @@ fn namespace_to_garage_info(ns: &k8s_openapi::api::core::v1::Namespace) -> Optio
         .unwrap_or_else(Utc::now);
 
     // Determine state based on namespace status
+    // Note: K8s namespace phase only tells us if namespace is active or terminating.
+    // For full garage state (Pending/Initializing/Ready/Failed), we need DB info.
+    // This is a simplified mapping for local mode without DB access.
     let state = match &ns.status {
         Some(status) => match status.phase.as_deref() {
             Some("Active") => GarageState::Ready,
-            Some("Terminating") => GarageState::Terminating,
+            Some("Terminating") => GarageState::Terminated,
             _ => GarageState::Pending,
         },
         None => GarageState::Pending,
