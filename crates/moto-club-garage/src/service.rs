@@ -519,6 +519,8 @@ impl GarageService {
             branch: input.branch.clone(),
             image: input.image.clone(),
             repo: input.repo.clone(),
+            with_postgres: input.with_postgres,
+            with_redis: input.with_redis,
         };
 
         debug!(namespace = %namespace, "deploying dev container pod");

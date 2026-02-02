@@ -7,13 +7,17 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use k8s_openapi::api::core::v1::{
-    Capabilities, ConfigMapVolumeSource, Container, EmptyDirVolumeSource,
+    Capabilities, ConfigMapVolumeSource, Container, EmptyDirVolumeSource, EnvVar, EnvVarSource,
     PersistentVolumeClaimVolumeSource, Pod, PodSecurityContext, PodSpec, Probe,
-    ResourceRequirements, SeccompProfile, SecretVolumeSource, SecurityContext, TCPSocketAction,
-    Volume, VolumeMount,
+    ResourceRequirements, SeccompProfile, SecretKeySelector, SecretVolumeSource, SecurityContext,
+    TCPSocketAction, Volume, VolumeMount,
 };
 
 use crate::pvc::WORKSPACE_PVC_NAME;
+use crate::supporting_services::{
+    POSTGRES_CREDENTIALS_SECRET_NAME, POSTGRES_PORT, POSTGRES_SERVICE_NAME,
+    REDIS_CREDENTIALS_SECRET_NAME, REDIS_PORT, REDIS_SERVICE_NAME,
+};
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::api::{Api, DeleteParams, ObjectMeta, PostParams};
@@ -57,6 +61,10 @@ pub struct GaragePodInput {
     pub image: Option<String>,
     /// Optional repository to clone on startup.
     pub repo: Option<RepoConfig>,
+    /// Include PostgreSQL environment variables.
+    pub with_postgres: bool,
+    /// Include Redis environment variables.
+    pub with_redis: bool,
 }
 
 impl GaragePodInput {
@@ -171,6 +179,8 @@ impl GaragePodOps for GarageK8s {
             &input.branch,
             labels,
             input.repo.as_ref(),
+            input.with_postgres,
+            input.with_redis,
         );
 
         let api: Api<Pod> = Api::namespaced(self.client.inner().clone(), &namespace);
@@ -259,6 +269,8 @@ fn build_dev_container_pod(
     branch: &str,
     labels: BTreeMap<String, String>,
     repo: Option<&RepoConfig>,
+    with_postgres: bool,
+    with_redis: bool,
 ) -> Pod {
     // Resource requirements
     let mut requests = BTreeMap::new();
@@ -305,18 +317,28 @@ fn build_dev_container_pod(
     };
 
     // Environment variables
-    let env_vars = vec![
-        k8s_openapi::api::core::v1::EnvVar {
+    let mut env_vars = vec![
+        EnvVar {
             name: "MOTO_GARAGE_BRANCH".to_string(),
             value: Some(branch.to_string()),
             ..Default::default()
         },
-        k8s_openapi::api::core::v1::EnvVar {
+        EnvVar {
             name: "MOTO_GARAGE_NAMESPACE".to_string(),
             value: Some(namespace.to_string()),
             ..Default::default()
         },
     ];
+
+    // Inject Postgres env vars per supporting-services.md spec (lines 236-255)
+    if with_postgres {
+        env_vars.extend(build_postgres_env_vars());
+    }
+
+    // Inject Redis env vars per supporting-services.md spec (lines 258-272)
+    if with_redis {
+        env_vars.extend(build_redis_env_vars());
+    }
 
     // Volume mounts for writable directories per garage-isolation.md spec.
     // Root filesystem is read-only, so we mount emptyDir volumes for writable paths.
@@ -656,6 +678,110 @@ const fn is_not_found(e: &kube::Error) -> bool {
     )
 }
 
+/// Builds Postgres environment variables for garage pod.
+///
+/// Per supporting-services.md spec (lines 236-255):
+/// - POSTGRES_HOST: postgres
+/// - POSTGRES_PORT: 5432
+/// - POSTGRES_USER: dev
+/// - POSTGRES_PASSWORD: from secret
+/// - POSTGRES_DB: dev
+/// - DATABASE_URL: from secret
+fn build_postgres_env_vars() -> Vec<EnvVar> {
+    vec![
+        EnvVar {
+            name: "POSTGRES_HOST".to_string(),
+            value: Some(POSTGRES_SERVICE_NAME.to_string()),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "POSTGRES_PORT".to_string(),
+            value: Some(POSTGRES_PORT.to_string()),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "POSTGRES_USER".to_string(),
+            value: Some("dev".to_string()),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "POSTGRES_PASSWORD".to_string(),
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: POSTGRES_CREDENTIALS_SECRET_NAME.to_string(),
+                    key: "password".to_string(),
+                    optional: Some(false),
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "POSTGRES_DB".to_string(),
+            value: Some("dev".to_string()),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "DATABASE_URL".to_string(),
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: POSTGRES_CREDENTIALS_SECRET_NAME.to_string(),
+                    key: "url".to_string(),
+                    optional: Some(false),
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    ]
+}
+
+/// Builds Redis environment variables for garage pod.
+///
+/// Per supporting-services.md spec (lines 258-272):
+/// - REDIS_HOST: redis
+/// - REDIS_PORT: 6379
+/// - REDIS_PASSWORD: from secret
+/// - REDIS_URL: from secret
+fn build_redis_env_vars() -> Vec<EnvVar> {
+    vec![
+        EnvVar {
+            name: "REDIS_HOST".to_string(),
+            value: Some(REDIS_SERVICE_NAME.to_string()),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "REDIS_PORT".to_string(),
+            value: Some(REDIS_PORT.to_string()),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "REDIS_PASSWORD".to_string(),
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: REDIS_CREDENTIALS_SECRET_NAME.to_string(),
+                    key: "password".to_string(),
+                    optional: Some(false),
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "REDIS_URL".to_string(),
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: REDIS_CREDENTIALS_SECRET_NAME.to_string(),
+                    key: "url".to_string(),
+                    optional: Some(false),
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -669,6 +795,8 @@ mod tests {
             branch: "main".to_string(),
             image: None,
             repo: None,
+            with_postgres: false,
+            with_redis: false,
         };
 
         let ns = input.namespace_name();
@@ -689,8 +817,15 @@ mod tests {
     #[test]
     fn build_pod_has_correct_structure() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod =
-            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            false,
+            false,
+        );
 
         // Check metadata
         assert_eq!(pod.metadata.name, Some(DEV_CONTAINER_POD_NAME.to_string()));
@@ -716,8 +851,15 @@ mod tests {
     #[test]
     fn build_pod_has_ttyd_readiness_probe() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod =
-            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            false,
+            false,
+        );
 
         let spec = pod.spec.as_ref().unwrap();
         let container = &spec.containers[0];
@@ -743,8 +885,15 @@ mod tests {
     #[test]
     fn build_pod_uses_default_entrypoint() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod =
-            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            false,
+            false,
+        );
 
         let spec = pod.spec.as_ref().unwrap();
         let container = &spec.containers[0];
@@ -770,6 +919,8 @@ mod tests {
             "main",
             labels,
             Some(&repo),
+            false,
+            false,
         );
 
         let spec = pod.spec.as_ref().unwrap();
@@ -808,8 +959,15 @@ mod tests {
     #[test]
     fn build_pod_without_repo_has_no_init_container() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod =
-            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            false,
+            false,
+        );
 
         let spec = pod.spec.as_ref().unwrap();
 
@@ -820,8 +978,15 @@ mod tests {
     #[test]
     fn build_pod_has_writable_volumes_per_spec() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod =
-            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            false,
+            false,
+        );
 
         let spec = pod.spec.as_ref().unwrap();
         let volumes = spec.volumes.as_ref().unwrap();
@@ -967,8 +1132,15 @@ mod tests {
     #[test]
     fn build_pod_has_security_context_per_spec() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod =
-            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            false,
+            false,
+        );
 
         let spec = pod.spec.as_ref().unwrap();
 
@@ -1034,5 +1206,91 @@ mod tests {
         assert!(add.contains(&"SETUID".to_string()));
         assert!(add.contains(&"NET_BIND_SERVICE".to_string()));
         assert_eq!(add.len(), 6, "should have exactly 6 capabilities added");
+    }
+
+    #[test]
+    fn build_pod_with_postgres_injects_env_vars() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            true,  // with_postgres
+            false, // with_redis
+        );
+
+        let spec = pod.spec.as_ref().unwrap();
+        let container = &spec.containers[0];
+        let env = container.env.as_ref().unwrap();
+
+        // Check POSTGRES_HOST
+        let host = env.iter().find(|e| e.name == "POSTGRES_HOST").unwrap();
+        assert_eq!(host.value, Some(POSTGRES_SERVICE_NAME.to_string()));
+
+        // Check POSTGRES_PORT
+        let port = env.iter().find(|e| e.name == "POSTGRES_PORT").unwrap();
+        assert_eq!(port.value, Some(POSTGRES_PORT.to_string()));
+
+        // Check POSTGRES_USER
+        let user = env.iter().find(|e| e.name == "POSTGRES_USER").unwrap();
+        assert_eq!(user.value, Some("dev".to_string()));
+
+        // Check POSTGRES_DB
+        let db = env.iter().find(|e| e.name == "POSTGRES_DB").unwrap();
+        assert_eq!(db.value, Some("dev".to_string()));
+
+        // Check POSTGRES_PASSWORD (from secret)
+        let pass = env.iter().find(|e| e.name == "POSTGRES_PASSWORD").unwrap();
+        let secret_ref = pass
+            .value_from
+            .as_ref()
+            .unwrap()
+            .secret_key_ref
+            .as_ref()
+            .unwrap();
+        assert_eq!(secret_ref.name, POSTGRES_CREDENTIALS_SECRET_NAME);
+        assert_eq!(secret_ref.key, "password");
+
+        // Check DATABASE_URL (from secret)
+        let url = env.iter().find(|e| e.name == "DATABASE_URL").unwrap();
+        let secret_ref = url
+            .value_from
+            .as_ref()
+            .unwrap()
+            .secret_key_ref
+            .as_ref()
+            .unwrap();
+        assert_eq!(secret_ref.name, POSTGRES_CREDENTIALS_SECRET_NAME);
+        assert_eq!(secret_ref.key, "url");
+    }
+
+    #[test]
+    fn build_pod_without_postgres_no_postgres_env_vars() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            false, // with_postgres
+            false, // with_redis
+        );
+
+        let spec = pod.spec.as_ref().unwrap();
+        let container = &spec.containers[0];
+        let env = container.env.as_ref().unwrap();
+
+        // Check no Postgres env vars exist
+        assert!(
+            env.iter().find(|e| e.name == "POSTGRES_HOST").is_none(),
+            "POSTGRES_HOST should not be present"
+        );
+        assert!(
+            env.iter().find(|e| e.name == "DATABASE_URL").is_none(),
+            "DATABASE_URL should not be present"
+        );
     }
 }
