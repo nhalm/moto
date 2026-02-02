@@ -87,7 +87,7 @@ pub use client::{
 };
 pub use enter::{
     ConsoleProgress, EnterConfig, EnterError, EnterProgress, EnterResult, GarageSession,
-    GarageWgInfo, SessionResponse, SilentProgress, SshConfig, enter_garage, get_existing_session,
+    GarageWgInfo, SessionResponse, SilentProgress, enter_garage, get_existing_session,
 };
 pub use status::{TunnelStatusInfo, TunnelStatusResponse, format_status_table, get_tunnel_status};
 pub use ttyd::{DEFAULT_TTYD_PORT, TtydClient, TtydConfig, TtydError};
