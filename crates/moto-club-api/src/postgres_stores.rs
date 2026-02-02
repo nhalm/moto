@@ -5,11 +5,10 @@
 
 use std::net::SocketAddr;
 
-use moto_club_db::{DbPool, user_ssh_key_repo, wg_device_repo, wg_garage_repo, wg_session_repo};
+use moto_club_db::{DbPool, wg_device_repo, wg_garage_repo, wg_session_repo};
 use moto_club_wg::{
     peers::{PeerError, PeerStore, RegisteredDevice, RegisteredGarage},
     sessions::{Session, SessionError, SessionStore},
-    ssh_keys::{RegisteredSshKey, SshKeyError, SshKeyStore},
 };
 use moto_wgtunnel_types::{OverlayIp, WgPublicKey};
 use uuid::Uuid;
@@ -396,137 +395,8 @@ impl SessionStore for PostgresSessionStore {
 }
 
 // ============================================================================
-// PostgreSQL SSH Key Store
-// ============================================================================
-
-/// PostgreSQL-backed SSH key store for user key management.
-///
-/// Uses `user_ssh_key_repo` from `moto-club-db`.
-pub struct PostgresSshKeyStore {
-    pool: DbPool,
-}
-
-impl PostgresSshKeyStore {
-    /// Create a new PostgreSQL SSH key store.
-    #[must_use]
-    pub const fn new(pool: DbPool) -> Self {
-        Self { pool }
-    }
-}
-
-impl SshKeyStore for PostgresSshKeyStore {
-    fn get_key(&self, key_id: Uuid) -> moto_club_wg::ssh_keys::Result<Option<RegisteredSshKey>> {
-        let pool = self.pool.clone();
-
-        let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { user_ssh_key_repo::get_by_id(&pool, key_id).await })
-        });
-
-        match result {
-            Ok(db_key) => Ok(Some(db_key_to_registered_key(db_key))),
-            Err(moto_club_db::DbError::NotFound { .. }) => Ok(None),
-            Err(e) => Err(SshKeyError::Storage(e.to_string())),
-        }
-    }
-
-    fn get_key_by_fingerprint(
-        &self,
-        fingerprint: &str,
-    ) -> moto_club_wg::ssh_keys::Result<Option<RegisteredSshKey>> {
-        // Note: This would need to iterate all keys or add a new repo function.
-        // For now, we don't have a direct lookup by fingerprint across all users.
-        // The SshKeyManager already handles idempotent registration logic.
-        let _ = fingerprint;
-        Ok(None)
-    }
-
-    fn set_key(&self, key: RegisteredSshKey) -> moto_club_wg::ssh_keys::Result<()> {
-        let pool = self.pool.clone();
-
-        // Note: The owner in RegisteredSshKey is a UUID (user_id), but the DB uses String.
-        // We convert UUID to string for storage.
-        let input = user_ssh_key_repo::CreateUserSshKey {
-            owner: key.user_id.to_string(),
-            public_key: key.public_key,
-            fingerprint: key.fingerprint,
-        };
-
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { user_ssh_key_repo::get_or_create(&pool, input).await })
-        })
-        .map_err(|e| SshKeyError::Storage(e.to_string()))?;
-
-        Ok(())
-    }
-
-    fn remove_key(&self, key_id: Uuid) -> moto_club_wg::ssh_keys::Result<Option<RegisteredSshKey>> {
-        let pool = self.pool.clone();
-
-        // First get the key
-        let key = self.get_key(key_id)?;
-
-        if key.is_some() {
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current()
-                    .block_on(async { user_ssh_key_repo::delete(&pool, key_id).await })
-            })
-            .map_err(|e| SshKeyError::Storage(e.to_string()))?;
-        }
-
-        Ok(key)
-    }
-
-    fn list_keys_by_user(
-        &self,
-        user_id: Uuid,
-    ) -> moto_club_wg::ssh_keys::Result<Vec<RegisteredSshKey>> {
-        let pool = self.pool.clone();
-        let owner = user_id.to_string();
-
-        let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { user_ssh_key_repo::list_by_owner(&pool, &owner).await })
-        });
-
-        match result {
-            Ok(db_keys) => {
-                let keys = db_keys.into_iter().map(db_key_to_registered_key).collect();
-                Ok(keys)
-            }
-            Err(e) => Err(SshKeyError::Storage(e.to_string())),
-        }
-    }
-}
-
-// ============================================================================
 // Helper Functions
 // ============================================================================
-
-/// Convert a database SSH key to a registered SSH key.
-fn db_key_to_registered_key(db_key: moto_club_db::UserSshKey) -> RegisteredSshKey {
-    // Parse the owner string back to UUID, defaulting to nil if parsing fails
-    let user_id = Uuid::parse_str(&db_key.owner).unwrap_or(Uuid::nil());
-
-    // Extract algorithm and comment from the public key
-    let parts: Vec<&str> = db_key.public_key.split_whitespace().collect();
-    let algorithm = parts.first().unwrap_or(&"unknown").to_string();
-    let comment = if parts.len() > 2 {
-        Some(parts[2..].join(" "))
-    } else {
-        None
-    };
-
-    RegisteredSshKey {
-        key_id: db_key.id,
-        user_id,
-        public_key: db_key.public_key,
-        fingerprint: db_key.fingerprint,
-        algorithm,
-        comment,
-    }
-}
 
 /// Parse a client overlay IP from a string.
 fn parse_client_overlay_ip(ip_str: &str) -> Result<OverlayIp, String> {

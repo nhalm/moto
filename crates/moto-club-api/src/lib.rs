@@ -13,8 +13,7 @@
 //! use moto_club_api::{AppState, router};
 //! use moto_club_db::DbPool;
 //! use moto_club_wg::{PeerRegistry, InMemoryPeerStore, Ipam, InMemoryStore, SessionManager,
-//!     InMemorySessionStore, DerpMapManager, InMemoryDerpStore, SshKeyManager, InMemorySshKeyStore,
-//!     PeerBroadcaster};
+//!     InMemorySessionStore, DerpMapManager, InMemoryDerpStore, PeerBroadcaster};
 //! use std::sync::Arc;
 //!
 //! let pool = DbPool::connect("postgres://...").await?;
@@ -24,9 +23,8 @@
 //! ));
 //! let session_manager = Arc::new(SessionManager::new(InMemorySessionStore::new()));
 //! let derp_manager = Arc::new(DerpMapManager::new(InMemoryDerpStore::with_default_map()));
-//! let ssh_key_manager = Arc::new(SshKeyManager::new(InMemorySshKeyStore::new()));
 //! let peer_broadcaster = Arc::new(PeerBroadcaster::new());
-//! let state = AppState::new(pool, peer_registry, session_manager, derp_manager, ssh_key_manager, peer_broadcaster);
+//! let state = AppState::new(pool, peer_registry, session_manager, derp_manager, peer_broadcaster);
 //! let app = router(state);
 //!
 //! // Run with axum
@@ -47,14 +45,13 @@ use moto_club_db::DbPool;
 use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
 use moto_club_wg::{
-    DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
-    InMemorySshKeyStore, InMemoryStore, PeerBroadcaster, PeerRegistry, SessionManager,
-    SshKeyManager, ipam::Ipam,
+    DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore, InMemoryStore,
+    PeerBroadcaster, PeerRegistry, SessionManager, ipam::Ipam,
 };
 use moto_k8s::K8sClient;
 
 pub use health::{health_server_router, is_startup_complete, mark_startup_complete};
-pub use postgres_stores::{PostgresPeerStore, PostgresSessionStore, PostgresSshKeyStore};
+pub use postgres_stores::{PostgresPeerStore, PostgresSessionStore};
 
 /// Type alias for the peer registry used with in-memory storage (for testing).
 pub type InMemoryWgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>;
@@ -62,17 +59,11 @@ pub type InMemoryWgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>
 /// Type alias for the session manager used with in-memory storage (for testing).
 pub type InMemoryWgSessionManager = SessionManager<InMemorySessionStore>;
 
-/// Type alias for the SSH key manager used with in-memory storage (for testing).
-pub type InMemoryWgSshKeyManager = SshKeyManager<InMemorySshKeyStore>;
-
 /// Type alias for the peer registry used with PostgreSQL storage (for production).
 pub type PostgresWgPeerRegistry = PeerRegistry<PostgresPeerStore, InMemoryStore>;
 
 /// Type alias for the session manager used with PostgreSQL storage (for production).
 pub type PostgresWgSessionManager = SessionManager<PostgresSessionStore>;
-
-/// Type alias for the SSH key manager used with PostgreSQL storage (for production).
-pub type PostgresWgSshKeyManager = SshKeyManager<PostgresSshKeyStore>;
 
 /// Type alias for the peer registry used in production.
 /// Currently defaults to in-memory; will be switched to PostgreSQL when fully wired.
@@ -84,10 +75,6 @@ pub type WgSessionManager = SessionManager<InMemorySessionStore>;
 
 /// Type alias for the DERP map manager used in production.
 pub type WgDerpMapManager = DerpMapManager<InMemoryDerpStore>;
-
-/// Type alias for the SSH key manager used in production.
-/// Currently defaults to in-memory; will be switched to PostgreSQL when fully wired.
-pub type WgSshKeyManager = SshKeyManager<InMemorySshKeyStore>;
 
 /// Shared application state.
 ///
@@ -102,8 +89,6 @@ pub struct AppState {
     pub session_manager: Arc<WgSessionManager>,
     /// DERP map manager for relay server configuration.
     pub derp_manager: Arc<WgDerpMapManager>,
-    /// SSH key manager for user key registration.
-    pub ssh_key_manager: Arc<WgSshKeyManager>,
     /// Peer event broadcaster for garage WebSocket connections.
     pub peer_broadcaster: Arc<PeerBroadcaster>,
     /// Kubernetes client for ServiceAccount token validation.
@@ -125,7 +110,6 @@ impl AppState {
         peer_registry: Arc<WgPeerRegistry>,
         session_manager: Arc<WgSessionManager>,
         derp_manager: Arc<WgDerpMapManager>,
-        ssh_key_manager: Arc<WgSshKeyManager>,
         peer_broadcaster: Arc<PeerBroadcaster>,
     ) -> Self {
         Self {
@@ -133,7 +117,6 @@ impl AppState {
             peer_registry,
             session_manager,
             derp_manager,
-            ssh_key_manager,
             peer_broadcaster,
             k8s_client: None,
             garage_k8s: None,
@@ -172,13 +155,11 @@ impl AppState {
         let peer_store = InMemoryPeerStore::new();
         let session_store = InMemorySessionStore::new();
         let derp_store = InMemoryDerpStore::with_default_map();
-        let ssh_key_store = InMemorySshKeyStore::new();
 
         let ipam = Ipam::new(ipam_store);
         let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
         let session_manager = Arc::new(SessionManager::new(session_store));
         let derp_manager = Arc::new(DerpMapManager::new(derp_store));
-        let ssh_key_manager = Arc::new(SshKeyManager::new(ssh_key_store));
         let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 
         Self {
@@ -186,7 +167,6 @@ impl AppState {
             peer_registry,
             session_manager,
             derp_manager,
-            ssh_key_manager,
             peer_broadcaster,
             k8s_client: None,
             garage_k8s: None,
@@ -288,12 +268,6 @@ pub mod error_codes {
     pub const K8S_ERROR: &str = "K8S_ERROR";
     /// Database connection error.
     pub const DATABASE_ERROR: &str = "DATABASE_ERROR";
-    /// Invalid SSH public key.
-    pub const INVALID_SSH_KEY: &str = "INVALID_SSH_KEY";
-    /// SSH key not found.
-    pub const SSH_KEY_NOT_FOUND: &str = "SSH_KEY_NOT_FOUND";
-    /// SSH key not owned by the requesting user.
-    pub const SSH_KEY_NOT_OWNED: &str = "SSH_KEY_NOT_OWNED";
     /// K8s ServiceAccount token is invalid or expired.
     pub const INVALID_TOKEN: &str = "INVALID_TOKEN";
     /// Pod not running in expected garage namespace.

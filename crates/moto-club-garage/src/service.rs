@@ -9,12 +9,10 @@ use thiserror::Error;
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
-use moto_club_db::{
-    DbError, DbPool, Garage, GarageStatus, TerminationReason, garage_repo, user_ssh_key_repo,
-};
+use moto_club_db::{DbError, DbPool, Garage, GarageStatus, TerminationReason, garage_repo};
 use moto_club_k8s::{
     DEV_CONTAINER_POD_NAME, GarageK8s, GarageNamespaceInput, GarageNamespaceOps, GaragePodInput,
-    GaragePodOps, GaragePodStatus, SshKeysSecretInput, SshKeysSecretOps,
+    GaragePodOps, GaragePodStatus,
 };
 use moto_club_types::GarageId;
 
@@ -474,33 +472,7 @@ impl GarageService {
         debug!(namespace = %namespace, "creating K8s namespace");
         self.k8s.create_garage_namespace(&ns_input).await?;
 
-        // Step 8: Create SSH keys Secret
-        // Query user's SSH public keys from the database
-        let ssh_keys = user_ssh_key_repo::list_by_owner(&self.db, owner).await?;
-        let ssh_public_keys: Vec<String> = ssh_keys.iter().map(|k| k.public_key.clone()).collect();
-
-        let ssh_secret_input = SshKeysSecretInput {
-            id: *garage_id,
-            name: name.to_string(),
-            owner: owner.to_string(),
-            ssh_public_keys,
-        };
-
-        debug!(
-            namespace = %namespace,
-            key_count = ssh_secret_input.ssh_public_keys.len(),
-            "creating SSH keys secret"
-        );
-        if let Err(e) = self.k8s.create_ssh_keys_secret(&ssh_secret_input).await {
-            // Cleanup namespace on secret creation failure
-            warn!(namespace = %namespace, error = %e, "SSH secret creation failed, cleaning up namespace");
-            if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
-                warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
-            }
-            return Err(e.into());
-        }
-
-        // Step 9: Deploy pod (mounts SSH keys secret)
+        // Step 8: Deploy pod
         let pod_input = GaragePodInput {
             id: *garage_id,
             name: name.to_string(),

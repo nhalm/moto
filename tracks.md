@@ -57,13 +57,13 @@ HOW TO USE THIS FILE:
   - ~~Remove moto-club-db/src/user_ssh_key_repo.rs module~~ ✓
   - ~~Remove user_ssh_keys table from schema migration~~ ✓
   - ~~Remove UserSshKey model from moto-club-db/src/models.rs~~ ✓
-  - Remove SSH key endpoints from moto-club-api/src/wg.rs (POST/GET/DELETE /api/v1/users/ssh-keys)
-  - Remove PostgresSshKeyStore from moto-club-api/src/postgres_stores.rs
+  - ~~Remove SSH key endpoints from moto-club-api/src/wg.rs (POST/GET/DELETE /api/v1/users/ssh-keys)~~ ✓
+  - ~~Remove PostgresSshKeyStore from moto-club-api/src/postgres_stores.rs~~ ✓
   - Remove SSH key Secret creation from moto-club-k8s/src/secrets.rs (SshKeysSecretOps)
   - Remove SSH keys volume mount from moto-club-k8s/src/pods.rs
-  - Remove SSH key Secret step from moto-club-garage/src/service.rs create flow
-  - Remove INVALID_SSH_KEY, SSH_KEY_NOT_FOUND, SSH_KEY_NOT_OWNED error codes from moto-club-api
-  - Update AppState to remove ssh_key_manager field
+  - ~~Remove SSH key Secret step from moto-club-garage/src/service.rs create flow~~ ✓
+  - ~~Remove INVALID_SSH_KEY, SSH_KEY_NOT_FOUND, SSH_KEY_NOT_OWNED error codes from moto-club-api~~ ✓
+  - ~~Update AppState to remove ssh_key_manager field~~ ✓
 
 ---
 

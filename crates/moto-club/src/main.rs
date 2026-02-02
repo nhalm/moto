@@ -41,8 +41,8 @@ use moto_club_k8s::GarageK8s;
 use moto_club_reconcile::{GarageReconciler, ReconcileConfig};
 use moto_club_wg::{
     DERP_CONFIG_ENV_VAR, DerpMapManager, InMemoryDerpStore, InMemoryPeerStore,
-    InMemorySessionStore, InMemorySshKeyStore, InMemoryStore, Ipam, PeerBroadcaster, PeerRegistry,
-    SessionManager, SshKeyManager, load_derp_config,
+    InMemorySessionStore, InMemoryStore, Ipam, PeerBroadcaster, PeerRegistry, SessionManager,
+    load_derp_config,
 };
 use moto_k8s::K8sClient;
 
@@ -272,10 +272,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let derp_store = InMemoryDerpStore::with_default_map();
     let derp_manager = Arc::new(DerpMapManager::new(derp_store));
 
-    // Create SSH key manager for user key registration
-    let ssh_key_store = InMemorySshKeyStore::new();
-    let ssh_key_manager = Arc::new(SshKeyManager::new(ssh_key_store));
-
     // Create peer broadcaster for garage WebSocket connections
     let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 
@@ -290,7 +286,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         peer_registry,
         session_manager,
         derp_manager,
-        ssh_key_manager,
         peer_broadcaster,
     )
     .with_garage_k8s(api_garage_k8s)

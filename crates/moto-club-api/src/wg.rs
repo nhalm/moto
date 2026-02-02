@@ -8,9 +8,6 @@
 //! - `DELETE /api/v1/wg/sessions/{id}` - Close session
 //! - `POST /api/v1/wg/garages` - Register garage (called by garage pod)
 //! - `GET /api/v1/wg/garages/{id}/peers` - Get peer list (garage polls this)
-//! - `POST /api/v1/users/ssh-keys` - Register user SSH key
-//! - `GET /api/v1/users/ssh-keys` - List user's SSH keys
-//! - `DELETE /api/v1/users/ssh-keys/{key_id}` - Delete user SSH key
 //! - `GET /api/v1/wg/derp-map` - Get DERP server map
 //! - `WS /internal/wg/garages/{id}/peers` - WebSocket for real-time peer streaming
 
@@ -30,8 +27,7 @@ use chrono::{DateTime, Utc};
 use futures_util::{SinkExt, StreamExt};
 use moto_club_wg::{
     CreateSessionRequest as WgCreateSessionRequest, CreateSessionResponse, DeviceRegistration,
-    GarageConnectionInfo, GarageRegistration, PeerEvent, RegisteredDevice, Session, SshKeyError,
-    SshKeyRegistration,
+    GarageConnectionInfo, GarageRegistration, PeerEvent, RegisteredDevice, Session,
 };
 use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
 use serde::{Deserialize, Serialize};
@@ -255,90 +251,9 @@ pub struct DerpMapResponse {
     pub version: u32,
 }
 
-/// Request to register an SSH key.
-#[derive(Debug, Clone, Deserialize)]
-pub struct RegisterSshKeyRequest {
-    /// SSH public key in OpenSSH format.
-    pub public_key: String,
-}
-
-/// Response for SSH key registration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SshKeyRegResponse {
-    /// Unique key identifier.
-    pub id: Uuid,
-    /// Key fingerprint (SHA256 format).
-    pub fingerprint: String,
-    /// When the key was created.
-    pub created_at: DateTime<Utc>,
-}
-
-impl From<moto_club_wg::RegisteredSshKey> for SshKeyRegResponse {
-    fn from(k: moto_club_wg::RegisteredSshKey) -> Self {
-        Self {
-            id: k.key_id,
-            fingerprint: k.fingerprint,
-            // In-memory store doesn't track created_at, use now as default
-            // PostgreSQL store will provide actual timestamp
-            created_at: Utc::now(),
-        }
-    }
-}
-
-/// Response for listing SSH keys.
-///
-/// GET /api/v1/users/ssh-keys
-#[derive(Debug, Clone, Serialize)]
-pub struct ListSshKeysResponse {
-    /// User's registered SSH keys.
-    pub keys: Vec<SshKeyInfo>,
-}
-
-/// SSH key info for listing.
-#[derive(Debug, Clone, Serialize)]
-pub struct SshKeyInfo {
-    /// Unique key identifier.
-    pub id: Uuid,
-    /// Key fingerprint (SHA256 format).
-    pub fingerprint: String,
-    /// SSH public key in OpenSSH format.
-    pub public_key: String,
-    /// When the key was created.
-    pub created_at: DateTime<Utc>,
-}
-
-impl From<moto_club_wg::RegisteredSshKey> for SshKeyInfo {
-    fn from(k: moto_club_wg::RegisteredSshKey) -> Self {
-        Self {
-            id: k.key_id,
-            fingerprint: k.fingerprint,
-            public_key: k.public_key,
-            // In-memory store doesn't track created_at, use now as default
-            // PostgreSQL store will provide actual timestamp
-            created_at: Utc::now(),
-        }
-    }
-}
-
 // ============================================================================
 // Helper functions
 // ============================================================================
-
-/// Derive a stable user ID from a username string.
-///
-/// This is used during development where the bearer token is the username.
-/// In production, user IDs would come from the authentication system.
-fn derive_user_id(username: &str) -> Uuid {
-    // Simple hash-based approach: XOR the bytes into a 16-byte array
-    let mut bytes = [0u8; 16];
-    for (i, b) in username.bytes().enumerate() {
-        bytes[i % 16] ^= b;
-    }
-    // Set version (4) and variant bits to make it a valid UUID
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
-    Uuid::from_bytes(bytes)
-}
 
 /// Extract owner from Authorization header.
 ///
@@ -1127,175 +1042,6 @@ async fn get_derp_map(State(state): State<AppState>, headers: HeaderMap) -> impl
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
-/// Register an SSH key.
-///
-/// POST /api/v1/users/ssh-keys
-async fn register_ssh_key(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(req): Json<RegisterSshKeyRequest>,
-) -> impl IntoResponse {
-    let owner = extract_owner(&headers)?;
-
-    // For development, derive a stable user ID from the bearer token.
-    // In production, this would come from the authentication system.
-    // We use a simple hash-based approach to convert the username to a UUID.
-    let user_id = derive_user_id(&owner);
-
-    let registration = SshKeyRegistration {
-        public_key: req.public_key,
-    };
-
-    let key = state
-        .ssh_key_manager
-        .register_key(user_id, registration)
-        .map_err(|e| match e {
-            SshKeyError::InvalidKey(msg) => {
-                tracing::debug!(error = %msg, "Invalid SSH key");
-                (
-                    StatusCode::BAD_REQUEST,
-                    Json(ApiError::new(error_codes::INVALID_SSH_KEY, msg)),
-                )
-            }
-            SshKeyError::Storage(msg) => {
-                tracing::error!(error = %msg, "SSH key storage error");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ApiError::new(
-                        error_codes::INTERNAL_ERROR,
-                        format!("Failed to register SSH key: {msg}"),
-                    )),
-                )
-            }
-            SshKeyError::NotFound(msg) => {
-                tracing::error!(error = %msg, "SSH key not found (unexpected)");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ApiError::new(
-                        error_codes::INTERNAL_ERROR,
-                        format!("Unexpected error: {msg}"),
-                    )),
-                )
-            }
-        })?;
-
-    tracing::info!(
-        user_id = %user_id,
-        fingerprint = %key.fingerprint,
-        algorithm = %key.algorithm,
-        "SSH key registered"
-    );
-
-    let response = SshKeyRegResponse::from(key);
-
-    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::CREATED, Json(response)))
-}
-
-/// List user's SSH keys.
-///
-/// GET /api/v1/users/ssh-keys
-async fn list_ssh_keys(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    let owner = extract_owner(&headers)?;
-
-    // Derive user ID from bearer token (same as register)
-    let user_id = derive_user_id(&owner);
-
-    let keys = state.ssh_key_manager.list_keys(user_id).map_err(|e| {
-        tracing::error!(user_id = %user_id, error = %e, "Failed to list SSH keys");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError::new(
-                error_codes::INTERNAL_ERROR,
-                format!("Failed to list SSH keys: {e}"),
-            )),
-        )
-    })?;
-
-    let response = ListSshKeysResponse {
-        keys: keys.into_iter().map(SshKeyInfo::from).collect(),
-    };
-
-    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
-}
-
-/// Delete a user's SSH key.
-///
-/// DELETE /api/v1/users/ssh-keys/{key_id}
-///
-/// Note: Does not remove key from already-running garages.
-async fn delete_ssh_key(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(key_id): Path<Uuid>,
-) -> impl IntoResponse {
-    let owner = extract_owner(&headers)?;
-
-    // Derive user ID from bearer token (same as register/list)
-    let user_id = derive_user_id(&owner);
-
-    // First get the key to verify it exists and check ownership
-    let key = state
-        .ssh_key_manager
-        .get_key(key_id)
-        .map_err(|e| {
-            tracing::error!(key_id = %key_id, error = %e, "Failed to get SSH key");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiError::new(
-                    error_codes::INTERNAL_ERROR,
-                    format!("Failed to get SSH key: {e}"),
-                )),
-            )
-        })?
-        .ok_or_else(|| {
-            tracing::debug!(key_id = %key_id, "SSH key not found");
-            (
-                StatusCode::NOT_FOUND,
-                Json(ApiError::new(
-                    error_codes::SSH_KEY_NOT_FOUND,
-                    format!("SSH key '{key_id}' not found"),
-                )),
-            )
-        })?;
-
-    // Verify ownership
-    if key.user_id != user_id {
-        tracing::debug!(
-            key_id = %key_id,
-            owner = %key.user_id,
-            requester = %user_id,
-            "SSH key not owned by requester"
-        );
-        return Err((
-            StatusCode::FORBIDDEN,
-            Json(ApiError::new(
-                error_codes::SSH_KEY_NOT_OWNED,
-                format!("SSH key '{key_id}' not owned by you"),
-            )),
-        ));
-    }
-
-    // Delete the key
-    state.ssh_key_manager.remove_key(key_id).map_err(|e| {
-        tracing::error!(key_id = %key_id, error = %e, "Failed to delete SSH key");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError::new(
-                error_codes::INTERNAL_ERROR,
-                format!("Failed to delete SSH key: {e}"),
-            )),
-        )
-    })?;
-
-    tracing::info!(
-        key_id = %key_id,
-        user_id = %user_id,
-        "SSH key deleted"
-    );
-
-    Ok::<_, (StatusCode, Json<ApiError>)>(StatusCode::NO_CONTENT)
-}
-
 // ============================================================================
 // WebSocket Handler
 // ============================================================================
@@ -1422,9 +1168,6 @@ async fn handle_peers_socket(socket: WebSocket, garage_id: String, state: AppSta
 /// - `GET /api/v1/wg/garages/{id}` - Get garage WireGuard registration
 /// - `GET /api/v1/wg/garages/{id}/peers` - Get peer list
 /// - `GET /api/v1/wg/derp-map` - Get DERP server map
-/// - `POST /api/v1/users/ssh-keys` - Register SSH key
-/// - `GET /api/v1/users/ssh-keys` - List user's SSH keys
-/// - `DELETE /api/v1/users/ssh-keys/{key_id}` - Delete SSH key
 /// - `WS /internal/wg/garages/{id}/peers` - Peer streaming WebSocket
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -1445,12 +1188,6 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/wg/derp-map", get(get_derp_map))
         // Internal WebSocket for peer streaming (garages connect here)
         .route("/internal/wg/garages/{id}/peers", get(peers_websocket))
-        // SSH key endpoints
-        .route(
-            "/api/v1/users/ssh-keys",
-            post(register_ssh_key).get(list_ssh_keys),
-        )
-        .route("/api/v1/users/ssh-keys/{key_id}", delete(delete_ssh_key))
 }
 
 #[cfg(test)]
@@ -1551,13 +1288,6 @@ mod tests {
     }
 
     #[test]
-    fn register_ssh_key_request_deserialize() {
-        let json = r#"{"public_key": "ssh-ed25519 AAAA... user@host"}"#;
-        let req: RegisterSshKeyRequest = serde_json::from_str(json).unwrap();
-        assert!(req.public_key.starts_with("ssh-ed25519"));
-    }
-
-    #[test]
     fn device_response_serialize() {
         let key = test_public_key();
         let response = DeviceResponse {
@@ -1625,35 +1355,6 @@ mod tests {
     }
 
     #[test]
-    fn ssh_key_reg_response_serialize() {
-        let response = SshKeyRegResponse {
-            id: Uuid::nil(),
-            fingerprint: "SHA256:abc123".to_string(),
-            created_at: Utc::now(),
-        };
-        let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains("SHA256:abc123"));
-        assert!(json.contains(r#""id":"#));
-        assert!(json.contains(r#""created_at":"#));
-    }
-
-    #[test]
-    fn list_ssh_keys_response_serialize() {
-        let response = ListSshKeysResponse {
-            keys: vec![SshKeyInfo {
-                id: Uuid::nil(),
-                fingerprint: "SHA256:abc123".to_string(),
-                public_key: "ssh-ed25519 AAAA... user@host".to_string(),
-                created_at: Utc::now(),
-            }],
-        };
-        let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains(r#""keys":"#));
-        assert!(json.contains("SHA256:abc123"));
-        assert!(json.contains("ssh-ed25519"));
-    }
-
-    #[test]
     fn derp_map_response_serialize() {
         use moto_wgtunnel_types::derp::{DerpNode, DerpRegion};
 
@@ -1712,8 +1413,7 @@ mod tests {
         };
         use moto_club_wg::{
             DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore,
-            InMemorySshKeyStore, InMemoryStore, Ipam, PeerBroadcaster, PeerRegistry,
-            SessionManager, SshKeyManager,
+            InMemoryStore, Ipam, PeerBroadcaster, PeerRegistry, SessionManager,
         };
         use sqlx::postgres::PgPoolOptions;
         use std::sync::Arc;
@@ -1724,13 +1424,11 @@ mod tests {
             let peer_store = InMemoryPeerStore::new();
             let session_store = InMemorySessionStore::new();
             let derp_store = InMemoryDerpStore::with_default_map();
-            let ssh_key_store = InMemorySshKeyStore::new();
 
             let ipam = Ipam::new(ipam_store);
             let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
             let session_manager = Arc::new(SessionManager::new(session_store));
             let derp_manager = Arc::new(DerpMapManager::new(derp_store));
-            let ssh_key_manager = Arc::new(SshKeyManager::new(ssh_key_store));
             let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 
             // Create a pool that will never actually connect (WG endpoints don't use DB)
@@ -1743,7 +1441,6 @@ mod tests {
                 peer_registry,
                 session_manager,
                 derp_manager,
-                ssh_key_manager,
                 peer_broadcaster,
             )
         }
@@ -2232,452 +1929,6 @@ mod tests {
                 .unwrap();
 
             assert_eq!(response.status(), StatusCode::NO_CONTENT);
-        }
-
-        #[tokio::test]
-        async fn register_ssh_key_success() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            let body = serde_json::json!({
-                "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
-            });
-
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::from(serde_json::to_string(&body).unwrap()))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::CREATED);
-
-            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result: SshKeyRegResponse = serde_json::from_slice(&body).unwrap();
-
-            assert!(result.fingerprint.starts_with("SHA256:"));
-        }
-
-        #[tokio::test]
-        async fn register_ssh_key_invalid_format() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            // Missing key data
-            let body = serde_json::json!({
-                "public_key": "ssh-ed25519"
-            });
-
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::from(serde_json::to_string(&body).unwrap()))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        }
-
-        #[tokio::test]
-        async fn register_ssh_key_unsupported_algorithm() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            let body = serde_json::json!({
-                "public_key": "unknown-alg AAAA user@host"
-            });
-
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::from(serde_json::to_string(&body).unwrap()))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        }
-
-        #[tokio::test]
-        async fn register_ssh_key_requires_auth() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            let body = serde_json::json!({
-                "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
-            });
-
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        // No authorization header
-                        .body(Body::from(serde_json::to_string(&body).unwrap()))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        }
-
-        #[tokio::test]
-        async fn register_ssh_key_idempotent() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            let body = serde_json::json!({
-                "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
-            });
-
-            // Register once
-            let response1 = app
-                .clone()
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::from(serde_json::to_string(&body).unwrap()))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response1.status(), StatusCode::CREATED);
-            let body1 = axum::body::to_bytes(response1.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result1: SshKeyRegResponse = serde_json::from_slice(&body1).unwrap();
-
-            // Register again with same key
-            let response2 = app
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::from(serde_json::to_string(&body).unwrap()))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response2.status(), StatusCode::CREATED);
-            let body2 = axum::body::to_bytes(response2.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result2: SshKeyRegResponse = serde_json::from_slice(&body2).unwrap();
-
-            // Same fingerprint returned
-            assert_eq!(result1.fingerprint, result2.fingerprint);
-        }
-
-        #[tokio::test]
-        async fn list_ssh_keys_success() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            let body = serde_json::json!({
-                "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
-            });
-
-            // Register a key first
-            let response = app
-                .clone()
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::from(serde_json::to_string(&body).unwrap()))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::CREATED);
-
-            // List keys
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("GET")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::OK);
-
-            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
-
-            // Should have keys array
-            assert!(result["keys"].is_array());
-            let keys = result["keys"].as_array().unwrap();
-            assert_eq!(keys.len(), 1);
-
-            // Key should have expected fields
-            let key = &keys[0];
-            assert!(key["id"].is_string());
-            assert!(key["fingerprint"].as_str().unwrap().starts_with("SHA256:"));
-            assert!(
-                key["public_key"]
-                    .as_str()
-                    .unwrap()
-                    .starts_with("ssh-ed25519")
-            );
-            assert!(key["created_at"].is_string());
-        }
-
-        #[tokio::test]
-        async fn list_ssh_keys_empty() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            // List keys without registering any
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("GET")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::OK);
-
-            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
-
-            // Should have empty keys array
-            assert!(result["keys"].is_array());
-            assert!(result["keys"].as_array().unwrap().is_empty());
-        }
-
-        #[tokio::test]
-        async fn list_ssh_keys_requires_auth() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("GET")
-                        .uri("/api/v1/users/ssh-keys")
-                        // No authorization header
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        }
-
-        #[tokio::test]
-        async fn delete_ssh_key_success() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            // First register a key
-            let body = serde_json::json!({
-                "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
-            });
-
-            let response = app
-                .clone()
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::from(serde_json::to_string(&body).unwrap()))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::CREATED);
-
-            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result: SshKeyRegResponse = serde_json::from_slice(&body).unwrap();
-            let key_id = result.id;
-
-            // Now delete the key
-            let response = app
-                .clone()
-                .oneshot(
-                    Request::builder()
-                        .method("DELETE")
-                        .uri(format!("/api/v1/users/ssh-keys/{key_id}"))
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::NO_CONTENT);
-
-            // Verify the key is gone by listing keys
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("GET")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::OK);
-            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
-            assert!(result["keys"].as_array().unwrap().is_empty());
-        }
-
-        #[tokio::test]
-        async fn delete_ssh_key_not_found() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            let nonexistent_id = Uuid::now_v7();
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("DELETE")
-                        .uri(format!("/api/v1/users/ssh-keys/{nonexistent_id}"))
-                        .header(header::AUTHORIZATION, "Bearer testuser")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::NOT_FOUND);
-
-            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
-            assert_eq!(result["error"]["code"], "SSH_KEY_NOT_FOUND");
-        }
-
-        #[tokio::test]
-        async fn delete_ssh_key_not_owned() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            // User 1 registers a key
-            let body = serde_json::json!({
-                "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
-            });
-
-            let response = app
-                .clone()
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/api/v1/users/ssh-keys")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::AUTHORIZATION, "Bearer user1")
-                        .body(Body::from(serde_json::to_string(&body).unwrap()))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::CREATED);
-
-            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result: SshKeyRegResponse = serde_json::from_slice(&body).unwrap();
-            let key_id = result.id;
-
-            // User 2 tries to delete it
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("DELETE")
-                        .uri(format!("/api/v1/users/ssh-keys/{key_id}"))
-                        .header(header::AUTHORIZATION, "Bearer user2")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::FORBIDDEN);
-
-            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-                .await
-                .unwrap();
-            let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
-            assert_eq!(result["error"]["code"], "SSH_KEY_NOT_OWNED");
-        }
-
-        #[tokio::test]
-        async fn delete_ssh_key_requires_auth() {
-            let state = create_test_state();
-            let app = router().with_state(state);
-
-            let some_id = Uuid::now_v7();
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .method("DELETE")
-                        .uri(format!("/api/v1/users/ssh-keys/{some_id}"))
-                        // No authorization header
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         }
 
         #[tokio::test]
