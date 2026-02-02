@@ -123,13 +123,13 @@ HOW TO USE THIS FILE:
 
 ---
 
-## dev-container.md v0.12
+## dev-container.md v0.13
 
 **Status:** Complete
 
 **Implemented:**
 - Nix dockerTools.buildLayeredImage with buildEnv wrapper
-- Modular structure: infra/pkgs/moto-garage.nix, infra/modules/{base,dev-tools,ssh,wireguard}.nix
+- Modular structure: infra/pkgs/moto-garage.nix, infra/modules/{base,dev-tools,terminal,wireguard}.nix
 - Root flake at moto/flake.nix exports moto-garage package
 - Multi-arch via eachDefaultSystem (x86_64-linux, aarch64-linux)
 - Rust 1.85 stable toolchain with extensions (rust-src, rust-analyzer)
@@ -140,13 +140,14 @@ HOW TO USE THIS FILE:
 - General tools: curl, jq, yq, ripgrep, fd, bat, htop, tree
 - Kubernetes: kubectl, k9s, kubernetes-helm
 - Node.js 22.x LTS
-- Connectivity: wireguard-tools, openssh
+- Connectivity: wireguard-tools, ttyd, tmux (no openssh - WireGuard tunnel is auth boundary)
 - Environment variables: WORKSPACE, CARGO_HOME, CARGO_TARGET_DIR, RUST_BACKTRACE, RUST_LOG, RUSTC_WRAPPER, RUSTFLAGS, NIX_PATH, SSL_CERT_FILE, DO_NOT_TRACK
-- Container config: /bin/bash cmd, /workspace workdir, volumes, port 22 exposed
-- Smoke tests: infra/smoke-test.sh (core tools, env vars, Rust compilation)
+- Container config: garage-entrypoint cmd (starts ttyd), /workspace workdir, volumes, port 7681 exposed
+- Terminal daemon: ttyd on port 7681 with tmux session persistence (terminal.nix module)
+- Smoke tests: infra/smoke-test.sh (core tools, terminal tools, env vars, Rust compilation)
 
 **Remaining:**
-(none - dev-container.md v0.12 implementation complete)
+(none - dev-container.md v0.13 implementation complete)
 
 ---
 
