@@ -95,6 +95,13 @@ run_test "jj present" "which jj" || ((FAILED++))
 run_test "kubectl present" "which kubectl" || ((FAILED++))
 
 echo ""
+echo "=== Terminal Tools ==="
+
+run_test "ttyd present" "which ttyd" || ((FAILED++))
+run_test "tmux present" "which tmux" || ((FAILED++))
+run_test "garage-entrypoint present" "which garage-entrypoint" || ((FAILED++))
+
+echo ""
 echo "=== Environment Variables ==="
 
 run_test "RUST_BACKTRACE set" '[ -n "$RUST_BACKTRACE" ]' || ((FAILED++))

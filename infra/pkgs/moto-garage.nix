@@ -30,7 +30,9 @@ pkgs.dockerTools.buildLayeredImage {
   contents = [ garageEnv ];
 
   config = {
-    Cmd = [ "/bin/bash" ];
+    # Start ttyd daemon for WebSocket terminal access
+    # ttyd spawns tmux sessions for persistence
+    Cmd = [ "garage-entrypoint" ];
     WorkingDir = "/workspace";
     Env = allEnv;
     ExposedPorts = {
