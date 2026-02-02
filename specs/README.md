@@ -46,19 +46,19 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [moto-club](moto-club.md) | Ready to Rip | Central orchestration, garage management |
+| [moto-club](moto-club.md) | Ripping | Central orchestration, garage management |
 | [keybox](keybox.md) | Ripping | Secrets manager, SPIFFE-based identity |
 | [ai-proxy](ai-proxy.md) | Bare Frame | AI provider gateway, injects secrets |
-| [dev-container](dev-container.md) | Ready to Rip | Nix dockerTools container, tooling, environment |
+| [dev-container](dev-container.md) | Ripping | Nix dockerTools container, tooling, environment |
 | [container-system](container-system.md) | Ripping | Build pipeline, registry |
 | [local-cluster](local-cluster.md) | Ripping | Local k3s cluster, moto cluster CLI |
 | [garage-isolation](garage-isolation.md) | Bare Frame | Network policies, resource limits |
 | [garage-local](garage-local.md) | Wrenching | Local K8s operations (no server) |
-| [garage-lifecycle](garage-lifecycle.md) | Ready to Rip | Full lifecycle with ttyd terminal, TTL |
+| [garage-lifecycle](garage-lifecycle.md) | Ripping | Full lifecycle with ttyd terminal, TTL |
 | [moto-bike](moto-bike.md) | Ripping | Bike base image, engine contract |
 | [supporting-services](supporting-services.md) | Bare Frame | Postgres, Redis deployment |
 | [moto-cron](moto-cron.md) | Bare Frame | Scheduled tasks (TTL cleanup), K8s CronJobs |
-| [moto-wgtunnel](moto-wgtunnel.md) | Ready to Rip | WireGuard tunnels for terminal access |
+| [moto-wgtunnel](moto-wgtunnel.md) | Ripping | WireGuard tunnels for terminal access |
 | [moto-club-websocket](moto-club-websocket.md) | Bare Frame | WebSocket streaming for logs/events |
 
 ## Phase 2: Tokenization (The Vault)
