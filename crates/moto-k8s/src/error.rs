@@ -121,25 +121,45 @@ pub enum Error {
     #[error("failed to delete PVC: {0}")]
     PvcDelete(#[source] kube::Error),
 
-    /// Failed to create NetworkPolicy.
+    /// Failed to create `NetworkPolicy`.
     #[error("failed to create NetworkPolicy: {0}")]
     NetworkPolicyCreate(#[source] kube::Error),
 
-    /// NetworkPolicy already exists.
+    /// `NetworkPolicy` already exists.
     #[error("NetworkPolicy already exists: {0}")]
     NetworkPolicyExists(String),
 
-    /// NetworkPolicy not found.
+    /// `NetworkPolicy` not found.
     #[error("NetworkPolicy not found: {0}")]
     NetworkPolicyNotFound(String),
 
-    /// Failed to get NetworkPolicy.
+    /// Failed to get `NetworkPolicy`.
     #[error("failed to get NetworkPolicy: {0}")]
     NetworkPolicyGet(#[source] kube::Error),
 
-    /// Failed to delete NetworkPolicy.
+    /// Failed to delete `NetworkPolicy`.
     #[error("failed to delete NetworkPolicy: {0}")]
     NetworkPolicyDelete(#[source] kube::Error),
+
+    /// Failed to create `ResourceQuota`.
+    #[error("failed to create ResourceQuota: {0}")]
+    ResourceQuotaCreate(#[source] kube::Error),
+
+    /// `ResourceQuota` already exists.
+    #[error("ResourceQuota already exists: {0}")]
+    ResourceQuotaExists(String),
+
+    /// `ResourceQuota` not found.
+    #[error("ResourceQuota not found: {0}")]
+    ResourceQuotaNotFound(String),
+
+    /// Failed to get `ResourceQuota`.
+    #[error("failed to get ResourceQuota: {0}")]
+    ResourceQuotaGet(#[source] kube::Error),
+
+    /// Failed to delete `ResourceQuota`.
+    #[error("failed to delete ResourceQuota: {0}")]
+    ResourceQuotaDelete(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.

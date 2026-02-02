@@ -32,11 +32,13 @@ mod namespace;
 mod network_policy;
 mod pods;
 mod pvc;
+mod resource_quota;
 
 pub use namespace::{GarageNamespaceInput, GarageNamespaceOps};
 pub use network_policy::{GARAGE_ISOLATION_POLICY_NAME, GarageNetworkPolicyOps};
 pub use pods::{DEV_CONTAINER_POD_NAME, GaragePodInput, GaragePodOps, GaragePodStatus, RepoConfig};
 pub use pvc::{GarageWorkspacePvcOps, WORKSPACE_PVC_NAME};
+pub use resource_quota::{GARAGE_QUOTA_NAME, GarageResourceQuotaOps};
 
 use moto_k8s::K8sClient;
 

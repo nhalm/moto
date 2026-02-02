@@ -1,6 +1,6 @@
-//! NetworkPolicy operations.
+//! `NetworkPolicy` operations.
 //!
-//! Provides low-level CRUD operations for Kubernetes NetworkPolicies.
+//! Provides low-level CRUD operations for Kubernetes `NetworkPolicy` resources.
 
 use std::future::Future;
 
@@ -10,42 +10,42 @@ use tracing::{debug, instrument};
 
 use crate::{Error, K8sClient, Result};
 
-/// Trait for NetworkPolicy operations.
+/// Trait for `NetworkPolicy` operations.
 pub trait NetworkPolicyOps {
-    /// Creates a NetworkPolicy in the specified namespace.
+    /// Creates a `NetworkPolicy` in the specified namespace.
     ///
     /// # Errors
     ///
-    /// Returns an error if the NetworkPolicy already exists or creation fails.
+    /// Returns an error if the `NetworkPolicy` already exists or creation fails.
     fn create_network_policy(
         &self,
         namespace: &str,
         network_policy: &NetworkPolicy,
     ) -> impl Future<Output = Result<NetworkPolicy>> + Send;
 
-    /// Gets a NetworkPolicy by name in the specified namespace.
+    /// Gets a `NetworkPolicy` by name in the specified namespace.
     ///
     /// # Errors
     ///
-    /// Returns an error if the NetworkPolicy doesn't exist or the operation fails.
+    /// Returns an error if the `NetworkPolicy` doesn't exist or the operation fails.
     fn get_network_policy(
         &self,
         namespace: &str,
         name: &str,
     ) -> impl Future<Output = Result<NetworkPolicy>> + Send;
 
-    /// Deletes a NetworkPolicy by name in the specified namespace.
+    /// Deletes a `NetworkPolicy` by name in the specified namespace.
     ///
     /// # Errors
     ///
-    /// Returns an error if the NetworkPolicy doesn't exist or deletion fails.
+    /// Returns an error if the `NetworkPolicy` doesn't exist or deletion fails.
     fn delete_network_policy(
         &self,
         namespace: &str,
         name: &str,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Checks if a NetworkPolicy exists in the specified namespace.
+    /// Checks if a `NetworkPolicy` exists in the specified namespace.
     fn network_policy_exists(
         &self,
         namespace: &str,

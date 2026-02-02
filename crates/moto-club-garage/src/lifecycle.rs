@@ -77,12 +77,14 @@ impl GarageLifecycle {
 
         matches!(
             (from, to),
-            // Forward progress
-            (GarageStatus::Pending, GarageStatus::Initializing)
-                | (GarageStatus::Initializing, GarageStatus::Ready)
-                // Failure transitions
-                | (GarageStatus::Pending, GarageStatus::Failed)
-                | (GarageStatus::Initializing, GarageStatus::Failed)
+            // Forward progress and failure transitions
+            (
+                GarageStatus::Pending,
+                GarageStatus::Initializing | GarageStatus::Failed
+            ) | (
+                GarageStatus::Initializing,
+                GarageStatus::Ready | GarageStatus::Failed
+            )
         )
     }
 
@@ -108,7 +110,7 @@ impl GarageLifecycle {
     ///
     /// TTL can be extended for garages that are not in terminal states.
     #[must_use]
-    pub fn can_extend_ttl(status: GarageStatus) -> bool {
+    pub const fn can_extend_ttl(status: GarageStatus) -> bool {
         !matches!(status, GarageStatus::Terminated | GarageStatus::Failed)
     }
 
@@ -143,7 +145,7 @@ impl GarageLifecycle {
 
     /// Checks if a state is active (not in a terminal failure or terminated state).
     #[must_use]
-    pub fn is_active(status: GarageStatus) -> bool {
+    pub const fn is_active(status: GarageStatus) -> bool {
         !matches!(status, GarageStatus::Terminated | GarageStatus::Failed)
     }
 }

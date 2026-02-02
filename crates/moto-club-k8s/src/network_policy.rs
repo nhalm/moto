@@ -1,9 +1,9 @@
-//! Garage NetworkPolicy management.
+//! Garage `NetworkPolicy` management.
 //!
-//! Creates the garage-isolation NetworkPolicy per garage-isolation.md spec:
-//! - Deny all ingress (WireGuard tunnel bypasses at pod level)
+//! Creates the garage-isolation `NetworkPolicy` per garage-isolation.md spec:
+//! - Deny all ingress (`WireGuard` tunnel bypasses at pod level)
 //! - Allow egress: DNS, keybox, same-namespace (postgres/redis), internet
-//! - Block: cluster internal networks, cloud metadata, WireGuard range
+//! - Block: cluster internal networks, cloud metadata, `WireGuard` range
 
 use std::future::Future;
 
@@ -21,28 +21,28 @@ use moto_k8s::{NetworkPolicyOps, Result};
 
 use crate::GarageK8s;
 
-/// Name of the garage isolation NetworkPolicy.
+/// Name of the garage isolation `NetworkPolicy`.
 pub const GARAGE_ISOLATION_POLICY_NAME: &str = "garage-isolation";
 
-/// Trait for garage NetworkPolicy operations.
+/// Trait for garage `NetworkPolicy` operations.
 pub trait GarageNetworkPolicyOps {
-    /// Creates the garage-isolation NetworkPolicy in the garage namespace.
+    /// Creates the garage-isolation `NetworkPolicy` in the garage namespace.
     ///
     /// The policy:
     /// - Applies to all pods in the namespace
     /// - Denies all ingress
     /// - Allows egress to: DNS, keybox, same-namespace (postgres/redis), internet
-    /// - Blocks: cluster internal networks, cloud metadata, WireGuard range
+    /// - Blocks: cluster internal networks, cloud metadata, `WireGuard` range
     ///
     /// # Errors
     ///
-    /// Returns an error if the NetworkPolicy already exists or creation fails.
+    /// Returns an error if the `NetworkPolicy` already exists or creation fails.
     fn create_garage_network_policy(
         &self,
         id: &GarageId,
     ) -> impl Future<Output = Result<NetworkPolicy>> + Send;
 
-    /// Checks if the garage-isolation NetworkPolicy exists.
+    /// Checks if the garage-isolation `NetworkPolicy` exists.
     fn garage_network_policy_exists(
         &self,
         id: &GarageId,
@@ -72,7 +72,7 @@ impl GarageNetworkPolicyOps for GarageK8s {
     }
 }
 
-/// Builds the garage-isolation NetworkPolicy per garage-isolation.md spec.
+/// Builds the garage-isolation `NetworkPolicy` per garage-isolation.md spec.
 fn build_garage_isolation_policy(namespace: &str) -> NetworkPolicy {
     NetworkPolicy {
         metadata: ObjectMeta {
@@ -111,11 +111,10 @@ fn build_dns_egress_rule() -> NetworkPolicyEgressRule {
         to: Some(vec![NetworkPolicyPeer {
             namespace_selector: Some(LabelSelector {
                 match_labels: Some(
-                    [(
+                    std::iter::once((
                         "kubernetes.io/metadata.name".to_string(),
                         "kube-system".to_string(),
-                    )]
-                    .into_iter()
+                    ))
                     .collect(),
                 ),
                 ..Default::default()
@@ -136,17 +135,13 @@ fn build_keybox_egress_rule() -> NetworkPolicyEgressRule {
         to: Some(vec![NetworkPolicyPeer {
             namespace_selector: Some(LabelSelector {
                 match_labels: Some(
-                    [("moto.dev/type".to_string(), "system".to_string())]
-                        .into_iter()
-                        .collect(),
+                    std::iter::once(("moto.dev/type".to_string(), "system".to_string())).collect(),
                 ),
                 ..Default::default()
             }),
             pod_selector: Some(LabelSelector {
                 match_labels: Some(
-                    [("app".to_string(), "keybox".to_string())]
-                        .into_iter()
-                        .collect(),
+                    std::iter::once(("app".to_string(), "keybox".to_string())).collect(),
                 ),
                 ..Default::default()
             }),
