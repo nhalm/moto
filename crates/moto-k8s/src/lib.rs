@@ -8,6 +8,7 @@
 //! - [`PvcOps`] - Trait for `PersistentVolumeClaim` operations
 //! - [`NetworkPolicyOps`] - Trait for `NetworkPolicy` operations
 //! - [`ResourceQuotaOps`] - Trait for `ResourceQuota` operations
+//! - [`LimitRangeOps`] - Trait for `LimitRange` operations
 //! - [`TokenReviewOps`] - Trait for `ServiceAccount` token validation
 //! - [`labels`] - Constants for moto K8s labels
 
@@ -15,6 +16,7 @@ mod client;
 mod deployment;
 mod error;
 mod labels;
+mod limit_range;
 mod namespace;
 mod network_policy;
 mod pod;
@@ -26,6 +28,7 @@ pub use client::K8sClient;
 pub use deployment::{BikeDeploymentConfig, BikeInfo, DeploymentOps};
 pub use error::{Error, Result};
 pub use labels::Labels;
+pub use limit_range::LimitRangeOps;
 pub use namespace::NamespaceOps;
 pub use network_policy::NetworkPolicyOps;
 pub use pod::{LogStream, PodLogOptions, PodOps};

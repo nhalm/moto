@@ -28,12 +28,14 @@
 //! let pod = garage_k8s.deploy_pod(&input, "ghcr.io/moto/dev:latest").await?;
 //! ```
 
+mod limit_range;
 mod namespace;
 mod network_policy;
 mod pods;
 mod pvc;
 mod resource_quota;
 
+pub use limit_range::{GARAGE_LIMITS_NAME, GarageLimitRangeOps};
 pub use namespace::{GarageNamespaceInput, GarageNamespaceOps};
 pub use network_policy::{GARAGE_ISOLATION_POLICY_NAME, GarageNetworkPolicyOps};
 pub use pods::{DEV_CONTAINER_POD_NAME, GaragePodInput, GaragePodOps, GaragePodStatus, RepoConfig};

@@ -11,8 +11,9 @@ use uuid::Uuid;
 
 use moto_club_db::{DbError, DbPool, Garage, GarageStatus, TerminationReason, garage_repo};
 use moto_club_k8s::{
-    DEV_CONTAINER_POD_NAME, GarageK8s, GarageNamespaceInput, GarageNamespaceOps,
-    GarageNetworkPolicyOps, GaragePodInput, GaragePodOps, GaragePodStatus, GarageResourceQuotaOps,
+    DEV_CONTAINER_POD_NAME, GarageK8s, GarageLimitRangeOps, GarageNamespaceInput,
+    GarageNamespaceOps, GarageNetworkPolicyOps, GaragePodInput, GaragePodOps, GaragePodStatus,
+    GarageResourceQuotaOps,
 };
 use moto_club_types::GarageId;
 
@@ -487,6 +488,17 @@ impl GarageService {
         if let Err(e) = self.k8s.create_garage_resource_quota(garage_id).await {
             // Cleanup namespace on ResourceQuota creation failure
             warn!(namespace = %namespace, error = %e, "ResourceQuota creation failed, cleaning up namespace");
+            if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
+                warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
+            }
+            return Err(e.into());
+        }
+
+        // Step 6c: Apply LimitRange per garage-isolation.md spec
+        debug!(namespace = %namespace, "creating LimitRange");
+        if let Err(e) = self.k8s.create_garage_limit_range(garage_id).await {
+            // Cleanup namespace on LimitRange creation failure
+            warn!(namespace = %namespace, error = %e, "LimitRange creation failed, cleaning up namespace");
             if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
                 warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
             }

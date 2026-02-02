@@ -160,6 +160,26 @@ pub enum Error {
     /// Failed to delete `ResourceQuota`.
     #[error("failed to delete ResourceQuota: {0}")]
     ResourceQuotaDelete(#[source] kube::Error),
+
+    /// Failed to create `LimitRange`.
+    #[error("failed to create LimitRange: {0}")]
+    LimitRangeCreate(#[source] kube::Error),
+
+    /// `LimitRange` already exists.
+    #[error("LimitRange already exists: {0}")]
+    LimitRangeExists(String),
+
+    /// `LimitRange` not found.
+    #[error("LimitRange not found: {0}")]
+    LimitRangeNotFound(String),
+
+    /// Failed to get `LimitRange`.
+    #[error("failed to get LimitRange: {0}")]
+    LimitRangeGet(#[source] kube::Error),
+
+    /// Failed to delete `LimitRange`.
+    #[error("failed to delete LimitRange: {0}")]
+    LimitRangeDelete(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.
