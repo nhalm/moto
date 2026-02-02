@@ -15,13 +15,13 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v1.1
+## moto-club.md v1.2
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - moto-club-types crate: GarageId, GarageState, GarageInfo
-- moto-club-wg crate: lib.rs, ipam.rs, peers.rs, sessions.rs, ssh_keys.rs, derp.rs (in-memory)
+- moto-club-wg crate: lib.rs, ipam.rs, peers.rs, sessions.rs, derp.rs (in-memory)
 - moto-club-db crate: lib.rs, models.rs, garage_repo.rs (scaffolding)
 - moto-club-api crate: lib.rs, health.rs, garages.rs, wg.rs (scaffolding)
 - moto-club-k8s crate: lib.rs, namespace.rs, pods.rs (scaffolding)
@@ -29,28 +29,22 @@ HOW TO USE THIS FILE:
 - moto-club-reconcile crate: lib.rs, garage.rs (scaffolding)
 - moto-club binary: main.rs (scaffolding)
 - Device identity model: WireGuard public_key as primary key (spec lines 406, 1040-1046)
-- moto-club-db: PostgreSQL migrations for all tables (garages, wg_devices, wg_sessions, wg_garages, user_ssh_keys, derp_servers)
+- moto-club-db: PostgreSQL migrations for all tables (garages, wg_devices, wg_sessions, wg_garages, derp_servers)
 - moto-club-db: models updated for spec v1.1 (removed Attached status, WgDevice uses public_key as PK, added WgGarage model, Garage has image field)
 - moto-club-db: wg_devices repository using public_key as primary key (wg_device_repo.rs)
 - moto-club-db: wg_sessions repository with garage_id ON DELETE CASCADE (wg_session_repo.rs)
 - moto-club-db: wg_garages repository with deterministic IP allocation (wg_garage_repo.rs)
-- moto-club-db: user_ssh_keys repository (user_ssh_key_repo.rs)
-- moto-club-api: PostgreSQL storage implementations (postgres_stores.rs: PostgresPeerStore, PostgresSessionStore, PostgresSshKeyStore)
+- moto-club-api: PostgreSQL storage implementations (postgres_stores.rs: PostgresPeerStore, PostgresSessionStore)
 - moto-club-api: GET /api/v1/wg/garages/{garage_id} endpoint (returns registration info for garage pods)
 - moto-club-api: K8s ServiceAccount token validation for garage endpoints (moto-k8s TokenReviewOps trait, validate_garage_token helper)
 - moto-club-api: GET /api/v1/wg/derp-map endpoint (returns DERP map with version for clients and garages)
 - moto-club-api: Conditional GET for peers (?version= param, 304 response)
-- moto-club-k8s: SSH keys Secret creation (secrets.rs: SshKeysSecretOps trait, creates ssh-keys Secret with authorized_keys)
-- moto-club-k8s: Pod SSH keys volume mount (pods.rs: mounts ssh-keys Secret to /home/moto/.ssh with mode 0600)
 - moto-k8s: Labels use moto.dev/garage-id and moto.dev/garage-name per spec (labels.rs updated, all usages fixed)
 - moto-club: DERP config file loading from MOTO_CLUB_DERP_CONFIG env var (moto-club-wg DerpConfigFile, load_derp_config; moto-club-db derp_server_repo with sync_from_config; main.rs startup sync)
 - moto-club: Structured JSON logging (main.rs: flatten_event=true for flat JSON output per spec lines 1183-1194)
-- moto-club-garage: SSH keys Secret creation wired into create flow (step 8 per spec lines 866-879; queries user_ssh_key_repo, creates Secret before pod deployment)
 - moto-club-api: K8s namespace deletion in close flow (DELETE /api/v1/garages/{name} calls GarageK8s.delete_garage_namespace per spec lines 903-913)
-- moto-club-api: GET /api/v1/users/ssh-keys endpoint (list user's SSH keys per spec lines 715-730)
-- moto-club-api: DELETE /api/v1/users/ssh-keys/{key_id} endpoint (delete SSH key per spec lines 734-743)
 - moto-club-api: GET /api/v1/info includes api_version, git_sha, features fields per spec lines 803-817
-- moto-club-api: POST /api/v1/garages uses GarageService for full K8s integration (create flow steps 4-12: namespace, SSH keys Secret, pod deployment per spec lines 866-879)
+- moto-club-api: POST /api/v1/garages uses GarageService for full K8s integration
 - moto-club-api: Removed unused SESSION_EXPIRED error code (spec v1.0 changelog)
 - moto-club-api: GET /api/v1/wg/sessions endpoint with ?garage_id and ?all query params per spec lines 514-540
 - moto-club-api: GET /health endpoint includes database, k8s, and keybox checks per spec lines 1153-1179
@@ -58,7 +52,18 @@ HOW TO USE THIS FILE:
 - moto-club-api: POST /api/v1/garages/{name}/extend returns ExtendTtlResponse {expires_at, ttl_remaining_seconds} per spec lines 379-386
 
 **Remaining:**
-(none - moto-club.md v1.1 implementation complete)
+- Remove SSH key management (v1.2 changelog: ttyd+WireGuard tunnel is sole auth boundary):
+  - ~~Remove moto-club-wg/src/ssh_keys.rs module~~ ✓
+  - Remove moto-club-db/src/user_ssh_key_repo.rs module
+  - Remove user_ssh_keys table from schema migration
+  - Remove UserSshKey model from moto-club-db/src/models.rs
+  - Remove SSH key endpoints from moto-club-api/src/wg.rs (POST/GET/DELETE /api/v1/users/ssh-keys)
+  - Remove PostgresSshKeyStore from moto-club-api/src/postgres_stores.rs
+  - Remove SSH key Secret creation from moto-club-k8s/src/secrets.rs (SshKeysSecretOps)
+  - Remove SSH keys volume mount from moto-club-k8s/src/pods.rs
+  - Remove SSH key Secret step from moto-club-garage/src/service.rs create flow
+  - Remove INVALID_SSH_KEY, SSH_KEY_NOT_FOUND, SSH_KEY_NOT_OWNED error codes from moto-club-api
+  - Update AppState to remove ssh_key_manager field
 
 ---
 

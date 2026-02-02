@@ -5,7 +5,6 @@
 //! - [`ipam`]: IP address allocation for garages and client devices
 //! - [`peers`]: Peer registration for devices and garages
 //! - [`sessions`]: Tunnel session management
-//! - [`ssh_keys`]: User SSH key management for garage access
 //! - [`derp`]: DERP relay map management
 //! - [`broadcaster`]: Real-time peer event broadcasting for garage WebSockets
 //!
@@ -18,6 +17,9 @@
 //! The WireGuard public key IS the device identity (Cloudflare WARP model).
 //! No separate device ID is needed.
 //!
+//! Terminal access uses ttyd over the WireGuard tunnel - the tunnel is the sole
+//! authentication boundary.
+//!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────────────┐
 //! │                           moto-club                                  │
@@ -26,7 +28,6 @@
 //! │  │  ├── IP Allocator (fd00:moto::/48)  ← this crate              │  │
 //! │  │  ├── Peer Registration              ← this crate              │  │
 //! │  │  ├── Session Management             ← this crate              │  │
-//! │  │  ├── SSH Key Management             ← this crate              │  │
 //! │  │  └── DERP Map Provider              ← this crate              │  │
 //! │  └───────────────────────────────────────────────────────────────┘  │
 //! └─────────────────────────────────────────────────────────────────────┘
@@ -64,7 +65,6 @@ pub mod derp;
 pub mod ipam;
 pub mod peers;
 pub mod sessions;
-pub mod ssh_keys;
 
 pub use broadcaster::{PeerAction, PeerBroadcaster, PeerEvent};
 pub use derp::{
@@ -81,8 +81,4 @@ pub use sessions::{
     CreateSessionRequest, CreateSessionResponse, DEFAULT_SESSION_TTL_SECS,
     DISCONNECT_GRACE_PERIOD_SECS, GarageConnectionInfo, InMemorySessionStore, Session,
     SessionError, SessionManager, SessionStore,
-};
-pub use ssh_keys::{
-    InMemorySshKeyStore, RegisteredSshKey, SshKeyError, SshKeyManager, SshKeyRegistration,
-    SshKeyResponse, SshKeyStore,
 };
