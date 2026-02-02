@@ -1293,4 +1293,118 @@ mod tests {
             "DATABASE_URL should not be present"
         );
     }
+
+    #[test]
+    fn build_pod_with_redis_injects_env_vars() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            false, // with_postgres
+            true,  // with_redis
+        );
+
+        let spec = pod.spec.as_ref().unwrap();
+        let container = &spec.containers[0];
+        let env = container.env.as_ref().unwrap();
+
+        // Check REDIS_HOST
+        let host = env.iter().find(|e| e.name == "REDIS_HOST").unwrap();
+        assert_eq!(host.value, Some(REDIS_SERVICE_NAME.to_string()));
+
+        // Check REDIS_PORT
+        let port = env.iter().find(|e| e.name == "REDIS_PORT").unwrap();
+        assert_eq!(port.value, Some(REDIS_PORT.to_string()));
+
+        // Check REDIS_PASSWORD (from secret)
+        let pass = env.iter().find(|e| e.name == "REDIS_PASSWORD").unwrap();
+        let secret_ref = pass
+            .value_from
+            .as_ref()
+            .unwrap()
+            .secret_key_ref
+            .as_ref()
+            .unwrap();
+        assert_eq!(secret_ref.name, REDIS_CREDENTIALS_SECRET_NAME);
+        assert_eq!(secret_ref.key, "password");
+
+        // Check REDIS_URL (from secret)
+        let url = env.iter().find(|e| e.name == "REDIS_URL").unwrap();
+        let secret_ref = url
+            .value_from
+            .as_ref()
+            .unwrap()
+            .secret_key_ref
+            .as_ref()
+            .unwrap();
+        assert_eq!(secret_ref.name, REDIS_CREDENTIALS_SECRET_NAME);
+        assert_eq!(secret_ref.key, "url");
+    }
+
+    #[test]
+    fn build_pod_without_redis_no_redis_env_vars() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            false, // with_postgres
+            false, // with_redis
+        );
+
+        let spec = pod.spec.as_ref().unwrap();
+        let container = &spec.containers[0];
+        let env = container.env.as_ref().unwrap();
+
+        // Check no Redis env vars exist
+        assert!(
+            env.iter().find(|e| e.name == "REDIS_HOST").is_none(),
+            "REDIS_HOST should not be present"
+        );
+        assert!(
+            env.iter().find(|e| e.name == "REDIS_URL").is_none(),
+            "REDIS_URL should not be present"
+        );
+    }
+
+    #[test]
+    fn build_pod_with_both_postgres_and_redis_injects_all_env_vars() {
+        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
+        let pod = build_dev_container_pod(
+            "moto-garage-abc12345",
+            "test:latest",
+            "main",
+            labels,
+            None,
+            true, // with_postgres
+            true, // with_redis
+        );
+
+        let spec = pod.spec.as_ref().unwrap();
+        let container = &spec.containers[0];
+        let env = container.env.as_ref().unwrap();
+
+        // Check both Postgres and Redis env vars exist
+        assert!(
+            env.iter().find(|e| e.name == "POSTGRES_HOST").is_some(),
+            "POSTGRES_HOST should be present"
+        );
+        assert!(
+            env.iter().find(|e| e.name == "DATABASE_URL").is_some(),
+            "DATABASE_URL should be present"
+        );
+        assert!(
+            env.iter().find(|e| e.name == "REDIS_HOST").is_some(),
+            "REDIS_HOST should be present"
+        );
+        assert!(
+            env.iter().find(|e| e.name == "REDIS_URL").is_some(),
+            "REDIS_URL should be present"
+        );
+    }
 }
