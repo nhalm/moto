@@ -21,6 +21,10 @@
 //!     branch: "main".to_string(),
 //!     ttl_seconds: Some(14400),
 //!     image: None,
+//!     engine: None,
+//!     repo: None,
+//!     with_postgres: false,
+//!     with_redis: false,
 //! };
 //! let garage = service.create("nick", input).await?;
 //!

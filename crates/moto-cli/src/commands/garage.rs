@@ -42,6 +42,14 @@ pub enum GarageAction {
         /// Engine to work on (default: current directory name)
         #[arg(short, long)]
         engine: Option<String>,
+
+        /// Include PostgreSQL database (postgres:16)
+        #[arg(long)]
+        with_postgres: bool,
+
+        /// Include Redis cache (redis:7)
+        #[arg(long)]
+        with_redis: bool,
     },
 
     /// Connect to a garage terminal session
@@ -309,7 +317,13 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 }
             }
         }
-        GarageAction::Open { owner, ttl, engine } => {
+        GarageAction::Open {
+            owner,
+            ttl,
+            engine,
+            with_postgres,
+            with_redis,
+        } => {
             let client = GarageClient::local().await?;
             let name = crate::names::generate();
             let owner_ref = owner.as_deref();

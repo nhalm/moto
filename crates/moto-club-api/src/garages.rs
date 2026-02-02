@@ -44,6 +44,12 @@ pub struct CreateGarageRequest {
     pub ttl_seconds: Option<i32>,
     /// Override dev container image.
     pub image: Option<String>,
+    /// Include PostgreSQL supporting service (postgres:16).
+    #[serde(default)]
+    pub with_postgres: bool,
+    /// Include Redis supporting service (redis:7).
+    #[serde(default)]
+    pub with_redis: bool,
 }
 
 /// Request to extend a garage's TTL.
@@ -225,6 +231,8 @@ async fn create_garage(
             image: req.image,
             engine: None,
             repo: None, // TODO: Add repo to API request when needed
+            with_postgres: req.with_postgres,
+            with_redis: req.with_redis,
         };
 
         let garage = garage_service
@@ -760,6 +768,8 @@ mod tests {
         assert_eq!(req.ttl_seconds, Some(7200));
         assert!(req.branch.is_none());
         assert!(req.image.is_none());
+        assert!(!req.with_postgres);
+        assert!(!req.with_redis);
     }
 
     #[test]
@@ -770,6 +780,16 @@ mod tests {
         assert!(req.branch.is_none());
         assert!(req.ttl_seconds.is_none());
         assert!(req.image.is_none());
+        assert!(!req.with_postgres);
+        assert!(!req.with_redis);
+    }
+
+    #[test]
+    fn create_garage_request_with_services() {
+        let json = r#"{"with_postgres": true, "with_redis": true}"#;
+        let req: CreateGarageRequest = serde_json::from_str(json).unwrap();
+        assert!(req.with_postgres);
+        assert!(req.with_redis);
     }
 
     #[test]

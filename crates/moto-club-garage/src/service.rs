@@ -92,6 +92,12 @@ pub struct CreateGarageInput {
     pub engine: Option<String>,
     /// Optional repository to clone on startup.
     pub repo: Option<moto_club_k8s::RepoConfig>,
+    /// Include PostgreSQL supporting service.
+    #[serde(default)]
+    pub with_postgres: bool,
+    /// Include Redis supporting service.
+    #[serde(default)]
+    pub with_redis: bool,
 }
 
 /// Input for extending a garage's TTL.
@@ -575,12 +581,16 @@ mod tests {
             image: None,
             engine: None,
             repo: None,
+            with_postgres: false,
+            with_redis: false,
         };
 
         assert!(input.name.is_none());
         assert_eq!(input.branch, "main");
         assert!(input.ttl_seconds.is_none());
         assert!(input.repo.is_none());
+        assert!(!input.with_postgres);
+        assert!(!input.with_redis);
     }
 
     #[test]

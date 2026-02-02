@@ -279,3 +279,20 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 (none - garage-isolation.md v0.3 implementation complete)
+
+---
+
+## supporting-services.md v0.2
+
+**Status:** In Progress
+
+**Implemented:**
+- CLI flags: `--with-postgres` and `--with-redis` on `moto garage open` command
+- API: `with_postgres` and `with_redis` fields in `CreateGarageRequest` and `CreateGarageInput`
+
+**Remaining:**
+- K8s: PostgreSQL Deployment, Service, and credentials Secret
+- K8s: Redis Deployment, Service, and credentials Secret
+- Garage pod: Inject Postgres env vars (POSTGRES_HOST, POSTGRES_PORT, DATABASE_URL, etc.)
+- Garage pod: Inject Redis env vars (REDIS_HOST, REDIS_PORT, REDIS_URL, etc.)
+- Ready check: Wait for supporting service Deployments to be available before marking garage Ready
