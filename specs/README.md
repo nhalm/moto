@@ -1,6 +1,6 @@
 # Moto Specifications
 
-> Building a fintech motorcycle: tokenization, proxy, payments, lending.
+> The Garage: secure workspaces for AI-assisted development.
 
 ## How Specs Work
 
@@ -61,28 +61,3 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [moto-wgtunnel](moto-wgtunnel.md) | Ripping | WireGuard tunnels for terminal access |
 | [moto-club-websocket](moto-club-websocket.md) | Bare Frame | WebSocket streaming for logs/events |
 
-## Phase 2: Tokenization (The Vault)
-
-| Spec | Status | Description |
-|------|--------|-------------|
-| [token-format](token-format.md) | Bare Frame | Data types, token formats |
-| [key-management](key-management.md) | Bare Frame | Key generation, rotation, storage |
-| [vault-storage](vault-storage.md) | Bare Frame | Encrypted storage layer |
-| [tokenization-api](tokenization-api.md) | Bare Frame | API for tokenize/detokenize |
-| [compliance](compliance.md) | Bare Frame | PCI DSS, SOC 2, audit |
-
-## Phase 3: Proxy (The Transmission)
-
-| Spec | Status | Description |
-|------|--------|-------------|
-| [proxy-architecture](proxy-architecture.md) | Bare Frame | Overall proxy design |
-| [route-configuration](route-configuration.md) | Bare Frame | Route matching, transformation |
-| [audit-logging](audit-logging.md) | Bare Frame | What's logged, retention |
-
-## Phase 4: Payments (Future)
-
-_Specs to be defined_
-
-## Phase 5: Lending (Future)
-
-_Specs to be defined_
