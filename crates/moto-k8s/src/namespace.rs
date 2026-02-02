@@ -48,6 +48,17 @@ pub trait NamespaceOps {
 
     /// Checks if a namespace exists.
     fn namespace_exists(&self, name: &str) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Patches namespace labels (merge patch).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the namespace doesn't exist or the patch fails.
+    fn patch_namespace_labels(
+        &self,
+        name: &str,
+        labels: BTreeMap<String, String>,
+    ) -> impl Future<Output = Result<Namespace>> + Send;
 }
 
 use std::future::Future;

@@ -1,4 +1,4 @@
-//! Garage subcommands: list, open, close, logs, enter.
+//! Garage subcommands: list, open, close, logs, enter, extend.
 
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
@@ -79,6 +79,16 @@ pub enum GarageAction {
         #[arg(long)]
         since: Option<String>,
     },
+
+    /// Extend a garage's TTL
+    Extend {
+        /// Name of the garage to extend
+        name: String,
+
+        /// Time to add to current TTL (e.g., 2h, 30m)
+        #[arg(long, default_value = "2h")]
+        ttl: String,
+    },
 }
 
 /// JSON output for garage list
@@ -134,6 +144,14 @@ struct GarageEnterJson {
     garage_ip: String,
     path_type: String,
     path_detail: String,
+}
+
+/// JSON output for garage extend
+#[derive(Serialize)]
+struct GarageExtendJson {
+    name: String,
+    expires_at: String,
+    ttl_remaining_seconds: i64,
 }
 
 /// Garage info with context name for multi-context listing.
@@ -516,6 +534,57 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                     if !logs.ends_with('\n') {
                         println!();
                     }
+                }
+            }
+        }
+        GarageAction::Extend { name, ttl } => {
+            let client = GarageClient::local().await?;
+
+            // Parse TTL extension
+            let seconds = parse_duration(&ttl)?;
+            if seconds <= 0 {
+                return Err(CliError::invalid_input("TTL extension must be positive"));
+            }
+
+            if !flags.quiet && !flags.json {
+                println!("Extending garage '{name}' TTL by {ttl}...");
+            }
+
+            let garage = client.extend(&name, seconds).await.map_err(|e| match e {
+                moto_garage::Error::GarageNotFound(_) => CliError::not_found(format!(
+                    "Garage '{}' not found.\n\nTry: moto garage list",
+                    name
+                )),
+                moto_garage::Error::GarageExpired(_) => CliError::general(format!(
+                    "Garage '{}' has expired and cannot be extended.",
+                    name
+                )),
+                moto_garage::Error::InvalidTtl(msg) => CliError::invalid_input(msg),
+                _ => CliError::general(e.to_string()),
+            })?;
+
+            let now = chrono::Utc::now();
+            let ttl_remaining_seconds = garage
+                .expires_at
+                .map(|exp| (exp - now).num_seconds().max(0))
+                .unwrap_or(0);
+
+            if flags.json {
+                let json = GarageExtendJson {
+                    name: garage.name.clone(),
+                    expires_at: garage
+                        .expires_at
+                        .map(|dt| dt.to_rfc3339())
+                        .unwrap_or_default(),
+                    ttl_remaining_seconds,
+                };
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            } else if !flags.quiet {
+                let ttl_formatted = format_duration(ttl_remaining_seconds);
+                println!("Garage TTL extended.");
+                println!("  New TTL: {ttl_formatted}");
+                if let Some(expires) = garage.expires_at {
+                    println!("  Expires: {}", expires.format("%Y-%m-%d %H:%M:%S UTC"));
                 }
             }
         }

@@ -20,6 +20,14 @@ pub enum Error {
     /// Remote mode is not yet implemented.
     #[error("remote mode not implemented")]
     RemoteNotImplemented,
+
+    /// Garage has expired.
+    #[error("garage has expired: {0}")]
+    GarageExpired(String),
+
+    /// Invalid TTL value.
+    #[error("invalid TTL: {0}")]
+    InvalidTtl(String),
 }
 
 /// Result type alias for garage operations.

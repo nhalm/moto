@@ -215,6 +215,24 @@ HOW TO USE THIS FILE:
 
 ---
 
+## garage-lifecycle.md v0.3
+
+**Status:** In Progress
+
+**Implemented:**
+- moto garage extend CLI command: --ttl flag (default 2h), duration parsing, max TTL validation
+- moto-garage: GarageClient.extend() method updates namespace labels with new expires_at
+- moto-k8s: NamespaceOps.patch_namespace_labels() for updating namespace labels via merge patch
+- JSON output for extend command (name, expires_at, ttl_remaining_seconds)
+
+**Remaining:**
+- moto garage enter: Replace SSH with WebSocket to ttyd (port 7681) per spec v0.3
+- Dev container: ttyd daemon on port 7681 with tmux for session persistence
+- Ready criteria check: ttyd accepting connections, WireGuard registered, repo cloned
+- Repo cloning on garage creation (URL injection, credentials from keybox)
+
+---
+
 ## keybox.md v0.2
 
 **Status:** In Progress

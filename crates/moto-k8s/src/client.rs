@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{
     Client, Config,
-    api::{Api, ListParams, ObjectMeta, PostParams},
+    api::{Api, ListParams, ObjectMeta, Patch, PatchParams, PostParams},
     config::{KubeConfigOptions, Kubeconfig},
 };
 use tracing::{debug, instrument};
@@ -223,6 +223,35 @@ impl NamespaceOps for K8sClient {
             Err(e) if is_not_found(&e) => Ok(false),
             Err(e) => Err(Error::NamespaceGet(e)),
         }
+    }
+
+    #[instrument(skip(self, labels), fields(namespace = %name))]
+    async fn patch_namespace_labels(
+        &self,
+        name: &str,
+        labels: BTreeMap<String, String>,
+    ) -> Result<Namespace> {
+        let api: Api<Namespace> = Api::all(self.client.clone());
+
+        // Check if namespace exists first
+        if !self.namespace_exists(name).await? {
+            return Err(Error::NamespaceNotFound(name.to_string()));
+        }
+
+        // Build merge patch for labels
+        let patch = serde_json::json!({
+            "metadata": {
+                "labels": labels
+            }
+        });
+
+        debug!("patching namespace labels");
+        let patched = api
+            .patch(name, &PatchParams::default(), &Patch::Merge(&patch))
+            .await
+            .map_err(Error::NamespacePatch)?;
+
+        Ok(patched)
     }
 }
 

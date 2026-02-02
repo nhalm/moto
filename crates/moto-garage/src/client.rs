@@ -185,6 +185,29 @@ impl GarageClient {
         }
     }
 
+    /// Extends a garage's TTL by the specified number of seconds.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Name of the garage to extend.
+    /// * `seconds` - Number of seconds to add to the current expiry.
+    ///
+    /// # Returns
+    ///
+    /// Returns the updated `GarageInfo` with the new expiration time.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the garage doesn't exist, has expired, or the extension
+    /// would exceed the maximum TTL (48 hours).
+    #[instrument(skip(self), fields(garage.name = %name))]
+    pub async fn extend(&self, name: &str, seconds: i64) -> Result<GarageInfo> {
+        match &self.mode {
+            GarageMode::Local => self.extend_local(name, seconds).await,
+            GarageMode::Remote { .. } => Err(Error::RemoteNotImplemented),
+        }
+    }
+
     /// Lists garages in local mode.
     async fn list_local(&self) -> Result<Vec<GarageInfo>> {
         let k8s = self
@@ -365,6 +388,70 @@ impl GarageClient {
             .await?;
 
         Ok(stream)
+    }
+
+    /// Extends a garage's TTL in local mode.
+    async fn extend_local(&self, name: &str, seconds: i64) -> Result<GarageInfo> {
+        const MAX_TTL_SECONDS: i64 = 48 * 3600; // 48 hours
+
+        let k8s = self
+            .k8s
+            .as_ref()
+            .expect("k8s client required for local mode");
+
+        // Validate extension amount
+        if seconds <= 0 {
+            return Err(Error::InvalidTtl("extension must be positive".to_string()));
+        }
+
+        // Find the garage by name
+        let garages = self.list_local().await?;
+        let garage = garages
+            .into_iter()
+            .find(|g| g.name == name)
+            .ok_or_else(|| Error::GarageNotFound(name.to_string()))?;
+
+        // Check if garage has expired
+        let now = Utc::now();
+        if let Some(expires_at) = garage.expires_at {
+            if expires_at < now {
+                return Err(Error::GarageExpired(name.to_string()));
+            }
+        }
+
+        // Calculate new expiration time
+        let current_expires = garage.expires_at.unwrap_or(now);
+        let extension = Duration::try_seconds(seconds)
+            .ok_or_else(|| Error::InvalidTtl("invalid extension duration".to_string()))?;
+        let new_expires = current_expires + extension;
+
+        // Check if new TTL exceeds maximum
+        let new_ttl_seconds = (new_expires - garage.created_at).num_seconds();
+        if new_ttl_seconds > MAX_TTL_SECONDS {
+            return Err(Error::InvalidTtl(format!(
+                "total TTL would be {}s, which exceeds maximum of {}s",
+                new_ttl_seconds, MAX_TTL_SECONDS
+            )));
+        }
+
+        // Build labels with updated expires_at
+        let labels = Labels::for_garage(
+            &garage.id.to_string(),
+            &garage.name,
+            garage.owner.as_deref(),
+            Some(&new_expires.to_rfc3339()),
+            garage.engine.as_deref(),
+        );
+
+        debug!(namespace = %garage.namespace, new_expires = %new_expires, "extending garage TTL");
+        k8s.patch_namespace_labels(&garage.namespace, labels)
+            .await?;
+
+        // Return updated garage info
+        Ok(GarageInfo {
+            expires_at: Some(new_expires),
+            ..garage
+        })
     }
 }
 

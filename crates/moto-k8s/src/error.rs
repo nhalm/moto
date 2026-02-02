@@ -96,6 +96,10 @@ pub enum Error {
     /// Token not authenticated (invalid or expired).
     #[error("token not authenticated")]
     TokenNotAuthenticated,
+
+    /// Failed to patch namespace.
+    #[error("failed to patch namespace: {0}")]
+    NamespacePatch(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.
