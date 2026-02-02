@@ -205,8 +205,7 @@ fn generate_garage_name() -> String {
 ///
 /// When `GarageService` is configured, this creates the full K8s resources:
 /// - K8s namespace with labels
-/// - SSH keys Secret with user's public keys
-/// - Dev container pod
+/// - Dev container pod (with ttyd terminal daemon)
 ///
 /// When `GarageService` is not configured (testing/local dev without K8s),
 /// only the database record is created.

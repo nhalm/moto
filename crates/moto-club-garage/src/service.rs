@@ -447,8 +447,7 @@ impl GarageService {
     /// 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
     /// 6. Apply `NetworkPolicy`, `ResourceQuota` (deferred)
     /// 7. Create `ServiceAccount` (for keybox auth) (deferred)
-    /// 8. Create SSH keys Secret (user's public keys as `authorized_keys`)
-    /// 9. Deploy dev container pod (mounts SSH keys secret)
+    /// 8. Deploy dev container pod
     async fn create_k8s_resources(
         &self,
         garage_id: &GarageId,

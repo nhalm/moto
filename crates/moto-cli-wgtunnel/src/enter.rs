@@ -34,8 +34,6 @@
 #![allow(clippy::similar_names)]
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -59,12 +57,6 @@ pub const DEFAULT_DERP_TIMEOUT_SECS: u64 = 10;
 /// Default session TTL when not specified (follows garage TTL).
 pub const DEFAULT_SESSION_TTL_SECS: u64 = 14400; // 4 hours
 
-/// Default SSH port.
-pub const DEFAULT_SSH_PORT: u16 = 22;
-
-/// Default SSH user for garage connections.
-pub const DEFAULT_SSH_USER: &str = "moto";
-
 /// Errors that can occur during garage enter.
 #[derive(Debug, Error)]
 pub enum EnterError {
@@ -87,18 +79,6 @@ pub enum EnterError {
     /// Connection failed (all paths exhausted).
     #[error("connection failed: {0}")]
     ConnectionFailed(String),
-
-    /// SSH session failed.
-    #[error("SSH session failed: {0}")]
-    SshFailed(String),
-
-    /// SSH command not found.
-    #[error("SSH command not found - ensure OpenSSH is installed")]
-    SshNotFound,
-
-    /// SSH session exited with error.
-    #[error("SSH session exited with code {0}")]
-    SshExitCode(i32),
 
     /// ttyd connection failed.
     #[error("ttyd connection failed: {0}")]
@@ -199,93 +179,6 @@ impl EnterConfig {
     #[must_use]
     pub fn with_owner(mut self, owner: impl Into<String>) -> Self {
         self.owner = owner.into();
-        self
-    }
-}
-
-/// Configuration for SSH session spawning.
-#[derive(Debug, Clone)]
-pub struct SshConfig {
-    /// SSH port (default: 22).
-    pub port: u16,
-
-    /// SSH user (default: "moto").
-    pub user: String,
-
-    /// Path to SSH private key (None = use default ~/.ssh/id_ed25519 or ssh-agent).
-    pub identity_file: Option<PathBuf>,
-
-    /// Disable strict host key checking (for ephemeral garage keys).
-    pub disable_host_key_check: bool,
-
-    /// Additional SSH options to pass.
-    pub extra_options: Vec<String>,
-
-    /// Working directory to change to after connecting.
-    pub working_dir: Option<String>,
-}
-
-impl Default for SshConfig {
-    fn default() -> Self {
-        Self {
-            port: DEFAULT_SSH_PORT,
-            user: DEFAULT_SSH_USER.to_string(),
-            identity_file: None,
-            disable_host_key_check: true, // Garage keys are ephemeral
-            extra_options: Vec::new(),
-            working_dir: Some("/workspace".to_string()),
-        }
-    }
-}
-
-impl SshConfig {
-    /// Create a new SSH configuration with default values.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Set the SSH port.
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn with_port(mut self, port: u16) -> Self {
-        self.port = port;
-        self
-    }
-
-    /// Set the SSH user.
-    #[must_use]
-    pub fn with_user(mut self, user: impl Into<String>) -> Self {
-        self.user = user.into();
-        self
-    }
-
-    /// Set the SSH identity file.
-    #[must_use]
-    pub fn with_identity_file(mut self, path: PathBuf) -> Self {
-        self.identity_file = Some(path);
-        self
-    }
-
-    /// Enable or disable strict host key checking.
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn with_host_key_check(mut self, enable: bool) -> Self {
-        self.disable_host_key_check = !enable;
-        self
-    }
-
-    /// Add an extra SSH option.
-    #[must_use]
-    pub fn with_option(mut self, option: impl Into<String>) -> Self {
-        self.extra_options.push(option.into());
-        self
-    }
-
-    /// Set the working directory to change to after connecting.
-    #[must_use]
-    pub fn with_working_dir(mut self, dir: impl Into<String>) -> Self {
-        self.working_dir = Some(dir.into());
         self
     }
 }
@@ -465,12 +358,6 @@ impl GarageSession {
         self.garage_ip
     }
 
-    /// Get the SSH connection target (`garage_ip:22`).
-    #[must_use]
-    pub fn ssh_target(&self) -> String {
-        format!("[{}]:22", self.garage_ip)
-    }
-
     /// Close the session explicitly.
     ///
     /// This removes the session from the tunnel manager.
@@ -482,173 +369,6 @@ impl GarageSession {
             garage = %self.garage_name,
             "garage session closed"
         );
-    }
-
-    /// Spawn an interactive SSH session to the garage.
-    ///
-    /// This spawns an SSH process that connects to the garage's overlay IP
-    /// over the established `WireGuard` tunnel. The SSH process inherits
-    /// stdin/stdout/stderr for interactive use.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - SSH configuration (user, port, identity file, etc.)
-    ///
-    /// # Returns
-    ///
-    /// The exit status of the SSH process.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - SSH binary is not found
-    /// - SSH process fails to spawn
-    /// - SSH exits with a non-zero code
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let session = enter_garage(&manager, "my-garage", config, &progress).await?;
-    /// let status = session.spawn_ssh(SshConfig::default())?;
-    /// ```
-    pub fn spawn_ssh(&self, config: SshConfig) -> Result<ExitStatus, EnterError> {
-        let ssh_target = format!("{}@{}", config.user, self.garage_ip);
-        info!(
-            target = %ssh_target,
-            port = config.port,
-            "spawning SSH session"
-        );
-
-        let mut cmd = Command::new("ssh");
-
-        // Set port
-        cmd.arg("-p").arg(config.port.to_string());
-
-        // Disable host key checking for ephemeral garage keys
-        if config.disable_host_key_check {
-            cmd.arg("-o").arg("StrictHostKeyChecking=no");
-            cmd.arg("-o").arg("UserKnownHostsFile=/dev/null");
-            // Suppress the warning about adding to known_hosts
-            cmd.arg("-o").arg("LogLevel=ERROR");
-        }
-
-        // Set identity file if specified
-        if let Some(ref identity) = config.identity_file {
-            cmd.arg("-i").arg(identity);
-        }
-
-        // Add any extra options
-        for opt in &config.extra_options {
-            cmd.arg("-o").arg(opt);
-        }
-
-        // Set the target (user@host)
-        cmd.arg(&ssh_target);
-
-        // If working directory is specified, change to it
-        if let Some(ref dir) = config.working_dir {
-            cmd.arg("-t"); // Force pseudo-terminal allocation for cd
-            cmd.arg(format!("cd {} && exec $SHELL -l", dir));
-        }
-
-        // Inherit stdio for interactive session
-        cmd.stdin(Stdio::inherit());
-        cmd.stdout(Stdio::inherit());
-        cmd.stderr(Stdio::inherit());
-
-        debug!(command = ?cmd, "executing SSH command");
-
-        // Spawn and wait for the SSH process
-        let status = cmd
-            .spawn()
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    EnterError::SshNotFound
-                } else {
-                    EnterError::SshFailed(format!("failed to spawn SSH: {e}"))
-                }
-            })?
-            .wait()
-            .map_err(|e| EnterError::SshFailed(format!("failed to wait for SSH: {e}")))?;
-
-        info!(
-            exit_code = status.code(),
-            success = status.success(),
-            "SSH session ended"
-        );
-
-        Ok(status)
-    }
-
-    /// Spawn an SSH session and return an error if it exits with non-zero.
-    ///
-    /// This is a convenience wrapper around [`spawn_ssh`](Self::spawn_ssh)
-    /// that returns an error if SSH exits with a non-zero exit code.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - SSH configuration
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - SSH fails to spawn (see [`spawn_ssh`](Self::spawn_ssh))
-    /// - SSH exits with a non-zero exit code
-    pub fn spawn_ssh_checked(&self, config: SshConfig) -> Result<(), EnterError> {
-        let status = self.spawn_ssh(config)?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(EnterError::SshExitCode(status.code().unwrap_or(-1)))
-        }
-    }
-
-    /// Build the SSH command arguments without spawning.
-    ///
-    /// This is useful for displaying the SSH command to the user or for
-    /// debugging.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - SSH configuration
-    ///
-    /// # Returns
-    ///
-    /// A vector of command-line arguments for the SSH command.
-    #[must_use]
-    pub fn ssh_command_args(&self, config: &SshConfig) -> Vec<String> {
-        let mut args = vec!["ssh".to_string()];
-
-        args.push("-p".to_string());
-        args.push(config.port.to_string());
-
-        if config.disable_host_key_check {
-            args.push("-o".to_string());
-            args.push("StrictHostKeyChecking=no".to_string());
-            args.push("-o".to_string());
-            args.push("UserKnownHostsFile=/dev/null".to_string());
-            args.push("-o".to_string());
-            args.push("LogLevel=ERROR".to_string());
-        }
-
-        if let Some(ref identity) = config.identity_file {
-            args.push("-i".to_string());
-            args.push(identity.display().to_string());
-        }
-
-        for opt in &config.extra_options {
-            args.push("-o".to_string());
-            args.push(opt.clone());
-        }
-
-        args.push(format!("{}@{}", config.user, self.garage_ip));
-
-        if let Some(ref dir) = config.working_dir {
-            args.push("-t".to_string());
-            args.push(format!("cd {} && exec $SHELL -l", dir));
-        }
-
-        args
     }
 
     /// Connect to the garage terminal via ttyd WebSocket.
@@ -1312,88 +1032,5 @@ mod tests {
         assert_eq!(result.session_id, "sess_123");
         assert_eq!(result.garage_name, "test-garage");
         assert_eq!(result.path_type, "direct");
-    }
-
-    #[test]
-    fn ssh_config_defaults() {
-        let config = SshConfig::default();
-        assert_eq!(config.port, 22);
-        assert_eq!(config.user, "moto");
-        assert!(config.identity_file.is_none());
-        assert!(config.disable_host_key_check);
-        assert!(config.extra_options.is_empty());
-        assert_eq!(config.working_dir, Some("/workspace".to_string()));
-    }
-
-    #[test]
-    fn ssh_config_builder() {
-        let config = SshConfig::new()
-            .with_port(2222)
-            .with_user("testuser")
-            .with_identity_file(PathBuf::from("/tmp/id_test"))
-            .with_host_key_check(true)
-            .with_option("BatchMode=yes")
-            .with_working_dir("/home/test");
-
-        assert_eq!(config.port, 2222);
-        assert_eq!(config.user, "testuser");
-        assert_eq!(config.identity_file, Some(PathBuf::from("/tmp/id_test")));
-        assert!(!config.disable_host_key_check); // with_host_key_check(true) means check is enabled
-        assert_eq!(config.extra_options, vec!["BatchMode=yes"]);
-        assert_eq!(config.working_dir, Some("/home/test".to_string()));
-    }
-
-    #[test]
-    fn ssh_command_args_default() {
-        // Create a mock GarageSession-like struct for testing
-        // We can't easily create a GarageSession without the TunnelManager,
-        // so we test the command building logic directly
-        let garage_ip = OverlayIp::garage(123);
-        let config = SshConfig::default();
-
-        // Build args manually (same logic as ssh_command_args)
-        let mut args = vec!["ssh".to_string()];
-        args.push("-p".to_string());
-        args.push(config.port.to_string());
-        if config.disable_host_key_check {
-            args.push("-o".to_string());
-            args.push("StrictHostKeyChecking=no".to_string());
-            args.push("-o".to_string());
-            args.push("UserKnownHostsFile=/dev/null".to_string());
-            args.push("-o".to_string());
-            args.push("LogLevel=ERROR".to_string());
-        }
-        args.push(format!("{}@{}", config.user, garage_ip));
-        if let Some(ref dir) = config.working_dir {
-            args.push("-t".to_string());
-            args.push(format!("cd {} && exec $SHELL -l", dir));
-        }
-
-        assert_eq!(args[0], "ssh");
-        assert_eq!(args[1], "-p");
-        assert_eq!(args[2], "22");
-        assert!(args.contains(&"StrictHostKeyChecking=no".to_string()));
-        assert!(args.contains(&"UserKnownHostsFile=/dev/null".to_string()));
-        // IP format is fd00:6d6f:746f:1:: (moto encoded as hex: 6d6f = "mo", 746f = "to")
-        assert!(
-            args.iter()
-                .any(|a| a.starts_with("moto@fd00:6d6f:746f:1::"))
-        );
-        assert!(args.contains(&"-t".to_string()));
-        assert!(args.iter().any(|a| a.contains("/workspace")));
-    }
-
-    #[test]
-    fn ssh_command_args_with_identity() {
-        let config = SshConfig::new()
-            .with_identity_file(PathBuf::from("/home/user/.ssh/id_custom"))
-            .with_host_key_check(true); // Enable checking = disable_host_key_check is false
-
-        // The identity file should be included
-        assert_eq!(
-            config.identity_file,
-            Some(PathBuf::from("/home/user/.ssh/id_custom"))
-        );
-        assert!(!config.disable_host_key_check);
     }
 }
