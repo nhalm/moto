@@ -55,7 +55,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [garage-isolation](garage-isolation.md) | Ready to Rip | Network policies, resource limits |
 | [garage-lifecycle](garage-lifecycle.md) | Ripping | Full lifecycle with ttyd terminal, TTL |
 | [moto-bike](moto-bike.md) | Ripping | Bike base image, engine contract |
-| [supporting-services](supporting-services.md) | Bare Frame | Postgres, Redis deployment |
+| [supporting-services](supporting-services.md) | Ready to Rip | Postgres, Redis deployment |
 | [moto-cron](moto-cron.md) | Bare Frame | Scheduled tasks (TTL cleanup), K8s CronJobs |
 | [moto-wgtunnel](moto-wgtunnel.md) | Ripping | WireGuard tunnels for terminal access |
 | [moto-club-websocket](moto-club-websocket.md) | Bare Frame | WebSocket streaming for logs/events |

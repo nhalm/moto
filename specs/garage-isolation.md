@@ -186,14 +186,9 @@ spec:
         - protocol: TCP
           port: 8080
 
-    # Allow supporting services (postgres, redis)
+    # Allow same-namespace traffic (supporting services are per-garage)
     - to:
-        - namespaceSelector:
-            matchLabels:
-              moto.dev/type: system
-          podSelector:
-            matchLabels:
-              moto.dev/supporting-service: "true"
+        - podSelector: {}   # All pods in same namespace
       ports:
         - protocol: TCP
           port: 5432    # postgres
@@ -220,7 +215,7 @@ spec:
 | Internet | Yes | Packages, docs, external APIs |
 | kube-system (DNS) | Yes | Name resolution |
 | keybox | Yes | Fetch secrets |
-| Supporting services | Yes | Dev databases |
+| Same namespace (supporting services) | Yes | Per-garage postgres/redis |
 | moto-club | No | Config pushed via ConfigMap |
 | Other garages | No | Full isolation |
 | Kubernetes API | No | No service account |
@@ -257,9 +252,9 @@ spec:
     requests.memory: 8Gi
     limits.cpu: "4"
     limits.memory: 8Gi
-    pods: "1"
+    pods: "10"                   # garage + supporting services
     persistentvolumeclaims: "1"
-    services: "1"
+    services: "10"
 ```
 
 #### LimitRange
@@ -364,7 +359,8 @@ Secrets are pull-based and on-demand. Garage only gets secrets it explicitly req
 - Workspace volume changed to PVC (survives pod restarts)
 - Added writable mounts for apt: /var/lib/apt, /var/cache/apt, /usr/local
 - NetworkPolicy: block cloud metadata (169.254.0.0/16), WireGuard range (100.64.0.0/10), loopback
-- ResourceQuota: pods=1 (one garage = one pod)
+- NetworkPolicy: supporting services are per-garage (same namespace), not shared
+- ResourceQuota and LimitRange for namespace
 - Clarified moto-club generates WireGuard keypair
 
 ### v0.2 (2026-02-02)
