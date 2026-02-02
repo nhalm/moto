@@ -226,9 +226,10 @@ HOW TO USE THIS FILE:
 - JSON output for extend command (name, expires_at, ttl_remaining_seconds)
 - Dev container: ttyd daemon on port 7681 with tmux for session persistence (garage-entrypoint script, container Cmd updated)
 - moto garage enter: ttyd WebSocket client (moto-cli-wgtunnel ttyd.rs), replaces SSH with WebSocket to port 7681
+- Ready criteria check: WireGuard registration check in reconciler (garage transitions to Ready only when wg_garages entry exists)
 
 **Remaining:**
-- Ready criteria check: ttyd accepting connections, WireGuard registered, repo cloned
+- Ready criteria check: ttyd accepting connections (K8s readiness probe on port 7681)
 - Repo cloning on garage creation (URL injection, credentials from keybox)
 
 ---

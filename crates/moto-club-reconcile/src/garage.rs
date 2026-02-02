@@ -11,7 +11,7 @@ use tokio::time::interval;
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
-use moto_club_db::{DbPool, GarageStatus, TerminationReason, garage_repo};
+use moto_club_db::{DbPool, GarageStatus, TerminationReason, garage_repo, wg_garage_repo};
 use moto_club_k8s::{GarageK8s, GarageNamespaceOps, GaragePodOps, GaragePodStatus};
 use moto_club_types::GarageId;
 use moto_k8s::Labels;
@@ -276,10 +276,32 @@ impl GarageReconciler {
         let pod_status = self.k8s.get_garage_pod_status(&garage_id).await?;
 
         // Map pod status to garage status
+        // Ready criteria check: pod must be ready AND WireGuard must be registered
+        // See garage-lifecycle.md spec for full Ready criteria:
+        //   1. Pod running (containers ready)
+        //   2. Terminal daemon up (ttyd on port 7681) - checked via container readiness
+        //   3. WireGuard registered - checked below
+        //   4. Repo cloned - checked via init container completion (future)
         let new_status = match pod_status {
             GaragePodStatus::Pending => GarageStatus::Pending,
             GaragePodStatus::Running => GarageStatus::Running,
-            GaragePodStatus::Ready => GarageStatus::Ready,
+            GaragePodStatus::Ready => {
+                // Pod containers are ready, but we need to check WireGuard registration
+                // before transitioning to Ready status
+                let wg_registered = wg_garage_repo::exists(&self.db, uuid)
+                    .await
+                    .unwrap_or(false);
+                if wg_registered {
+                    GarageStatus::Ready
+                } else {
+                    // Pod is ready but WireGuard not registered yet - stay in Running
+                    debug!(
+                        garage_id = %id_str,
+                        "pod ready but WireGuard not registered, staying in Running"
+                    );
+                    GarageStatus::Running
+                }
+            }
             GaragePodStatus::Failed | GaragePodStatus::Succeeded => {
                 // Pod is gone - terminate the garage
                 garage_repo::terminate(&self.db, uuid, TerminationReason::PodLost).await?;
@@ -294,23 +316,19 @@ impl GarageReconciler {
             }
             GaragePodStatus::Unknown => {
                 // Pod might be missing - check if it actually exists
-                match self.k8s.get_garage_pod(&garage_id).await {
-                    Ok(_) => {
-                        // Pod exists but status unknown - keep current status
-                        return Ok(());
-                    }
-                    Err(_) => {
-                        // Pod doesn't exist - terminate
-                        garage_repo::terminate(&self.db, uuid, TerminationReason::PodLost).await?;
-                        info!(
-                            garage_id = %id_str,
-                            garage_name = %garage.name,
-                            "garage terminated: pod_lost (pod not found)"
-                        );
-                        stats.terminated += 1;
-                        return Ok(());
-                    }
+                if self.k8s.get_garage_pod(&garage_id).await.is_ok() {
+                    // Pod exists but status unknown - keep current status
+                    return Ok(());
                 }
+                // Pod doesn't exist - terminate
+                garage_repo::terminate(&self.db, uuid, TerminationReason::PodLost).await?;
+                info!(
+                    garage_id = %id_str,
+                    garage_name = %garage.name,
+                    "garage terminated: pod_lost (pod not found)"
+                );
+                stats.terminated += 1;
+                return Ok(());
             }
         };
 
@@ -334,7 +352,7 @@ impl GarageReconciler {
 ///
 /// We avoid some transitions that don't make sense:
 /// - Ready → Running (would be a downgrade)
-fn should_update_status(current: GarageStatus, new: GarageStatus) -> bool {
+const fn should_update_status(current: GarageStatus, new: GarageStatus) -> bool {
     match (current, new) {
         // Don't downgrade from Ready to Running
         (GarageStatus::Ready, GarageStatus::Running) => false,
