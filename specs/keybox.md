@@ -2,10 +2,16 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
-| Last Updated | 2026-01-26 |
+| Version | 0.3 |
+| Last Updated | 2026-02-02 |
 
 ## Changelog
+
+### v0.3 (2026-02-02)
+- Added POST /auth/issue-garage-svid endpoint for moto-club delegation
+- Garages no longer use K8s ServiceAccount (SVID pushed by moto-club)
+- Separated auth flows for bikes (K8s SA) vs garages (moto-club delegation)
+- Added endpoint authorization matrix (SVID vs service token access)
 
 ### v0.2 (2026-01-26)
 - Clarified keybox is internal service (users go through moto-club)
@@ -82,8 +88,10 @@ Resolution priority: Instance → Service → Global
 
 ### Authentication Flow
 
+**Bikes (have K8s ServiceAccount):**
+
 ```
-1. Garage/Bike pod starts with K8s ServiceAccount JWT
+1. Bike pod starts with K8s ServiceAccount JWT
 
 2. Pod → POST /auth/token
    Headers: Authorization: Bearer <K8s SA JWT>
@@ -91,12 +99,37 @@ Resolution priority: Instance → Service → Global
    Keybox:
    - Validates JWT via K8s TokenReview API
    - Fetches pod metadata via K8s API
-   - Verifies pod labels (garage-id, bike-id, etc.)
+   - Verifies pod labels (bike-id, etc.)
    - Signs SVID JWT with Ed25519 key
 
    ← Returns: Signed SVID (15 min TTL)
 
 3. Pod caches SVID, refreshes at 14 min (before expiry)
+```
+
+**Garages (no K8s ServiceAccount - SVID pushed by moto-club):**
+
+Garages don't have K8s API access (`automountServiceAccountToken: false`). Instead, moto-club requests an SVID on behalf of the garage and pushes it via Secret.
+
+```
+1. moto-club creates garage
+
+2. moto-club → POST /auth/issue-garage-svid
+   Headers: Authorization: Bearer <service-token>
+   Body: { "garage_id": "abc123", "owner": "user@example.com" }
+
+   Keybox:
+   - Validates moto-club service token
+   - Creates SVID for garage identity
+   - Signs SVID JWT with Ed25519 key
+
+   ← Returns: Signed SVID (1 hour TTL)
+
+3. moto-club creates Secret in garage namespace with SVID
+
+4. Garage pod mounts SVID Secret, uses for keybox requests
+
+5. moto-club refreshes SVID before expiry, updates Secret
 ```
 
 ### Service-to-Service Auth (moto-club)
@@ -254,24 +287,30 @@ let client = KeyboxClient::new()?;  // Reads SVID from file instead of K8s
 let secret = client.get_secret(Scope::Global, "ai/anthropic").await?;
 ```
 
-The client library supports both paths:
-- **K8s mode:** Fetches SVID via ServiceAccount JWT (default)
-- **Local mode:** Reads SVID from `MOTO_KEYBOX_SVID_FILE`
+The client library supports multiple modes:
+- **K8s mode:** Fetches SVID via ServiceAccount JWT (bikes)
+- **File mode:** Reads SVID from `MOTO_KEYBOX_SVID_FILE` (garages, local dev)
+- **Local mode:** Alias for file mode with dev SVID
 
 ### API Endpoints
 
 **Authentication:**
 ```
 POST /auth/token
-  Request: K8s ServiceAccount JWT
-  Response: Signed SVID
+  Request: K8s ServiceAccount JWT (for bikes)
+  Response: Signed SVID (15 min TTL)
+
+POST /auth/issue-garage-svid
+  Auth: Service token (moto-club only)
+  Request: { "garage_id": "...", "owner": "..." }
+  Response: Signed SVID (1 hour TTL)
 ```
 
 **Secrets:**
 ```
 GET  /secrets/{scope}/{name}     - Retrieve secret
-POST /secrets/{scope}/{name}     - Create/update secret (admin)
-DELETE /secrets/{scope}/{name}   - Delete secret (admin)
+POST /secrets/{scope}/{name}     - Create/update secret
+DELETE /secrets/{scope}/{name}   - Delete secret
 GET  /secrets/{scope}            - List secrets in scope (names only, no values)
 ```
 
@@ -280,6 +319,27 @@ GET  /secrets/{scope}            - List secrets in scope (names only, no values)
 GET  /audit/logs                 - Query audit logs
 POST /admin/rotate-dek/{name}    - Rotate a secret's DEK
 ```
+
+### Endpoint Authorization
+
+Keybox enforces logical isolation based on token type:
+
+| Endpoint | SVID (garages/bikes) | Service Token (moto-club) |
+|----------|---------------------|---------------------------|
+| `POST /auth/token` | No (uses K8s SA JWT) | No |
+| `POST /auth/issue-garage-svid` | **Denied** | Allowed |
+| `GET /secrets/{scope}/{name}` | Allowed (ABAC checked) | Allowed |
+| `POST /secrets/{scope}/{name}` | **Denied** | Allowed |
+| `DELETE /secrets/{scope}/{name}` | **Denied** | Allowed |
+| `GET /secrets/{scope}` | Allowed (own scope only) | Allowed (all scopes) |
+| `GET /audit/logs` | **Denied** | Allowed |
+| `POST /admin/*` | **Denied** | Allowed |
+
+**Enforcement:** Keybox checks the `Authorization` header:
+- SVID JWT → workload access only
+- Service token → full access
+
+Requests with SVID tokens to admin endpoints return `403 Forbidden`.
 
 ### CLI Commands
 

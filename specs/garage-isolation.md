@@ -101,6 +101,17 @@ volumes:
   - name: usr-local
     emptyDir: {}
 
+  # Secrets (pushed by moto-club)
+  - name: wireguard-config
+    configMap:
+      name: wireguard-config
+  - name: wireguard-keys
+    secret:
+      secretName: wireguard-keys
+  - name: garage-svid
+    secret:
+      secretName: garage-svid
+
 volumeMounts:
   - name: workspace
     mountPath: /workspace
@@ -120,9 +131,18 @@ volumeMounts:
     mountPath: /var/cache/apt
   - name: usr-local
     mountPath: /usr/local
+  - name: wireguard-config
+    mountPath: /etc/wireguard/config
+    readOnly: true
+  - name: wireguard-keys
+    mountPath: /etc/wireguard/keys
+    readOnly: true
+  - name: garage-svid
+    mountPath: /var/run/secrets/svid
+    readOnly: true
 ```
 
-**Note:** The workspace uses a PVC so uncommitted work survives pod restarts. All other volumes are ephemeral.
+**Note:** The workspace uses a PVC so uncommitted work survives pod restarts. Secrets are read-only and pushed by moto-club.
 
 #### Forbidden Pod Settings
 
@@ -232,9 +252,11 @@ resources:
     cpu: 100m
     memory: 256Mi
   limits:
-    cpu: 4
-    memory: 8Gi
+    cpu: 3
+    memory: 7Gi
 ```
+
+**Note:** Limits leave headroom for supporting services (up to 1 CPU, 1Gi for postgres/redis).
 
 #### Namespace Quota
 
@@ -320,6 +342,33 @@ The garage pod mounts these and reads on startup. No API call to moto-club neede
 
 Garages access secrets via keybox with SVID authentication.
 
+#### SVID Provisioning (Push Model)
+
+moto-club issues a garage SVID when creating the garage:
+
+1. moto-club calls keybox: `POST /auth/issue-svid` with garage ID
+2. keybox returns signed SVID JWT (short-lived, e.g., 1 hour)
+3. moto-club creates Secret with SVID in garage namespace
+4. Garage pod mounts SVID Secret at `/var/run/secrets/svid/`
+5. Garage reads SVID, uses for keybox API calls
+6. moto-club refreshes SVID before expiry, updates Secret
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: garage-svid
+  namespace: moto-garage-{id}
+type: Opaque
+stringData:
+  svid.jwt: "{signed-svid-token}"
+  spiffe_id: "spiffe://moto.local/garage/{garage-id}"
+```
+
+This avoids mounting K8s ServiceAccount token - the garage has no K8s API access.
+
+#### Secret Scopes
+
 | Scope | Examples | Access |
 |-------|----------|--------|
 | Instance | Dev credentials for this garage | Yes |
@@ -362,6 +411,9 @@ Secrets are pull-based and on-demand. Garage only gets secrets it explicitly req
 - NetworkPolicy: supporting services are per-garage (same namespace), not shared
 - ResourceQuota and LimitRange for namespace
 - Clarified moto-club generates WireGuard keypair
+- SVID push model: moto-club issues SVID via keybox, pushes via Secret
+- Added volume mounts for WireGuard config/keys and SVID
+- Reduced garage pod limits to 3 CPU / 7Gi (leaves room for supporting services)
 
 ### v0.2 (2026-02-02)
 - Full specification written

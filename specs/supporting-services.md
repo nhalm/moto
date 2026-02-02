@@ -82,6 +82,8 @@ spec:
                   key: password
             - name: POSTGRES_DB
               value: dev
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           resources:
             requests:
               cpu: 50m
@@ -184,13 +186,15 @@ spec:
               mountPath: /data
           readinessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "ping"]
             initialDelaySeconds: 5
             periodSeconds: 5
       volumes:
         - name: data
           emptyDir: {}
 ```
+
+**Note:** The readiness probe uses the password from the environment variable.
 
 #### Service
 
@@ -221,7 +225,7 @@ stringData:
   password: "{random-generated}"
   host: redis
   port: "6379"
-  url: "redis://:password@redis:6379"
+  url: "redis://:{password}@redis:6379"
 ```
 
 ### Credential Discovery
@@ -278,7 +282,7 @@ Services are constrained to fit within the garage namespace quota:
 | Redis | 50m | 250m | 64Mi | 256Mi |
 | **Total** | 100m | 750m | 192Mi | 768Mi |
 
-This leaves the majority of namespace quota (4 CPU, 8Gi) for the garage pod.
+Combined with garage pod limits (3 CPU, 7Gi), total stays within namespace quota (4 CPU, 8Gi).
 
 ### Lifecycle
 
