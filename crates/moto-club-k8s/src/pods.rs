@@ -313,12 +313,59 @@ fn build_dev_container_pod(
         },
     ];
 
-    // Volume mount for workspace (shared between init container and main container)
+    // Volume mounts for writable directories per garage-isolation.md spec.
+    // Root filesystem is read-only, so we mount emptyDir volumes for writable paths.
     let workspace_volume_mount = VolumeMount {
         name: "workspace".to_string(),
         mount_path: "/workspace".to_string(),
         ..Default::default()
     };
+
+    // Ephemeral writable mounts (destroyed with pod)
+    let volume_mounts = vec![
+        workspace_volume_mount.clone(),
+        VolumeMount {
+            name: "tmp".to_string(),
+            mount_path: "/tmp".to_string(),
+            ..Default::default()
+        },
+        VolumeMount {
+            name: "var-tmp".to_string(),
+            mount_path: "/var/tmp".to_string(),
+            ..Default::default()
+        },
+        VolumeMount {
+            name: "home".to_string(),
+            mount_path: "/root".to_string(),
+            ..Default::default()
+        },
+        VolumeMount {
+            name: "nix".to_string(),
+            mount_path: "/nix".to_string(),
+            ..Default::default()
+        },
+        VolumeMount {
+            name: "cargo".to_string(),
+            mount_path: "/root/.cargo".to_string(),
+            ..Default::default()
+        },
+        // For apt package installation
+        VolumeMount {
+            name: "var-lib-apt".to_string(),
+            mount_path: "/var/lib/apt".to_string(),
+            ..Default::default()
+        },
+        VolumeMount {
+            name: "var-cache-apt".to_string(),
+            mount_path: "/var/cache/apt".to_string(),
+            ..Default::default()
+        },
+        VolumeMount {
+            name: "usr-local".to_string(),
+            mount_path: "/usr/local".to_string(),
+            ..Default::default()
+        },
+    ];
 
     // Readiness probe: TCP check on ttyd port
     // Container is ready when ttyd is accepting connections
@@ -347,21 +394,64 @@ fn build_dev_container_pod(
         resources: Some(resources),
         security_context: Some(security_context.clone()),
         env: Some(env_vars),
-        volume_mounts: Some(vec![workspace_volume_mount.clone()]),
+        volume_mounts: Some(volume_mounts.clone()),
         // Use container's default entrypoint (garage-entrypoint)
         // which starts ttyd for terminal access
         readiness_probe: Some(readiness_probe),
         ..Default::default()
     };
 
-    // Volume for workspace (shared between init container and main container)
-    let workspace_volume = Volume {
-        name: "workspace".to_string(),
-        empty_dir: Some(EmptyDirVolumeSource::default()),
-        ..Default::default()
-    };
-
-    let volumes = vec![workspace_volume];
+    // Volumes per garage-isolation.md spec:
+    // - workspace: persistent (shared between init container and main container)
+    // - tmp, var-tmp, home, nix, cargo: ephemeral writable paths
+    // - var-lib-apt, var-cache-apt, usr-local: for apt package installation
+    let volumes = vec![
+        Volume {
+            name: "workspace".to_string(),
+            empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+        Volume {
+            name: "tmp".to_string(),
+            empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+        Volume {
+            name: "var-tmp".to_string(),
+            empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+        Volume {
+            name: "home".to_string(),
+            empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+        Volume {
+            name: "nix".to_string(),
+            empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+        Volume {
+            name: "cargo".to_string(),
+            empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+        Volume {
+            name: "var-lib-apt".to_string(),
+            empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+        Volume {
+            name: "var-cache-apt".to_string(),
+            empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+        Volume {
+            name: "usr-local".to_string(),
+            empty_dir: Some(EmptyDirVolumeSource::default()),
+            ..Default::default()
+        },
+    ];
 
     // Build init containers for repo cloning if configured
     let init_containers = repo.map(|repo_config| {
@@ -678,23 +768,68 @@ mod tests {
     }
 
     #[test]
-    fn build_pod_has_workspace_volume() {
+    fn build_pod_has_writable_volumes_per_spec() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
         let pod =
             build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
 
         let spec = pod.spec.as_ref().unwrap();
-
-        // Check workspace volume is defined
         let volumes = spec.volumes.as_ref().unwrap();
-        let workspace_volume = volumes.iter().find(|v| v.name == "workspace").unwrap();
-        assert!(workspace_volume.empty_dir.is_some());
-
-        // Check main container has workspace mount
         let container = &spec.containers[0];
         let mounts = container.volume_mounts.as_ref().unwrap();
-        let workspace_mount = mounts.iter().find(|m| m.name == "workspace").unwrap();
-        assert_eq!(workspace_mount.mount_path, "/workspace");
+
+        // Expected volumes and their mount paths per garage-isolation.md spec
+        let expected_volumes = [
+            ("workspace", "/workspace"),
+            ("tmp", "/tmp"),
+            ("var-tmp", "/var/tmp"),
+            ("home", "/root"),
+            ("nix", "/nix"),
+            ("cargo", "/root/.cargo"),
+            ("var-lib-apt", "/var/lib/apt"),
+            ("var-cache-apt", "/var/cache/apt"),
+            ("usr-local", "/usr/local"),
+        ];
+
+        // Check all volumes exist and are emptyDir
+        for (vol_name, _) in &expected_volumes {
+            let volume = volumes
+                .iter()
+                .find(|v| v.name == *vol_name)
+                .unwrap_or_else(|| panic!("volume '{}' should exist", vol_name));
+            assert!(
+                volume.empty_dir.is_some(),
+                "volume '{}' should be emptyDir",
+                vol_name
+            );
+        }
+
+        // Check all volume mounts exist with correct paths
+        for (vol_name, mount_path) in &expected_volumes {
+            let mount = mounts
+                .iter()
+                .find(|m| m.name == *vol_name)
+                .unwrap_or_else(|| panic!("mount '{}' should exist", vol_name));
+            assert_eq!(
+                mount.mount_path, *mount_path,
+                "mount '{}' should have path '{}'",
+                vol_name, mount_path
+            );
+        }
+
+        // Verify exact count (no extra volumes/mounts)
+        assert_eq!(
+            volumes.len(),
+            expected_volumes.len(),
+            "should have exactly {} volumes",
+            expected_volumes.len()
+        );
+        assert_eq!(
+            mounts.len(),
+            expected_volumes.len(),
+            "should have exactly {} mounts",
+            expected_volumes.len()
+        );
     }
 
     #[test]
