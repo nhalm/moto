@@ -293,6 +293,7 @@ HOW TO USE THIS FILE:
 - K8s: Redis Deployment, Service, and credentials Secret (moto-club-k8s/supporting_services.rs: GarageRedisOps trait, build_redis_deployment, build_redis_service, build_redis_credentials_secret)
 - Garage pod: Inject Postgres env vars (POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DATABASE_URL per spec lines 236-255)
 - Garage pod: Inject Redis env vars (REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_URL per spec lines 258-272)
+- Ready check: Wait for supporting service Deployments to be available before marking garage Ready (reconciler checks postgres_available/redis_available before transitioning to Ready)
 
 **Remaining:**
-- Ready check: Wait for supporting service Deployments to be available before marking garage Ready
+(none - supporting-services.md v0.2 implementation complete)

@@ -69,6 +69,12 @@ pub trait GaragePostgresOps {
 
     /// Checks if Postgres is deployed in the garage namespace.
     fn postgres_exists(&self, id: &GarageId) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Checks if Postgres Deployment is available (has ready replicas).
+    ///
+    /// Per supporting-services.md spec, moto-club waits for deployments to be available
+    /// before marking garage as Ready.
+    fn postgres_available(&self, id: &GarageId) -> impl Future<Output = Result<bool>> + Send;
 }
 
 impl GaragePostgresOps for GarageK8s {
@@ -122,6 +128,27 @@ impl GaragePostgresOps for GarageK8s {
             Err(e) => Err(moto_k8s::Error::DeploymentGet(e)),
         }
     }
+
+    #[instrument(skip(self), fields(garage_id = %id))]
+    async fn postgres_available(&self, id: &GarageId) -> Result<bool> {
+        let namespace = format!("moto-garage-{}", id.short());
+        let api: Api<Deployment> = Api::namespaced(self.client.inner().clone(), &namespace);
+
+        match api.get(POSTGRES_DEPLOYMENT_NAME).await {
+            Ok(deployment) => {
+                // Check if deployment has available replicas
+                let available = deployment
+                    .status
+                    .as_ref()
+                    .and_then(|s| s.available_replicas)
+                    .unwrap_or(0);
+                debug!(namespace = %namespace, available_replicas = available, "checking Postgres availability");
+                Ok(available >= 1)
+            }
+            Err(kube::Error::Api(kube::core::ErrorResponse { code: 404, .. })) => Ok(false),
+            Err(e) => Err(moto_k8s::Error::DeploymentGet(e)),
+        }
+    }
 }
 
 /// Trait for Redis supporting service operations.
@@ -140,6 +167,12 @@ pub trait GarageRedisOps {
 
     /// Checks if Redis is deployed in the garage namespace.
     fn redis_exists(&self, id: &GarageId) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Checks if Redis Deployment is available (has ready replicas).
+    ///
+    /// Per supporting-services.md spec, moto-club waits for deployments to be available
+    /// before marking garage as Ready.
+    fn redis_available(&self, id: &GarageId) -> impl Future<Output = Result<bool>> + Send;
 }
 
 impl GarageRedisOps for GarageK8s {
@@ -189,6 +222,27 @@ impl GarageRedisOps for GarageK8s {
 
         match api.get(REDIS_DEPLOYMENT_NAME).await {
             Ok(_) => Ok(true),
+            Err(kube::Error::Api(kube::core::ErrorResponse { code: 404, .. })) => Ok(false),
+            Err(e) => Err(moto_k8s::Error::DeploymentGet(e)),
+        }
+    }
+
+    #[instrument(skip(self), fields(garage_id = %id))]
+    async fn redis_available(&self, id: &GarageId) -> Result<bool> {
+        let namespace = format!("moto-garage-{}", id.short());
+        let api: Api<Deployment> = Api::namespaced(self.client.inner().clone(), &namespace);
+
+        match api.get(REDIS_DEPLOYMENT_NAME).await {
+            Ok(deployment) => {
+                // Check if deployment has available replicas
+                let available = deployment
+                    .status
+                    .as_ref()
+                    .and_then(|s| s.available_replicas)
+                    .unwrap_or(0);
+                debug!(namespace = %namespace, available_replicas = available, "checking Redis availability");
+                Ok(available >= 1)
+            }
             Err(kube::Error::Api(kube::core::ErrorResponse { code: 404, .. })) => Ok(false),
             Err(e) => Err(moto_k8s::Error::DeploymentGet(e)),
         }

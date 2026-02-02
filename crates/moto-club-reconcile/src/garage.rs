@@ -12,7 +12,9 @@ use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 use moto_club_db::{DbPool, GarageStatus, TerminationReason, garage_repo, wg_garage_repo};
-use moto_club_k8s::{GarageK8s, GarageNamespaceOps, GaragePodOps, GaragePodStatus};
+use moto_club_k8s::{
+    GarageK8s, GarageNamespaceOps, GaragePodOps, GaragePodStatus, GaragePostgresOps, GarageRedisOps,
+};
 use moto_club_types::GarageId;
 use moto_k8s::Labels;
 
@@ -286,21 +288,12 @@ impl GarageReconciler {
             GaragePodStatus::Pending => GarageStatus::Pending,
             GaragePodStatus::Running => GarageStatus::Initializing,
             GaragePodStatus::Ready => {
-                // Pod containers are ready, but we need to check WireGuard registration
-                // before transitioning to Ready status
-                let wg_registered = wg_garage_repo::exists(&self.db, uuid)
-                    .await
-                    .unwrap_or(false);
-                if wg_registered {
-                    GarageStatus::Ready
-                } else {
-                    // Pod is ready but WireGuard not registered yet - stay in Initializing
-                    debug!(
-                        garage_id = %id_str,
-                        "pod ready but WireGuard not registered, staying in Initializing"
-                    );
-                    GarageStatus::Initializing
+                // Pod containers are ready, but we need to check additional ready criteria
+                // before transitioning to Ready status per garage-lifecycle.md and supporting-services.md
+                if !self.check_ready_criteria(&garage_id, uuid, id_str).await {
+                    return Ok(());
                 }
+                GarageStatus::Ready
             }
             GaragePodStatus::Failed => {
                 // Pod failed (init container or main container failure)
@@ -359,11 +352,63 @@ impl GarageReconciler {
     }
 }
 
+impl GarageReconciler {
+    /// Checks all ready criteria for a garage pod.
+    ///
+    /// Per garage-lifecycle.md and supporting-services.md specs, a garage is Ready when:
+    /// 1. Pod running (containers ready) - already checked
+    /// 2. Terminal daemon up (ttyd) - checked via container readiness probe
+    /// 3. WireGuard registered
+    /// 4. Supporting services available (if requested)
+    async fn check_ready_criteria(&self, garage_id: &GarageId, uuid: Uuid, id_str: &str) -> bool {
+        // Check WireGuard registration
+        let wg_registered = wg_garage_repo::exists(&self.db, uuid)
+            .await
+            .unwrap_or(false);
+        if !wg_registered {
+            debug!(
+                garage_id = %id_str,
+                "pod ready but WireGuard not registered, staying in Initializing"
+            );
+            return false;
+        }
+
+        // Check supporting services (if any were requested)
+        // Per supporting-services.md: moto-club waits for deployments to be available
+        if self.k8s.postgres_exists(garage_id).await.unwrap_or(false)
+            && !self
+                .k8s
+                .postgres_available(garage_id)
+                .await
+                .unwrap_or(false)
+        {
+            debug!(
+                garage_id = %id_str,
+                "pod ready but Postgres not available, staying in Initializing"
+            );
+            return false;
+        }
+
+        if self.k8s.redis_exists(garage_id).await.unwrap_or(false)
+            && !self.k8s.redis_available(garage_id).await.unwrap_or(false)
+        {
+            debug!(
+                garage_id = %id_str,
+                "pod ready but Redis not available, staying in Initializing"
+            );
+            return false;
+        }
+
+        true
+    }
+}
+
 /// Determines if a status update should be applied.
 ///
 /// We avoid some transitions that don't make sense:
 /// - Ready → Initializing (would be a downgrade)
 /// - Failed is a terminal state (only moves to Terminated)
+#[allow(clippy::match_same_arms)] // Explicit arms are clearer for state machine transitions
 const fn should_update_status(current: GarageStatus, new: GarageStatus) -> bool {
     match (current, new) {
         // Don't downgrade from Ready to Initializing
