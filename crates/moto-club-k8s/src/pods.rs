@@ -261,8 +261,8 @@ fn build_dev_container_pod(
     requests.insert("memory".to_string(), Quantity("256Mi".to_string()));
 
     let mut limits = BTreeMap::new();
-    limits.insert("cpu".to_string(), Quantity("2".to_string()));
-    limits.insert("memory".to_string(), Quantity("4Gi".to_string()));
+    limits.insert("cpu".to_string(), Quantity("3".to_string()));
+    limits.insert("memory".to_string(), Quantity("7Gi".to_string()));
 
     let resources = ResourceRequirements {
         requests: Some(requests),

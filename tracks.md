@@ -269,9 +269,9 @@ HOW TO USE THIS FILE:
 **Implemented:**
 - Pod security context: runAsUser/runAsGroup: 0, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, seccompProfile: RuntimeDefault, capabilities (drop ALL, add CHOWN/DAC_OVERRIDE/FOWNER/SETGID/SETUID/NET_BIND_SERVICE)
 - Pod spec: automountServiceAccountToken: false, host_network/host_pid/host_ipc: false
+- Pod resource limits: 3 CPU / 7Gi per spec (requests: 100m CPU / 256Mi)
 
 **Remaining:**
-- Pod resource limits: 3 CPU / 7Gi (currently 2 CPU / 4Gi)
 - Pod volumes: writable emptyDir mounts for tmp, var-tmp, home, nix, cargo, var-lib-apt, var-cache-apt, usr-local
 - Pod volumes: wireguard-config ConfigMap mount, wireguard-keys Secret mount, garage-svid Secret mount
 - Workspace PVC: change from emptyDir to PersistentVolumeClaim
