@@ -17,7 +17,7 @@ HOW TO USE THIS FILE:
 
 ## moto-club.md v1.2
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - moto-club-types crate: GarageId, GarageState, GarageInfo
@@ -50,20 +50,10 @@ HOW TO USE THIS FILE:
 - moto-club-api: GET /health endpoint includes database, k8s, and keybox checks per spec lines 1153-1179
 - moto-club-api: GET /api/v1/garages query params ?status= and ?all= per spec lines 295-300 (with INVALID_STATUS error code)
 - moto-club-api: POST /api/v1/garages/{name}/extend returns ExtendTtlResponse {expires_at, ttl_remaining_seconds} per spec lines 379-386
+- Remove SSH key management (v1.2 changelog: ttyd+WireGuard tunnel is sole auth boundary): moto-club-wg/src/ssh_keys.rs, moto-club-db user_ssh_key_repo.rs and user_ssh_keys table, UserSshKey model, SSH key API endpoints, PostgresSshKeyStore, moto-club-k8s secrets.rs (SshKeysSecretOps) and SSH volume mount in pods.rs, SSH key Secret step in garage service, INVALID_SSH_KEY/SSH_KEY_NOT_FOUND/SSH_KEY_NOT_OWNED error codes, ssh_key_manager in AppState
 
 **Remaining:**
-- Remove SSH key management (v1.2 changelog: ttyd+WireGuard tunnel is sole auth boundary):
-  - ~~Remove moto-club-wg/src/ssh_keys.rs module~~ ✓
-  - ~~Remove moto-club-db/src/user_ssh_key_repo.rs module~~ ✓
-  - ~~Remove user_ssh_keys table from schema migration~~ ✓
-  - ~~Remove UserSshKey model from moto-club-db/src/models.rs~~ ✓
-  - ~~Remove SSH key endpoints from moto-club-api/src/wg.rs (POST/GET/DELETE /api/v1/users/ssh-keys)~~ ✓
-  - ~~Remove PostgresSshKeyStore from moto-club-api/src/postgres_stores.rs~~ ✓
-  - Remove SSH key Secret creation from moto-club-k8s/src/secrets.rs (SshKeysSecretOps)
-  - Remove SSH keys volume mount from moto-club-k8s/src/pods.rs
-  - ~~Remove SSH key Secret step from moto-club-garage/src/service.rs create flow~~ ✓
-  - ~~Remove INVALID_SSH_KEY, SSH_KEY_NOT_FOUND, SSH_KEY_NOT_OWNED error codes from moto-club-api~~ ✓
-  - ~~Update AppState to remove ssh_key_manager field~~ ✓
+(none - moto-club.md v1.2 implementation complete)
 
 ---
 

@@ -7,13 +7,11 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use k8s_openapi::api::core::v1::{
-    Container, EmptyDirVolumeSource, KeyToPath, Pod, PodSpec, Probe, ResourceRequirements,
-    SecretVolumeSource, SecurityContext, TCPSocketAction, Volume, VolumeMount,
+    Container, EmptyDirVolumeSource, Pod, PodSpec, Probe, ResourceRequirements, SecurityContext,
+    TCPSocketAction, Volume, VolumeMount,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
-
-use crate::secrets::{AUTHORIZED_KEYS_KEY, SSH_KEYS_SECRET_NAME};
 use kube::api::{Api, DeleteParams, ObjectMeta, PostParams};
 use tracing::{debug, instrument};
 
@@ -294,14 +292,6 @@ fn build_dev_container_pod(
         },
     ];
 
-    // Volume mount for SSH authorized_keys
-    let ssh_volume_mount = VolumeMount {
-        name: "ssh-keys".to_string(),
-        mount_path: "/home/moto/.ssh".to_string(),
-        read_only: Some(true),
-        ..Default::default()
-    };
-
     // Volume mount for workspace (shared between init container and main container)
     let workspace_volume_mount = VolumeMount {
         name: "workspace".to_string(),
@@ -336,27 +326,10 @@ fn build_dev_container_pod(
         resources: Some(resources),
         security_context: Some(security_context.clone()),
         env: Some(env_vars),
-        volume_mounts: Some(vec![ssh_volume_mount, workspace_volume_mount.clone()]),
+        volume_mounts: Some(vec![workspace_volume_mount.clone()]),
         // Use container's default entrypoint (garage-entrypoint)
         // which starts ttyd for terminal access
         readiness_probe: Some(readiness_probe),
-        ..Default::default()
-    };
-
-    // Volume for SSH keys Secret
-    // Mount authorized_keys file with mode 0600 (octal 384)
-    let ssh_volume = Volume {
-        name: "ssh-keys".to_string(),
-        secret: Some(SecretVolumeSource {
-            secret_name: Some(SSH_KEYS_SECRET_NAME.to_string()),
-            default_mode: Some(0o600),
-            items: Some(vec![KeyToPath {
-                key: AUTHORIZED_KEYS_KEY.to_string(),
-                path: "authorized_keys".to_string(),
-                mode: Some(0o600),
-            }]),
-            ..Default::default()
-        }),
         ..Default::default()
     };
 
@@ -367,7 +340,7 @@ fn build_dev_container_pod(
         ..Default::default()
     };
 
-    let volumes = vec![ssh_volume, workspace_volume];
+    let volumes = vec![workspace_volume];
 
     // Build init containers for repo cloning if configured
     let init_containers = repo.map(|repo_config| {
@@ -561,39 +534,6 @@ mod tests {
         let env = container.env.as_ref().unwrap();
         let branch_env = env.iter().find(|e| e.name == "MOTO_GARAGE_BRANCH");
         assert_eq!(branch_env.unwrap().value, Some("main".to_string()));
-    }
-
-    #[test]
-    fn build_pod_has_ssh_keys_volume() {
-        let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
-        let pod =
-            build_dev_container_pod("moto-garage-abc12345", "test:latest", "main", labels, None);
-
-        let spec = pod.spec.as_ref().unwrap();
-
-        // Check volumes are defined (ssh-keys + workspace)
-        let volumes = spec.volumes.as_ref().unwrap();
-        assert_eq!(volumes.len(), 2);
-        let ssh_volume = volumes.iter().find(|v| v.name == "ssh-keys").unwrap();
-
-        let secret = ssh_volume.secret.as_ref().unwrap();
-        assert_eq!(secret.secret_name, Some(SSH_KEYS_SECRET_NAME.to_string()));
-        assert_eq!(secret.default_mode, Some(0o600));
-
-        // Check items mapping
-        let items = secret.items.as_ref().unwrap();
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].key, AUTHORIZED_KEYS_KEY);
-        assert_eq!(items[0].path, "authorized_keys");
-        assert_eq!(items[0].mode, Some(0o600));
-
-        // Check container has volume mounts (ssh + workspace)
-        let container = &spec.containers[0];
-        let mounts = container.volume_mounts.as_ref().unwrap();
-        assert_eq!(mounts.len(), 2);
-        let ssh_mount = mounts.iter().find(|m| m.name == "ssh-keys").unwrap();
-        assert_eq!(ssh_mount.mount_path, "/home/moto/.ssh");
-        assert_eq!(ssh_mount.read_only, Some(true));
     }
 
     #[test]
