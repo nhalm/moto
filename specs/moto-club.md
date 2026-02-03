@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.2 |
-| Last Updated | 2026-02-02 |
+| Version | 1.3 |
+| Last Updated | 2026-02-03 |
 
 ## Overview
 
@@ -787,12 +787,20 @@ enum GarageStatus {
 3. Insert into database (Pending, owner from config)
 4. Create K8s namespace: moto-garage-{id}
 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
-6. Apply NetworkPolicy, ResourceQuota
-7. Create ServiceAccount (for keybox auth)
-8. Deploy dev container pod
-9. Wait for pod Ready
-10. Update database (Ready)
-11. Return garage details
+6. Apply NetworkPolicy, ResourceQuota, LimitRange
+7. Generate WireGuard keypair:
+   - Create wireguard-config ConfigMap (address, peers)
+   - Create wireguard-keys Secret (private_key, public_key)
+   - Store public_key in database for client session routing
+8. Issue garage SVID from keybox:
+   - POST /auth/issue-garage-svid { garage_id, owner }
+   - Create garage-svid Secret with returned SVID
+9. If --with-postgres/--with-redis: create supporting service Deployments, Services, Secrets
+10. Create workspace PVC
+11. Deploy dev container pod (mounts all secrets/configmaps)
+12. Wait for pod Ready (includes supporting services if requested)
+13. Update database (Ready)
+14. Return garage details
 ```
 
 **Create failure handling:**
@@ -1172,6 +1180,15 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v1.3
+- Updated garage creation flow with SVID provisioning:
+  - Issue garage SVID from keybox (POST /auth/issue-garage-svid)
+  - Create garage-svid Secret in garage namespace
+- Added WireGuard keypair generation steps to create flow
+- Added supporting services provisioning steps (--with-postgres/--with-redis)
+- Added workspace PVC creation step
+- Removed ServiceAccount step (garages use SVID push model, not K8s SA auth)
 
 ### v1.2
 - Rename "Running" to "Initializing" garage status (clearer meaning)
