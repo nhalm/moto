@@ -36,7 +36,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
+| [project-structure](project-structure.md) | Ready to Rip | Directory layout, crate organization, workspace |
 | [moto-cli](moto-cli.md) | Ripping | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
 | [pre-commit](pre-commit.md) | Ripping | Git hooks for fast feedback to agents |
@@ -52,10 +52,10 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [dev-container](dev-container.md) | Ripping | Nix dockerTools container, tooling, environment |
 | [container-system](container-system.md) | Ripping | Build pipeline, registry |
 | [local-cluster](local-cluster.md) | Ripping | Local k3s cluster, moto cluster CLI |
-| [garage-isolation](garage-isolation.md) | Ready to Rip | Network policies, resource limits |
+| [garage-isolation](garage-isolation.md) | Ripping | Network policies, resource limits |
 | [garage-lifecycle](garage-lifecycle.md) | Ripping | Full lifecycle with ttyd terminal, TTL |
 | [moto-bike](moto-bike.md) | Ripping | Bike base image, engine contract |
-| [supporting-services](supporting-services.md) | Ready to Rip | Postgres, Redis deployment |
+| [supporting-services](supporting-services.md) | Ripping | Postgres, Redis deployment |
 | [moto-cron](moto-cron.md) | Bare Frame | Scheduled tasks (TTL cleanup), K8s CronJobs |
 | [moto-wgtunnel](moto-wgtunnel.md) | Ripping | WireGuard tunnels for terminal access |
 | [moto-club-websocket](moto-club-websocket.md) | Bare Frame | WebSocket streaming for logs/events |
