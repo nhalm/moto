@@ -180,6 +180,46 @@ pub enum Error {
     /// Failed to delete `LimitRange`.
     #[error("failed to delete LimitRange: {0}")]
     LimitRangeDelete(#[source] kube::Error),
+
+    /// Failed to create `ConfigMap`.
+    #[error("failed to create ConfigMap: {0}")]
+    ConfigMapCreate(#[source] kube::Error),
+
+    /// `ConfigMap` already exists.
+    #[error("ConfigMap already exists: {0}")]
+    ConfigMapExists(String),
+
+    /// `ConfigMap` not found.
+    #[error("ConfigMap not found: {0}")]
+    ConfigMapNotFound(String),
+
+    /// Failed to get `ConfigMap`.
+    #[error("failed to get ConfigMap: {0}")]
+    ConfigMapGet(#[source] kube::Error),
+
+    /// Failed to delete `ConfigMap`.
+    #[error("failed to delete ConfigMap: {0}")]
+    ConfigMapDelete(#[source] kube::Error),
+
+    /// Failed to create `Secret`.
+    #[error("failed to create Secret: {0}")]
+    SecretCreate(#[source] kube::Error),
+
+    /// `Secret` already exists.
+    #[error("Secret already exists: {0}")]
+    SecretExists(String),
+
+    /// `Secret` not found.
+    #[error("Secret not found: {0}")]
+    SecretNotFound(String),
+
+    /// Failed to get `Secret`.
+    #[error("failed to get Secret: {0}")]
+    SecretGet(#[source] kube::Error),
+
+    /// Failed to delete `Secret`.
+    #[error("failed to delete Secret: {0}")]
+    SecretDelete(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.

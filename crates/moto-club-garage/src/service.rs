@@ -13,7 +13,7 @@ use moto_club_db::{DbError, DbPool, Garage, GarageStatus, TerminationReason, gar
 use moto_club_k8s::{
     DEV_CONTAINER_POD_NAME, GarageK8s, GarageLimitRangeOps, GarageNamespaceInput,
     GarageNamespaceOps, GarageNetworkPolicyOps, GaragePodInput, GaragePodOps, GaragePodStatus,
-    GarageResourceQuotaOps, GarageWorkspacePvcOps,
+    GarageResourceQuotaOps, GarageWireGuardOps, GarageWorkspacePvcOps,
 };
 use moto_club_types::GarageId;
 
@@ -453,7 +453,7 @@ impl GarageService {
     /// 4. Create K8s namespace: moto-garage-{id}
     /// 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
     /// 6. Apply NetworkPolicy, ResourceQuota, LimitRange (per garage-isolation.md spec)
-    /// 7. Generate WireGuard keypair (TODO: create ConfigMap and Secret)
+    /// 7. Generate WireGuard keypair, create wireguard-config ConfigMap and wireguard-keys Secret
     /// 8. Issue garage SVID from keybox (TODO: POST /auth/issue-garage-svid, create Secret)
     /// 9. If --with-postgres/--with-redis: create supporting services (done in pod env vars)
     /// 10. Create workspace PVC
@@ -513,6 +513,33 @@ impl GarageService {
             }
             return Err(e.into());
         }
+
+        // Step 7: Generate WireGuard keypair per spec v1.3
+        // Creates wireguard-config ConfigMap and wireguard-keys Secret
+        debug!(namespace = %namespace, "creating WireGuard resources");
+        let wg_resources = match self.k8s.create_wireguard_resources(garage_id).await {
+            Ok(resources) => {
+                info!(
+                    namespace = %namespace,
+                    public_key = %resources.public_key,
+                    overlay_ip = %resources.overlay_ip,
+                    "WireGuard resources created"
+                );
+                resources
+            }
+            Err(e) => {
+                // Cleanup namespace on WireGuard resources creation failure
+                warn!(namespace = %namespace, error = %e, "WireGuard resources creation failed, cleaning up namespace");
+                if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
+                    warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
+                }
+                return Err(e.into());
+            }
+        };
+
+        // TODO: Store wg_resources.public_key in database for client session routing
+        // This will be done in a future PR when we integrate with wg_garages table
+        let _ = wg_resources; // Suppress unused warning for now
 
         // Step 10: Create workspace PVC per spec v1.3
         debug!(namespace = %namespace, "creating workspace PVC");

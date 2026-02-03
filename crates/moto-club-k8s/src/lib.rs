@@ -35,6 +35,7 @@ mod pods;
 mod pvc;
 mod resource_quota;
 mod supporting_services;
+mod wireguard;
 
 pub use limit_range::{GARAGE_LIMITS_NAME, GarageLimitRangeOps};
 pub use namespace::{GarageNamespaceInput, GarageNamespaceOps};
@@ -46,6 +47,9 @@ pub use supporting_services::{
     GaragePostgresOps, GarageRedisOps, POSTGRES_CREDENTIALS_SECRET_NAME, POSTGRES_DEPLOYMENT_NAME,
     POSTGRES_PORT, POSTGRES_SERVICE_NAME, REDIS_CREDENTIALS_SECRET_NAME, REDIS_DEPLOYMENT_NAME,
     REDIS_PORT, REDIS_SERVICE_NAME, SUPPORTING_SERVICE_LABEL,
+};
+pub use wireguard::{
+    GarageWireGuardOps, WIREGUARD_CONFIG_NAME, WIREGUARD_KEYS_SECRET_NAME, WireGuardResources,
 };
 
 use moto_k8s::K8sClient;

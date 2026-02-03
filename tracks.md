@@ -53,9 +53,9 @@ HOW TO USE THIS FILE:
 - Remove SSH key management (v1.2 changelog: ttyd+WireGuard tunnel is sole auth boundary): moto-club-wg/src/ssh_keys.rs, moto-club-db user_ssh_key_repo.rs and user_ssh_keys table, UserSshKey model, SSH key API endpoints, PostgresSshKeyStore, moto-club-k8s secrets.rs (SshKeysSecretOps) and SSH volume mount in pods.rs, SSH key Secret step in garage service, INVALID_SSH_KEY/SSH_KEY_NOT_FOUND/SSH_KEY_NOT_OWNED error codes, ssh_key_manager in AppState
 - Clean up outdated SSH comments in service.rs and garages.rs
 - Create workspace PVC in garage create flow (spec v1.3 step 10: service.rs calls GarageWorkspacePvcOps.create_workspace_pvc before deploying pod)
+- WireGuard keypair generation in garage create flow (spec v1.3 step 7: create wireguard-config ConfigMap and wireguard-keys Secret; GarageWireGuardOps trait, WireGuardResources struct, service.rs integration)
 
 **Remaining:**
-- WireGuard keypair generation in garage create flow (spec v1.3 step 7: create wireguard-config ConfigMap and wireguard-keys Secret)
 - Issue garage SVID from keybox in garage create flow (spec v1.3 step 8: call POST /auth/issue-garage-svid, create garage-svid Secret)
 
 ---
