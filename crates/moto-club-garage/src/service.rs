@@ -13,7 +13,7 @@ use moto_club_db::{DbError, DbPool, Garage, GarageStatus, TerminationReason, gar
 use moto_club_k8s::{
     DEV_CONTAINER_POD_NAME, GarageK8s, GarageLimitRangeOps, GarageNamespaceInput,
     GarageNamespaceOps, GarageNetworkPolicyOps, GaragePodInput, GaragePodOps, GaragePodStatus,
-    GarageResourceQuotaOps,
+    GarageResourceQuotaOps, GarageWorkspacePvcOps,
 };
 use moto_club_types::GarageId;
 
@@ -448,13 +448,16 @@ impl GarageService {
 
     /// Creates K8s resources for a garage.
     ///
-    /// # Flow (per spec lines 866-879)
+    /// # Flow (per spec v1.3 lines 786-803)
     ///
     /// 4. Create K8s namespace: moto-garage-{id}
     /// 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
-    /// 6. Apply `NetworkPolicy` (per garage-isolation.md spec)
-    /// 7. Create `ServiceAccount` (for keybox auth) (deferred)
-    /// 8. Deploy dev container pod
+    /// 6. Apply NetworkPolicy, ResourceQuota, LimitRange (per garage-isolation.md spec)
+    /// 7. Generate WireGuard keypair (TODO: create ConfigMap and Secret)
+    /// 8. Issue garage SVID from keybox (TODO: POST /auth/issue-garage-svid, create Secret)
+    /// 9. If --with-postgres/--with-redis: create supporting services (done in pod env vars)
+    /// 10. Create workspace PVC
+    /// 11. Deploy dev container pod
     async fn create_k8s_resources(
         &self,
         garage_id: &GarageId,
@@ -511,7 +514,18 @@ impl GarageService {
             return Err(e.into());
         }
 
-        // Step 8: Deploy pod
+        // Step 10: Create workspace PVC per spec v1.3
+        debug!(namespace = %namespace, "creating workspace PVC");
+        if let Err(e) = self.k8s.create_workspace_pvc(garage_id, name, owner).await {
+            // Cleanup namespace on PVC creation failure
+            warn!(namespace = %namespace, error = %e, "workspace PVC creation failed, cleaning up namespace");
+            if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
+                warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
+            }
+            return Err(e.into());
+        }
+
+        // Step 11: Deploy pod
         let pod_input = GaragePodInput {
             id: *garage_id,
             name: name.to_string(),

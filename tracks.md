@@ -15,9 +15,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v1.2
+## moto-club.md v1.3
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - moto-club-types crate: GarageId, GarageState, GarageInfo
@@ -52,9 +52,11 @@ HOW TO USE THIS FILE:
 - moto-club-api: POST /api/v1/garages/{name}/extend returns ExtendTtlResponse {expires_at, ttl_remaining_seconds} per spec lines 379-386
 - Remove SSH key management (v1.2 changelog: ttyd+WireGuard tunnel is sole auth boundary): moto-club-wg/src/ssh_keys.rs, moto-club-db user_ssh_key_repo.rs and user_ssh_keys table, UserSshKey model, SSH key API endpoints, PostgresSshKeyStore, moto-club-k8s secrets.rs (SshKeysSecretOps) and SSH volume mount in pods.rs, SSH key Secret step in garage service, INVALID_SSH_KEY/SSH_KEY_NOT_FOUND/SSH_KEY_NOT_OWNED error codes, ssh_key_manager in AppState
 - Clean up outdated SSH comments in service.rs and garages.rs
+- Create workspace PVC in garage create flow (spec v1.3 step 10: service.rs calls GarageWorkspacePvcOps.create_workspace_pvc before deploying pod)
 
 **Remaining:**
-(none - moto-club.md v1.2 implementation complete)
+- WireGuard keypair generation in garage create flow (spec v1.3 step 7: create wireguard-config ConfigMap and wireguard-keys Secret)
+- Issue garage SVID from keybox in garage create flow (spec v1.3 step 8: call POST /auth/issue-garage-svid, create garage-svid Secret)
 
 ---
 
