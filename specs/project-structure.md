@@ -1,7 +1,7 @@
 # Project Structure Specification
 
-**Version:** 1.1
-**Last Updated:** 2026-01-21
+**Version:** 1.2
+**Last Updated:** 2026-02-03
 
 ---
 
@@ -183,7 +183,7 @@ moto/
 | `moto-common` | lib | Shared utilities: error types, config loading, `Secret<T>` wrapper |
 | `moto-club-types` | lib | Types shared between CLI and server: `GarageId`, `GarageInfo`, `GarageState`, API request/response types |
 | `moto-k8s` | lib | Low-level K8s operations: namespace CRUD, pod CRUD, label helpers |
-| `moto-garage` | lib | Garage client: abstracts local (direct K8s) vs remote (via club) mode |
+| `moto-garage` | lib | **DEPRECATED** - Remove this crate. CLI talks directly to moto-club API. |
 | `moto-cli` | bin | CLI commands: `moto garage {list,open,close}`, `moto bike {...}` |
 
 ### Club Crates (Implement Later)
@@ -245,9 +245,11 @@ moto/
 
 ### moto-garage
 
-**GarageMode** - Enum: `Local` (direct K8s) or `Remote { endpoint }` (via club)
+**DEPRECATED** - This crate should be removed. The CLI now talks directly to moto-club API using context configuration. There is no need for a separate abstraction layer.
 
-**GarageClient** - Methods: `list()`, `open(name)`, `close(id)`
+~~**GarageMode** - Enum: `Local` (direct K8s) or `Remote { endpoint }` (via club)~~
+
+~~**GarageClient** - Methods: `list()`, `open(name)`, `close(id)`~~
 
 ---
 
@@ -296,11 +298,16 @@ All labels use `moto.dev/` prefix:
 ## 9. Key Decisions
 
 ### Local vs Remote Mode
-The CLI can work in two modes:
-- **Local**: Direct K8s access via kubeconfig (for solo dev)
-- **Remote**: Through moto-club server (for team/managed)
 
-`moto-garage` abstracts this - same interface, different backend.
+**DEPRECATED** - Local mode is no longer supported. The CLI always talks to moto-club API.
+
+~~The CLI can work in two modes:~~
+~~- **Local**: Direct K8s access via kubeconfig (for solo dev)~~
+~~- **Remote**: Through moto-club server (for team/managed)~~
+
+~~`moto-garage` abstracts this - same interface, different backend.~~
+
+The CLI uses `--context` to select which moto-club instance to talk to. Even for local development, moto-club runs in the local cluster and the CLI connects to it via API.
 
 ### Namespace-First
 Garages are Kubernetes namespaces with labels. In v1, we just manage namespaces. Pods, volumes, services come later.
@@ -333,7 +340,7 @@ Both CLI and server need the same types (GarageInfo, etc). Put them in `moto-clu
 | Bike Part | System Concept | Crate |
 |-----------|----------------|-------|
 | Club | Central orchestration | moto-club |
-| Garage | Dev environment | moto-garage |
+| Garage | Dev environment | ~~moto-garage~~ (deprecated) |
 | Bike | Production deployment | moto-club-bike |
 | Bars | CLI/control | moto-cli |
 | Frame | K8s infrastructure | moto-k8s |
@@ -350,6 +357,13 @@ Both CLI and server need the same types (GarageInfo, etc). Put them in `moto-clu
 ---
 
 ## Changelog
+
+### v1.2 (2026-02-03)
+
+Deprecated `moto-garage` crate and local mode. The CLI now always talks to moto-club API using context configuration. Remove the following:
+- `crates/moto-garage/` directory
+- All references to `GarageClient` and `GarageMode` in moto-cli
+- Local mode logic that bypasses moto-club API
 
 ### v1.1 (2026-01-21)
 
