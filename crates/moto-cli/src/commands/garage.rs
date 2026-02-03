@@ -1,10 +1,13 @@
 //! Garage subcommands: list, open, close, logs, enter, extend.
+//!
+//! The CLI talks directly to moto-club API for all garage operations.
+//! Local mode (direct K8s access) is deprecated per project-structure.md v1.2.
 
 use clap::{Args, Subcommand};
-use futures_util::StreamExt;
-use moto_cli_wgtunnel::{ConsoleProgress, EnterConfig, EnterError, TunnelManager, enter_garage};
-use moto_garage::GarageClient;
-use moto_k8s::K8sClient;
+use moto_cli_wgtunnel::{
+    ClientError, ConsoleProgress, CreateGarageRequest, EnterConfig, EnterError, MotoClubClient,
+    MotoClubConfig, TunnelManager, enter_garage,
+};
 use serde::Serialize;
 use std::io::{self, Write};
 
@@ -22,11 +25,7 @@ pub struct GarageCommand {
 #[derive(Subcommand)]
 pub enum GarageAction {
     /// List all garages
-    List {
-        /// Filter by kubectl context (use "all" for all contexts)
-        #[arg(long)]
-        context: Option<String>,
-    },
+    List,
 
     /// Open a new garage
     Open {
@@ -113,8 +112,6 @@ struct GarageJson {
     ttl_remaining_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     engine: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    context: Option<String>,
 }
 
 /// JSON output for garage open (matches spec)
@@ -160,144 +157,104 @@ struct GarageExtendJson {
     ttl_remaining_seconds: i64,
 }
 
-/// Garage info with context name for multi-context listing.
-struct GarageWithContext {
-    garage: moto_club_types::GarageInfo,
-    context: Option<String>,
+/// Create a moto-club client from configuration.
+fn create_client(_flags: &GlobalFlags) -> Result<MotoClubClient> {
+    // Get base URL from config or environment
+    let base_url =
+        std::env::var("MOTO_CLUB_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+    // Get owner from environment variable
+    // Per moto-club.md spec: MOTO_USER is required for local dev
+    let owner = std::env::var("MOTO_USER").map_err(|_| {
+        CliError::invalid_input(
+            "MOTO_USER environment variable is required.\n\n\
+             Set MOTO_USER to your username, e.g.:\n\
+             export MOTO_USER=\"your-username\"",
+        )
+    })?;
+
+    let config = MotoClubConfig::new(base_url, owner);
+    MotoClubClient::new(config)
+        .map_err(|e| CliError::general(format!("failed to create client: {e}")))
+}
+
+/// Convert client error to CLI error.
+fn client_error_to_cli_error(e: ClientError) -> CliError {
+    match e {
+        ClientError::GarageNotFound(msg) => CliError::not_found(msg),
+        ClientError::NotAuthorized(msg) => CliError::general(format!("not authorized: {msg}")),
+        ClientError::Unreachable { url, reason } => CliError::general(format!(
+            "moto-club unreachable at {url}: {reason}\n\n\
+             Make sure moto-club is running.\n\
+             Try: moto cluster status"
+        )),
+        ClientError::Server { code, message } => CliError::general(format!("{code}: {message}")),
+        _ => CliError::general(e.to_string()),
+    }
 }
 
 /// Run the garage command
 pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
-        GarageAction::List { context } => {
+        GarageAction::List => {
+            let client = create_client(flags)?;
             let now = chrono::Utc::now();
-            let show_context_column = context.as_deref() == Some("all");
 
-            // Collect garages from the appropriate context(s)
-            let garages_with_context: Vec<GarageWithContext> = if context.as_deref() == Some("all")
-            {
-                // List from all contexts
-                let contexts = K8sClient::list_contexts()?;
-                let mut all_garages = Vec::new();
-                for ctx_name in contexts {
-                    match GarageClient::local_with_context(&ctx_name).await {
-                        Ok(client) => {
-                            if let Ok(garages) = client.list().await {
-                                for g in garages {
-                                    all_garages.push(GarageWithContext {
-                                        garage: g,
-                                        context: Some(ctx_name.clone()),
-                                    });
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            // Skip contexts that fail to connect (e.g., cluster not available)
-                            if flags.verbose > 0 {
-                                eprintln!(
-                                    "Warning: could not connect to context '{ctx_name}': {e}"
-                                );
-                            }
-                        }
-                    }
-                }
-                all_garages
-            } else if let Some(ctx_name) = &context {
-                // List from specific context
-                let client = GarageClient::local_with_context(ctx_name).await?;
-                client
-                    .list()
-                    .await?
-                    .into_iter()
-                    .map(|g| GarageWithContext {
-                        garage: g,
-                        context: Some(ctx_name.clone()),
-                    })
-                    .collect()
-            } else {
-                // List from current/default context
-                let client = GarageClient::local().await?;
-                client
-                    .list()
-                    .await?
-                    .into_iter()
-                    .map(|g| GarageWithContext {
-                        garage: g,
-                        context: None,
-                    })
-                    .collect()
-            };
+            let response = client
+                .list_garages()
+                .await
+                .map_err(client_error_to_cli_error)?;
 
             if flags.json {
                 let json = GarageListJson {
-                    garages: garages_with_context
+                    garages: response
+                        .garages
                         .iter()
-                        .map(|gwc| {
-                            let g = &gwc.garage;
-                            let age_seconds = (now - g.created_at).num_seconds();
-                            let ttl_remaining_seconds = g.expires_at.map(|exp| {
-                                let remaining = (exp - now).num_seconds();
-                                remaining.max(0)
-                            });
+                        .map(|g| {
+                            let created_at = chrono::DateTime::parse_from_rfc3339(&g.created_at)
+                                .map(|dt| dt.with_timezone(&chrono::Utc))
+                                .unwrap_or(now);
+                            let age_seconds = (now - created_at).num_seconds();
+
+                            let ttl_remaining_seconds =
+                                chrono::DateTime::parse_from_rfc3339(&g.expires_at)
+                                    .ok()
+                                    .map(|exp| {
+                                        let remaining =
+                                            (exp.with_timezone(&chrono::Utc) - now).num_seconds();
+                                        remaining.max(0)
+                                    });
+
                             GarageJson {
                                 name: g.name.clone(),
-                                status: g.state.to_string(),
+                                status: g.status.clone(),
                                 age_seconds,
                                 ttl_remaining_seconds,
                                 engine: g.engine.clone(),
-                                context: gwc.context.clone(),
                             }
                         })
                         .collect(),
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
-            } else if garages_with_context.is_empty() {
+            } else if response.garages.is_empty() {
                 if !flags.quiet {
                     println!("No garages found.");
                 }
-            } else if show_context_column {
-                println!(
-                    "{:<16} {:<10} {:<8} {:<10} {:<16} {}",
-                    "NAME", "STATUS", "AGE", "TTL", "CONTEXT", "ENGINE"
-                );
-                for gwc in garages_with_context {
-                    let g = &gwc.garage;
-                    let age = format_duration((now - g.created_at).num_seconds());
-                    let ttl = g
-                        .expires_at
-                        .map(|exp| {
-                            let remaining = (exp - now).num_seconds();
-                            if remaining <= 0 {
-                                "expired".to_string()
-                            } else {
-                                format_duration(remaining)
-                            }
-                        })
-                        .unwrap_or_else(|| "-".to_string());
-                    let engine = g.engine.as_deref().unwrap_or("-");
-                    let ctx = gwc.context.as_deref().unwrap_or("-");
-                    println!(
-                        "{:<16} {:<10} {:<8} {:<10} {:<16} {}",
-                        truncate(&g.name, 16),
-                        g.state,
-                        age,
-                        ttl,
-                        truncate(ctx, 16),
-                        engine
-                    );
-                }
             } else {
                 println!(
-                    "{:<16} {:<10} {:<8} {:<10} {}",
+                    "{:<16} {:<12} {:<8} {:<10} {}",
                     "NAME", "STATUS", "AGE", "TTL", "ENGINE"
                 );
-                for gwc in garages_with_context {
-                    let g = &gwc.garage;
-                    let age = format_duration((now - g.created_at).num_seconds());
-                    let ttl = g
-                        .expires_at
+                for g in response.garages {
+                    let created_at = chrono::DateTime::parse_from_rfc3339(&g.created_at)
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                        .unwrap_or(now);
+                    let age = format_duration((now - created_at).num_seconds());
+
+                    let ttl = chrono::DateTime::parse_from_rfc3339(&g.expires_at)
+                        .ok()
                         .map(|exp| {
-                            let remaining = (exp - now).num_seconds();
+                            let remaining = (exp.with_timezone(&chrono::Utc) - now).num_seconds();
                             if remaining <= 0 {
                                 "expired".to_string()
                             } else {
@@ -305,11 +262,12 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                             }
                         })
                         .unwrap_or_else(|| "-".to_string());
+
                     let engine = g.engine.as_deref().unwrap_or("-");
                     println!(
-                        "{:<16} {:<10} {:<8} {:<10} {}",
+                        "{:<16} {:<12} {:<8} {:<10} {}",
                         truncate(&g.name, 16),
-                        g.state,
+                        g.status,
                         age,
                         ttl,
                         engine
@@ -317,35 +275,49 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 }
             }
         }
+
         GarageAction::Open {
-            owner,
+            owner: _owner,
             ttl,
             engine,
             with_postgres,
             with_redis,
         } => {
-            let client = GarageClient::local().await?;
+            let client = create_client(flags)?;
             let name = crate::names::generate();
-            let owner_ref = owner.as_deref();
-            let engine_ref = engine.as_deref();
+
             // Use CLI flag, then config default, then hardcoded default
             let ttl_str = ttl
                 .as_deref()
                 .or(flags.config.garage.ttl.as_deref())
                 .unwrap_or("4h");
             let ttl_seconds = parse_ttl(ttl_str)?;
+
             if !flags.quiet && !flags.json {
                 println!("Opening garage...");
             }
+
+            let request = CreateGarageRequest {
+                name: Some(name.clone()),
+                branch: None,
+                ttl_seconds: Some(ttl_seconds),
+                image: None,
+                engine: engine.clone(),
+                with_postgres: if with_postgres { Some(true) } else { None },
+                with_redis: if with_redis { Some(true) } else { None },
+            };
+
             let garage = client
-                .open(&name, owner_ref, Some(ttl_seconds), engine_ref)
-                .await?;
+                .create_garage(&request)
+                .await
+                .map_err(client_error_to_cli_error)?;
+
             if flags.json {
                 let json = GarageOpenJson {
                     name: garage.name.clone(),
                     engine: garage.engine.clone(),
                     ttl_seconds,
-                    status: garage.state.to_string(),
+                    status: garage.status.clone(),
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
             } else {
@@ -358,16 +330,15 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 println!("To connect: moto garage enter {}", garage.name);
             }
         }
+
         GarageAction::Enter { name } => {
+            let client = create_client(flags)?;
+
             // Check if garage exists first
-            let client = GarageClient::local().await?;
-            let garages = client.list().await?;
-            if !garages.iter().any(|g| g.name == name) {
-                return Err(CliError::not_found(format!(
-                    "Garage '{}' not found.\n\nTry: moto garage list",
-                    name
-                )));
-            }
+            client
+                .get_garage(&name)
+                .await
+                .map_err(client_error_to_cli_error)?;
 
             if !flags.quiet && !flags.json {
                 eprintln!("Connecting to garage {name}...");
@@ -429,16 +400,15 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 })?;
             }
         }
+
         GarageAction::Close { name, force } => {
-            let client = GarageClient::local().await.map_err(CliError::from)?;
+            let client = create_client(flags)?;
+
             // Check if garage exists first
-            let garages = client.list().await.map_err(CliError::from)?;
-            if !garages.iter().any(|g| g.name == name) {
-                return Err(CliError::not_found(format!(
-                    "Garage '{}' not found.\n\nTry: moto garage list",
-                    name
-                )));
-            }
+            client
+                .get_garage(&name)
+                .await
+                .map_err(client_error_to_cli_error)?;
 
             // Prompt for confirmation unless --force is used
             if !force && !flags.json {
@@ -457,7 +427,12 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             if !flags.quiet && !flags.json {
                 println!("Closing garage '{name}'...");
             }
-            client.close_by_name(&name).await?;
+
+            client
+                .close_garage(&name)
+                .await
+                .map_err(client_error_to_cli_error)?;
+
             if flags.json {
                 let json = GarageCloseJson {
                     name,
@@ -468,67 +443,34 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 println!("Garage closed.");
             }
         }
+
         GarageAction::Logs {
             name,
             follow,
-            tail,
-            since,
+            tail: _tail,
+            since: _since,
         } => {
-            let client = GarageClient::local().await?;
-            let since_seconds = since.as_deref().map(parse_duration).transpose()?;
-
+            // Logs endpoint not yet implemented in HTTP client.
+            // Per spec, WebSocket streaming will handle this in a future version.
+            // For now, show an informative error.
             if follow {
-                // Streaming mode - --json is not supported with --follow
-                if flags.json {
-                    return Err(CliError::invalid_input(
-                        "JSON output is not supported with --follow",
-                    ));
-                }
-
-                if !flags.quiet {
-                    eprintln!("Streaming logs from '{name}'... (Ctrl+C to stop)");
-                }
-
-                let mut stream = client.logs_stream(&name, Some(tail), since_seconds).await?;
-                let stdout = io::stdout();
-                let mut handle = stdout.lock();
-
-                while let Some(result) = stream.next().await {
-                    match result {
-                        Ok(line) => {
-                            write!(handle, "{line}")?;
-                            handle.flush()?;
-                        }
-                        Err(e) => {
-                            eprintln!("Error reading logs: {e}");
-                            break;
-                        }
-                    }
-                }
-            } else {
-                // Non-streaming mode
-                let logs = client.logs(&name, Some(tail), since_seconds).await?;
-
-                if flags.json {
-                    let json = GarageLogsJson {
-                        name: name.clone(),
-                        logs: logs.clone(),
-                    };
-                    println!("{}", serde_json::to_string_pretty(&json)?);
-                } else if logs.is_empty() {
-                    if !flags.quiet {
-                        println!("No logs found for garage '{name}'.");
-                    }
-                } else {
-                    print!("{logs}");
-                    if !logs.ends_with('\n') {
-                        println!();
-                    }
-                }
+                return Err(CliError::general(
+                    "Log streaming via --follow is not yet supported.\n\n\
+                     Use kubectl logs to view garage logs directly:\n\
+                     kubectl logs -n moto-garage-<id> garage -f",
+                ));
             }
+
+            return Err(CliError::general(format!(
+                "Log viewing is not yet supported via moto-club API.\n\n\
+                 Use kubectl logs to view garage '{}' logs:\n\
+                 kubectl logs -n moto-garage-<id> garage",
+                name
+            )));
         }
+
         GarageAction::Extend { name, ttl } => {
-            let client = GarageClient::local().await?;
+            let client = create_client(flags)?;
 
             // Parse TTL extension
             let seconds = parse_duration(&ttl)?;
@@ -540,42 +482,38 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 println!("Extending garage '{name}' TTL by {ttl}...");
             }
 
-            let garage = client.extend(&name, seconds).await.map_err(|e| match e {
-                moto_garage::Error::GarageNotFound(_) => CliError::not_found(format!(
-                    "Garage '{}' not found.\n\nTry: moto garage list",
-                    name
-                )),
-                moto_garage::Error::GarageExpired(_) => CliError::general(format!(
-                    "Garage '{}' has expired and cannot be extended.",
-                    name
-                )),
-                moto_garage::Error::InvalidTtl(msg) => CliError::invalid_input(msg),
-                _ => CliError::general(e.to_string()),
-            })?;
-
-            let now = chrono::Utc::now();
-            let ttl_remaining_seconds = garage
-                .expires_at
-                .map(|exp| (exp - now).num_seconds().max(0))
-                .unwrap_or(0);
+            let response = client
+                .extend_garage(&name, seconds)
+                .await
+                .map_err(|e| match e {
+                    ClientError::GarageNotFound(_) => CliError::not_found(format!(
+                        "Garage '{}' not found.\n\nTry: moto garage list",
+                        name
+                    )),
+                    ClientError::Server { code, message } if code == "GARAGE_EXPIRED" => {
+                        CliError::general(format!(
+                            "Garage '{}' has expired and cannot be extended.",
+                            name
+                        ))
+                    }
+                    ClientError::Server { code, message } if code == "INVALID_TTL" => {
+                        CliError::invalid_input(message)
+                    }
+                    _ => client_error_to_cli_error(e),
+                })?;
 
             if flags.json {
                 let json = GarageExtendJson {
-                    name: garage.name.clone(),
-                    expires_at: garage
-                        .expires_at
-                        .map(|dt| dt.to_rfc3339())
-                        .unwrap_or_default(),
-                    ttl_remaining_seconds,
+                    name: name.clone(),
+                    expires_at: response.expires_at.clone(),
+                    ttl_remaining_seconds: response.ttl_remaining_seconds,
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
             } else if !flags.quiet {
-                let ttl_formatted = format_duration(ttl_remaining_seconds);
+                let ttl_formatted = format_duration(response.ttl_remaining_seconds);
                 println!("Garage TTL extended.");
                 println!("  New TTL: {ttl_formatted}");
-                if let Some(expires) = garage.expires_at {
-                    println!("  Expires: {}", expires.format("%Y-%m-%d %H:%M:%S UTC"));
-                }
+                println!("  Expires: {}", response.expires_at);
             }
         }
     }

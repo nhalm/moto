@@ -64,16 +64,6 @@ impl fmt::Display for CliError {
 
 impl std::error::Error for CliError {}
 
-/// Convert moto_garage errors to CLI errors with appropriate exit codes.
-impl From<moto_garage::Error> for CliError {
-    fn from(err: moto_garage::Error) -> Self {
-        match &err {
-            moto_garage::Error::GarageNotFound(_) => CliError::not_found(err.to_string()),
-            _ => CliError::general(err.to_string()),
-        }
-    }
-}
-
 /// Convert moto_k8s errors to CLI errors with appropriate exit codes.
 impl From<moto_k8s::Error> for CliError {
     fn from(err: moto_k8s::Error) -> Self {

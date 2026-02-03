@@ -235,7 +235,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## keybox.md v0.2
+## keybox.md v0.3
 
 **Status:** In Progress
 
@@ -254,8 +254,11 @@ HOW TO USE THIS FILE:
 - moto-keybox-cli: issue-dev-svid command (24h dev SVID for local testing)
 - moto-keybox-cli: set/get/list secret commands
 - moto-keybox-server: Server binary (main.rs) with config from env vars, graceful shutdown, JSON logging
+- POST /auth/issue-garage-svid endpoint for moto-club delegation (per spec v0.3 changelog: garage SVID issuance with 1-hour TTL, service token auth, IssueGarageSvidRequest/Response types)
+- Service token authentication for moto-club (MOTO_KEYBOX_SERVICE_TOKEN and MOTO_KEYBOX_SERVICE_TOKEN_FILE env vars, constant-time comparison)
 
 **Remaining:**
+- Endpoint authorization matrix enforcement (future - spec v0.3: SVID tokens should be denied for admin endpoints)
 - POST /admin/rotate-dek/{name} endpoint (future)
 - K8s ServiceAccount JWT validation via TokenReview API (future - MVP accepts principal info directly)
 - PostgreSQL-backed repository (future - currently in-memory)
@@ -297,3 +300,16 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 (none - supporting-services.md v0.2 implementation complete)
+
+---
+
+## project-structure.md v1.2
+
+**Status:** Complete
+
+**Implemented:**
+- (see tracks-history.md for prior work)
+- Deprecate moto-garage crate and local mode: moto-cli garage commands now use MotoClubClient HTTP client instead of moto_garage::GarageClient, removed moto-garage dependency from moto-cli, added list_garages/create_garage/close_garage/extend_garage methods to MotoClubClient
+
+**Remaining:**
+(none - project-structure.md v1.2 implementation complete)

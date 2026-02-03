@@ -82,7 +82,8 @@ pub mod ttyd;
 pub mod tunnel;
 
 pub use client::{
-    ClientError, DeviceResponse, GarageInfo, ListSessionsResponse, MotoClubClient, MotoClubConfig,
+    ClientError, CreateGarageRequest, DeviceResponse, ExtendGarageResponse, GarageDetailsResponse,
+    GarageInfo, ListGaragesResponse, ListSessionsResponse, MotoClubClient, MotoClubConfig,
     SessionInfo, SessionResponse as ApiSessionResponse,
 };
 pub use enter::{

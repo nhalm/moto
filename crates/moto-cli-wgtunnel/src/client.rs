@@ -360,6 +360,113 @@ impl MotoClubClient {
         self.get_json(&url).await
     }
 
+    /// List all garages for the current user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if moto-club is unreachable.
+    pub async fn list_garages(&self) -> Result<ListGaragesResponse, ClientError> {
+        let url = format!("{}/api/v1/garages", self.config.base_url);
+
+        debug!(url = %url, "listing garages");
+
+        self.get_json(&url).await
+    }
+
+    /// Create a new garage.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - Garage creation parameters
+    ///
+    /// # Returns
+    ///
+    /// Created garage details.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - moto-club is unreachable
+    /// - Name already exists (GARAGE_ALREADY_EXISTS)
+    /// - Invalid TTL (INVALID_TTL)
+    pub async fn create_garage(
+        &self,
+        request: &CreateGarageRequest,
+    ) -> Result<GarageDetailsResponse, ClientError> {
+        let url = format!("{}/api/v1/garages", self.config.base_url);
+
+        debug!(url = %url, name = ?request.name, "creating garage");
+
+        self.post_json(&url, request).await
+    }
+
+    /// Close (delete) a garage by name.
+    ///
+    /// # Arguments
+    ///
+    /// * `garage_name` - Name of the garage to close
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - moto-club is unreachable
+    /// - Garage is not found
+    /// - User is not authorized
+    pub async fn close_garage(&self, garage_name: &str) -> Result<(), ClientError> {
+        let url = format!("{}/api/v1/garages/{}", self.config.base_url, garage_name);
+
+        debug!(url = %url, garage = %garage_name, "closing garage");
+
+        let response = self
+            .client
+            .delete(&url)
+            .header("Authorization", self.auth_header())
+            .send()
+            .await
+            .map_err(|e| self.connection_error(e))?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            self.handle_error_response(response).await
+        }
+    }
+
+    /// Extend a garage's TTL.
+    ///
+    /// # Arguments
+    ///
+    /// * `garage_name` - Name of the garage to extend
+    /// * `seconds` - Seconds to add to current expiry
+    ///
+    /// # Returns
+    ///
+    /// New expiration info.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - moto-club is unreachable
+    /// - Garage is not found
+    /// - Garage has expired or is terminated
+    /// - Extension would exceed max TTL
+    pub async fn extend_garage(
+        &self,
+        garage_name: &str,
+        seconds: i64,
+    ) -> Result<ExtendGarageResponse, ClientError> {
+        let url = format!(
+            "{}/api/v1/garages/{}/extend",
+            self.config.base_url, garage_name
+        );
+
+        let request = ExtendGarageRequest { seconds };
+
+        debug!(url = %url, garage = %garage_name, seconds = %seconds, "extending garage TTL");
+
+        self.post_json(&url, &request).await
+    }
+
     /// Send a POST request with JSON body and parse JSON response.
     async fn post_json<Req, Resp>(&self, url: &str, body: &Req) -> Result<Resp, ClientError>
     where
@@ -552,21 +659,91 @@ pub struct GarageDetailsResponse {
     /// Owner identifier.
     pub owner: String,
     /// Git branch.
+    #[serde(default)]
     pub branch: String,
     /// Current status.
     pub status: String,
     /// Dev container image used.
+    #[serde(default)]
     pub image: String,
     /// Time-to-live in seconds.
     pub ttl_seconds: i32,
     /// When the garage expires (ISO 8601).
     pub expires_at: String,
     /// Kubernetes namespace.
+    #[serde(default)]
     pub namespace: String,
     /// Kubernetes pod name.
+    #[serde(default)]
     pub pod_name: String,
     /// When the garage was created (ISO 8601).
     pub created_at: String,
+    /// Engine name (optional).
+    #[serde(default)]
+    pub engine: Option<String>,
+}
+
+/// Response for listing garages.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ListGaragesResponse {
+    /// List of garages.
+    pub garages: Vec<GarageDetailsResponse>,
+}
+
+/// Request to create a garage.
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateGarageRequest {
+    /// Human-friendly name (auto-generated if omitted).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Git branch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    /// Time-to-live in seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl_seconds: Option<i64>,
+    /// Override dev container image.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    /// Engine name (what the garage is working on).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engine: Option<String>,
+    /// Include PostgreSQL database.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with_postgres: Option<bool>,
+    /// Include Redis cache.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with_redis: Option<bool>,
+}
+
+impl Default for CreateGarageRequest {
+    fn default() -> Self {
+        Self {
+            name: None,
+            branch: None,
+            ttl_seconds: None,
+            image: None,
+            engine: None,
+            with_postgres: None,
+            with_redis: None,
+        }
+    }
+}
+
+/// Request to extend a garage's TTL.
+#[derive(Debug, Clone, Serialize)]
+struct ExtendGarageRequest {
+    /// Seconds to add to current expiry.
+    seconds: i64,
+}
+
+/// Response for extending a garage's TTL.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExtendGarageResponse {
+    /// New expiration time (ISO 8601).
+    pub expires_at: String,
+    /// Remaining TTL in seconds.
+    pub ttl_remaining_seconds: i64,
 }
 
 /// API error response format.
