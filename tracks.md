@@ -54,9 +54,10 @@ HOW TO USE THIS FILE:
 - Clean up outdated SSH comments in service.rs and garages.rs
 - Create workspace PVC in garage create flow (spec v1.3 step 10: service.rs calls GarageWorkspacePvcOps.create_workspace_pvc before deploying pod)
 - WireGuard keypair generation in garage create flow (spec v1.3 step 7: create wireguard-config ConfigMap and wireguard-keys Secret; GarageWireGuardOps trait, WireGuardResources struct, service.rs integration)
+- Issue garage SVID from keybox in garage create flow (spec v1.3 step 8: moto-club-garage KeyboxClient, moto-club-k8s GarageSvidOps trait, service.rs integration with optional KeyboxClient)
 
 **Remaining:**
-- Issue garage SVID from keybox in garage create flow (spec v1.3 step 8: call POST /auth/issue-garage-svid, create garage-svid Secret)
+(none - moto-club.md v1.3 implementation complete)
 
 ---
 

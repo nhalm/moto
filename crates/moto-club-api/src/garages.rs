@@ -410,6 +410,16 @@ fn map_garage_service_error(e: GarageServiceError) -> (StatusCode, Json<ApiError
                 Json(ApiError::new(error_codes::INTERNAL_ERROR, e.to_string())),
             )
         }
+        GarageServiceError::Keybox(e) => {
+            tracing::error!("Keybox error: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    "Keybox operation failed",
+                )),
+            )
+        }
     }
 }
 

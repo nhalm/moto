@@ -35,6 +35,7 @@ mod pods;
 mod pvc;
 mod resource_quota;
 mod supporting_services;
+mod svid;
 mod wireguard;
 
 pub use limit_range::{GARAGE_LIMITS_NAME, GarageLimitRangeOps};
@@ -48,6 +49,7 @@ pub use supporting_services::{
     POSTGRES_PORT, POSTGRES_SERVICE_NAME, REDIS_CREDENTIALS_SECRET_NAME, REDIS_DEPLOYMENT_NAME,
     REDIS_PORT, REDIS_SERVICE_NAME, SUPPORTING_SERVICE_LABEL,
 };
+pub use svid::{GARAGE_SVID_SECRET_NAME, GarageSvidOps, SvidSecret};
 pub use wireguard::{
     GarageWireGuardOps, WIREGUARD_CONFIG_NAME, WIREGUARD_KEYS_SECRET_NAME, WireGuardResources,
 };

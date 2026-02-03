@@ -13,10 +13,11 @@ use moto_club_db::{DbError, DbPool, Garage, GarageStatus, TerminationReason, gar
 use moto_club_k8s::{
     DEV_CONTAINER_POD_NAME, GarageK8s, GarageLimitRangeOps, GarageNamespaceInput,
     GarageNamespaceOps, GarageNetworkPolicyOps, GaragePodInput, GaragePodOps, GaragePodStatus,
-    GarageResourceQuotaOps, GarageWireGuardOps, GarageWorkspacePvcOps,
+    GarageResourceQuotaOps, GarageSvidOps, GarageWireGuardOps, GarageWorkspacePvcOps,
 };
 use moto_club_types::GarageId;
 
+use crate::keybox::{KeyboxClient, KeyboxError};
 use crate::lifecycle::{GarageLifecycle, LifecycleError};
 use crate::{DEFAULT_IMAGE, DEFAULT_TTL_SECONDS, MAX_TTL_SECONDS, MIN_TTL_SECONDS};
 
@@ -34,6 +35,10 @@ pub enum GarageServiceError {
     /// Lifecycle error.
     #[error("lifecycle error: {0}")]
     Lifecycle(#[from] LifecycleError),
+
+    /// Keybox error.
+    #[error("keybox error: {0}")]
+    Keybox(#[from] KeyboxError),
 
     /// Garage not found.
     #[error("garage not found: {0}")]
@@ -112,6 +117,7 @@ pub struct ExtendTtlInput {
 /// This service coordinates between:
 /// - Database (garage records)
 /// - Kubernetes (namespaces, pods)
+/// - Keybox (SVID issuance)
 ///
 /// It ensures consistency between these layers during garage
 /// creation, updates, and termination.
@@ -119,13 +125,32 @@ pub struct ExtendTtlInput {
 pub struct GarageService {
     db: DbPool,
     k8s: GarageK8s,
+    keybox: Option<KeyboxClient>,
 }
 
 impl GarageService {
     /// Creates a new garage service.
     #[must_use]
-    pub const fn new(db: DbPool, k8s: GarageK8s) -> Self {
-        Self { db, k8s }
+    pub fn new(db: DbPool, k8s: GarageK8s) -> Self {
+        Self {
+            db,
+            k8s,
+            keybox: None,
+        }
+    }
+
+    /// Creates a new garage service with keybox client for SVID issuance.
+    ///
+    /// Per moto-club.md spec v1.3 step 8, garages need an SVID for keybox
+    /// authentication. The keybox client issues the SVID which is then
+    /// stored in a K8s Secret that the garage pod mounts.
+    #[must_use]
+    pub fn with_keybox(db: DbPool, k8s: GarageK8s, keybox: KeyboxClient) -> Self {
+        Self {
+            db,
+            k8s,
+            keybox: Some(keybox),
+        }
     }
 
     /// Creates a new garage.
@@ -454,7 +479,7 @@ impl GarageService {
     /// 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
     /// 6. Apply NetworkPolicy, ResourceQuota, LimitRange (per garage-isolation.md spec)
     /// 7. Generate WireGuard keypair, create wireguard-config ConfigMap and wireguard-keys Secret
-    /// 8. Issue garage SVID from keybox (TODO: POST /auth/issue-garage-svid, create Secret)
+    /// 8. Issue garage SVID from keybox (POST /auth/issue-garage-svid, create garage-svid Secret)
     /// 9. If --with-postgres/--with-redis: create supporting services (done in pod env vars)
     /// 10. Create workspace PVC
     /// 11. Deploy dev container pod
@@ -540,6 +565,67 @@ impl GarageService {
         // TODO: Store wg_resources.public_key in database for client session routing
         // This will be done in a future PR when we integrate with wg_garages table
         let _ = wg_resources; // Suppress unused warning for now
+
+        // Step 8: Issue garage SVID from keybox per spec v1.3
+        // POST /auth/issue-garage-svid, create garage-svid Secret
+        if let Some(ref keybox) = self.keybox {
+            debug!(namespace = %namespace, "issuing garage SVID from keybox");
+            match keybox
+                .issue_garage_svid(&garage_id.to_string(), owner)
+                .await
+            {
+                Ok(svid_response) => {
+                    // Create garage-svid Secret with the issued SVID
+                    match self
+                        .k8s
+                        .create_garage_svid_secret(
+                            garage_id,
+                            &svid_response.token,
+                            &svid_response.spiffe_id,
+                            svid_response.expires_at,
+                        )
+                        .await
+                    {
+                        Ok(_svid_secret) => {
+                            info!(
+                                namespace = %namespace,
+                                spiffe_id = %svid_response.spiffe_id,
+                                expires_at = svid_response.expires_at,
+                                "garage SVID secret created"
+                            );
+                        }
+                        Err(e) => {
+                            // Cleanup namespace on SVID Secret creation failure
+                            warn!(
+                                namespace = %namespace,
+                                error = %e,
+                                "garage SVID Secret creation failed, cleaning up namespace"
+                            );
+                            if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
+                                warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
+                            }
+                            return Err(e.into());
+                        }
+                    }
+                }
+                Err(e) => {
+                    // Cleanup namespace on SVID issuance failure
+                    warn!(
+                        namespace = %namespace,
+                        error = %e,
+                        "garage SVID issuance failed, cleaning up namespace"
+                    );
+                    if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
+                        warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
+                    }
+                    return Err(e.into());
+                }
+            }
+        } else {
+            // Keybox not configured - skip SVID issuance
+            // This is valid for local development without keybox
+            debug!(namespace = %namespace, "keybox not configured, skipping SVID issuance");
+        }
 
         // Step 10: Create workspace PVC per spec v1.3
         debug!(namespace = %namespace, "creating workspace PVC");

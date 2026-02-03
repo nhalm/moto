@@ -32,9 +32,11 @@
 //! service.close("nick", &garage.name).await?;
 //! ```
 
+mod keybox;
 mod lifecycle;
 mod service;
 
+pub use keybox::{IssueGarageSvidResponse, KeyboxClient, KeyboxError};
 pub use lifecycle::{GarageLifecycle, LifecycleError};
 pub use service::{CreateGarageInput, ExtendTtlInput, GarageService, GarageServiceError};
 
