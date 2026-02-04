@@ -15,7 +15,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v1.4
+## moto-club.md v1.5
 
 **Status:** In Progress
 
@@ -59,7 +59,9 @@ HOW TO USE THIS FILE:
 - Fix: Call create_garage_postgres() and create_garage_redis() in garage creation flow (v1.4: service.rs now calls GaragePostgresOps.create_garage_postgres and GarageRedisOps.create_garage_redis when with_postgres/with_redis are true)
 
 **Remaining:**
-(none - moto-club.md v1.4 implementation complete)
+- /health/ready must check keybox /health/ready endpoint (v1.5: return degraded status if unreachable, add keybox field to response)
+- Store garage public_key in wg_garages table during creation (v1.5: step 7 - required for client session routing)
+- Add owner field to RegisteredDevice trait (v1.5: currently hardcoded as "unknown" in PostgresPeerStore)
 
 ---
 
@@ -245,7 +247,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## keybox.md v0.4
+## keybox.md v0.5
 
 **Status:** In Progress
 
@@ -271,6 +273,7 @@ HOW TO USE THIS FILE:
 - Health check endpoints per moto-bike.md spec (v0.4: /health/live, /health/ready, /health/startup on port 8081 via moto-keybox-server, health.rs module in moto-keybox)
 - Wire up moto-keybox-db PostgreSQL backend for secrets and audit logs (v0.4: secret_repo.rs, audit_repo.rs in moto-keybox-db; PgSecretRepository in moto-keybox/pg_repository.rs; PgAppState and pg_router in moto-keybox/pg_api.rs; server uses MOTO_KEYBOX_DATABASE_URL env var to enable PostgreSQL mode)
 - Fix bikes ABAC: enforce service field matching (v0.4: SvidClaims.service field added; bikes must have service claim to access service-scoped secrets; ABAC evaluate_service checks principal.service == resource.service)
+- Rename moto-keybox-server binary from moto-keybox to moto-keybox-server (v0.5: fixes cargo doc collision with moto-keybox library crate)
 
 **Remaining:**
 - Endpoint authorization matrix enforcement (future - spec v0.3: SVID tokens should be denied for admin endpoints)
@@ -319,13 +322,13 @@ HOW TO USE THIS FILE:
 
 ---
 
-## project-structure.md v1.2
+## project-structure.md v1.4
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - (see tracks-history.md for prior work)
 - Deprecate moto-garage crate and local mode: moto-cli garage commands now use MotoClubClient HTTP client instead of moto_garage::GarageClient, removed moto-garage dependency from moto-cli, added list_garages/create_garage/close_garage/extend_garage methods to MotoClubClient
 
 **Remaining:**
-(none - project-structure.md v1.2 implementation complete)
+- Remove moto-garage crate entirely (v1.4: delete crates/moto-garage/ directory, remove from Cargo.toml workspace members)

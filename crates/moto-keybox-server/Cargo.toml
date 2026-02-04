@@ -8,7 +8,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [[bin]]
-name = "moto-keybox"
+name = "moto-keybox-server"
 path = "src/main.rs"
 
 [dependencies]
