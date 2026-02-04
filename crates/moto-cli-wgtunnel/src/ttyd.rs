@@ -253,7 +253,7 @@ impl TtydClient {
                 msg = ws_stream.next() => {
                     match msg {
                         Some(Ok(Message::Binary(data))) => {
-                            if let Err(e) = self.handle_ttyd_message(&data).await {
+                            if let Err(e) = self.handle_ttyd_message(&data) {
                                 warn!(error = %e, "error handling ttyd message");
                             }
                         }
@@ -305,7 +305,8 @@ impl TtydClient {
     }
 
     /// Handle a message from ttyd.
-    async fn handle_ttyd_message(&self, data: &[u8]) -> Result<(), TtydError> {
+    #[allow(clippy::unused_self)]
+    fn handle_ttyd_message(&self, data: &[u8]) -> Result<(), TtydError> {
         if data.is_empty() {
             return Ok(());
         }

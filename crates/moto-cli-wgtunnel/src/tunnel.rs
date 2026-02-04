@@ -617,6 +617,7 @@ impl TunnelManager {
 
         let session_id = session.session_id.clone();
         sessions.insert(session_id.clone(), session);
+        drop(sessions);
 
         debug!(session_id = %session_id, "added tunnel session");
         Ok(())
@@ -654,6 +655,7 @@ impl TunnelManager {
             .ok_or_else(|| TunnelError::SessionNotFound(session_id.to_string()))?;
 
         session.set_status(status);
+        drop(sessions);
         Ok(())
     }
 
@@ -675,6 +677,7 @@ impl TunnelManager {
             .ok_or_else(|| TunnelError::SessionNotFound(session_id.to_string()))?;
 
         session.configure_wg_tunnel(&self.private_key)?;
+        drop(sessions);
         Ok(())
     }
 
@@ -697,6 +700,7 @@ impl TunnelManager {
             .ok_or_else(|| TunnelError::SessionNotFound(session_id.to_string()))?;
 
         session.configure_wg_tunnel_with_keepalive(&self.private_key, keepalive)?;
+        drop(sessions);
         Ok(())
     }
 
@@ -720,7 +724,9 @@ impl TunnelManager {
             .get_mut(session_id)
             .ok_or_else(|| TunnelError::SessionNotFound(session_id.to_string()))?;
 
-        session.initiate_handshake()
+        let result = session.initiate_handshake();
+        drop(sessions);
+        result
     }
 
     /// Remove a session by ID.
@@ -729,6 +735,7 @@ impl TunnelManager {
     pub async fn remove_session(&self, session_id: &str) -> Option<TunnelSession> {
         let mut sessions = self.sessions.write().await;
         let removed = sessions.remove(session_id);
+        drop(sessions);
 
         if removed.is_some() {
             debug!(session_id = %session_id, "removed tunnel session");
@@ -754,6 +761,7 @@ impl TunnelManager {
         let mut sessions = self.sessions.write().await;
         let count = sessions.len();
         sessions.clear();
+        drop(sessions);
 
         if count > 0 {
             info!(count, "closed all tunnel sessions");

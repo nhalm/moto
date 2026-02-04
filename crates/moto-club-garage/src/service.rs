@@ -486,6 +486,7 @@ impl GarageService {
     /// 9. If --with-postgres/--with-redis: create supporting service Deployments, Services, Secrets
     /// 10. Create workspace PVC
     /// 11. Deploy dev container pod (mounts all secrets/configmaps)
+    #[allow(clippy::too_many_lines)]
     async fn create_k8s_resources(
         &self,
         garage_id: &GarageId,

@@ -150,11 +150,11 @@ mod tests {
 
     #[test]
     fn issue_garage_svid_response_deserialize() {
-        let json = r#"{"token":"eyJ...","expires_at":1700003600,"spiffe_id":"spiffe://moto.local/garage/abc123"}"#;
+        let json = r#"{"token":"eyJ...","expires_at":1_700_003_600,"spiffe_id":"spiffe://moto.local/garage/abc123"}"#;
         let response: IssueGarageSvidResponse = serde_json::from_str(json).unwrap();
 
         assert_eq!(response.token, "eyJ...");
-        assert_eq!(response.expires_at, 1700003600);
+        assert_eq!(response.expires_at, 1_700_003_600);
         assert_eq!(response.spiffe_id, "spiffe://moto.local/garage/abc123");
     }
 

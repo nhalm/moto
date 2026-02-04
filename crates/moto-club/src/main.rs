@@ -169,6 +169,7 @@ async fn main() {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Parse configuration
     let config = Config::from_env()?;

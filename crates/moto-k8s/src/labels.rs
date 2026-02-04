@@ -112,9 +112,9 @@ mod tests {
             labels.get(Labels::GARAGE_NAME),
             Some(&"my-project".to_string())
         );
-        assert!(labels.get(Labels::OWNER).is_none());
-        assert!(labels.get(Labels::EXPIRES_AT).is_none());
-        assert!(labels.get(Labels::ENGINE).is_none());
+        assert!(!labels.contains_key(Labels::OWNER));
+        assert!(!labels.contains_key(Labels::EXPIRES_AT));
+        assert!(!labels.contains_key(Labels::ENGINE));
     }
 
     #[test]
@@ -150,6 +150,6 @@ mod tests {
         assert_eq!(labels.get(Labels::TYPE), Some(&"bike".to_string()));
         assert_eq!(labels.get(Labels::BIKE_ID), Some(&"def-456".to_string()));
         assert_eq!(labels.get(Labels::BIKE_NAME), Some(&"prod-app".to_string()));
-        assert!(labels.get(Labels::OWNER).is_none());
+        assert!(!labels.contains_key(Labels::OWNER));
     }
 }

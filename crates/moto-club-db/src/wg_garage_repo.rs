@@ -280,7 +280,6 @@ mod tests {
         assert_eq!(parts[0], "fd00:moto:1");
 
         // Host part should have 4 groups separated by colons
-        let host_parts: Vec<&str> = parts[1].split(':').collect();
-        assert_eq!(host_parts.len(), 4);
+        assert_eq!(parts[1].split(':').count(), 4);
     }
 }

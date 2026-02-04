@@ -361,9 +361,7 @@ async fn validate_garage_token(
     garage_id: &str,
 ) -> Result<(), (StatusCode, Json<ApiError>)> {
     // If no K8s client configured, skip validation (test/local dev mode)
-    let k8s_client = if let Some(client) = &state.k8s_client {
-        client
-    } else {
+    let Some(k8s_client) = &state.k8s_client else {
         tracing::debug!(garage_id = %garage_id, "K8s token validation skipped (no client configured)");
         return Ok(());
     };
@@ -933,12 +931,9 @@ async fn get_peer_version_from_db(
     garage_id: &str,
 ) -> Result<i32, (StatusCode, Json<ApiError>)> {
     // Try to parse as UUID for database lookup
-    let garage_uuid = match garage_id.parse::<Uuid>() {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            // For non-UUID garage IDs (in-memory testing), return 0
-            return Ok(0);
-        }
+    let Ok(garage_uuid) = garage_id.parse::<Uuid>() else {
+        // For non-UUID garage IDs (in-memory testing), return 0
+        return Ok(0);
     };
 
     // Query the database for peer_version
@@ -1970,10 +1965,10 @@ mod tests {
 
             // Default test state includes one region with derp.moto.dev
             assert!(regions.contains_key("1"));
-            let region1 = &regions["1"];
-            assert_eq!(region1["name"], "primary");
-            assert!(region1["nodes"].is_array());
-            assert_eq!(region1["nodes"][0]["host"], "derp.moto.dev");
+            let primary_region = &regions["1"];
+            assert_eq!(primary_region["name"], "primary");
+            assert!(primary_region["nodes"].is_array());
+            assert_eq!(primary_region["nodes"][0]["host"], "derp.moto.dev");
         }
 
         #[tokio::test]

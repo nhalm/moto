@@ -132,6 +132,7 @@ const fn is_not_found(e: &kube::Error) -> bool {
 mod tests {
     use super::*;
     use k8s_openapi::api::networking::v1::{NetworkPolicyEgressRule, NetworkPolicySpec};
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
     use kube::api::ObjectMeta;
 
     #[test]
@@ -150,7 +151,7 @@ mod tests {
                 ..Default::default()
             },
             spec: Some(NetworkPolicySpec {
-                pod_selector: Default::default(),
+                pod_selector: LabelSelector::default(),
                 policy_types: Some(vec!["Ingress".to_string(), "Egress".to_string()]),
                 ingress: Some(vec![]),
                 egress: Some(vec![NetworkPolicyEgressRule {

@@ -1047,6 +1047,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn build_pod_has_writable_volumes_per_spec() {
         let labels = Labels::for_garage("abc-123", "test", Some("alice"), None, None);
         let pod = build_dev_container_pod(
@@ -1235,33 +1236,37 @@ mod tests {
 
         // Check container security context
         let container = &spec.containers[0];
-        let sec = container
+        let container_sec = container
             .security_context
             .as_ref()
             .expect("container security_context should be set");
 
-        assert_eq!(sec.run_as_user, Some(0), "container should run as root");
-        assert_eq!(sec.run_as_group, Some(0));
         assert_eq!(
-            sec.allow_privilege_escalation,
+            container_sec.run_as_user,
+            Some(0),
+            "container should run as root"
+        );
+        assert_eq!(container_sec.run_as_group, Some(0));
+        assert_eq!(
+            container_sec.allow_privilege_escalation,
             Some(false),
             "privilege escalation should be disabled"
         );
         assert_eq!(
-            sec.read_only_root_filesystem,
+            container_sec.read_only_root_filesystem,
             Some(true),
             "root filesystem should be read-only"
         );
 
         // Check seccomp profile
-        let seccomp = sec
+        let seccomp = container_sec
             .seccomp_profile
             .as_ref()
             .expect("seccomp_profile should be set");
         assert_eq!(seccomp.type_, "RuntimeDefault");
 
         // Check capabilities
-        let caps = sec
+        let caps = container_sec
             .capabilities
             .as_ref()
             .expect("capabilities should be set");

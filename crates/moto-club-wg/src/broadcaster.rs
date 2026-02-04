@@ -127,13 +127,20 @@ impl PeerBroadcaster {
     ///
     /// Returns a receiver that will receive all peer add/remove events
     /// for the specified garage. Creates the channel if it doesn't exist.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     #[must_use]
     pub fn subscribe(&self, garage_id: &str) -> broadcast::Receiver<PeerEvent> {
-        let mut inner = self.inner.lock().unwrap();
-        let sender = inner
+        let sender = self
+            .inner
+            .lock()
+            .unwrap()
             .channels
             .entry(garage_id.to_string())
-            .or_insert_with(|| broadcast::channel(CHANNEL_CAPACITY).0);
+            .or_insert_with(|| broadcast::channel(CHANNEL_CAPACITY).0)
+            .clone();
         sender.subscribe()
     }
 
@@ -168,6 +175,10 @@ impl PeerBroadcaster {
     ///
     /// Called when a garage disconnects. Any remaining subscribers
     /// will receive an error on their next recv.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn remove_garage(&self, garage_id: &str) {
         let mut inner = self.inner.lock().unwrap();
         inner.channels.remove(garage_id);
@@ -176,6 +187,10 @@ impl PeerBroadcaster {
     /// Get the number of active subscribers for a garage.
     ///
     /// Returns 0 if the garage has no channel.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     #[must_use]
     pub fn subscriber_count(&self, garage_id: &str) -> usize {
         let inner = self.inner.lock().unwrap();

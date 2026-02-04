@@ -160,8 +160,7 @@ fn get_linux_target() -> Result<String> {
 
     let arch = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let linux_arch = match arch.as_str() {
-        "arm64" => "aarch64",
-        "aarch64" => "aarch64",
+        "arm64" | "aarch64" => "aarch64",
         "x86_64" => "x86_64",
         other => {
             return Err(CliError::general(format!(
@@ -401,6 +400,7 @@ fn build_bike_image(bike_name: &str, tag: &str, quiet: bool) -> Result<()> {
 }
 
 /// Run the bike command
+#[allow(clippy::too_many_lines)]
 pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
         BikeAction::Build { tag, push } => {
@@ -626,7 +626,7 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
 
             let log_options = PodLogOptions {
                 tail_lines: Some(tail),
-                since_seconds: since_seconds.map(|s| s as i64),
+                since_seconds: since_seconds.map(|s| i64::try_from(s).unwrap_or(i64::MAX)),
                 follow,
             };
 
@@ -882,7 +882,7 @@ mod tests {
     fn test_format_duration_days() {
         assert_eq!(format_duration(86400), "1d");
         assert_eq!(format_duration(90000), "1d1h");
-        assert_eq!(format_duration(172800), "2d");
+        assert_eq!(format_duration(172_800), "2d");
     }
 
     #[test]
@@ -918,7 +918,7 @@ mod tests {
                 status: "running".to_string(),
                 replicas_ready: 2,
                 replicas_desired: 2,
-                age_seconds: 259200,
+                age_seconds: 259_200,
                 image: "api-service:abc123f".to_string(),
             }],
         };
@@ -930,7 +930,7 @@ mod tests {
         assert_eq!(parsed["bikes"][0]["status"], "running");
         assert_eq!(parsed["bikes"][0]["replicas_ready"], 2);
         assert_eq!(parsed["bikes"][0]["replicas_desired"], 2);
-        assert_eq!(parsed["bikes"][0]["age_seconds"], 259200);
+        assert_eq!(parsed["bikes"][0]["age_seconds"], 259_200);
         assert_eq!(parsed["bikes"][0]["image"], "api-service:abc123f");
     }
 }

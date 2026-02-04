@@ -58,16 +58,16 @@ const UTUN_CONTROL_NAME: &[u8] = b"com.apple.net.utun_control\0";
 const MAX_KCTL_NAME: usize = 96;
 
 /// ioctl request to get control ID.
-const CTLIOCGINFO: libc::c_ulong = 0xc0644e03;
+const CTLIOCGINFO: libc::c_ulong = 0xc064_4e03;
 
 /// ioctl request to set interface flags.
-const SIOCSIFFLAGS: libc::c_ulong = 0x80206910;
+const SIOCSIFFLAGS: libc::c_ulong = 0x8020_6910;
 
 /// ioctl request to get interface flags.
-const SIOCGIFFLAGS: libc::c_ulong = 0xc0206911;
+const SIOCGIFFLAGS: libc::c_ulong = 0xc020_6911;
 
 /// ioctl request to set MTU.
-const SIOCSIFMTU: libc::c_ulong = 0x80206934;
+const SIOCSIFMTU: libc::c_ulong = 0x8020_6934;
 
 /// Interface flag: UP.
 const IFF_UP: i16 = 0x1;

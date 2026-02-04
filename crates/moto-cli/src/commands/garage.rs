@@ -203,6 +203,7 @@ fn client_error_to_cli_error(e: ClientError) -> CliError {
 }
 
 /// Run the garage command
+#[allow(clippy::too_many_lines)]
 pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
         GarageAction::List => {
@@ -265,15 +266,18 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
 
                     let ttl = chrono::DateTime::parse_from_rfc3339(&g.expires_at)
                         .ok()
-                        .map(|exp| {
-                            let remaining = (exp.with_timezone(&chrono::Utc) - now).num_seconds();
-                            if remaining <= 0 {
-                                "expired".to_string()
-                            } else {
-                                format_duration(remaining)
-                            }
-                        })
-                        .unwrap_or_else(|| "-".to_string());
+                        .map_or_else(
+                            || "-".to_string(),
+                            |exp| {
+                                let remaining =
+                                    (exp.with_timezone(&chrono::Utc) - now).num_seconds();
+                                if remaining <= 0 {
+                                    "expired".to_string()
+                                } else {
+                                    format_duration(remaining)
+                                }
+                            },
+                        );
 
                     let branch = if g.branch.is_empty() { "-" } else { &g.branch };
                     println!(
@@ -672,8 +676,8 @@ fn parse_duration(s: &str) -> Result<i64> {
 
 /// Parse a TTL duration string with validation (max 48h).
 fn parse_ttl(s: &str) -> Result<i64> {
-    let seconds = parse_duration(s)?;
     const MAX_TTL_SECONDS: i64 = 48 * 3600; // 48 hours
+    let seconds = parse_duration(s)?;
 
     if seconds <= 0 {
         return Err(CliError::invalid_input("TTL must be positive"));
@@ -717,7 +721,7 @@ mod tests {
     fn test_format_duration_days() {
         assert_eq!(format_duration(86400), "1d");
         assert_eq!(format_duration(90000), "1d1h");
-        assert_eq!(format_duration(172800), "2d");
+        assert_eq!(format_duration(172_800), "2d");
     }
 
     #[test]

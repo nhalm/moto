@@ -457,14 +457,11 @@ impl VirtualTun {
             return Err(TunError::Closed);
         }
 
-        if let Some(packet) = self.outbound.pop_front() {
+        self.outbound.pop_front().map_or(Ok(0), |packet| {
             let len = packet.len().min(buf.len());
             buf[..len].copy_from_slice(&packet[..len]);
             Ok(len)
-        } else {
-            // Non-blocking: return 0 when no packets available
-            Ok(0)
-        }
+        })
     }
 
     /// Write a packet to the virtual TUN (outbound queue).

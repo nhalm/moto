@@ -592,14 +592,14 @@ mod tests {
     fn keybox_url_parsing() {
         // Test URL construction for keybox health endpoint
         let keybox_url = "http://keybox:8080";
-        let health_url = match url::Url::parse(keybox_url) {
-            Ok(mut url) => {
+        let health_url = url::Url::parse(keybox_url).map_or_else(
+            |_| format!("{keybox_url}:8081/health/ready"),
+            |mut url| {
                 url.set_port(Some(8081)).ok();
                 url.set_path("/health/ready");
                 url.to_string()
-            }
-            Err(_) => format!("{keybox_url}:8081/health/ready"),
-        };
+            },
+        );
 
         assert_eq!(health_url, "http://keybox:8081/health/ready");
     }
@@ -608,14 +608,14 @@ mod tests {
     fn keybox_url_parsing_with_port() {
         // Test URL construction when keybox URL already has a port
         let keybox_url = "http://keybox:8080";
-        let health_url = match url::Url::parse(keybox_url) {
-            Ok(mut url) => {
+        let health_url = url::Url::parse(keybox_url).map_or_else(
+            |_| format!("{keybox_url}:8081/health/ready"),
+            |mut url| {
                 url.set_port(Some(8081)).ok();
                 url.set_path("/health/ready");
                 url.to_string()
-            }
-            Err(_) => format!("{keybox_url}:8081/health/ready"),
-        };
+            },
+        );
 
         // The port 8080 should be replaced with 8081
         assert_eq!(health_url, "http://keybox:8081/health/ready");

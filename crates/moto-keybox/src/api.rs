@@ -1086,12 +1086,12 @@ mod tests {
     fn token_response_serialize() {
         let resp = TokenResponse {
             token: "eyJ...".to_string(),
-            expires_at: 1700000000,
+            expires_at: 1_700_000_000,
         };
         let json = serde_json::to_string(&resp).unwrap();
 
         assert!(json.contains(r#""token":"eyJ...""#));
-        assert!(json.contains(r#""expires_at":1700000000"#));
+        assert!(json.contains(r#""expires_at":1_700_000_000"#));
     }
 
     #[test]
@@ -1241,13 +1241,13 @@ mod tests {
     fn issue_garage_svid_response_serialize() {
         let resp = IssueGarageSvidResponse {
             token: "eyJ...".to_string(),
-            expires_at: 1700003600,
+            expires_at: 1_700_003_600,
             spiffe_id: "spiffe://moto.local/garage/abc123".to_string(),
         };
         let json = serde_json::to_string(&resp).unwrap();
 
         assert!(json.contains(r#""token":"eyJ...""#));
-        assert!(json.contains(r#""expires_at":1700003600"#));
+        assert!(json.contains(r#""expires_at":1_700_003_600"#));
         assert!(json.contains(r#""spiffe_id":"spiffe://moto.local/garage/abc123""#));
     }
 

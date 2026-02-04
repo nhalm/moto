@@ -88,7 +88,7 @@ struct RegistryStatusJson {
 pub async fn run(cmd: ClusterCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
         ClusterAction::Init { force } => init_cluster(flags, force).await,
-        ClusterAction::Status => cluster_status(flags).await,
+        ClusterAction::Status => cluster_status(flags),
     }
 }
 
@@ -392,7 +392,7 @@ pub enum ClusterStatus {
 }
 
 impl ClusterStatus {
-    const fn as_str(&self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::Running => "running",
             Self::Stopped => "stopped",
@@ -434,7 +434,7 @@ fn get_cluster_status() -> Result<ClusterStatus> {
 }
 
 /// Show cluster status
-async fn cluster_status(flags: &GlobalFlags) -> Result<()> {
+fn cluster_status(flags: &GlobalFlags) -> Result<()> {
     check_k3d_installed()?;
 
     let status = get_cluster_status()?;

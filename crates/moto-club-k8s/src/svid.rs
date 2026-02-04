@@ -134,7 +134,7 @@ mod tests {
             "moto-garage-abc12345",
             "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9...",
             "spiffe://moto.local/garage/abc123",
-            1700003600,
+            1_700_003_600,
         );
 
         // Check metadata
@@ -163,18 +163,18 @@ mod tests {
             data.get("spiffe_id"),
             Some(&"spiffe://moto.local/garage/abc123".to_string())
         );
-        assert_eq!(data.get("expires_at"), Some(&"1700003600".to_string()));
+        assert_eq!(data.get("expires_at"), Some(&"1_700_003_600".to_string()));
     }
 
     #[test]
     fn svid_secret_result_contains_correct_fields() {
         let result = SvidSecret {
             spiffe_id: "spiffe://moto.local/garage/abc123".to_string(),
-            expires_at: 1700003600,
+            expires_at: 1_700_003_600,
         };
 
         assert_eq!(result.spiffe_id, "spiffe://moto.local/garage/abc123");
-        assert_eq!(result.expires_at, 1700003600);
+        assert_eq!(result.expires_at, 1_700_003_600);
     }
 
     #[test]
