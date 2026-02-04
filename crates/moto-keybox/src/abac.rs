@@ -177,7 +177,7 @@ impl PolicyEngine {
     /// Evaluates access to service-scoped secrets.
     ///
     /// Rules:
-    /// - Bikes can read secrets belonging to their service
+    /// - Bikes can read secrets belonging to their service (service claim must match)
     /// - Services can access their own service secrets
     fn evaluate_service(
         &self,
@@ -189,16 +189,37 @@ impl PolicyEngine {
 
         match claims.principal_type {
             PrincipalType::Bike => {
-                // Bikes can read secrets of the service they belong to
-                // The service is determined by the secret's service field
-                // For MVP, bikes can read any service secret (they're trusted)
-                if action == Action::Read {
+                // Bikes can only read service secrets (not write/delete)
+                if action != Action::Read {
+                    return Err(Error::AccessDenied {
+                        message: format!(
+                            "bike '{}' can only read service secrets, not {}",
+                            claims.principal_id, action
+                        ),
+                    });
+                }
+
+                // Bikes must have a service claim to access service-scoped secrets
+                let bike_service = match &claims.service {
+                    Some(s) => s.as_str(),
+                    None => {
+                        return Err(Error::AccessDenied {
+                            message: format!(
+                                "bike '{}' has no service claim and cannot access service-scoped secrets",
+                                claims.principal_id
+                            ),
+                        });
+                    }
+                };
+
+                // Bikes can only access secrets belonging to their own service
+                if bike_service == secret_service {
                     Ok(())
                 } else {
                     Err(Error::AccessDenied {
                         message: format!(
-                            "bike '{}' can only read service secrets, not {}",
-                            claims.principal_id, action
+                            "bike '{}' (service '{}') cannot access service '{}' secrets",
+                            claims.principal_id, bike_service, secret_service
                         ),
                     })
                 }
@@ -352,6 +373,10 @@ mod tests {
         SvidClaims::new(&SpiffeId::bike(id), DEFAULT_SVID_TTL_SECS)
     }
 
+    fn bike_claims_with_service(id: &str, service: &str) -> SvidClaims {
+        SvidClaims::new(&SpiffeId::bike(id), DEFAULT_SVID_TTL_SECS).with_service(service)
+    }
+
     fn service_claims(id: &str) -> SvidClaims {
         SvidClaims::new(&SpiffeId::service(id), DEFAULT_SVID_TTL_SECS)
     }
@@ -425,18 +450,38 @@ mod tests {
     }
 
     #[test]
-    fn bike_can_read_service_secrets() {
+    fn bike_can_read_own_service_secrets() {
         let engine = PolicyEngine::new();
-        let claims = bike_claims("bike-abc");
+        let claims = bike_claims_with_service("bike-abc", "tokenization");
         let secret = SecretMetadata::service("tokenization", "db/password");
 
         engine.can_read(&claims, &secret).unwrap();
     }
 
     #[test]
+    fn bike_cannot_read_other_service_secrets() {
+        let engine = PolicyEngine::new();
+        let claims = bike_claims_with_service("bike-abc", "tokenization");
+        let secret = SecretMetadata::service("other-service", "db/password");
+
+        let err = engine.can_read(&claims, &secret).unwrap_err();
+        assert!(matches!(err, Error::AccessDenied { .. }));
+    }
+
+    #[test]
+    fn bike_without_service_claim_cannot_access_service_secrets() {
+        let engine = PolicyEngine::new();
+        let claims = bike_claims("bike-abc"); // No service claim
+        let secret = SecretMetadata::service("tokenization", "db/password");
+
+        let err = engine.can_read(&claims, &secret).unwrap_err();
+        assert!(matches!(err, Error::AccessDenied { .. }));
+    }
+
+    #[test]
     fn bike_cannot_write_service_secrets() {
         let engine = PolicyEngine::new();
-        let claims = bike_claims("bike-abc");
+        let claims = bike_claims_with_service("bike-abc", "tokenization");
         let secret = SecretMetadata::service("tokenization", "db/password");
 
         let err = engine

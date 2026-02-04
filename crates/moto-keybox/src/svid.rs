@@ -34,6 +34,10 @@ pub struct SvidClaims {
     pub principal_type: PrincipalType,
     /// Principal ID (garage-id, bike-id, or service name).
     pub principal_id: String,
+    /// Service name for bikes (required for service-scoped secret access).
+    /// Determined from the `moto.dev/service` label on the bike pod.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
     /// Pod UID for binding (prevents replay if pod dies).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pod_uid: Option<String>,
@@ -61,10 +65,20 @@ impl SvidClaims {
             jti: Uuid::now_v7().to_string(),
             principal_type: spiffe_id.principal_type,
             principal_id: spiffe_id.id.clone(),
+            service: None,
             pod_uid: None,
             pod_namespace: None,
             pod_name: None,
         }
+    }
+
+    /// Sets the service name for bikes.
+    ///
+    /// Required for bikes to access service-scoped secrets.
+    #[must_use]
+    pub fn with_service(mut self, service: impl Into<String>) -> Self {
+        self.service = Some(service.into());
+        self
     }
 
     /// Sets the pod UID for binding.

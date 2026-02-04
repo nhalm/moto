@@ -626,6 +626,10 @@ mod tests {
         SvidClaims::new(&SpiffeId::bike(id), DEFAULT_SVID_TTL_SECS)
     }
 
+    fn bike_claims_with_service(id: &str, service: &str) -> SvidClaims {
+        SvidClaims::new(&SpiffeId::bike(id), DEFAULT_SVID_TTL_SECS).with_service(service)
+    }
+
     fn service_claims(id: &str) -> SvidClaims {
         SvidClaims::new(&SpiffeId::service(id), DEFAULT_SVID_TTL_SECS)
     }
@@ -812,10 +816,11 @@ mod tests {
     }
 
     #[test]
-    fn bike_can_read_service_secrets() {
+    fn bike_can_read_own_service_secrets() {
         let mut repo = test_repo();
         let admin = admin_claims();
-        let bike = bike_claims("bike-123");
+        // Bike belongs to "tokenization" service
+        let bike = bike_claims_with_service("bike-123", "tokenization");
 
         repo.create_service(&admin, "tokenization", "db/password", b"dbpass")
             .unwrap();
@@ -827,10 +832,43 @@ mod tests {
     }
 
     #[test]
+    fn bike_cannot_read_other_service_secrets() {
+        let mut repo = test_repo();
+        let admin = admin_claims();
+        // Bike belongs to "tokenization" service
+        let bike = bike_claims_with_service("bike-123", "tokenization");
+
+        repo.create_service(&admin, "other-service", "db/password", b"dbpass")
+            .unwrap();
+
+        let err = repo
+            .get_service(&bike, "other-service", "db/password")
+            .unwrap_err();
+        assert!(matches!(err, Error::AccessDenied { .. }));
+    }
+
+    #[test]
+    fn bike_without_service_claim_cannot_access_service_secrets() {
+        let mut repo = test_repo();
+        let admin = admin_claims();
+        // Bike without service claim
+        let bike = bike_claims("bike-123");
+
+        repo.create_service(&admin, "tokenization", "db/password", b"dbpass")
+            .unwrap();
+
+        let err = repo
+            .get_service(&bike, "tokenization", "db/password")
+            .unwrap_err();
+        assert!(matches!(err, Error::AccessDenied { .. }));
+    }
+
+    #[test]
     fn bike_cannot_write_service_secrets() {
         let mut repo = test_repo();
         let admin = admin_claims();
-        let bike = bike_claims("bike-123");
+        // Even bikes with matching service cannot write
+        let bike = bike_claims_with_service("bike-123", "tokenization");
 
         repo.create_service(&admin, "tokenization", "db/password", b"dbpass")
             .unwrap();
