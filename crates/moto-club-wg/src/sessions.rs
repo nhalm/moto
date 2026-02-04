@@ -49,6 +49,7 @@
 //! let device_key = WgPrivateKey::generate();
 //! let device = registry.register_device(DeviceRegistration {
 //!     public_key: device_key.public_key(),
+//!     owner: "testuser".to_string(),
 //!     device_name: Some("laptop".to_string()),
 //! }).await.unwrap();
 //!
@@ -564,6 +565,7 @@ mod tests {
         let device = registry
             .register_device(DeviceRegistration {
                 public_key: device_key.clone(),
+                owner: "testuser".to_string(),
                 device_name: None,
             })
             .await
@@ -607,6 +609,7 @@ mod tests {
         let device = registry
             .register_device(DeviceRegistration {
                 public_key: device_key.clone(),
+                owner: "testuser".to_string(),
                 device_name: None,
             })
             .await
@@ -649,6 +652,7 @@ mod tests {
         let device = registry
             .register_device(DeviceRegistration {
                 public_key: device_key.clone(),
+                owner: "testuser".to_string(),
                 device_name: None,
             })
             .await
@@ -695,6 +699,7 @@ mod tests {
         let device = registry
             .register_device(DeviceRegistration {
                 public_key: device_key.clone(),
+                owner: "testuser".to_string(),
                 device_name: None,
             })
             .await
@@ -742,6 +747,7 @@ mod tests {
         let device = registry
             .register_device(DeviceRegistration {
                 public_key: device_key.clone(),
+                owner: "testuser".to_string(),
                 device_name: None,
             })
             .await
@@ -795,6 +801,7 @@ mod tests {
             let device = registry
                 .register_device(DeviceRegistration {
                     public_key: device_key.clone(),
+                    owner: "testuser".to_string(),
                     device_name: None,
                 })
                 .await
@@ -837,6 +844,7 @@ mod tests {
             let device = registry
                 .register_device(DeviceRegistration {
                     public_key: device_key.clone(),
+                    owner: "testuser".to_string(),
                     device_name: None,
                 })
                 .await
@@ -902,6 +910,7 @@ mod tests {
         let device = registry
             .register_device(DeviceRegistration {
                 public_key: device_key.clone(),
+                owner: "testuser".to_string(),
                 device_name: None,
             })
             .await

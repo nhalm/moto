@@ -58,6 +58,7 @@ impl PeerStore for PostgresPeerStore {
 
                 Ok(Some(RegisteredDevice {
                     public_key,
+                    owner: device.owner,
                     overlay_ip,
                     device_name: device.device_name,
                 }))
@@ -71,9 +72,7 @@ impl PeerStore for PostgresPeerStore {
         let pool = self.pool.clone();
         let input = wg_device_repo::CreateWgDevice {
             public_key: device.public_key.to_base64(),
-            // Note: We don't have owner info in RegisteredDevice, so we use a placeholder.
-            // In practice, the API layer should handle this before calling the trait.
-            owner: "unknown".to_string(),
+            owner: device.owner,
             device_name: device.device_name,
             assigned_ip: device.overlay_ip.to_string(),
         };

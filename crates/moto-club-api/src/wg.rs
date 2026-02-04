@@ -445,11 +445,12 @@ async fn register_device(
     headers: HeaderMap,
     Json(req): Json<RegisterDeviceRequest>,
 ) -> impl IntoResponse {
-    let _owner = extract_owner(&headers)?;
+    let owner = extract_owner(&headers)?;
 
     // Public key IS the device identity - no separate device_id needed
     let registration = DeviceRegistration {
         public_key: req.public_key,
+        owner,
         device_name: req.device_name,
     };
 
@@ -1648,6 +1649,7 @@ mod tests {
             peer_registry
                 .register_device(moto_club_wg::DeviceRegistration {
                     public_key: device_key.clone(),
+                    owner: "testuser".to_string(),
                     device_name: Some("test-device".to_string()),
                 })
                 .await
@@ -1686,6 +1688,7 @@ mod tests {
             peer_registry
                 .register_device(moto_club_wg::DeviceRegistration {
                     public_key: device_key.clone(),
+                    owner: "testuser".to_string(),
                     device_name: Some("test-device".to_string()),
                 })
                 .await
@@ -1870,6 +1873,7 @@ mod tests {
             peer_registry
                 .register_device(moto_club_wg::DeviceRegistration {
                     public_key: device_key.clone(),
+                    owner: "testuser".to_string(),
                     device_name: None,
                 })
                 .await

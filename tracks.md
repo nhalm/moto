@@ -59,9 +59,10 @@ HOW TO USE THIS FILE:
 - Fix: Call create_garage_postgres() and create_garage_redis() in garage creation flow (v1.4: service.rs now calls GaragePostgresOps.create_garage_postgres and GarageRedisOps.create_garage_redis when with_postgres/with_redis are true)
 - /health/ready and /health keybox integration (v1.5: checks keybox /health/ready on port 8081, returns degraded status if unreachable, adds keybox field to response; MOTO_CLUB_KEYBOX_URL env var for config; AppState.keybox_url field)
 - Store garage public_key in wg_garages table during creation (v1.5: step 7 - service.rs calls wg_garage_repo::register after creating WireGuard resources, endpoints empty initially)
+- Add owner field to RegisteredDevice and DeviceRegistration structs (v1.5: moto-club-wg peers.rs adds owner field, PostgresPeerStore now uses device.owner instead of hardcoded "unknown")
 
 **Remaining:**
-- Add owner field to RegisteredDevice trait (v1.5: currently hardcoded as "unknown" in PostgresPeerStore)
+(none - moto-club.md v1.5 implementation complete)
 
 ---
 

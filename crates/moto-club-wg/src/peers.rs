@@ -42,6 +42,7 @@
 //!
 //! let registration = DeviceRegistration {
 //!     public_key: public_key.clone(),
+//!     owner: "testuser".to_string(),
 //!     device_name: Some("macbook-pro".to_string()),
 //! };
 //!
@@ -90,6 +91,9 @@ pub struct DeviceRegistration {
     /// Device's `WireGuard` public key (IS the device identity).
     pub public_key: WgPublicKey,
 
+    /// Owner of the device (from Bearer token).
+    pub owner: String,
+
     /// Optional human-readable device name (e.g., "macbook-pro").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device_name: Option<String>,
@@ -102,6 +106,9 @@ pub struct DeviceRegistration {
 pub struct RegisteredDevice {
     /// Device's `WireGuard` public key (IS the device identity).
     pub public_key: WgPublicKey,
+
+    /// Owner of the device (from Bearer token).
+    pub owner: String,
 
     /// Assigned overlay IP address.
     pub overlay_ip: OverlayIp,
@@ -231,6 +238,7 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
 
         let device = RegisteredDevice {
             public_key: req.public_key,
+            owner: req.owner,
             overlay_ip,
             device_name: req.device_name,
         };
@@ -398,12 +406,14 @@ mod tests {
 
         let registration = DeviceRegistration {
             public_key: public_key.clone(),
+            owner: "testuser".to_string(),
             device_name: Some("test-device".to_string()),
         };
 
         let device = registry.register_device(registration).await.unwrap();
 
         assert_eq!(device.public_key, public_key);
+        assert_eq!(device.owner, "testuser");
         assert!(device.overlay_ip.is_client());
         assert_eq!(device.device_name, Some("test-device".to_string()));
     }
@@ -415,6 +425,7 @@ mod tests {
 
         let registration = DeviceRegistration {
             public_key: public_key.clone(),
+            owner: "testuser".to_string(),
             device_name: None,
         };
 
@@ -439,6 +450,7 @@ mod tests {
         // Register with first key
         let registration1 = DeviceRegistration {
             public_key: key1.clone(),
+            owner: "testuser".to_string(),
             device_name: None,
         };
         let device1 = registry.register_device(registration1).await.unwrap();
@@ -446,6 +458,7 @@ mod tests {
         // Register with new key (this is a NEW device)
         let registration2 = DeviceRegistration {
             public_key: key2.clone(),
+            owner: "testuser".to_string(),
             device_name: None,
         };
         let device2 = registry.register_device(registration2).await.unwrap();
@@ -466,6 +479,7 @@ mod tests {
         // Register
         let registration = DeviceRegistration {
             public_key: public_key.clone(),
+            owner: "testuser".to_string(),
             device_name: None,
         };
         registry.register_device(registration).await.unwrap();
@@ -591,6 +605,7 @@ mod tests {
     fn device_registration_serde() {
         let registration = DeviceRegistration {
             public_key: generate_public_key(),
+            owner: "testuser".to_string(),
             device_name: Some("test".to_string()),
         };
 
@@ -598,6 +613,7 @@ mod tests {
         let parsed: DeviceRegistration = serde_json::from_str(&json).unwrap();
 
         assert_eq!(registration.public_key, parsed.public_key);
+        assert_eq!(registration.owner, parsed.owner);
         assert_eq!(registration.device_name, parsed.device_name);
     }
 

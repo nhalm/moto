@@ -52,6 +52,7 @@
 //!
 //! let registration = DeviceRegistration {
 //!     public_key: private_key.public_key(),
+//!     owner: "myuser".to_string(),
 //!     device_name: Some("my-laptop".to_string()),
 //! };
 //!
