@@ -269,7 +269,7 @@ async fn info_handler(State(state): State<AppState>) -> impl IntoResponse {
         api_version: "v1",
         git_sha: option_env!("GIT_SHA"),
         features: InfoFeatures {
-            websocket: false, // WebSocket streaming deferred to future version
+            websocket: true, // WebSocket peer streaming implemented (WS /internal/wg/garages/{id}/peers)
             derp_regions,
         },
     };
@@ -364,7 +364,7 @@ mod tests {
             api_version: "v1",
             git_sha: Some("abc1234"),
             features: InfoFeatures {
-                websocket: false,
+                websocket: true,
                 derp_regions: 1,
             },
         };
@@ -374,7 +374,7 @@ mod tests {
         assert!(json.contains(r#""version":"0.1.0""#));
         assert!(json.contains(r#""api_version":"v1""#));
         assert!(json.contains(r#""git_sha":"abc1234""#));
-        assert!(json.contains(r#""websocket":false"#));
+        assert!(json.contains(r#""websocket":true"#));
         assert!(json.contains(r#""derp_regions":1"#));
     }
 
@@ -386,7 +386,7 @@ mod tests {
             api_version: "v1",
             git_sha: None,
             features: InfoFeatures {
-                websocket: false,
+                websocket: true,
                 derp_regions: 0,
             },
         };

@@ -13,7 +13,8 @@ use moto_club_db::{DbError, DbPool, Garage, GarageStatus, TerminationReason, gar
 use moto_club_k8s::{
     DEV_CONTAINER_POD_NAME, GarageK8s, GarageLimitRangeOps, GarageNamespaceInput,
     GarageNamespaceOps, GarageNetworkPolicyOps, GaragePodInput, GaragePodOps, GaragePodStatus,
-    GarageResourceQuotaOps, GarageSvidOps, GarageWireGuardOps, GarageWorkspacePvcOps,
+    GaragePostgresOps, GarageRedisOps, GarageResourceQuotaOps, GarageSvidOps, GarageWireGuardOps,
+    GarageWorkspacePvcOps,
 };
 use moto_club_types::GarageId;
 
@@ -473,16 +474,16 @@ impl GarageService {
 
     /// Creates K8s resources for a garage.
     ///
-    /// # Flow (per spec v1.3 lines 786-803)
+    /// # Flow (per spec v1.4 lines 797-817)
     ///
     /// 4. Create K8s namespace: moto-garage-{id}
     /// 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
     /// 6. Apply NetworkPolicy, ResourceQuota, LimitRange (per garage-isolation.md spec)
     /// 7. Generate WireGuard keypair, create wireguard-config ConfigMap and wireguard-keys Secret
     /// 8. Issue garage SVID from keybox (POST /auth/issue-garage-svid, create garage-svid Secret)
-    /// 9. If --with-postgres/--with-redis: create supporting services (done in pod env vars)
+    /// 9. If --with-postgres/--with-redis: create supporting service Deployments, Services, Secrets
     /// 10. Create workspace PVC
-    /// 11. Deploy dev container pod
+    /// 11. Deploy dev container pod (mounts all secrets/configmaps)
     async fn create_k8s_resources(
         &self,
         garage_id: &GarageId,
@@ -627,7 +628,32 @@ impl GarageService {
             debug!(namespace = %namespace, "keybox not configured, skipping SVID issuance");
         }
 
-        // Step 10: Create workspace PVC per spec v1.3
+        // Step 9: If --with-postgres/--with-redis: create supporting services per spec v1.4
+        if input.with_postgres {
+            debug!(namespace = %namespace, "creating PostgreSQL supporting service");
+            if let Err(e) = self.k8s.create_garage_postgres(garage_id).await {
+                warn!(namespace = %namespace, error = %e, "PostgreSQL creation failed, cleaning up namespace");
+                if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
+                    warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
+                }
+                return Err(e.into());
+            }
+            info!(namespace = %namespace, "PostgreSQL supporting service created");
+        }
+
+        if input.with_redis {
+            debug!(namespace = %namespace, "creating Redis supporting service");
+            if let Err(e) = self.k8s.create_garage_redis(garage_id).await {
+                warn!(namespace = %namespace, error = %e, "Redis creation failed, cleaning up namespace");
+                if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
+                    warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
+                }
+                return Err(e.into());
+            }
+            info!(namespace = %namespace, "Redis supporting service created");
+        }
+
+        // Step 10: Create workspace PVC per spec v1.4
         debug!(namespace = %namespace, "creating workspace PVC");
         if let Err(e) = self.k8s.create_workspace_pvc(garage_id, name, owner).await {
             // Cleanup namespace on PVC creation failure

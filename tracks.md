@@ -15,7 +15,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v1.3
+## moto-club.md v1.4
 
 **Status:** In Progress
 
@@ -55,9 +55,11 @@ HOW TO USE THIS FILE:
 - Create workspace PVC in garage create flow (spec v1.3 step 10: service.rs calls GarageWorkspacePvcOps.create_workspace_pvc before deploying pod)
 - WireGuard keypair generation in garage create flow (spec v1.3 step 7: create wireguard-config ConfigMap and wireguard-keys Secret; GarageWireGuardOps trait, WireGuardResources struct, service.rs integration)
 - Issue garage SVID from keybox in garage create flow (spec v1.3 step 8: moto-club-garage KeyboxClient, moto-club-k8s GarageSvidOps trait, service.rs integration with optional KeyboxClient)
+- Fix: GET /api/v1/info features.websocket returns true (v1.4: WS /internal/wg/garages/{id}/peers implemented)
+- Fix: Call create_garage_postgres() and create_garage_redis() in garage creation flow (v1.4: service.rs now calls GaragePostgresOps.create_garage_postgres and GarageRedisOps.create_garage_redis when with_postgres/with_redis are true)
 
 **Remaining:**
-(none - moto-club.md v1.3 implementation complete)
+(none - moto-club.md v1.4 implementation complete)
 
 ---
 
