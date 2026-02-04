@@ -20,7 +20,7 @@ pub enum ColorMode {
 }
 
 impl ColorMode {
-    /// Computes the effective color mode, respecting MOTO_NO_COLOR env var.
+    /// Computes the effective color mode, respecting `MOTO_NO_COLOR` env var.
     ///
     /// Priority (highest to lowest):
     /// 1. `MOTO_NO_COLOR` env var (if set, always returns `Never`)
@@ -35,6 +35,7 @@ impl ColorMode {
 
     /// Returns true if colors should be enabled, considering terminal capabilities.
     #[must_use]
+    #[allow(dead_code)]
     pub fn should_colorize(self) -> bool {
         match self {
             Self::Always => true,
@@ -107,6 +108,7 @@ impl Config {
     /// # Errors
     ///
     /// Returns an error if the file cannot be read or parsed.
+    #[allow(dead_code)]
     pub fn load_from(path: &std::path::Path) -> Result<Self, ConfigError> {
         let contents = std::fs::read_to_string(path).map_err(|e| ConfigError::Read {
             path: path.to_path_buf(),
@@ -121,6 +123,7 @@ impl Config {
 }
 
 /// Configuration errors.
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     /// Failed to read config file

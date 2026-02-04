@@ -65,10 +65,13 @@ mod tests {
 
     #[test]
     fn reexports_work() {
-        // Verify re-exports are accessible
-        let _scope = Scope::Global;
-        let _principal = PrincipalType::Garage;
+        // Verify re-exports are accessible via type construction
+        let scope: Scope = Scope::Global;
+        let principal: PrincipalType = PrincipalType::Garage;
         let spiffe = SpiffeId::garage("test");
+        // Use values to verify they're valid
+        assert!(matches!(scope, Scope::Global));
+        assert!(matches!(principal, PrincipalType::Garage));
         assert_eq!(spiffe.to_uri(), "spiffe://moto.local/garage/test");
     }
 }

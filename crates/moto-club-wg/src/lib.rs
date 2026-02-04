@@ -6,7 +6,7 @@
 //! - [`peers`]: Peer registration for devices and garages
 //! - [`sessions`]: Tunnel session management
 //! - [`derp`]: DERP relay map management
-//! - [`broadcaster`]: Real-time peer event broadcasting for garage WebSockets
+//! - [`broadcaster`]: Real-time peer event broadcasting for garage `WebSockets`
 //!
 //! # Architecture
 //!
@@ -14,10 +14,10 @@
 //! sees tunnel traffic. The traffic flows directly peer-to-peer (or via DERP relay
 //! when NAT blocks direct connections).
 //!
-//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//! The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 //! No separate device ID is needed.
 //!
-//! Terminal access uses ttyd over the WireGuard tunnel - the tunnel is the sole
+//! Terminal access uses ttyd over the `WireGuard` tunnel - the tunnel is the sole
 //! authentication boundary.
 //!
 //! ```text

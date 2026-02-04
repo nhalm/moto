@@ -43,13 +43,13 @@ use tokio::sync::broadcast;
 /// Default channel capacity for peer events.
 const CHANNEL_CAPACITY: usize = 64;
 
-/// Action to perform on a WireGuard peer.
+/// Action to perform on a `WireGuard` peer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PeerAction {
-    /// Add a peer to the WireGuard configuration.
+    /// Add a peer to the `WireGuard` configuration.
     Add,
-    /// Remove a peer from the WireGuard configuration.
+    /// Remove a peer from the `WireGuard` configuration.
     Remove,
 }
 
@@ -59,7 +59,7 @@ pub struct PeerEvent {
     /// Action to perform (add or remove).
     pub action: PeerAction,
 
-    /// Peer's WireGuard public key.
+    /// Peer's `WireGuard` public key.
     pub public_key: WgPublicKey,
 
     /// Peer's allowed IP (their overlay IP).
@@ -75,13 +75,13 @@ impl PeerEvent {
         Self {
             action: PeerAction::Add,
             public_key,
-            allowed_ip: Some(format!("{}/128", allowed_ip)),
+            allowed_ip: Some(format!("{allowed_ip}/128")),
         }
     }
 
     /// Create a new peer remove event.
     #[must_use]
-    pub fn remove(public_key: WgPublicKey) -> Self {
+    pub const fn remove(public_key: WgPublicKey) -> Self {
         Self {
             action: PeerAction::Remove,
             public_key,
@@ -140,7 +140,7 @@ impl PeerBroadcaster {
     /// Broadcast a peer add event.
     ///
     /// Called when a new session is created and the garage should add
-    /// the client as a WireGuard peer.
+    /// the client as a `WireGuard` peer.
     pub fn broadcast_add(&self, garage_id: &str, public_key: WgPublicKey, allowed_ip: OverlayIp) {
         let event = PeerEvent::add(public_key, allowed_ip);
         self.broadcast(garage_id, event);
@@ -149,7 +149,7 @@ impl PeerBroadcaster {
     /// Broadcast a peer remove event.
     ///
     /// Called when a session is closed and the garage should remove
-    /// the client from WireGuard peers.
+    /// the client from `WireGuard` peers.
     pub fn broadcast_remove(&self, garage_id: &str, public_key: WgPublicKey) {
         let event = PeerEvent::remove(public_key);
         self.broadcast(garage_id, event);
@@ -182,7 +182,7 @@ impl PeerBroadcaster {
         inner
             .channels
             .get(garage_id)
-            .map_or(0, |s| s.receiver_count())
+            .map_or(0, tokio::sync::broadcast::Sender::receiver_count)
     }
 }
 

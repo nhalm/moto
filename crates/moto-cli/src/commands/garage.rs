@@ -46,7 +46,7 @@ pub enum GarageAction {
         #[arg(short, long)]
         engine: Option<String>,
 
-        /// Include PostgreSQL database (postgres:16)
+        /// Include `PostgreSQL` database (postgres:16)
         #[arg(long)]
         with_postgres: bool,
 
@@ -139,7 +139,8 @@ struct GarageCloseJson {
     status: String,
 }
 
-/// JSON output for garage logs
+/// JSON output for garage logs (reserved for future `garage logs --json`)
+#[allow(dead_code)]
 #[derive(Serialize)]
 struct GarageLogsJson {
     name: String,
@@ -227,12 +228,11 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                             let ttl_remaining_seconds =
                                 chrono::DateTime::parse_from_rfc3339(&g.expires_at)
                                     .ok()
-                                    .map(|exp| {
+                                    .map_or(0, |exp| {
                                         let remaining =
                                             (exp.with_timezone(&chrono::Utc) - now).num_seconds();
                                         remaining.max(0)
-                                    })
-                                    .unwrap_or(0);
+                                    });
 
                             GarageJson {
                                 id: format_short_id(&g.id),
@@ -254,8 +254,8 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 // Output format per spec v0.4:
                 // ID       NAME                    BRANCH   STATUS    TTL        AGE
                 println!(
-                    "{:<9} {:<24} {:<9} {:<12} {:<10} {}",
-                    "ID", "NAME", "BRANCH", "STATUS", "TTL", "AGE"
+                    "{:<9} {:<24} {:<9} {:<12} {:<10} AGE",
+                    "ID", "NAME", "BRANCH", "STATUS", "TTL"
                 );
                 for g in response.garages {
                     let created_at = chrono::DateTime::parse_from_rfc3339(&g.created_at)
@@ -350,7 +350,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 println!("Garage created: {}", format_short_id(&garage.id));
                 println!("  Name:    {}", garage.name);
                 println!("  Branch:  {}", garage.branch);
-                println!("  TTL:     {} (expires {})", ttl_str, expires_display);
+                println!("  TTL:     {ttl_str} (expires {expires_display})");
                 println!("  Status:  {}", garage.status);
                 println!();
 
@@ -432,12 +432,10 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 .await
                 .map_err(|e| match e {
                     EnterError::GarageNotFound(_) => CliError::not_found(format!(
-                        "Garage '{}' not found.\n\nTry: moto garage list",
-                        name
+                        "Garage '{name}' not found.\n\nTry: moto garage list"
                     )),
                     EnterError::NotAuthorized(_) => CliError::general(format!(
-                        "Not authorized to access garage '{}'.\n\nCheck your permissions.",
-                        name
+                        "Not authorized to access garage '{name}'.\n\nCheck your permissions."
                     )),
                     EnterError::ConnectionFailed(msg) => CliError::general(format!(
                         "Connection failed: {msg}\n\nTry: moto garage logs {name}"
@@ -450,7 +448,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 let json = GarageEnterJson {
                     name: session.garage_name().to_string(),
                     session_id: session.session_id().to_string(),
-                    client_ip: "".to_string(), // Not exposed on session handle
+                    client_ip: String::new(), // Not exposed on session handle
                     garage_ip: session.garage_ip().to_string(),
                     path_type: "derp".to_string(), // Default for now
                     path_detail: "primary".to_string(),
@@ -537,9 +535,8 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
 
             return Err(CliError::general(format!(
                 "Log viewing is not yet supported via moto-club API.\n\n\
-                 Use kubectl logs to view garage '{}' logs:\n\
-                 kubectl logs -n moto-garage-<id> garage",
-                name
+                 Use kubectl logs to view garage '{name}' logs:\n\
+                 kubectl logs -n moto-garage-<id> garage"
             )));
         }
 
@@ -561,13 +558,11 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 .await
                 .map_err(|e| match e {
                     ClientError::GarageNotFound(_) => CliError::not_found(format!(
-                        "Garage '{}' not found.\n\nTry: moto garage list",
-                        name
+                        "Garage '{name}' not found.\n\nTry: moto garage list"
                     )),
                     ClientError::Server { code, message } if code == "GARAGE_EXPIRED" => {
                         CliError::general(format!(
-                            "Garage '{}' has expired and cannot be extended.",
-                            name
+                            "Garage '{name}' has expired and cannot be extended."
                         ))
                     }
                     ClientError::Server { code, message } if code == "INVALID_TTL" => {
@@ -613,9 +608,10 @@ fn format_short_id(id: &uuid::Uuid) -> String {
 
 /// Format an ISO 8601 timestamp for display (e.g., "2026-01-20 02:48:00").
 fn format_expires_at(expires_at: &str) -> String {
-    chrono::DateTime::parse_from_rfc3339(expires_at)
-        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-        .unwrap_or_else(|_| expires_at.to_string())
+    chrono::DateTime::parse_from_rfc3339(expires_at).map_or_else(
+        |_| expires_at.to_string(),
+        |dt| dt.format("%Y-%m-%d %H:%M:%S").to_string(),
+    )
 }
 
 /// Format a duration in seconds as a human-readable string (e.g., "2h15m", "45m", "3d").

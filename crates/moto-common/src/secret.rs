@@ -27,14 +27,14 @@ pub struct Secret<T>(T);
 
 impl<T> Secret<T> {
     /// Create a new secret wrapper.
-    pub fn new(value: T) -> Self {
+    pub const fn new(value: T) -> Self {
         Self(value)
     }
 
     /// Expose the inner secret value.
     ///
     /// Use this sparingly - only when the actual value is needed.
-    pub fn expose(&self) -> &T {
+    pub const fn expose(&self) -> &T {
         &self.0
     }
 
@@ -63,13 +63,13 @@ mod tests {
     #[test]
     fn debug_hides_value() {
         let secret = Secret::new("my-secret-value");
-        assert_eq!(format!("{:?}", secret), "Secret([REDACTED])");
+        assert_eq!(format!("{secret:?}"), "Secret([REDACTED])");
     }
 
     #[test]
     fn display_hides_value() {
         let secret = Secret::new("my-secret-value");
-        assert_eq!(format!("{}", secret), "[REDACTED]");
+        assert_eq!(format!("{secret}"), "[REDACTED]");
     }
 
     #[test]

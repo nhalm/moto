@@ -40,6 +40,7 @@
 //! ```
 
 use serde::Serialize;
+use std::fmt::Write;
 
 use crate::{TunnelManager, TunnelSession, TunnelStatus};
 use moto_wgtunnel_conn::PathType;
@@ -189,6 +190,7 @@ pub async fn get_tunnel_status(manager: &TunnelManager) -> TunnelStatusResponse 
 /// Format tunnel status for human-readable output.
 ///
 /// Returns a formatted string suitable for terminal display.
+#[must_use]
 pub fn format_status_table(response: &TunnelStatusResponse) -> String {
     if response.tunnels.is_empty() {
         return "No active tunnels.".to_string();
@@ -231,25 +233,27 @@ pub fn format_status_table(response: &TunnelStatusResponse) -> String {
         .max(6);
 
     // Header
-    output.push_str(&format!(
-        "{:<session_width$}  {:<garage_width$}  {:<client_ip_width$}  {:<status_width$}  PATH\n",
+    let _ = writeln!(
+        output,
+        "{:<session_width$}  {:<garage_width$}  {:<client_ip_width$}  {:<status_width$}  PATH",
         "SESSION", "GARAGE", "CLIENT IP", "STATUS"
-    ));
+    );
 
     // Rows
     for tunnel in &response.tunnels {
-        output.push_str(&format!(
-            "{:<session_width$}  {:<garage_width$}  {:<client_ip_width$}  {:<status_width$}  {}\n",
+        let _ = writeln!(
+            output,
+            "{:<session_width$}  {:<garage_width$}  {:<client_ip_width$}  {:<status_width$}  {}",
             tunnel.session_id,
             tunnel.garage_name,
             tunnel.client_ip,
             tunnel.status,
             tunnel.format_path()
-        ));
+        );
     }
 
     output.push('\n');
-    output.push_str(&format!("{} active tunnel(s)\n", response.count));
+    let _ = writeln!(output, "{} active tunnel(s)", response.count);
 
     output
 }

@@ -145,8 +145,7 @@ fn cluster_exists() -> Result<bool> {
     Ok(stdout.lines().any(|line| {
         line.split_whitespace()
             .next()
-            .map(|name| name == CLUSTER_NAME)
-            .unwrap_or(false)
+            .is_some_and(|name| name == CLUSTER_NAME)
     }))
 }
 
@@ -308,9 +307,8 @@ async fn wait_for_cluster_ready(quiet: bool) -> Result<()> {
 
     // Final error after all retries exhausted
     Err(CliError::general(format!(
-        "Cluster created but API not responding after {}s.\n\n\
-         Try: kubectl cluster-info --context k3d-{CLUSTER_NAME}",
-        API_READY_TIMEOUT_SECS
+        "Cluster created but API not responding after {API_READY_TIMEOUT_SECS}s.\n\n\
+         Try: kubectl cluster-info --context k3d-{CLUSTER_NAME}"
     )))
 }
 
@@ -394,11 +392,11 @@ pub enum ClusterStatus {
 }
 
 impl ClusterStatus {
-    fn as_str(&self) -> &'static str {
+    const fn as_str(&self) -> &'static str {
         match self {
-            ClusterStatus::Running => "running",
-            ClusterStatus::Stopped => "stopped",
-            ClusterStatus::NotFound => "not_found",
+            Self::Running => "running",
+            Self::Stopped => "stopped",
+            Self::NotFound => "not_found",
         }
     }
 }
@@ -613,8 +611,7 @@ mod tests {
         let has_moto = sample_output.lines().any(|line| {
             line.split_whitespace()
                 .next()
-                .map(|name| name == CLUSTER_NAME)
-                .unwrap_or(false)
+                .is_some_and(|name| name == CLUSTER_NAME)
         });
         assert!(has_moto);
 
@@ -623,8 +620,7 @@ mod tests {
         let has_moto_other = other_output.lines().any(|line| {
             line.split_whitespace()
                 .next()
-                .map(|name| name == CLUSTER_NAME)
-                .unwrap_or(false)
+                .is_some_and(|name| name == CLUSTER_NAME)
         });
         assert!(!has_moto_other);
 
@@ -633,8 +629,7 @@ mod tests {
         let has_moto_multi = multi_output.lines().any(|line| {
             line.split_whitespace()
                 .next()
-                .map(|name| name == CLUSTER_NAME)
-                .unwrap_or(false)
+                .is_some_and(|name| name == CLUSTER_NAME)
         });
         assert!(has_moto_multi);
 
@@ -643,8 +638,7 @@ mod tests {
         let has_moto_empty = empty_output.lines().any(|line| {
             line.split_whitespace()
                 .next()
-                .map(|name| name == CLUSTER_NAME)
-                .unwrap_or(false)
+                .is_some_and(|name| name == CLUSTER_NAME)
         });
         assert!(!has_moto_empty);
     }
@@ -663,7 +657,10 @@ mod tests {
         }
 
         // Calculate total wait time
-        let total_wait: u64 = API_READY_BACKOFF.iter().map(|d| d.as_secs()).sum();
+        let total_wait: u64 = API_READY_BACKOFF
+            .iter()
+            .map(std::time::Duration::as_secs)
+            .sum();
         assert!(
             total_wait <= API_READY_TIMEOUT_SECS,
             "total backoff wait ({total_wait}s) should not exceed timeout ({API_READY_TIMEOUT_SECS}s)"
@@ -674,27 +671,24 @@ mod tests {
     fn test_check_api_ready_returns_bool() {
         // This test verifies that check_api_ready() returns a boolean
         // The actual result depends on whether kubectl and the cluster are available
-        let result = check_api_ready();
-        // Result is a boolean (true or false), not a panic
-        assert!(result || !result);
+        let _result: bool = check_api_ready();
+        // Type annotation ensures function returns bool, not a panic
     }
 
     #[test]
     fn test_check_api_healthy_returns_bool() {
         // This test verifies that check_api_healthy() returns a boolean
         // The actual result depends on whether kubectl and the cluster are available
-        let result = check_api_healthy();
-        // Result is a boolean (true or false), not a panic
-        assert!(result || !result);
+        let _result: bool = check_api_healthy();
+        // Type annotation ensures function returns bool, not a panic
     }
 
     #[test]
     fn test_check_registry_healthy_returns_bool() {
         // This test verifies that check_registry_healthy() returns a boolean
         // The actual result depends on whether the registry is running
-        let result = check_registry_healthy();
-        // Result is a boolean (true or false), not a panic
-        assert!(result || !result);
+        let _result: bool = check_registry_healthy();
+        // Type annotation ensures function returns bool, not a panic
     }
 
     #[test]
@@ -702,7 +696,7 @@ mod tests {
         // Verify the health check uses the correct registry endpoint:
         // curl http://localhost:5000/v2/
         // This should return HTTP 200 when healthy
-        let expected_endpoint = format!("http://localhost:{}/v2/", REGISTRY_PORT);
+        let expected_endpoint = format!("http://localhost:{REGISTRY_PORT}/v2/");
         assert_eq!(expected_endpoint, "http://localhost:5000/v2/");
     }
 
@@ -711,7 +705,7 @@ mod tests {
         // Verify the health check uses the correct kubectl command:
         // kubectl --context k3d-moto get --raw /healthz
         // This should return "ok" when healthy
-        let expected_context = format!("k3d-{}", CLUSTER_NAME);
+        let expected_context = format!("k3d-{CLUSTER_NAME}");
         assert_eq!(expected_context, "k3d-moto");
     }
 
@@ -733,8 +727,14 @@ mod tests {
         // - If cluster doesn't exist: create regardless of force flag
 
         // The force flag is defined in ClusterAction::Init
-        let _action = ClusterAction::Init { force: true };
-        let _action_no_force = ClusterAction::Init { force: false };
+        let action = ClusterAction::Init { force: true };
+        let action_no_force = ClusterAction::Init { force: false };
+        // Use the values to avoid unused variable warnings
+        assert!(matches!(action, ClusterAction::Init { force: true }));
+        assert!(matches!(
+            action_no_force,
+            ClusterAction::Init { force: false }
+        ));
     }
 
     #[test]
@@ -811,11 +811,11 @@ mod tests {
             cluster_type: "k3d".to_string(),
             status: ClusterStatus::Running.as_str().to_string(),
             api: ApiStatusJson {
-                endpoint: format!("https://localhost:{}", API_PORT),
+                endpoint: format!("https://localhost:{API_PORT}"),
                 healthy: true,
             },
             registry: RegistryStatusJson {
-                endpoint: format!("localhost:{}", REGISTRY_PORT),
+                endpoint: format!("localhost:{REGISTRY_PORT}"),
                 healthy: true,
             },
         };
@@ -840,11 +840,11 @@ mod tests {
             cluster_type: "k3d".to_string(),
             status: ClusterStatus::Stopped.as_str().to_string(),
             api: ApiStatusJson {
-                endpoint: format!("https://localhost:{}", API_PORT),
+                endpoint: format!("https://localhost:{API_PORT}"),
                 healthy: false,
             },
             registry: RegistryStatusJson {
-                endpoint: format!("localhost:{}", REGISTRY_PORT),
+                endpoint: format!("localhost:{REGISTRY_PORT}"),
                 healthy: false,
             },
         };
@@ -865,11 +865,11 @@ mod tests {
             cluster_type: "k3d".to_string(),
             status: ClusterStatus::NotFound.as_str().to_string(),
             api: ApiStatusJson {
-                endpoint: format!("https://localhost:{}", API_PORT),
+                endpoint: format!("https://localhost:{API_PORT}"),
                 healthy: false,
             },
             registry: RegistryStatusJson {
-                endpoint: format!("localhost:{}", REGISTRY_PORT),
+                endpoint: format!("localhost:{REGISTRY_PORT}"),
                 healthy: false,
             },
         };
