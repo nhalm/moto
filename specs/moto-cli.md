@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
+| Version | 0.4 |
 | Status | Ready to Rip |
-| Last Updated | 2026-01-22 |
+| Last Updated | 2026-02-04 |
 
 ## Overview
 
@@ -508,6 +508,13 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.4
+- Fix: Implement `garage logs` command (currently returns error directing to kubectl)
+- Fix: `--owner` flag must be passed to API (currently parsed but ignored)
+- Fix: `--context` filtering for `garage list` (currently not filtering)
+- Add: `--branch` flag to `garage open` (pass to API, default to "main")
+- Add: `--no-attach` flag to `garage open` (create without connecting)
 
 ### v0.3
 - Fixed detach key sequence: `Ctrl+P, Ctrl+Q` (was incorrectly `Ctrl+D`)

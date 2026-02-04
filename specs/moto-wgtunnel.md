@@ -2,8 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.8 |
-| Last Updated | 2026-02-02 |
+| Version | 0.9 |
+| Status | Ready to Rip |
+| Last Updated | 2026-02-04 |
 
 ## Overview
 
@@ -627,28 +628,16 @@ Response 200:
 | moto-wgtunnel-engine | ✓ Complete | Tunnel management, platform TUN |
 | moto-club-wg | ✓ Complete | IPAM, peers, sessions, DERP |
 | moto-garage-wgtunnel | ✓ Complete | Daemon, registration, health |
-| moto-cli-wgtunnel | Partial | Types complete, integration pending |
+| moto-cli-wgtunnel | ✓ Complete | WireGuard engine, direct UDP, DERP relay, ttyd terminal all wired up |
 
-**Remaining integration (can implement now):**
-
-| Task | Location | Description |
-|------|----------|-------------|
-| Wire up WireGuard engine | `enter.rs` | Connect `moto-wgtunnel-engine` to configure tunnel |
-| Wire up direct UDP | `enter.rs` | Use `MagicConn` for direct connection attempts |
-| Wire up DERP relay | `enter.rs` | Use `DerpClient` for relay fallback |
-| Terminal connection | `enter.rs` | Connect to ttyd WebSocket after tunnel up |
-
-**Blocked on moto-club implementation:**
-
-| Task | Blocked By | Description |
-|------|------------|-------------|
-| Device registration | `POST /api/v1/wg/devices` | moto-club must wire up HTTP handler |
-| Session creation | `POST /api/v1/wg/sessions` | moto-club must wire up HTTP handler |
-| Garage peer info | `POST /api/v1/wg/garages` | moto-club must wire up HTTP handler |
-
-The types and logic for these APIs exist in `moto-club-wg`. The API contracts are fully specified in [moto-club.md](moto-club.md). The moto-club server needs to wire up HTTP handlers that use these crates.
+All integration tasks are complete. The tunnel system is fully functional.
 
 ## Changelog
+
+### v0.9
+- Update implementation status: moto-cli-wgtunnel is Complete (was incorrectly marked Partial)
+- Remove "Remaining integration" and "Blocked" sections (all tasks complete)
+- All 7 crates fully implemented and functional
 
 ### v0.8
 - Replace SSH with ttyd + tmux for terminal access

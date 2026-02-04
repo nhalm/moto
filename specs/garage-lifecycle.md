@@ -2,8 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
-| Last Updated | 2026-02-02 |
+| Version | 0.4 |
+| Status | Ready to Rip |
+| Last Updated | 2026-02-04 |
 
 ## Overview
 
@@ -255,6 +256,13 @@ Garage can fetch:
 - Global secrets (AI keys via ai-proxy, etc.)
 
 ## Changelog
+
+### v0.4
+- Fix: Implement `--branch` flag in CLI (currently documented but not in CLI args)
+- Fix: Implement `--no-attach` flag in CLI (currently documented but not implemented)
+- Fix: Add "repo cloned" ready criteria check (verify init container completed successfully)
+- Fix: `garage open` output format should match spec (show ID, branch, expires_at, status)
+- Fix: `garage list` columns should match spec (add ID, BRANCH columns)
 
 ### v0.3
 - Rename "Running" to "Initializing", add "Failed" state (5 states: Pending → Initializing → Ready/Failed → Terminated)

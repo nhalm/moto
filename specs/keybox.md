@@ -2,10 +2,19 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
-| Last Updated | 2026-02-02 |
+| Version | 0.4 |
+| Last Updated | 2026-02-04 |
 
 ## Changelog
+
+### v0.4 (2026-02-04)
+- Wire up moto-keybox-db PostgreSQL backend for secrets and audit logs (was in-memory only)
+- Add 1 MB maximum secret size limit (API validation)
+- Return 403 Forbidden for both "not found" and "access denied" (prevents secret enumeration)
+- Fix bikes ABAC: enforce service field matching (bikes can only read their own service's secrets)
+- Add health check endpoints per moto-bike.md spec (/health/live, /health/ready, /health/startup on port 8081)
+- Add request logging/metrics middleware (Phase 2)
+- Add key rotation mechanism (Phase 2)
 
 ### v0.3 (2026-02-02)
 - Added POST /auth/issue-garage-svid endpoint for moto-club delegation
@@ -444,3 +453,65 @@ CREATE INDEX idx_secrets_service ON secrets(service) WHERE service IS NOT NULL;
 CREATE INDEX idx_audit_log_timestamp ON audit_log(timestamp);
 CREATE INDEX idx_audit_log_spiffe_id ON audit_log(spiffe_id);
 ```
+
+### Secret Size Limits
+
+To prevent memory exhaustion and DoS attacks, keybox enforces a maximum secret size:
+
+| Limit | Value |
+|-------|-------|
+| Maximum secret value size | 1 MB (1,048,576 bytes) |
+
+The API returns `400 Bad Request` with error code `SECRET_TOO_LARGE` if the decoded secret value exceeds this limit.
+
+### Error Response Consistency (Enumeration Prevention)
+
+To prevent attackers from enumerating which secrets exist, keybox returns the same HTTP status code for both "secret not found" and "access denied":
+
+| Condition | HTTP Status | Error Code |
+|-----------|-------------|------------|
+| Secret does not exist | 403 Forbidden | ACCESS_DENIED |
+| Secret exists but access denied | 403 Forbidden | ACCESS_DENIED |
+
+This prevents information leakage where different response codes could reveal secret existence.
+
+### Bikes ABAC: Service Field Enforcement
+
+Bikes must only access secrets belonging to their own service. The SVID for bikes includes a `service` claim.
+
+**Updated policy (replaces MVP "bikes can read any service secret"):**
+```
+# Bike can access its service's secrets (ENFORCED)
+principal.type == "bike" AND
+principal.service == resource.service AND
+resource.scope == "service"
+```
+
+The bike's service is determined from:
+1. The `service` claim in the bike's SVID (required for bikes)
+2. The `moto.dev/service` label on the bike pod
+
+Bikes without a service claim cannot access service-scoped secrets.
+
+### Health Check Endpoints
+
+Per moto-bike.md Engine Contract, keybox exposes health endpoints on port 8081:
+
+| Endpoint | Returns 200 when |
+|----------|------------------|
+| `GET /health/live` | Process is alive (not deadlocked) |
+| `GET /health/ready` | Ready for traffic (master key loaded, DB connected) |
+| `GET /health/startup` | Initial startup complete |
+
+**Readiness criteria:**
+- Master key successfully loaded
+- SVID signing key successfully loaded
+- Database connection established (when using PostgreSQL backend)
+
+### Future Work (Phase 2)
+
+The following items are deferred to Phase 2:
+
+- **Key rotation mechanism**: `POST /admin/rotate-dek/{name}` endpoint, master key versioning
+- **Request logging/metrics**: HTTP request metrics middleware (method, path, status, duration)
+- **Rate limiting**: See moto-throttle.md spec

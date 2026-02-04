@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
+| Version | 0.6 |
 | Status | Ready to Rip |
-| Last Updated | 2026-01-26 |
+| Last Updated | 2026-02-04 |
 
 ## Overview
 
@@ -139,12 +139,17 @@ k3s-status:     # Show cluster status
 All targets should be declared `.PHONY` since they don't produce files:
 
 ```makefile
-.PHONY: install build test check fmt lint clean fix ci
+.PHONY: install build test check fmt lint clean fix ci run
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
+.PHONY: build-bike test-bike
 .PHONY: registry-start registry-stop
 ```
 
 ## Changelog
+
+### v0.6 (2026-02-04)
+- Add `build-bike` and `test-bike` targets (were implemented but not documented)
+- Add `run` to phony targets
 
 ### v0.5 (2026-01-26)
 - Add `clean-nix-cache` target for removing Docker volume used by Nix store

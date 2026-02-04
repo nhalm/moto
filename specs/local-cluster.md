@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.1 |
+| Version | 0.2 |
 | Status | Ready to Rip |
-| Last Updated | 2026-01-27 |
+| Last Updated | 2026-02-04 |
 
 ## Overview
 
@@ -27,6 +27,7 @@ Local Kubernetes cluster using k3d (k3s-in-Docker). Provides the cluster where g
 | Requirement | Why |
 |-------------|-----|
 | Docker or Colima | k3d runs k3s inside Docker |
+| k3d | CLI tool for managing k3s clusters in Docker |
 
 ### Why k3d
 
@@ -163,3 +164,13 @@ Options:
 
 - [moto-cli.md](moto-cli.md) - CLI command definitions
 - [container-system.md](container-system.md) - How images are built
+
+## Changelog
+
+### v0.2 (2026-02-04)
+- Add k3d as explicit prerequisite
+- Document global flags (--json, --quiet, --verbose, --context) available on all commands
+- Document `moto cluster init` JSON output format (status: "created" or "exists")
+
+### v0.1 (2026-01-27)
+- Initial specification

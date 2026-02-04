@@ -2,8 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.3 |
-| Last Updated | 2026-02-03 |
+| Version | 1.4 |
+| Status | Ready to Rip |
+| Last Updated | 2026-02-04 |
 
 ## Overview
 
@@ -14,13 +15,13 @@ The motorcycle club - central orchestration service for the moto platform. Where
 - WireGuard coordination (peer registration, IP allocation)
 - K8s namespace/pod management
 - Poll-based reconciliation (K8s → database)
+- Supporting services per garage (Postgres, Redis) - see [supporting-services.md](supporting-services.md)
 
 **Deferred:**
 - Bike management (deploy, track, stop) - future version
-- Supporting services per garage (Postgres, Redis) - future version
 - TTL enforcement loop (handled by moto-cron) - manual `garage close` for now
 - Authentication/identity system
-- WebSocket streaming (REST polling for v1)
+- WebSocket streaming (REST polling for v1) - see [moto-club-websocket.md](moto-club-websocket.md)
 - Peer streaming endpoint details
 
 **Dependencies:**
@@ -171,6 +172,10 @@ crates/
         ├── error.rs          # Error types
         └── api.rs            # Request/response types
 ```
+
+**Test Organization:** Tests for large modules should be in separate files per AGENTS.md convention:
+- `moto-club-api/src/wg.rs` → tests in `moto-club-api/src/wg_test.rs`
+- `moto-club-k8s/src/pods.rs` → tests in `moto-club-k8s/src/pods_test.rs`
 
 **Deferred crates (future):**
 - `moto-club-bike/` - Bike service logic
@@ -735,11 +740,19 @@ Response 200:
 
 No authentication required.
 
-#### WebSocket Endpoints (Deferred)
+#### WebSocket Endpoints
 
-WebSocket streaming is deferred to a future version. See [moto-club-websocket.md](moto-club-websocket.md).
+**Peer streaming (implemented):**
 
-For v1, peer updates use REST polling (see `GET /api/v1/wg/garages/{id}/peers`).
+```
+WS /internal/wg/garages/{id}/peers
+```
+
+Real-time peer updates for garage pods. Authenticated via K8s ServiceAccount token. Broadcasts peer add/remove events.
+
+For clients preferring polling, `GET /api/v1/wg/garages/{id}/peers` with `?version=` conditional GET is also available.
+
+See [moto-club-websocket.md](moto-club-websocket.md) for additional WebSocket endpoints (log streaming, events - future).
 
 ### Garage Service
 
@@ -1168,9 +1181,11 @@ Bike service will handle:
 
 This will be added in a future version. The crate structure is designed to accommodate `moto-club-bike/` when ready.
 
-### Supporting Services (Future)
+### Supporting Services
 
-Per-garage supporting services (Postgres, Redis) will be added later. For v1, garages connect to shared/external services.
+Per-garage supporting services (Postgres, Redis) are provisioned on demand. See [supporting-services.md](supporting-services.md).
+
+**Integration:** When `--with-postgres` or `--with-redis` flags are passed to garage creation, moto-club must call `create_garage_postgres()` and `create_garage_redis()` to create the K8s Deployments, Services, and Secrets before creating the garage pod.
 
 ### Authentication (Future)
 
@@ -1180,6 +1195,12 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v1.4
+- Move WebSocket peer streaming from "Deferred" to implemented (WS /internal/wg/garages/{id}/peers exists)
+- Update /api/v1/info features.websocket to return true (was incorrectly false)
+- Move Supporting Services from "Future" to implemented
+- Fix: Call create_garage_postgres() and create_garage_redis() in garage creation flow (services were not being created, only env vars injected)
 
 ### v1.3
 - Updated garage creation flow with SVID provisioning:

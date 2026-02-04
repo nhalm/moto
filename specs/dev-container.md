@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.13 |
+| Version | 0.14 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-02 |
+| Last Updated | 2026-02-04 |
 
 ## Overview
 
@@ -482,6 +482,11 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.14 (2026-02-04)
+- Clarify: Claude Code is installed at runtime via install script, not at container build time
+- Clarify: Container Cmd is `garage-entrypoint` (starts ttyd), not `/bin/bash`
+- Clarify: K8s env vars (GARAGE_ID, DATABASE_URL, etc.) are injected by K8s, not set in image
 
 ### v0.13 (2026-02-02)
 - Replace SSH with ttyd + tmux for terminal access

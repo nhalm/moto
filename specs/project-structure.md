@@ -1,7 +1,8 @@
 # Project Structure Specification
 
-**Version:** 1.2
-**Last Updated:** 2026-02-03
+**Version:** 1.3
+**Status:** Ready to Rip
+**Last Updated:** 2026-02-04
 
 ---
 
@@ -117,14 +118,26 @@ moto/
 │   │
 │   │── moto-club/                    # Binary: central server
 │   │── moto-club-api/                # Library: REST handlers
-│   │── moto-club-ws/                 # Library: WebSocket handlers
 │   │── moto-club-garage/             # Library: garage service logic
-│   │── moto-club-bike/               # Library: bike service logic
 │   │── moto-club-k8s/                # Library: K8s operations for club
 │   │── moto-club-db/                 # Library: database layer
 │   │── moto-club-types/              # Library: shared types (CLI + Club)
+│   │── moto-club-wg/                 # Library: WireGuard coordination
+│   │── moto-club-reconcile/          # Library: K8s → DB reconciliation
 │   │
-│   │── moto-keybox/                  # Secrets manager (future)
+│   │── moto-wgtunnel-types/          # Library: WireGuard types
+│   │── moto-wgtunnel-conn/           # Library: MagicConn, STUN
+│   │── moto-wgtunnel-derp/           # Library: DERP protocol
+│   │── moto-wgtunnel-engine/         # Library: Tunnel management
+│   │── moto-cli-wgtunnel/            # Library: CLI tunnel integration
+│   │── moto-garage-wgtunnel/         # Library: Garage daemon
+│   │
+│   │── moto-keybox/                  # Library: Secrets manager core
+│   │── moto-keybox-server/           # Binary: Keybox HTTP server
+│   │── moto-keybox-client/           # Library: Keybox client
+│   │── moto-keybox-cli/              # Binary: Keybox admin CLI
+│   │── moto-keybox-db/               # Library: Keybox database layer
+│   │
 │   │── moto-ai-proxy/                # AI provider proxy (future)
 │   │── moto-tank/                    # Vault/storage (future)
 │   │── moto-transmission/            # Proxy layer (future)
@@ -186,17 +199,38 @@ moto/
 | `moto-garage` | lib | **DEPRECATED** - Remove this crate. CLI talks directly to moto-club API. |
 | `moto-cli` | bin | CLI commands: `moto garage {list,open,close}`, `moto bike {...}` |
 
-### Club Crates (Implement Later)
+### Club Crates
 
 | Crate | Type | Purpose |
 |-------|------|---------|
-| `moto-club` | bin | Server main: wires together API, WS, services |
+| `moto-club` | bin | Server main: wires together API, services |
 | `moto-club-api` | lib | REST handlers for garage/bike operations |
-| `moto-club-ws` | lib | WebSocket for terminal attach, real-time updates |
 | `moto-club-garage` | lib | Garage service: lifecycle state machine, TTL |
-| `moto-club-bike` | lib | Bike service: deployment, scaling |
 | `moto-club-k8s` | lib | K8s operations specific to club (wraps moto-k8s) |
 | `moto-club-db` | lib | Database: migrations, repositories |
+| `moto-club-wg` | lib | WireGuard coordination: IPAM, peers, sessions, DERP |
+| `moto-club-reconcile` | lib | K8s → DB reconciliation loop |
+
+### WireGuard Tunnel Crates
+
+| Crate | Type | Purpose |
+|-------|------|---------|
+| `moto-wgtunnel-types` | lib | Keys, IPs, peers, DERP types |
+| `moto-wgtunnel-conn` | lib | MagicConn, STUN, endpoint selection |
+| `moto-wgtunnel-derp` | lib | DERP protocol, client, map |
+| `moto-wgtunnel-engine` | lib | Tunnel management, platform TUN |
+| `moto-cli-wgtunnel` | lib | CLI integration: enter command tunnel setup |
+| `moto-garage-wgtunnel` | lib | Garage daemon: registration, health |
+
+### Keybox Crates
+
+| Crate | Type | Purpose |
+|-------|------|---------|
+| `moto-keybox` | lib | Core: SVID, ABAC, envelope encryption, repository |
+| `moto-keybox-server` | bin | HTTP server: auth, secrets, audit endpoints |
+| `moto-keybox-client` | lib | Client for garages/bikes: SVID cache, secret fetching |
+| `moto-keybox-cli` | bin | Admin CLI: init, set/get secrets, issue dev SVIDs |
+| `moto-keybox-db` | lib | Database: models, migrations, repositories |
 
 ### Infrastructure Crates (Future)
 
@@ -357,6 +391,17 @@ Both CLI and server need the same types (GarageInfo, etc). Put them in `moto-clu
 ---
 
 ## Changelog
+
+### v1.3 (2026-02-04)
+
+Major crate documentation update:
+- Remove `moto-club-ws` (doesn't exist, WebSocket is in moto-club-api)
+- Remove `moto-club-bike` (doesn't exist, future work)
+- Add WireGuard Tunnel Crates section (6 crates)
+- Add Keybox Crates section (5 crates)
+- Add `moto-club-wg` and `moto-club-reconcile` to Club Crates
+- Update `moto-keybox` from "future" to implemented
+- Remove `moto-garage` crate (per v1.2 deprecation)
 
 ### v1.2 (2026-02-03)
 

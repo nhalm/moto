@@ -2,8 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
-| Last Updated | 2026-02-02 |
+| Version | 0.3 |
+| Status | Ready to Rip |
+| Last Updated | 2026-02-04 |
 
 ## Overview
 
@@ -320,6 +321,13 @@ Additional services can be added following the same pattern:
 - **MinIO** - S3-compatible storage (future)
 
 ## Changelog
+
+### v0.3 (2026-02-04)
+- Fix: Actually create K8s Deployments, Services, and Secrets for supporting services
+  - Call `create_garage_postgres()` in garage creation flow when `--with-postgres` is set
+  - Call `create_garage_redis()` in garage creation flow when `--with-redis` is set
+  - Currently only env vars are injected but services are not created
+- The trait implementations exist in `moto-club-k8s/supporting_services.rs` but are not called from `moto-club-garage/service.rs`
 
 ### v0.2 (2026-02-02)
 - Full specification written
