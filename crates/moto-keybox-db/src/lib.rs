@@ -2,7 +2,7 @@
 //!
 //! This crate provides:
 //! - Data models that map to the `PostgreSQL` schema (`models`)
-//! - Repository functions for database operations (TODO)
+//! - Repository functions for database operations (`secret_repo`, `audit_repo`)
 //!
 //! # Schema
 //!
@@ -16,24 +16,33 @@
 //! # Example
 //!
 //! ```ignore
-//! use moto_keybox_db::{DbPool, Secret, Scope};
+//! use moto_keybox_db::{DbPool, Secret, Scope, secret_repo, audit_repo};
 //! use uuid::Uuid;
 //!
-//! let pool = DbPool::connect("postgres://...").await?;
+//! let pool = moto_keybox_db::connect("postgres://...").await?;
 //!
-//! // Query secrets
-//! let secrets = sqlx::query_as::<_, Secret>(
-//!     "SELECT * FROM secrets WHERE scope = $1"
-//! )
-//!     .bind(Scope::Global)
-//!     .fetch_all(&pool)
-//!     .await?;
+//! // Create a secret
+//! let secret = secret_repo::create_secret(&pool, Scope::Global, None, None, "ai/anthropic").await?;
+//!
+//! // Log an audit entry
+//! audit_repo::insert_audit_entry(
+//!     &pool,
+//!     AuditEventType::Created,
+//!     Some(PrincipalType::Service),
+//!     Some("moto-club"),
+//!     Some("spiffe://moto.local/service/moto-club"),
+//!     Some(Scope::Global),
+//!     Some("ai/anthropic"),
+//! ).await?;
 //! ```
 
+pub mod audit_repo;
 pub mod models;
+pub mod secret_repo;
 
 use thiserror::Error;
 
+pub use audit_repo::AuditLogQuery;
 pub use models::{
     AuditEventType, AuditLogEntry, EncryptedDek, ParseAuditEventTypeError, ParsePrincipalTypeError,
     ParseScopeError, PrincipalType, Scope, Secret, SecretVersion,
@@ -211,7 +220,7 @@ mod tests {
     fn migrations_are_embedded() {
         // Verify migrations are properly embedded at compile time
         assert!(
-            !MIGRATIONS.iter().collect::<Vec<_>>().is_empty(),
+            MIGRATIONS.iter().next().is_some(),
             "migrations should be embedded"
         );
 

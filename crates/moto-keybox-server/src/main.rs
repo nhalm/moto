@@ -7,6 +7,12 @@
 //! - Audit logging
 //! - Health endpoints for K8s probes (port 8081)
 //!
+//! # Storage Modes
+//!
+//! The server supports two storage backends:
+//! - **`PostgreSQL`** (recommended for production): Set `MOTO_KEYBOX_DATABASE_URL`
+//! - **In-memory** (for testing only): Omit `MOTO_KEYBOX_DATABASE_URL`
+//!
 //! # Configuration
 //!
 //! Required environment variables:
@@ -14,6 +20,7 @@
 //! - `MOTO_KEYBOX_SVID_SIGNING_KEY_FILE`: Path to file containing base64-encoded Ed25519 signing key
 //!
 //! Optional environment variables:
+//! - `MOTO_KEYBOX_DATABASE_URL`: `PostgreSQL` connection string (enables persistent storage)
 //! - `MOTO_KEYBOX_BIND_ADDR`: Server bind address (default: `0.0.0.0:8080`)
 //! - `MOTO_KEYBOX_HEALTH_BIND_ADDR`: Health server bind address (default: `0.0.0.0:8081`)
 //! - `MOTO_KEYBOX_ADMIN_SERVICE`: Service name with admin privileges (default: `moto-club`)
@@ -32,7 +39,8 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use moto_keybox::{
-    AppState, MasterKey, SvidIssuer, SvidValidator, health_router, mark_startup_complete, router,
+    AppState, MasterKey, PgAppState, SvidIssuer, SvidValidator, health_router,
+    mark_startup_complete, pg_router, router,
 };
 
 /// Default bind address for keybox API.
@@ -63,6 +71,8 @@ struct Config {
     svid_ttl_secs: i64,
     /// Service token for moto-club authentication.
     service_token: Option<String>,
+    /// `PostgreSQL` database URL (if provided, uses `PostgreSQL` backend).
+    database_url: Option<String>,
 }
 
 impl Config {
@@ -108,6 +118,9 @@ impl Config {
                 .map(|s| s.trim().to_string())
         });
 
+        // Database URL (optional - if not provided, uses in-memory storage)
+        let database_url = env::var("MOTO_KEYBOX_DATABASE_URL").ok();
+
         Ok(Self {
             bind_addr,
             health_bind_addr,
@@ -116,6 +129,7 @@ impl Config {
             admin_service,
             svid_ttl_secs,
             service_token,
+            database_url,
         })
     }
 }
@@ -169,6 +183,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         svid_ttl_secs = config.svid_ttl_secs,
         admin_service = %config.admin_service,
         service_token_configured = config.service_token.is_some(),
+        database_configured = config.database_url.is_some(),
         "starting moto-keybox"
     );
 
@@ -186,25 +201,61 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let svid_validator = SvidValidator::new(svid_issuer.verifying_key());
     info!("SVID signing key loaded");
 
-    // Create application state with in-memory repository
-    let mut state = AppState::new(
-        master_key,
-        svid_issuer,
-        svid_validator,
-        &config.admin_service,
-    );
+    // Create the API router based on storage mode
+    let app = if let Some(database_url) = config.database_url {
+        // PostgreSQL mode
+        info!("connecting to PostgreSQL database");
+        let pool = moto_keybox_db::connect(&database_url)
+            .await
+            .map_err(|e| format!("failed to connect to database: {e}"))?;
 
-    // Configure service token if provided
-    if let Some(token) = config.service_token {
-        state = state.with_service_token(token);
-        info!("service token configured for moto-club authentication");
-    } else {
-        tracing::warn!(
-            "no service token configured - POST /auth/issue-garage-svid will be unavailable"
+        info!("running database migrations");
+        moto_keybox_db::run_migrations(&pool)
+            .await
+            .map_err(|e| format!("failed to run migrations: {e}"))?;
+        info!("database migrations complete");
+
+        let mut state = PgAppState::new(
+            pool,
+            master_key,
+            svid_issuer,
+            svid_validator,
+            &config.admin_service,
         );
-    }
 
-    let app = router(state);
+        if let Some(token) = config.service_token {
+            state = state.with_service_token(token);
+            info!("service token configured for moto-club authentication");
+        } else {
+            tracing::warn!(
+                "no service token configured - POST /auth/issue-garage-svid will be unavailable"
+            );
+        }
+
+        info!("using PostgreSQL storage backend");
+        pg_router(state)
+    } else {
+        // In-memory mode (for testing)
+        tracing::warn!("no DATABASE_URL configured - using in-memory storage (NOT FOR PRODUCTION)");
+
+        let mut state = AppState::new(
+            master_key,
+            svid_issuer,
+            svid_validator,
+            &config.admin_service,
+        );
+
+        if let Some(token) = config.service_token {
+            state = state.with_service_token(token);
+            info!("service token configured for moto-club authentication");
+        } else {
+            tracing::warn!(
+                "no service token configured - POST /auth/issue-garage-svid will be unavailable"
+            );
+        }
+
+        router(state)
+    };
 
     // Start health server in background (port 8081)
     let health_app = health_router();

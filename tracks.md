@@ -267,9 +267,9 @@ HOW TO USE THIS FILE:
 - 1 MB maximum secret size limit in API validation (v0.4: MAX_SECRET_SIZE_BYTES constant, validation in set_secret handler, SECRET_TOO_LARGE error code)
 - Return 403 Forbidden for both "not found" and "access denied" to prevent secret enumeration (v0.4: map_error returns ACCESS_DENIED for both SecretNotFound and AccessDenied errors, updated client to remove dead SECRET_NOT_FOUND code path)
 - Health check endpoints per moto-bike.md spec (v0.4: /health/live, /health/ready, /health/startup on port 8081 via moto-keybox-server, health.rs module in moto-keybox)
+- Wire up moto-keybox-db PostgreSQL backend for secrets and audit logs (v0.4: secret_repo.rs, audit_repo.rs in moto-keybox-db; PgSecretRepository in moto-keybox/pg_repository.rs; PgAppState and pg_router in moto-keybox/pg_api.rs; server uses MOTO_KEYBOX_DATABASE_URL env var to enable PostgreSQL mode)
 
 **Remaining:**
-- Wire up moto-keybox-db PostgreSQL backend for secrets and audit logs (v0.4: was in-memory only)
 - Fix bikes ABAC: enforce service field matching (v0.4: bikes can only read their own service's secrets)
 - Endpoint authorization matrix enforcement (future - spec v0.3: SVID tokens should be denied for admin endpoints)
 - POST /admin/rotate-dek/{name} endpoint (future - Phase 2)

@@ -20,6 +20,8 @@ serde_json.workspace = true
 getrandom = "0.3"
 axum.workspace = true
 tokio.workspace = true
+subtle.workspace = true
+moto-keybox-db = { path = "../moto-keybox-db" }
 
 [dev-dependencies]
 
