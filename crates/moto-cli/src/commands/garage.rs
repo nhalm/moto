@@ -53,6 +53,10 @@ pub enum GarageAction {
         /// Include Redis cache (redis:7)
         #[arg(long)]
         with_redis: bool,
+
+        /// Create garage but don't connect to it
+        #[arg(long)]
+        no_attach: bool,
     },
 
     /// Connect to a garage terminal session
@@ -287,6 +291,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             engine,
             with_postgres,
             with_redis,
+            no_attach,
         } => {
             let client = create_client(flags)?;
             let name = crate::names::generate();
@@ -332,7 +337,55 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 }
                 println!("  TTL: {ttl_str}");
                 println!();
-                println!("To connect: moto garage enter {}", garage.name);
+
+                if no_attach {
+                    // --no-attach: just show how to connect later
+                    println!("To connect: moto garage enter {}", garage.name);
+                } else {
+                    // Default: connect to the garage
+                    println!(
+                        "Connecting... (use `moto garage enter {}` to reconnect)",
+                        garage.name
+                    );
+                    println!();
+
+                    // Initialize tunnel manager and enter the garage
+                    let manager = TunnelManager::new().await.map_err(|e| {
+                        CliError::general(format!("failed to initialize tunnel: {e}"))
+                    })?;
+
+                    let config = EnterConfig::default();
+                    let progress = ConsoleProgress::new(flags.quiet);
+
+                    let session = enter_garage(&manager, &garage.name, config, &progress)
+                        .await
+                        .map_err(|e| match e {
+                            EnterError::GarageNotFound(_) => CliError::not_found(format!(
+                                "Garage '{}' not found.\n\nTry: moto garage list",
+                                garage.name
+                            )),
+                            EnterError::NotAuthorized(_) => CliError::general(format!(
+                                "Not authorized to access garage '{}'.\n\nCheck your permissions.",
+                                garage.name
+                            )),
+                            EnterError::ConnectionFailed(msg) => CliError::general(format!(
+                                "Connection failed: {msg}\n\nTry: moto garage logs {}",
+                                garage.name
+                            )),
+                            _ => CliError::general(e.to_string()),
+                        })?;
+
+                    // Connect to ttyd - this blocks until the terminal session ends
+                    session.connect_ttyd().await.map_err(|e| match e {
+                        EnterError::TtydFailed(msg) => CliError::general(format!(
+                            "Terminal connection failed: {msg}\n\n\
+                             This may happen if the garage is still starting up.\n\
+                             Try: moto garage logs {}",
+                            garage.name
+                        )),
+                        _ => CliError::general(e.to_string()),
+                    })?;
+                }
             }
         }
 

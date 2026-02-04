@@ -233,9 +233,9 @@ HOW TO USE THIS FILE:
 - Repo cloning: init container with REPO_URL, REPO_BRANCH, REPO_NAME env vars (moto-club-k8s pods.rs RepoConfig, build_repo_clone_init_container); workspace volume shared between init and main container; 3-retry clone logic
 - 5-state lifecycle: Rename Running to Initializing, add Failed state per spec v0.3 changelog (GarageStatus enum, GarageState enum, lifecycle state machine, reconciler mapping, API status parsing)
 - CLI --branch flag for garage open (v0.4: passes branch to CreateGarageRequest)
+- CLI --no-attach flag for garage open (v0.4: creates garage without connecting; default is to connect after creation)
 
 **Remaining:**
-- Implement --no-attach flag in CLI (v0.4: documented but not implemented)
 - Add "repo cloned" ready criteria check (v0.4: verify init container completed successfully)
 - Fix garage open output format to match spec (v0.4: show ID, branch, expires_at, status)
 - Fix garage list columns to match spec (v0.4: add ID, BRANCH columns)
