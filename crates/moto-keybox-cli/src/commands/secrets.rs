@@ -279,10 +279,11 @@ mod tests {
 
     #[test]
     fn api_error_response_deserialization() {
-        let json = r#"{"error":{"code":"SECRET_NOT_FOUND","message":"Secret not found"}}"#;
+        // Server returns ACCESS_DENIED for both "not found" and "access denied" (spec v0.4)
+        let json = r#"{"error":{"code":"ACCESS_DENIED","message":"Access denied"}}"#;
         let resp: ApiErrorResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.error.code, "SECRET_NOT_FOUND");
-        assert_eq!(resp.error.message, "Secret not found");
+        assert_eq!(resp.error.code, "ACCESS_DENIED");
+        assert_eq!(resp.error.message, "Access denied");
     }
 
     #[test]

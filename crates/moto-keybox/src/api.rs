@@ -488,18 +488,17 @@ fn parse_scope(scope_str: &str) -> Result<Scope, (StatusCode, Json<ApiError>)> {
 }
 
 /// Convert keybox error to API response.
+///
+/// Note: Both "secret not found" and "access denied" return 403 Forbidden with
+/// the same ACCESS_DENIED error code to prevent secret enumeration attacks
+/// (spec v0.4: attackers cannot determine which secrets exist based on response codes).
 fn map_error(e: Error) -> (StatusCode, Json<ApiError>) {
     match e {
-        Error::AccessDenied { message } => (
+        Error::AccessDenied { .. } | Error::SecretNotFound { .. } => (
+            // Return 403 for both "not found" and "access denied" to prevent
+            // information leakage about secret existence (spec v0.4)
             StatusCode::FORBIDDEN,
-            Json(ApiError::new(error_codes::ACCESS_DENIED, message)),
-        ),
-        Error::SecretNotFound { scope, name } => (
-            StatusCode::NOT_FOUND,
-            Json(ApiError::new(
-                error_codes::SECRET_NOT_FOUND,
-                format!("Secret not found: {scope}/{name}"),
-            )),
+            Json(ApiError::new(error_codes::ACCESS_DENIED, "Access denied")),
         ),
         Error::SecretExists { scope, name } => (
             StatusCode::CONFLICT,
@@ -643,13 +642,11 @@ async fn get_secret(
             let value = repo.get(&claims, scope, &name).map_err(map_error)?;
             // Get metadata by listing (since get doesn't return it)
             let list = repo.list(&claims, scope);
+            // Return 403 for "not found" to prevent secret enumeration (spec v0.4)
             let meta = list.into_iter().find(|m| m.name == name).ok_or_else(|| {
                 (
-                    StatusCode::NOT_FOUND,
-                    Json(ApiError::new(
-                        error_codes::SECRET_NOT_FOUND,
-                        format!("Secret not found: {scope}/{name}"),
-                    )),
+                    StatusCode::FORBIDDEN,
+                    Json(ApiError::new(error_codes::ACCESS_DENIED, "Access denied")),
                 )
             })?;
             (value, meta)
@@ -681,16 +678,14 @@ async fn get_secret(
             } else {
                 repo.list_instance(&claims, context)
             };
+            // Return 403 for "not found" to prevent secret enumeration (spec v0.4)
             let meta = list
                 .into_iter()
                 .find(|m| m.name == secret_name)
                 .ok_or_else(|| {
                     (
-                        StatusCode::NOT_FOUND,
-                        Json(ApiError::new(
-                            error_codes::SECRET_NOT_FOUND,
-                            format!("Secret not found: {scope}/{name}"),
-                        )),
+                        StatusCode::FORBIDDEN,
+                        Json(ApiError::new(error_codes::ACCESS_DENIED, "Access denied")),
                     )
                 })?;
             (value, meta)

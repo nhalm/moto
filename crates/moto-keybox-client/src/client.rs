@@ -472,14 +472,9 @@ impl KeyboxClient {
         let message = error.error.message;
 
         // Map known error codes to specific errors
+        // Note: server returns ACCESS_DENIED for both "not found" and "access denied"
+        // to prevent secret enumeration (spec v0.4)
         match code.as_str() {
-            "SECRET_NOT_FOUND" => {
-                // Parse scope/name from message if possible
-                Err(Error::SecretNotFound {
-                    scope: "unknown".to_string(),
-                    name: message,
-                })
-            }
             "ACCESS_DENIED" => Err(Error::AccessDenied { message }),
             "SVID_EXPIRED" => Err(Error::SvidExpired),
             "UNAUTHORIZED" | "INVALID_SVID" => Err(Error::NoSvid { message }),
@@ -554,10 +549,11 @@ mod tests {
 
     #[test]
     fn api_error_deserialize() {
-        let json = r#"{"error":{"code":"SECRET_NOT_FOUND","message":"not found"}}"#;
+        // Server returns ACCESS_DENIED for both "not found" and "access denied" (spec v0.4)
+        let json = r#"{"error":{"code":"ACCESS_DENIED","message":"Access denied"}}"#;
         let error: ApiErrorResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(error.error.code, "SECRET_NOT_FOUND");
-        assert_eq!(error.error.message, "not found");
+        assert_eq!(error.error.code, "ACCESS_DENIED");
+        assert_eq!(error.error.message, "Access denied");
     }
 
     #[tokio::test]
