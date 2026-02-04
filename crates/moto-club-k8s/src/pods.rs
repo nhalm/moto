@@ -152,6 +152,21 @@ pub trait GaragePodOps {
     ///
     /// Returns an error if the namespace doesn't exist or list fails.
     fn list_garage_pods(&self, id: &GarageId) -> impl Future<Output = Result<Vec<Pod>>> + Send;
+
+    /// Checks if the init container (repo clone) succeeded.
+    ///
+    /// Returns:
+    /// - `Some(true)` if the init container completed successfully (exit code 0)
+    /// - `Some(false)` if the init container failed
+    /// - `None` if there's no init container configured (no repo to clone)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the pod doesn't exist or the operation fails.
+    fn init_container_succeeded(
+        &self,
+        id: &GarageId,
+    ) -> impl Future<Output = Result<Option<bool>>> + Send;
 }
 
 impl GaragePodOps for GarageK8s {
@@ -258,6 +273,62 @@ impl GaragePodOps for GarageK8s {
 
         debug!(namespace = %namespace, "listing garage pods");
         self.client.list_pods(&namespace, None).await
+    }
+
+    #[instrument(skip(self), fields(garage_id = %id))]
+    async fn init_container_succeeded(&self, id: &GarageId) -> Result<Option<bool>> {
+        let pod = self.get_garage_pod(id).await?;
+
+        // Check if pod has init containers configured
+        let has_init_containers = pod
+            .spec
+            .as_ref()
+            .and_then(|spec| spec.init_containers.as_ref())
+            .is_some_and(|ics| !ics.is_empty());
+
+        if !has_init_containers {
+            // No init container = no repo to clone, considered "ready" for this check
+            debug!("no init containers configured, skipping repo clone check");
+            return Ok(None);
+        }
+
+        // Get init container statuses
+        let init_statuses = pod
+            .status
+            .as_ref()
+            .and_then(|s| s.init_container_statuses.as_ref());
+
+        let Some(init_statuses) = init_statuses else {
+            // Init containers configured but no status yet - still pending
+            debug!("init containers configured but no status yet");
+            return Ok(Some(false));
+        };
+
+        // Find the clone-repo init container status
+        let clone_status = init_statuses.iter().find(|cs| cs.name == "clone-repo");
+
+        let Some(clone_status) = clone_status else {
+            // Init container not found in status - still pending
+            debug!("clone-repo init container not found in status");
+            return Ok(Some(false));
+        };
+
+        // Check if terminated successfully (exit code 0)
+        if let Some(state) = &clone_status.state {
+            if let Some(terminated) = &state.terminated {
+                let succeeded = terminated.exit_code == 0;
+                debug!(
+                    exit_code = terminated.exit_code,
+                    succeeded = succeeded,
+                    "clone-repo init container terminated"
+                );
+                return Ok(Some(succeeded));
+            }
+        }
+
+        // Init container still running or waiting
+        debug!("clone-repo init container not yet terminated");
+        Ok(Some(false))
     }
 }
 

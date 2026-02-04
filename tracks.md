@@ -234,9 +234,9 @@ HOW TO USE THIS FILE:
 - 5-state lifecycle: Rename Running to Initializing, add Failed state per spec v0.3 changelog (GarageStatus enum, GarageState enum, lifecycle state machine, reconciler mapping, API status parsing)
 - CLI --branch flag for garage open (v0.4: passes branch to CreateGarageRequest)
 - CLI --no-attach flag for garage open (v0.4: creates garage without connecting; default is to connect after creation)
+- Ready criteria check: repo cloned (v0.4: reconciler checks init container completed successfully via init_container_succeeded method in GaragePodOps trait, moto-club-k8s pods.rs)
 
 **Remaining:**
-- Add "repo cloned" ready criteria check (v0.4: verify init container completed successfully)
 - Fix garage open output format to match spec (v0.4: show ID, branch, expires_at, status)
 - Fix garage list columns to match spec (v0.4: add ID, BRANCH columns)
 - Repo cloning: credentials from keybox (future - MVP supports public repos)

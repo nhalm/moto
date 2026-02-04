@@ -278,12 +278,12 @@ impl GarageReconciler {
         let pod_status = self.k8s.get_garage_pod_status(&garage_id).await?;
 
         // Map pod status to garage status
-        // Ready criteria check: pod must be ready AND WireGuard must be registered
+        // Ready criteria check: see check_ready_criteria() for full Ready criteria per spec
         // See garage-lifecycle.md spec for full Ready criteria:
         //   1. Pod running (containers ready)
-        //   2. Terminal daemon up (ttyd on port 7681) - checked via container readiness
-        //   3. WireGuard registered - checked below
-        //   4. Repo cloned - checked via init container completion (pod stays Pending until init completes)
+        //   2. Terminal daemon up (ttyd on port 7681) - checked via container readiness probe
+        //   3. WireGuard registered - checked in check_ready_criteria()
+        //   4. Repo cloned - checked via init container completion in check_ready_criteria()
         let new_status = match pod_status {
             GaragePodStatus::Pending => GarageStatus::Pending,
             GaragePodStatus::Running => GarageStatus::Initializing,
@@ -359,7 +359,8 @@ impl GarageReconciler {
     /// 1. Pod running (containers ready) - already checked
     /// 2. Terminal daemon up (ttyd) - checked via container readiness probe
     /// 3. WireGuard registered
-    /// 4. Supporting services available (if requested)
+    /// 4. Repo cloned (init container completed successfully)
+    /// 5. Supporting services available (if requested)
     async fn check_ready_criteria(&self, garage_id: &GarageId, uuid: Uuid, id_str: &str) -> bool {
         // Check WireGuard registration
         let wg_registered = wg_garage_repo::exists(&self.db, uuid)
@@ -371,6 +372,36 @@ impl GarageReconciler {
                 "pod ready but WireGuard not registered, staying in Initializing"
             );
             return false;
+        }
+
+        // Check repo cloned (init container succeeded)
+        // Per garage-lifecycle.md spec: Repo cloned | Repository cloned to `/workspace/<repo-name>/`
+        // Returns Some(true) if succeeded, Some(false) if failed/pending, None if no init container
+        match self.k8s.init_container_succeeded(garage_id).await {
+            Ok(Some(true)) => {
+                // Init container succeeded - repo is cloned
+                debug!(garage_id = %id_str, "init container (repo clone) succeeded");
+            }
+            Ok(Some(false)) => {
+                // Init container not yet completed - stay in Initializing
+                debug!(
+                    garage_id = %id_str,
+                    "pod ready but init container (repo clone) not complete, staying in Initializing"
+                );
+                return false;
+            }
+            Ok(None) => {
+                // No init container configured - no repo to clone, skip this check
+                debug!(garage_id = %id_str, "no init container configured, skipping repo clone check");
+            }
+            Err(e) => {
+                // Error checking init container - log and skip this check to avoid blocking
+                warn!(
+                    garage_id = %id_str,
+                    error = %e,
+                    "failed to check init container status, skipping check"
+                );
+            }
         }
 
         // Check supporting services (if any were requested)
