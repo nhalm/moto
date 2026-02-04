@@ -217,7 +217,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## garage-lifecycle.md v0.3
+## garage-lifecycle.md v0.4
 
 **Status:** In Progress
 
@@ -232,13 +232,18 @@ HOW TO USE THIS FILE:
 - Ready criteria check: ttyd accepting connections (K8s TCP readiness probe on port 7681 in garage pod spec)
 - Repo cloning: init container with REPO_URL, REPO_BRANCH, REPO_NAME env vars (moto-club-k8s pods.rs RepoConfig, build_repo_clone_init_container); workspace volume shared between init and main container; 3-retry clone logic
 - 5-state lifecycle: Rename Running to Initializing, add Failed state per spec v0.3 changelog (GarageStatus enum, GarageState enum, lifecycle state machine, reconciler mapping, API status parsing)
+- CLI --branch flag for garage open (v0.4: passes branch to CreateGarageRequest)
 
 **Remaining:**
+- Implement --no-attach flag in CLI (v0.4: documented but not implemented)
+- Add "repo cloned" ready criteria check (v0.4: verify init container completed successfully)
+- Fix garage open output format to match spec (v0.4: show ID, branch, expires_at, status)
+- Fix garage list columns to match spec (v0.4: add ID, BRANCH columns)
 - Repo cloning: credentials from keybox (future - MVP supports public repos)
 
 ---
 
-## keybox.md v0.3
+## keybox.md v0.4
 
 **Status:** In Progress
 
@@ -261,10 +266,15 @@ HOW TO USE THIS FILE:
 - Service token authentication for moto-club (MOTO_KEYBOX_SERVICE_TOKEN and MOTO_KEYBOX_SERVICE_TOKEN_FILE env vars, constant-time comparison)
 
 **Remaining:**
+- Wire up moto-keybox-db PostgreSQL backend for secrets and audit logs (v0.4: was in-memory only)
+- Add 1 MB maximum secret size limit in API validation (v0.4)
+- Return 403 Forbidden for both "not found" and "access denied" to prevent secret enumeration (v0.4)
+- Fix bikes ABAC: enforce service field matching (v0.4: bikes can only read their own service's secrets)
+- Add health check endpoints per moto-bike.md spec (v0.4: /health/live, /health/ready, /health/startup on port 8081)
 - Endpoint authorization matrix enforcement (future - spec v0.3: SVID tokens should be denied for admin endpoints)
-- POST /admin/rotate-dek/{name} endpoint (future)
+- POST /admin/rotate-dek/{name} endpoint (future - Phase 2)
+- Add request logging/metrics middleware (future - Phase 2)
 - K8s ServiceAccount JWT validation via TokenReview API (future - MVP accepts principal info directly)
-- PostgreSQL-backed repository (future - currently in-memory)
 
 ---
 

@@ -33,6 +33,10 @@ pub enum GarageAction {
         #[arg(short, long)]
         owner: Option<String>,
 
+        /// Git branch to work on (default: current branch)
+        #[arg(short, long)]
+        branch: Option<String>,
+
         /// Time-to-live (max: 48h). Format: <number><unit> where unit is m, h, or d.
         /// Default: 4h or config file setting.
         #[arg(long)]
@@ -278,6 +282,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
 
         GarageAction::Open {
             owner: _owner,
+            branch,
             ttl,
             engine,
             with_postgres,
@@ -299,7 +304,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
 
             let request = CreateGarageRequest {
                 name: Some(name.clone()),
-                branch: None,
+                branch: branch.clone(),
                 ttl_seconds: Some(ttl_seconds),
                 image: None,
                 engine: engine.clone(),
