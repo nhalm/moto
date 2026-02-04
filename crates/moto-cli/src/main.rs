@@ -41,7 +41,7 @@ async fn main() {
     let result = match cli.command {
         Command::Bike(cmd) => commands::bike::run(cmd, &flags).await,
         Command::Cluster(cmd) => commands::cluster::run(cmd, &flags).await,
-        Command::Garage(cmd) => commands::garage::run(cmd, &flags).await,
+        Command::Garage(cmd) => Box::pin(commands::garage::run(cmd, &flags)).await,
     };
 
     if let Err(e) = result {

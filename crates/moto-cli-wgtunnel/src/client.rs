@@ -219,7 +219,8 @@ impl MotoClubClient {
         // Retry with exponential backoff
         let mut last_error = String::new();
         for (attempt, delay) in DEVICE_REGISTRATION_DELAYS.iter().enumerate() {
-            let attempt = attempt as u32 + 1;
+            // attempt index fits in u32 since DEVICE_REGISTRATION_DELAYS is small
+            let attempt = u32::try_from(attempt).unwrap_or(u32::MAX) + 1;
 
             match self.post_json::<_, DeviceResponse>(&url, &request).await {
                 Ok(response) => {
@@ -468,6 +469,7 @@ impl MotoClubClient {
     }
 
     /// Send a POST request with JSON body and parse JSON response.
+    #[allow(clippy::future_not_send)] // Self is not Sync, but this is an internal method
     async fn post_json<Req, Resp>(&self, url: &str, body: &Req) -> Result<Resp, ClientError>
     where
         Req: Serialize,

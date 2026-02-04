@@ -76,9 +76,9 @@ pub enum TtydError {
     #[error("connection failed: {0}")]
     Connection(String),
 
-    /// WebSocket error.
+    /// WebSocket error (boxed to reduce enum size).
     #[error("websocket error: {0}")]
-    WebSocket(#[from] tokio_tungstenite::tungstenite::Error),
+    WebSocket(Box<tokio_tungstenite::tungstenite::Error>),
 
     /// Protocol error.
     #[error("protocol error: {0}")]
@@ -95,6 +95,12 @@ pub enum TtydError {
     /// Timeout waiting for connection.
     #[error("connection timeout")]
     Timeout,
+}
+
+impl From<tokio_tungstenite::tungstenite::Error> for TtydError {
+    fn from(e: tokio_tungstenite::tungstenite::Error) -> Self {
+        Self::WebSocket(Box::new(e))
+    }
 }
 
 /// Configuration for ttyd client.
@@ -273,7 +279,7 @@ impl TtydClient {
                             // Ignore other message types
                         }
                         Some(Err(e)) => {
-                            break Err(TtydError::WebSocket(e));
+                            break Err(TtydError::WebSocket(Box::new(e)));
                         }
                         None => {
                             debug!("WebSocket stream ended");

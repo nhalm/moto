@@ -511,7 +511,9 @@ pub async fn enter_garage(
 
     // Step 3: Create session with moto-club (using garage UUID and device public key)
     progress.step_start("Creating session");
-    let ttl_seconds = config.session_ttl.map(|t| t as u32);
+    let ttl_seconds = config
+        .session_ttl
+        .map(|t| u32::try_from(t).unwrap_or(u32::MAX));
     let api_response = client
         .create_session(garage_details.id, &device_pubkey, ttl_seconds)
         .await
@@ -559,7 +561,7 @@ pub async fn enter_garage(
         garage_public_key.clone(),
         session_response.derp_map.clone(),
     );
-    manager.add_session(tunnel_session).await?;
+    Box::pin(manager.add_session(tunnel_session)).await?;
 
     // Step 4: Configure WireGuard tunnel
     progress.step_start("Configuring tunnel");

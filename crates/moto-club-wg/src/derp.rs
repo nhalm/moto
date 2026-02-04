@@ -713,7 +713,8 @@ mod tests {
             .map(|i| {
                 let m = Arc::clone(&manager);
                 thread::spawn(move || {
-                    let region_id = (i % 3) as u16 + 1;
+                    // i % 3 is always 0, 1, or 2; fits in u16
+                    let region_id = u16::try_from(i % 3).unwrap() + 1;
                     let region = DerpRegion::new(region_id, format!("region-{region_id}"))
                         .with_node(DerpNode::with_defaults(format!("derp{i}.example.com")));
                     m.add_region(region).unwrap();

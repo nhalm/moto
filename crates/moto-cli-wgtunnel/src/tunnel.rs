@@ -974,7 +974,7 @@ mod tests {
         );
 
         // Add session
-        manager.add_session(session).await.unwrap();
+        Box::pin(manager.add_session(session)).await.unwrap();
         assert_eq!(manager.session_count().await, 1);
 
         // Get session by ID
@@ -1031,10 +1031,10 @@ mod tests {
             DerpMap::new(),
         );
 
-        manager.add_session(session1).await.unwrap();
+        Box::pin(manager.add_session(session1)).await.unwrap();
 
         // Should fail - same garage ID
-        let result = manager.add_session(session2).await;
+        let result = Box::pin(manager.add_session(session2)).await;
         assert!(matches!(result, Err(TunnelError::SessionExists(_))));
     }
 
@@ -1060,12 +1060,12 @@ mod tests {
                 format!("sess_{i}"),
                 format!("garage_{i}"),
                 format!("test-garage-{i}"),
-                OverlayIp::client(i as u64),
-                OverlayIp::garage(i as u64),
+                OverlayIp::client(u64::try_from(i).unwrap()),
+                OverlayIp::garage(u64::try_from(i).unwrap()),
                 garage_key,
                 DerpMap::new(),
             );
-            manager.add_session(session).await.unwrap();
+            Box::pin(manager.add_session(session)).await.unwrap();
         }
 
         assert_eq!(manager.session_count().await, 3);
@@ -1242,7 +1242,7 @@ mod tests {
             DerpMap::new(),
         );
 
-        manager.add_session(session).await.unwrap();
+        Box::pin(manager.add_session(session)).await.unwrap();
 
         // Configure WG tunnel through manager
         manager.configure_wg_tunnel("sess_123").await.unwrap();

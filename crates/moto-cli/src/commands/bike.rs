@@ -401,6 +401,7 @@ fn build_bike_image(bike_name: &str, tag: &str, quiet: bool) -> Result<()> {
 
 /// Run the bike command
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::future_not_send)] // StdoutLock in log streaming loop is not Send
 pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
         BikeAction::Build { tag, push } => {

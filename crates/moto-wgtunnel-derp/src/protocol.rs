@@ -812,6 +812,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::similar_names)] // ping/pong are semantically paired names
     fn ping_pong_encode_decode() {
         let ping_data = [1, 2, 3, 4, 5, 6, 7, 8];
         let ping = Frame::Ping { data: ping_data };

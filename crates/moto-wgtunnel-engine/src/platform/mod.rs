@@ -214,7 +214,7 @@ impl TunDevice {
         } else {
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             {
-                Ok(Self::Platform(PlatformTun::create(config)?))
+                Ok(Self::Platform(PlatformTun::create(&config)?))
             }
             #[cfg(not(any(target_os = "linux", target_os = "macos")))]
             {
@@ -441,6 +441,10 @@ impl VirtualTun {
     /// Set the IPv6 address.
     ///
     /// For virtual TUN, this just stores the address (no kernel configuration).
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the device is closed.
     pub fn set_ipv6(&mut self, addr: Ipv6Addr) -> Result<(), TunError> {
         if self.closed {
             return Err(TunError::Closed);
@@ -452,6 +456,10 @@ impl VirtualTun {
     /// Read a packet from the virtual TUN (outbound queue).
     ///
     /// Returns the number of bytes read, or 0 if no packets are available.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the device is closed.
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TunError> {
         if self.closed {
             return Err(TunError::Closed);
@@ -467,6 +475,10 @@ impl VirtualTun {
     /// Write a packet to the virtual TUN (outbound queue).
     ///
     /// This queues a packet to be sent out through the `WireGuard` tunnel.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the device is closed.
     pub fn write(&mut self, buf: &[u8]) -> Result<usize, TunError> {
         if self.closed {
             return Err(TunError::Closed);
@@ -480,6 +492,10 @@ impl VirtualTun {
     ///
     /// This is called by the `WireGuard` engine when a packet is decrypted
     /// and needs to be delivered to the application.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the device is closed.
     pub fn inject(&mut self, buf: &[u8]) -> Result<(), TunError> {
         if self.closed {
             return Err(TunError::Closed);

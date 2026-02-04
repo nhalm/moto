@@ -377,7 +377,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                     let config = EnterConfig::default();
                     let progress = ConsoleProgress::new(flags.quiet);
 
-                    let session = enter_garage(&manager, &garage.name, config, &progress)
+                    let session = Box::pin(enter_garage(&manager, &garage.name, config, &progress))
                         .await
                         .map_err(|e| match e {
                             EnterError::GarageNotFound(_) => CliError::not_found(format!(
@@ -432,7 +432,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             let progress = ConsoleProgress::new(flags.quiet);
 
             // Enter the garage
-            let session = enter_garage(&manager, &name, config, &progress)
+            let session = Box::pin(enter_garage(&manager, &name, config, &progress))
                 .await
                 .map_err(|e| match e {
                     EnterError::GarageNotFound(_) => CliError::not_found(format!(

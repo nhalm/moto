@@ -17,7 +17,7 @@
 //! use moto_wgtunnel_engine::platform::TunConfig;
 //!
 //! let config = TunConfig::new().name("utun5");
-//! let mut tun = PlatformTun::create(config)?;
+//! let mut tun = PlatformTun::create(&config)?;
 //!
 //! // Read and write packets
 //! let mut buf = [0u8; 2048];
@@ -31,6 +31,15 @@
 //! header to each packet. This implementation handles the header automatically:
 //! - Read: strips the header, returns raw IP packet
 //! - Write: prepends the appropriate header based on IP version
+//!
+//! # Safety
+//!
+//! This module uses `unsafe` for system calls to the macOS kernel. All unsafe
+//! blocks are documented with SAFETY comments explaining why they are sound.
+#![allow(unsafe_code)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
 
 use std::ffi::CStr;
 use std::mem;
@@ -138,8 +147,9 @@ impl PlatformTun {
     /// Returns error if:
     /// - Control socket cannot be created
     /// - Device cannot be configured
-    pub fn create(config: TunConfig) -> Result<Self, TunError> {
+    pub fn create(config: &TunConfig) -> Result<Self, TunError> {
         // Create a system control socket
+        // SAFETY: libc::socket is a standard POSIX syscall. Returns -1 on error which we check.
         let fd = unsafe { libc::socket(libc::PF_SYSTEM, libc::SOCK_DGRAM, SYSPROTO_CONTROL) };
         if fd < 0 {
             let err = std::io::Error::last_os_error();
@@ -149,11 +159,16 @@ impl PlatformTun {
         }
 
         // Get the control ID for utun
+        // SAFETY: mem::zeroed is safe for CtlInfo which is a repr(C) struct with only
+        // primitive types (u32, [u8; N]) that have valid zero representations.
         let mut info: CtlInfo = unsafe { mem::zeroed() };
         info.ctl_name[..UTUN_CONTROL_NAME.len()].copy_from_slice(UTUN_CONTROL_NAME);
 
+        // SAFETY: libc::ioctl with CTLIOCGINFO queries control info. fd is valid (checked above),
+        // and info is properly initialized. Returns < 0 on error which we check.
         if unsafe { libc::ioctl(fd, CTLIOCGINFO, &mut info) } < 0 {
             let err = std::io::Error::last_os_error();
+            // SAFETY: fd is a valid file descriptor from socket() above.
             unsafe { libc::close(fd) };
             return Err(TunError::Create(format!(
                 "failed to get utun control ID: {err}"
@@ -170,16 +185,21 @@ impl PlatformTun {
         };
 
         // Prepare the control socket address
+        // SAFETY for casts: SockaddrCtl is a fixed-size struct (32 bytes on macOS).
+        // AF_SYSTEM and SYSPROTO_SYSTEM are small constants that fit in u8/u16.
         let addr = SockaddrCtl {
-            sc_len: mem::size_of::<SockaddrCtl>() as u8,
-            sc_family: libc::AF_SYSTEM as u8,
-            ss_sysaddr: SYSPROTO_SYSTEM as u16,
+            sc_len: mem::size_of::<SockaddrCtl>() as u8, // Always 32, fits in u8
+            sc_family: libc::AF_SYSTEM as u8,            // Always 32, fits in u8
+            ss_sysaddr: SYSPROTO_SYSTEM as u16,          // Always 0x800, fits in u16
             sc_id: info.ctl_id,
             sc_unit: unit + 1, // utun unit is 1-indexed in connect, but 0-indexed in name
             sc_reserved: [0; 5],
         };
 
         // Connect to create the utun device
+        // SAFETY: libc::connect is a standard POSIX syscall. fd is valid, addr is a properly
+        // initialized SockaddrCtl struct, and we pass its exact size. Returns < 0 on error.
+        // The size cast is safe because SockaddrCtl is a fixed-size struct (32 bytes).
         if unsafe {
             libc::connect(
                 fd,
@@ -189,6 +209,7 @@ impl PlatformTun {
         } < 0
         {
             let err = std::io::Error::last_os_error();
+            // SAFETY: fd is a valid file descriptor from socket() above.
             unsafe { libc::close(fd) };
             return Err(TunError::Create(format!(
                 "failed to connect utun device: {err}"
@@ -197,8 +218,11 @@ impl PlatformTun {
 
         // Get the actual device name
         let mut name_buf = [0u8; IFNAMSIZ];
+        // SAFETY: IFNAMSIZ is 16, which fits in u32 for socklen_t.
         let mut name_len = IFNAMSIZ as libc::socklen_t;
 
+        // SAFETY: libc::getsockopt is a standard POSIX syscall. fd is valid, name_buf is a valid
+        // buffer of IFNAMSIZ bytes, and name_len is initialized to IFNAMSIZ. Returns < 0 on error.
         if unsafe {
             libc::getsockopt(
                 fd,
@@ -210,12 +234,15 @@ impl PlatformTun {
         } < 0
         {
             let err = std::io::Error::last_os_error();
+            // SAFETY: fd is a valid file descriptor from socket() above.
             unsafe { libc::close(fd) };
             return Err(TunError::Create(format!(
                 "failed to get utun device name: {err}"
             )));
         }
 
+        // SAFETY: getsockopt with UTUN_OPT_IFNAME writes a null-terminated C string into name_buf.
+        // We checked the return value above, so name_buf contains valid UTF-8 interface name.
         let actual_name = unsafe {
             CStr::from_ptr(name_buf.as_ptr().cast())
                 .to_string_lossy()
@@ -276,6 +303,7 @@ impl PlatformTun {
 
     /// Set the MTU.
     fn set_mtu(&mut self, mtu: u16) -> Result<(), TunError> {
+        // SAFETY: libc::socket is a standard POSIX syscall. Returns -1 on error which we check.
         let sock = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
         if sock < 0 {
             return Err(TunError::Configure(
@@ -283,16 +311,22 @@ impl PlatformTun {
             ));
         }
 
+        // SAFETY: mem::zeroed is safe for IfReq which is a repr(C) struct containing only
+        // primitive types and a union of primitives. All have valid zero representations.
         let mut ifr: IfReq = unsafe { mem::zeroed() };
         for (i, c) in self.name.bytes().enumerate() {
             if i >= IFNAMSIZ - 1 {
                 break;
             }
+            // Interface names are ASCII, so u8 to c_char (i8 on macOS) is safe for printable ASCII.
             ifr.ifr_name[i] = c as libc::c_char;
         }
         ifr.ifr_data.ifr_mtu = i32::from(mtu);
 
+        // SAFETY: libc::ioctl with SIOCSIFMTU sets the interface MTU. sock is valid,
+        // and ifr is properly initialized with the interface name and MTU value.
         let result = unsafe { libc::ioctl(sock, SIOCSIFMTU, &ifr) };
+        // SAFETY: sock is a valid file descriptor from socket() above.
         unsafe { libc::close(sock) };
 
         if result < 0 {
@@ -306,6 +340,7 @@ impl PlatformTun {
 
     /// Bring up the interface.
     fn bring_up(&self) -> Result<(), TunError> {
+        // SAFETY: libc::socket is a standard POSIX syscall. Returns -1 on error which we check.
         let sock = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
         if sock < 0 {
             return Err(TunError::Configure(
@@ -313,17 +348,23 @@ impl PlatformTun {
             ));
         }
 
+        // SAFETY: mem::zeroed is safe for IfReq which is a repr(C) struct containing only
+        // primitive types and a union of primitives. All have valid zero representations.
         let mut ifr: IfReq = unsafe { mem::zeroed() };
         for (i, c) in self.name.bytes().enumerate() {
             if i >= IFNAMSIZ - 1 {
                 break;
             }
+            // Interface names are ASCII, so u8 to c_char (i8 on macOS) is safe for printable ASCII.
             ifr.ifr_name[i] = c as libc::c_char;
         }
 
         // Get current flags
+        // SAFETY: libc::ioctl with SIOCGIFFLAGS retrieves interface flags. sock is valid,
+        // and ifr is properly initialized with the interface name. Returns < 0 on error.
         if unsafe { libc::ioctl(sock, SIOCGIFFLAGS, &mut ifr) } < 0 {
             let err = std::io::Error::last_os_error();
+            // SAFETY: sock is a valid file descriptor from socket() above.
             unsafe { libc::close(sock) };
             return Err(TunError::Configure(format!(
                 "failed to get interface flags: {err}"
@@ -331,12 +372,17 @@ impl PlatformTun {
         }
 
         // Set UP and RUNNING flags
+        // SAFETY: We just read ifr_flags via SIOCGIFFLAGS above, so the union is in the ifr_flags
+        // variant. We're modifying the same field to set additional flags.
         unsafe {
             ifr.ifr_data.ifr_flags |= IFF_UP | IFF_RUNNING;
         }
 
         // Apply flags
+        // SAFETY: libc::ioctl with SIOCSIFFLAGS sets interface flags. sock is valid,
+        // and ifr contains valid flags we just read and modified.
         let result = unsafe { libc::ioctl(sock, SIOCSIFFLAGS, &ifr) };
+        // SAFETY: sock is a valid file descriptor from socket() above.
         unsafe { libc::close(sock) };
 
         if result < 0 {
@@ -354,6 +400,10 @@ impl PlatformTun {
     /// # Note
     ///
     /// This requires root privileges.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if ifconfig command fails or address cannot be assigned.
     pub fn set_ipv6(&mut self, addr: Ipv6Addr) -> Result<(), TunError> {
         // Use ifconfig command on macOS
         let output = std::process::Command::new("ifconfig")
@@ -387,12 +437,16 @@ impl PlatformTun {
 
         // Read with space for the 4-byte header
         let mut full_buf = vec![0u8; buf.len() + 4];
+        // SAFETY: libc::read is a standard POSIX syscall. fd is valid (checked via ok_or above),
+        // full_buf is a valid mutable buffer, and we pass its exact length.
         let n = unsafe { libc::read(fd, full_buf.as_mut_ptr().cast(), full_buf.len()) };
 
         if n < 0 {
             return Err(TunError::Read(std::io::Error::last_os_error()));
         }
 
+        // Cast is safe: we just checked n >= 0, and the returned byte count
+        // cannot exceed the buffer size which fits in usize.
         let n = n as usize;
         if n <= 4 {
             return Ok(0); // No payload
@@ -437,13 +491,16 @@ impl PlatformTun {
         full_buf.extend_from_slice(&proto.to_be_bytes());
         full_buf.extend_from_slice(buf);
 
+        // SAFETY: libc::write is a standard POSIX syscall. fd is valid (checked via ok_or above),
+        // full_buf is a valid buffer, and we pass its exact length.
         let n = unsafe { libc::write(fd, full_buf.as_ptr().cast(), full_buf.len()) };
 
         if n < 0 {
             return Err(TunError::Write(std::io::Error::last_os_error()));
         }
 
-        // Return the number of payload bytes written (excluding header)
+        // Return the number of payload bytes written (excluding header).
+        // Cast is safe: we just checked n >= 0, and the byte count cannot exceed buffer size.
         let written = (n as usize).saturating_sub(4);
         Ok(written)
     }
@@ -451,6 +508,8 @@ impl PlatformTun {
     /// Close the TUN device.
     pub fn close(&mut self) {
         if let Some(fd) = self.fd.take() {
+            // SAFETY: fd came from a successful socket() + connect() sequence,
+            // and we only close it once via take().
             unsafe { libc::close(fd) };
         }
     }
@@ -473,7 +532,7 @@ mod tests {
     #[ignore = "requires root"]
     fn create_utun_device() {
         let config = TunConfig::new().mtu(1420);
-        let tun = PlatformTun::create(config).unwrap();
+        let tun = PlatformTun::create(&config).unwrap();
 
         assert!(tun.name().starts_with("utun"));
         assert_eq!(tun.mtu(), 1420);
