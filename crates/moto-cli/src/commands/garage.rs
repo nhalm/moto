@@ -110,16 +110,15 @@ struct GarageListJson {
     garages: Vec<GarageJson>,
 }
 
-/// JSON representation of a garage (matches spec)
+/// JSON representation of a garage (matches spec v0.4)
 #[derive(Serialize)]
 struct GarageJson {
+    id: String,
     name: String,
+    branch: String,
     status: String,
+    ttl_remaining_seconds: i64,
     age_seconds: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    ttl_remaining_seconds: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    engine: Option<String>,
 }
 
 /// JSON output for garage open (matches spec v0.4)
@@ -232,14 +231,16 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                                         let remaining =
                                             (exp.with_timezone(&chrono::Utc) - now).num_seconds();
                                         remaining.max(0)
-                                    });
+                                    })
+                                    .unwrap_or(0);
 
                             GarageJson {
+                                id: format_short_id(&g.id),
                                 name: g.name.clone(),
+                                branch: g.branch.clone(),
                                 status: g.status.clone(),
-                                age_seconds,
                                 ttl_remaining_seconds,
-                                engine: g.engine.clone(),
+                                age_seconds,
                             }
                         })
                         .collect(),
@@ -250,9 +251,11 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                     println!("No garages found.");
                 }
             } else {
+                // Output format per spec v0.4:
+                // ID       NAME                    BRANCH   STATUS    TTL        AGE
                 println!(
-                    "{:<16} {:<12} {:<8} {:<10} {}",
-                    "NAME", "STATUS", "AGE", "TTL", "ENGINE"
+                    "{:<9} {:<24} {:<9} {:<12} {:<10} {}",
+                    "ID", "NAME", "BRANCH", "STATUS", "TTL", "AGE"
                 );
                 for g in response.garages {
                     let created_at = chrono::DateTime::parse_from_rfc3339(&g.created_at)
@@ -272,14 +275,15 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                         })
                         .unwrap_or_else(|| "-".to_string());
 
-                    let engine = g.engine.as_deref().unwrap_or("-");
+                    let branch = if g.branch.is_empty() { "-" } else { &g.branch };
                     println!(
-                        "{:<16} {:<12} {:<8} {:<10} {}",
-                        truncate(&g.name, 16),
+                        "{:<9} {:<24} {:<9} {:<12} {:<10} {}",
+                        format_short_id(&g.id),
+                        truncate(&g.name, 24),
+                        truncate(branch, 9),
                         g.status,
-                        age,
                         ttl,
-                        engine
+                        age
                     );
                 }
             }
