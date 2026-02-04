@@ -235,9 +235,9 @@ HOW TO USE THIS FILE:
 - CLI --branch flag for garage open (v0.4: passes branch to CreateGarageRequest)
 - CLI --no-attach flag for garage open (v0.4: creates garage without connecting; default is to connect after creation)
 - Ready criteria check: repo cloned (v0.4: reconciler checks init container completed successfully via init_container_succeeded method in GaragePodOps trait, moto-club-k8s pods.rs)
+- Fix garage open output format to match spec (v0.4: show ID, branch, expires_at, status) - moto-cli/src/commands/garage.rs, GarageOpenJson struct updated, format_short_id and format_expires_at helpers added
 
 **Remaining:**
-- Fix garage open output format to match spec (v0.4: show ID, branch, expires_at, status)
 - Fix garage list columns to match spec (v0.4: add ID, BRANCH columns)
 - Repo cloning: credentials from keybox (future - MVP supports public repos)
 

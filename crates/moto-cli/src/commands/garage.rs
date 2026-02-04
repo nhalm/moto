@@ -122,13 +122,14 @@ struct GarageJson {
     engine: Option<String>,
 }
 
-/// JSON output for garage open (matches spec)
+/// JSON output for garage open (matches spec v0.4)
 #[derive(Serialize)]
 struct GarageOpenJson {
+    id: String,
     name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    engine: Option<String>,
+    branch: String,
     ttl_seconds: i64,
+    expires_at: String,
     status: String,
 }
 
@@ -324,18 +325,29 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
 
             if flags.json {
                 let json = GarageOpenJson {
+                    id: format_short_id(&garage.id),
                     name: garage.name.clone(),
-                    engine: garage.engine.clone(),
+                    branch: garage.branch.clone(),
                     ttl_seconds,
+                    expires_at: garage.expires_at.clone(),
                     status: garage.status.clone(),
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
             } else {
-                println!("Created garage: {}", garage.name);
-                if let Some(engine) = &garage.engine {
-                    println!("  Engine: {engine}");
-                }
-                println!("  TTL: {ttl_str}");
+                // Format expiration time for display
+                let expires_display = format_expires_at(&garage.expires_at);
+
+                // Output format per spec v0.4:
+                // Garage created: abc123
+                //   Name:    feature-tokenization
+                //   Branch:  main
+                //   TTL:     4h (expires 2026-01-20 02:48:00)
+                //   Status:  Ready
+                println!("Garage created: {}", format_short_id(&garage.id));
+                println!("  Name:    {}", garage.name);
+                println!("  Branch:  {}", garage.branch);
+                println!("  TTL:     {} (expires {})", ttl_str, expires_display);
+                println!("  Status:  {}", garage.status);
                 println!();
 
                 if no_attach {
@@ -588,6 +600,20 @@ fn truncate(s: &str, max_len: usize) -> String {
     }
 }
 
+/// Format a UUID as a short 6-character ID (first 6 hex chars).
+/// e.g., "abc123" from "abc12345-6789-..."
+fn format_short_id(id: &uuid::Uuid) -> String {
+    let hex = id.simple().to_string();
+    hex[..6].to_string()
+}
+
+/// Format an ISO 8601 timestamp for display (e.g., "2026-01-20 02:48:00").
+fn format_expires_at(expires_at: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(expires_at)
+        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_else(|_| expires_at.to_string())
+}
+
 /// Format a duration in seconds as a human-readable string (e.g., "2h15m", "45m", "3d").
 fn format_duration(seconds: i64) -> String {
     if seconds < 0 {
@@ -697,5 +723,21 @@ mod tests {
     #[test]
     fn test_format_duration_negative() {
         assert_eq!(format_duration(-100), "0s");
+    }
+
+    #[test]
+    fn test_format_short_id() {
+        let id = uuid::Uuid::parse_str("abc12345-6789-0def-1234-567890abcdef").unwrap();
+        assert_eq!(format_short_id(&id), "abc123");
+    }
+
+    #[test]
+    fn test_format_expires_at() {
+        assert_eq!(
+            format_expires_at("2026-01-20T02:48:00Z"),
+            "2026-01-20 02:48:00"
+        );
+        // Invalid timestamp returns as-is
+        assert_eq!(format_expires_at("invalid"), "invalid");
     }
 }
