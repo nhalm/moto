@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.4 |
-| Status | Ready to Rip |
+| Version | 1.5 |
+| Status | Ripping |
 | Last Updated | 2026-02-04 |
 
 ## Overview
@@ -1195,6 +1195,17 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v1.5 (2026-02-04)
+- **Health check keybox integration:** `/health/ready` must check keybox `/health/ready`
+  - Return degraded status if keybox unreachable
+  - Add `keybox: "ok"` or `keybox: "unavailable"` to health response
+- **WireGuard key storage (step 7):** Store garage public_key in `wg_garages` table during creation
+  - Required for client session routing (clients need to know which garage to connect to)
+  - Currently has TODO in code, must be implemented
+- **Owner field in RegisteredDevice:** Add `owner` field to `RegisteredDevice` trait
+  - Currently hardcoded as "unknown" in PostgresPeerStore
+  - Required for proper device ownership tracking and ABAC
 
 ### v1.4
 - Move WebSocket peer streaming from "Deferred" to implemented (WS /internal/wg/garages/{id}/peers exists)

@@ -1,7 +1,7 @@
 # Project Structure Specification
 
-**Version:** 1.3
-**Status:** Ready to Rip
+**Version:** 1.4
+**Status:** Ripping
 **Last Updated:** 2026-02-04
 
 ---
@@ -391,6 +391,16 @@ Both CLI and server need the same types (GarageInfo, etc). Put them in `moto-clu
 ---
 
 ## Changelog
+
+### v1.4 (2026-02-04)
+
+**BREAKING: Remove `moto-garage` crate entirely.**
+
+The `moto-garage` crate provided a client library with local/remote modes, but is now dead code:
+- CLI uses `moto-cli-wgtunnel` which talks directly to moto-club API
+- No consumers exist in the workspace
+- Remove from Cargo.toml workspace members
+- Delete `crates/moto-garage/` directory
 
 ### v1.3 (2026-02-04)
 

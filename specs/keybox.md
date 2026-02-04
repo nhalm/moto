@@ -2,10 +2,18 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
+| Version | 0.5 |
 | Last Updated | 2026-02-04 |
 
 ## Changelog
+
+### v0.5 (2026-02-04)
+- **BREAKING:** Rename `moto-keybox-server` binary from `moto-keybox` to `moto-keybox-server`
+  - Fixes cargo doc collision with `moto-keybox` library crate
+  - Update Cargo.toml: `[[bin]] name = "moto-keybox-server"`
+- moto-club health check integration: `/health/ready` should check keybox availability
+  - moto-club calls keybox `/health/ready` endpoint
+  - Returns degraded health if keybox unreachable
 
 ### v0.4 (2026-02-04)
 - Wire up moto-keybox-db PostgreSQL backend for secrets and audit logs (was in-memory only)
