@@ -58,9 +58,9 @@ HOW TO USE THIS FILE:
 - Fix: GET /api/v1/info features.websocket returns true (v1.4: WS /internal/wg/garages/{id}/peers implemented)
 - Fix: Call create_garage_postgres() and create_garage_redis() in garage creation flow (v1.4: service.rs now calls GaragePostgresOps.create_garage_postgres and GarageRedisOps.create_garage_redis when with_postgres/with_redis are true)
 - /health/ready and /health keybox integration (v1.5: checks keybox /health/ready on port 8081, returns degraded status if unreachable, adds keybox field to response; MOTO_CLUB_KEYBOX_URL env var for config; AppState.keybox_url field)
+- Store garage public_key in wg_garages table during creation (v1.5: step 7 - service.rs calls wg_garage_repo::register after creating WireGuard resources, endpoints empty initially)
 
 **Remaining:**
-- Store garage public_key in wg_garages table during creation (v1.5: step 7 - required for client session routing)
 - Add owner field to RegisteredDevice trait (v1.5: currently hardcoded as "unknown" in PostgresPeerStore)
 
 ---

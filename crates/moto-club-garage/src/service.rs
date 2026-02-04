@@ -9,7 +9,9 @@ use thiserror::Error;
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
-use moto_club_db::{DbError, DbPool, Garage, GarageStatus, TerminationReason, garage_repo};
+use moto_club_db::{
+    DbError, DbPool, Garage, GarageStatus, TerminationReason, garage_repo, wg_garage_repo,
+};
 use moto_club_k8s::{
     DEV_CONTAINER_POD_NAME, GarageK8s, GarageLimitRangeOps, GarageNamespaceInput,
     GarageNamespaceOps, GarageNetworkPolicyOps, GaragePodInput, GaragePodOps, GaragePodStatus,
@@ -563,9 +565,28 @@ impl GarageService {
             }
         };
 
-        // TODO: Store wg_resources.public_key in database for client session routing
-        // This will be done in a future PR when we integrate with wg_garages table
-        let _ = wg_resources; // Suppress unused warning for now
+        // Step 7b: Store public_key in wg_garages table for client session routing
+        // Per spec v1.5: required so clients know which garage public key to connect to
+        debug!(namespace = %namespace, "storing WireGuard public key in database");
+        let wg_register = wg_garage_repo::RegisterWgGarage {
+            garage_id: garage_id.as_uuid(),
+            public_key: wg_resources.public_key.to_string(),
+            // Endpoints are empty at creation time - filled when garage pod registers
+            endpoints: vec![],
+        };
+        if let Err(e) = wg_garage_repo::register(&self.db, wg_register).await {
+            // Cleanup namespace on database registration failure
+            warn!(namespace = %namespace, error = %e, "WireGuard database registration failed, cleaning up namespace");
+            if let Err(ns_err) = self.k8s.delete_garage_namespace(garage_id).await {
+                warn!(namespace = %namespace, error = %ns_err, "failed to cleanup namespace");
+            }
+            return Err(e.into());
+        }
+        info!(
+            namespace = %namespace,
+            public_key = %wg_resources.public_key,
+            "WireGuard public key stored in database"
+        );
 
         // Step 8: Issue garage SVID from keybox per spec v1.3
         // POST /auth/issue-garage-svid, create garage-svid Secret
