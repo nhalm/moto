@@ -660,7 +660,7 @@ mod tests {
         let allowed_ip = OverlayIp::garage(1);
         let endpoint: SocketAddr = "203.0.113.5:51820".parse().unwrap();
 
-        let peer = PeerConfig::with_endpoint(peer_key.clone(), allowed_ip, endpoint);
+        let peer = PeerConfig::with_endpoint(peer_key, allowed_ip, endpoint);
 
         assert_eq!(peer.endpoint(), Some(endpoint));
     }
@@ -695,7 +695,7 @@ mod tests {
         let interface = InterfaceConfig::new(private_key, address);
 
         let peer_key = WgPrivateKey::generate().public_key();
-        let peer = PeerConfig::new(peer_key.clone(), OverlayIp::garage(1));
+        let peer = PeerConfig::new(peer_key, OverlayIp::garage(1));
 
         let config = TunnelConfig::builder()
             .interface(interface)

@@ -762,7 +762,7 @@ mod tests {
         let frame = Frame::ServerKey { key: key.clone() };
 
         let encoded = frame.encode_to_bytes();
-        let mut buf = encoded.clone();
+        let mut buf = encoded;
         let decoded = decode_frame(&mut buf).unwrap();
 
         assert_eq!(decoded, Frame::ServerKey { key });
@@ -779,7 +779,7 @@ mod tests {
         };
 
         let encoded = frame.encode_to_bytes();
-        let mut buf = encoded.clone();
+        let mut buf = encoded;
         let decoded = decode_frame(&mut buf).unwrap();
 
         assert_eq!(decoded, Frame::SendPacket { dst, data });
@@ -795,7 +795,7 @@ mod tests {
         };
 
         let encoded = frame.encode_to_bytes();
-        let mut buf = encoded.clone();
+        let mut buf = encoded;
         let decoded = decode_frame(&mut buf).unwrap();
 
         assert_eq!(decoded, Frame::RecvPacket { src, data });
@@ -805,7 +805,7 @@ mod tests {
     fn keepalive_encode_decode() {
         let frame = Frame::KeepAlive;
         let encoded = frame.encode_to_bytes();
-        let mut buf = encoded.clone();
+        let mut buf = encoded;
         let decoded = decode_frame(&mut buf).unwrap();
 
         assert_eq!(decoded, Frame::KeepAlive);
@@ -818,14 +818,14 @@ mod tests {
         let pong = Frame::Pong { data: ping_data };
 
         let encoded_ping = ping.encode_to_bytes();
-        let mut buf = encoded_ping.clone();
+        let mut buf = encoded_ping;
         assert_eq!(
             decode_frame(&mut buf).unwrap(),
             Frame::Ping { data: ping_data }
         );
 
         let encoded_pong = pong.encode_to_bytes();
-        let mut buf = encoded_pong.clone();
+        let mut buf = encoded_pong;
         assert_eq!(
             decode_frame(&mut buf).unwrap(),
             Frame::Pong { data: ping_data }
@@ -876,7 +876,7 @@ mod tests {
             message: "all good".to_string(),
         };
         let encoded = frame.encode_to_bytes();
-        let mut buf = encoded.clone();
+        let mut buf = encoded;
         let decoded = decode_frame(&mut buf).unwrap();
 
         assert_eq!(
@@ -894,7 +894,7 @@ mod tests {
             try_for_ms: 5000,
         };
         let encoded = frame.encode_to_bytes();
-        let mut buf = encoded.clone();
+        let mut buf = encoded;
         let decoded = decode_frame(&mut buf).unwrap();
 
         assert_eq!(
@@ -918,7 +918,7 @@ mod tests {
         };
 
         let encoded = frame.encode_to_bytes();
-        let mut buf = encoded.clone();
+        let mut buf = encoded;
         let decoded = decode_frame(&mut buf).unwrap();
 
         assert_eq!(decoded, Frame::ForwardPacket { src, dst, data });
@@ -936,7 +936,7 @@ mod tests {
         };
 
         let encoded = frame.encode_to_bytes();
-        let mut buf = encoded.clone();
+        let mut buf = encoded;
         let decoded = decode_frame(&mut buf).unwrap();
 
         assert_eq!(
@@ -959,7 +959,7 @@ mod tests {
         };
 
         let encoded = frame.encode_to_bytes();
-        let mut buf = encoded.clone();
+        let mut buf = encoded;
         let decoded = decode_frame(&mut buf).unwrap();
 
         assert_eq!(

@@ -59,18 +59,18 @@ pub type InMemoryWgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>
 /// Type alias for the session manager used with in-memory storage (for testing).
 pub type InMemoryWgSessionManager = SessionManager<InMemorySessionStore>;
 
-/// Type alias for the peer registry used with PostgreSQL storage (for production).
+/// Type alias for the peer registry used with `PostgreSQL` storage (for production).
 pub type PostgresWgPeerRegistry = PeerRegistry<PostgresPeerStore, InMemoryStore>;
 
-/// Type alias for the session manager used with PostgreSQL storage (for production).
+/// Type alias for the session manager used with `PostgreSQL` storage (for production).
 pub type PostgresWgSessionManager = SessionManager<PostgresSessionStore>;
 
 /// Type alias for the peer registry used in production.
-/// Currently defaults to in-memory; will be switched to PostgreSQL when fully wired.
+/// Currently defaults to in-memory; will be switched to `PostgreSQL` when fully wired.
 pub type WgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>;
 
 /// Type alias for the session manager used in production.
-/// Currently defaults to in-memory; will be switched to PostgreSQL when fully wired.
+/// Currently defaults to in-memory; will be switched to `PostgreSQL` when fully wired.
 pub type WgSessionManager = SessionManager<InMemorySessionStore>;
 
 /// Type alias for the DERP map manager used in production.
@@ -91,7 +91,7 @@ pub struct AppState {
     pub derp_manager: Arc<WgDerpMapManager>,
     /// Peer event broadcaster for garage WebSocket connections.
     pub peer_broadcaster: Arc<PeerBroadcaster>,
-    /// Kubernetes client for ServiceAccount token validation.
+    /// Kubernetes client for `ServiceAccount` token validation.
     /// When `None`, token validation is skipped (for testing/local dev).
     pub k8s_client: Option<K8sClient>,
     /// Garage K8s operations for namespace and pod management.
@@ -148,7 +148,7 @@ impl AppState {
     /// Creates a new `AppState` with in-memory storage (for testing).
     ///
     /// This uses in-memory stores that don't persist data across restarts.
-    /// K8s operations are disabled (k8s_client, garage_k8s, and garage_service are None).
+    /// K8s operations are disabled (`k8s_client`, `garage_k8s`, and `garage_service` are None).
     #[must_use]
     pub fn with_in_memory_storage(db_pool: DbPool) -> Self {
         let ipam_store = InMemoryStore::new();
@@ -181,7 +181,7 @@ impl AppState {
 /// - Health endpoints from [`health::router()`]
 /// - Garage endpoints from [`garages::router()`]
 /// - `WireGuard` endpoints from [`wg::router()`]
-/// - HTTP metrics middleware (records http_requests_total and http_request_duration_seconds)
+/// - HTTP metrics middleware (records `http_requests_total` and `http_request_duration_seconds`)
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(health::router())
@@ -268,7 +268,7 @@ pub mod error_codes {
     pub const K8S_ERROR: &str = "K8S_ERROR";
     /// Database connection error.
     pub const DATABASE_ERROR: &str = "DATABASE_ERROR";
-    /// K8s ServiceAccount token is invalid or expired.
+    /// K8s `ServiceAccount` token is invalid or expired.
     pub const INVALID_TOKEN: &str = "INVALID_TOKEN";
     /// Pod not running in expected garage namespace.
     pub const NAMESPACE_MISMATCH: &str = "NAMESPACE_MISMATCH";

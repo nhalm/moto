@@ -147,7 +147,7 @@ fn parse_duration(s: &str) -> Result<u64> {
 }
 
 /// Get the Linux target system based on host architecture.
-/// Maps arm64/aarch64 -> aarch64-linux, x86_64 -> x86_64-linux.
+/// Maps arm64/aarch64 -> aarch64-linux, `x86_64` -> x86_64-linux.
 fn get_linux_target() -> Result<String> {
     let output = ProcessCommand::new("uname")
         .arg("-m")
@@ -224,7 +224,7 @@ fn check_docker_running() -> Result<bool> {
     }
 }
 
-/// Get the registry from MOTO_REGISTRY env var.
+/// Get the registry from `MOTO_REGISTRY` env var.
 fn get_registry() -> Option<String> {
     std::env::var("MOTO_REGISTRY").ok()
 }
@@ -232,7 +232,7 @@ fn get_registry() -> Option<String> {
 /// Push an image to the registry.
 fn push_image(image_ref: &str, quiet: bool) -> Result<()> {
     if !quiet {
-        eprintln!("Pushing {}...", image_ref);
+        eprintln!("Pushing {image_ref}...");
     }
 
     let output = ProcessCommand::new("docker")
@@ -264,15 +264,14 @@ fn get_latest_local_image(bike_name: &str) -> Result<String> {
     let first_tag = tags.lines().next();
 
     match first_tag {
-        Some(tag) if !tag.is_empty() => Ok(format!("{}:{}", bike_name, tag)),
+        Some(tag) if !tag.is_empty() => Ok(format!("{bike_name}:{tag}")),
         _ => Err(CliError::invalid_input(format!(
-            "No local image found for '{}'. Build first with: moto bike build",
-            bike_name
+            "No local image found for '{bike_name}'. Build first with: moto bike build"
         ))),
     }
 }
 
-/// Convert BikeConfig to BikeDeploymentConfig for K8s deployment.
+/// Convert `BikeConfig` to `BikeDeploymentConfig` for K8s deployment.
 fn to_deployment_config(
     config: &BikeConfig,
     image: &str,
@@ -326,15 +325,14 @@ fn build_bike_image(bike_name: &str, tag: &str, quiet: bool) -> Result<()> {
     let nix_output = format!(".#packages.{linux_target}.moto-bike");
 
     if !quiet {
-        eprintln!("Building {}:{}...", bike_name, tag);
+        eprintln!("Building {bike_name}:{tag}...");
     }
 
     // Build using Docker-wrapped Nix (same pattern as Makefile)
     // This runs nix build inside a nixos/nix container, works on Mac without
     // configuring a Linux builder.
     let nix_command = format!(
-        "nix build {} --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result",
-        nix_output
+        "nix build {nix_output} --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result"
     );
 
     // First, run the Nix build and capture the OCI archive
@@ -343,7 +341,7 @@ fn build_bike_image(bike_name: &str, tag: &str, quiet: bool) -> Result<()> {
             "run",
             "--rm",
             "-v",
-            &format!("{}:/workspace", git_root),
+            &format!("{git_root}:/workspace"),
             "-v",
             "nix-store:/nix",
             "-w",
@@ -390,7 +388,7 @@ fn build_bike_image(bike_name: &str, tag: &str, quiet: bool) -> Result<()> {
     // Tag the image with the bike name and requested tag
     // Nix builds moto-bike:latest, we tag it as {bike_name}:{tag}
     let tag_output = ProcessCommand::new("docker")
-        .args(["tag", "moto-bike:latest", &format!("{}:{}", bike_name, tag)])
+        .args(["tag", "moto-bike:latest", &format!("{bike_name}:{tag}")])
         .output()
         .map_err(|e| CliError::general(format!("failed to tag image: {e}")))?;
 
@@ -469,13 +467,13 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
             // Output results
             if flags.json {
                 let json = BikeBuildJson {
-                    name: config.name.clone(),
-                    image: image_ref.clone(),
+                    name: config.name,
+                    image: image_ref,
                     pushed,
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
             } else if !flags.quiet {
-                println!("Build complete: {}", image_ref);
+                println!("Build complete: {image_ref}");
             }
         }
 
@@ -509,7 +507,7 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
             let effective_replicas = replicas.unwrap_or(config.deploy.replicas);
 
             if !flags.quiet {
-                eprintln!("Deploying {}...", image_ref);
+                eprintln!("Deploying {image_ref}...");
             }
 
             // Create K8s client and deploy
@@ -529,7 +527,7 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                     .await?;
 
                 if !flags.quiet {
-                    eprintln!("{}/{} ready", effective_replicas, effective_replicas);
+                    eprintln!("{effective_replicas}/{effective_replicas} ready");
                 }
             }
 
@@ -579,8 +577,8 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                 }
             } else {
                 println!(
-                    "{:<14} {:<10} {:<10} {:<8} {}",
-                    "NAME", "STATUS", "REPLICAS", "AGE", "IMAGE"
+                    "{:<14} {:<10} {:<10} {:<8} IMAGE",
+                    "NAME", "STATUS", "REPLICAS", "AGE"
                 );
                 for bike in bikes {
                     let replicas = format!("{}/{}", bike.replicas_ready, bike.replicas_desired);
@@ -645,8 +643,7 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                     .await
                     .map_err(|_| {
                         CliError::not_found(format!(
-                            "Bike '{}' not found.\n\nTry: moto bike list",
-                            name
+                            "Bike '{name}' not found.\n\nTry: moto bike list"
                         ))
                     })?;
 
@@ -660,7 +657,7 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                             stdout.flush()?;
                         }
                         Err(e) => {
-                            return Err(CliError::general(format!("log stream error: {}", e)));
+                            return Err(CliError::general(format!("log stream error: {e}")));
                         }
                     }
                 }
@@ -672,11 +669,11 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
 
                 if logs.is_empty() {
                     if !flags.quiet {
-                        eprintln!("No logs found for bike '{}'.", name);
+                        eprintln!("No logs found for bike '{name}'.");
                     }
                 } else {
                     // Print logs directly (already includes pod prefixes from K8s layer)
-                    print!("{}", logs);
+                    print!("{logs}");
                     if !logs.ends_with('\n') {
                         println!();
                     }

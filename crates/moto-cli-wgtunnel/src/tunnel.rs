@@ -6,10 +6,10 @@
 //! # Key Management
 //!
 //! Device keys are stored in `~/.config/moto/`:
-//! - `wg-private.key`: WireGuard private key (0600 permissions)
-//! - `wg-public.key`: WireGuard public key (0644 permissions)
+//! - `wg-private.key`: `WireGuard` private key (0600 permissions)
+//! - `wg-public.key`: `WireGuard` public key (0644 permissions)
 //!
-//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//! The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 //! There is no separate device ID - the public key serves as the identifier.
 //!
 //! Keys are generated on first use and reused across sessions.
@@ -49,7 +49,7 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-/// Environment variable to override WireGuard key file location.
+/// Environment variable to override `WireGuard` key file location.
 pub const ENV_WG_KEY_FILE: &str = "MOTO_WG_KEY_FILE";
 
 /// Required permissions for key files (0600 = owner read/write only).
@@ -102,25 +102,25 @@ pub enum TunnelError {
     #[error("connection failed: {0}")]
     ConnectionFailed(String),
 
-    /// WireGuard tunnel error.
+    /// `WireGuard` tunnel error.
     #[error("WireGuard tunnel error: {0}")]
     WireGuard(#[from] WgTunnelError),
 }
 
-/// Device identity for WireGuard connections.
+/// Device identity for `WireGuard` connections.
 ///
-/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 /// There is no separate device ID - the public key serves as the unique identifier.
 #[derive(Debug, Clone)]
 pub struct DeviceIdentity {
-    /// Device's WireGuard public key (this IS the device identity).
+    /// Device's `WireGuard` public key (this IS the device identity).
     pub public_key: WgPublicKey,
 }
 
 impl DeviceIdentity {
-    /// Create a new device identity from a WireGuard public key.
+    /// Create a new device identity from a `WireGuard` public key.
     #[must_use]
-    pub fn new(public_key: WgPublicKey) -> Self {
+    pub const fn new(public_key: WgPublicKey) -> Self {
         Self { public_key }
     }
 }
@@ -192,7 +192,7 @@ pub struct TunnelSession {
     /// Garage's overlay IP.
     garage_ip: OverlayIp,
 
-    /// Garage's WireGuard public key.
+    /// Garage's `WireGuard` public key.
     garage_public_key: WgPublicKey,
 
     /// DERP map for relay fallback.
@@ -201,10 +201,10 @@ pub struct TunnelSession {
     /// Current connection status.
     status: TunnelStatus,
 
-    /// WireGuard tunnel instance (boringtun-backed).
+    /// `WireGuard` tunnel instance (boringtun-backed).
     ///
     /// This is `None` until the tunnel is configured, then holds the
-    /// active WireGuard state machine for packet encryption/decryption.
+    /// active `WireGuard` state machine for packet encryption/decryption.
     wg_tunnel: Option<WgTunnel>,
 }
 
@@ -218,18 +218,24 @@ impl std::fmt::Debug for TunnelSession {
             .field("garage_ip", &self.garage_ip)
             .field("garage_public_key", &self.garage_public_key)
             .field("status", &self.status)
-            .field("wg_tunnel", &self.wg_tunnel.as_ref().map(|t| t.state()))
+            .field(
+                "wg_tunnel",
+                &self
+                    .wg_tunnel
+                    .as_ref()
+                    .map(moto_wgtunnel_engine::Tunnel::state),
+            )
             .finish_non_exhaustive()
     }
 }
 
-/// Default WireGuard keepalive interval (25 seconds).
+/// Default `WireGuard` keepalive interval (25 seconds).
 pub const DEFAULT_KEEPALIVE_SECS: u64 = 25;
 
 impl TunnelSession {
     /// Create a new tunnel session.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         session_id: String,
         garage_id: String,
         garage_name: String,
@@ -281,7 +287,7 @@ impl TunnelSession {
         self.garage_ip
     }
 
-    /// Get the garage's WireGuard public key.
+    /// Get the garage's `WireGuard` public key.
     #[must_use]
     pub const fn garage_public_key(&self) -> &WgPublicKey {
         &self.garage_public_key
@@ -295,7 +301,7 @@ impl TunnelSession {
 
     /// Get the current connection status.
     #[must_use]
-    pub fn status(&self) -> &TunnelStatus {
+    pub const fn status(&self) -> &TunnelStatus {
         &self.status
     }
 
@@ -312,38 +318,39 @@ impl TunnelSession {
 
     /// Check if the session is connected.
     #[must_use]
-    pub fn is_connected(&self) -> bool {
+    pub const fn is_connected(&self) -> bool {
         matches!(self.status, TunnelStatus::Connected { .. })
     }
 
     /// Check if the session is in an error state.
     #[must_use]
-    pub fn is_error(&self) -> bool {
+    pub const fn is_error(&self) -> bool {
         matches!(self.status, TunnelStatus::Error { .. })
     }
 
-    /// Check if the WireGuard tunnel is configured.
+    /// Check if the `WireGuard` tunnel is configured.
     #[must_use]
-    pub fn is_wg_configured(&self) -> bool {
+    pub const fn is_wg_configured(&self) -> bool {
         self.wg_tunnel.is_some()
     }
 
-    /// Get the WireGuard tunnel state, if configured.
+    /// Get the `WireGuard` tunnel state, if configured.
     #[must_use]
     pub fn wg_state(&self) -> Option<WgTunnelState> {
-        self.wg_tunnel.as_ref().map(|t| t.state())
+        self.wg_tunnel
+            .as_ref()
+            .map(moto_wgtunnel_engine::Tunnel::state)
     }
 
-    /// Check if the WireGuard handshake is complete.
+    /// Check if the `WireGuard` handshake is complete.
     #[must_use]
     pub fn is_wg_established(&self) -> bool {
         self.wg_tunnel
             .as_ref()
-            .map(|t| t.is_established())
-            .unwrap_or(false)
+            .is_some_and(moto_wgtunnel_engine::Tunnel::is_established)
     }
 
-    /// Configure the WireGuard tunnel with the given private key.
+    /// Configure the `WireGuard` tunnel with the given private key.
     ///
     /// This creates the boringtun tunnel instance that handles packet
     /// encryption/decryption. The tunnel is configured with:
@@ -353,7 +360,7 @@ impl TunnelSession {
     ///
     /// # Arguments
     ///
-    /// * `private_key` - Our device's WireGuard private key
+    /// * `private_key` - Our device's `WireGuard` private key
     ///
     /// # Errors
     ///
@@ -365,11 +372,11 @@ impl TunnelSession {
         )
     }
 
-    /// Configure the WireGuard tunnel with custom keepalive.
+    /// Configure the `WireGuard` tunnel with custom keepalive.
     ///
     /// # Arguments
     ///
-    /// * `private_key` - Our device's WireGuard private key
+    /// * `private_key` - Our device's `WireGuard` private key
     /// * `keepalive` - Keepalive interval for NAT traversal
     ///
     /// # Errors
@@ -400,10 +407,10 @@ impl TunnelSession {
         Ok(())
     }
 
-    /// Initiate the WireGuard handshake.
+    /// Initiate the `WireGuard` handshake.
     ///
     /// Returns the handshake initiation packet that should be sent to the peer
-    /// (via MagicConn). The tunnel transitions to `Handshaking` state.
+    /// (via `MagicConn`). The tunnel transitions to `Handshaking` state.
     ///
     /// # Errors
     ///
@@ -426,10 +433,10 @@ impl TunnelSession {
         Ok(events)
     }
 
-    /// Encapsulate an IP packet for sending over the WireGuard tunnel.
+    /// Encapsulate an IP packet for sending over the `WireGuard` tunnel.
     ///
-    /// Takes a plaintext IP packet and returns encrypted WireGuard packets
-    /// to send to the peer via MagicConn.
+    /// Takes a plaintext IP packet and returns encrypted `WireGuard` packets
+    /// to send to the peer via `MagicConn`.
     ///
     /// # Arguments
     ///
@@ -449,14 +456,14 @@ impl TunnelSession {
         Ok(events)
     }
 
-    /// Decapsulate a received WireGuard packet.
+    /// Decapsulate a received `WireGuard` packet.
     ///
-    /// Takes an encrypted WireGuard packet from the peer and returns
+    /// Takes an encrypted `WireGuard` packet from the peer and returns
     /// decrypted IP packets for processing.
     ///
     /// # Arguments
     ///
-    /// * `wg_packet` - The encrypted WireGuard packet
+    /// * `wg_packet` - The encrypted `WireGuard` packet
     ///
     /// # Errors
     ///
@@ -490,10 +497,10 @@ impl TunnelSession {
     }
 }
 
-/// Manager for WireGuard tunnel sessions.
+/// Manager for `WireGuard` tunnel sessions.
 ///
 /// The tunnel manager handles:
-/// - Device identity (WireGuard keypair, device UUID)
+/// - Device identity (`WireGuard` keypair, device UUID)
 /// - Active tunnel sessions
 /// - Key file management
 ///
@@ -501,7 +508,7 @@ impl TunnelSession {
 ///
 /// The manager is thread-safe and can be shared across tasks.
 pub struct TunnelManager {
-    /// Device's WireGuard private key.
+    /// Device's `WireGuard` private key.
     private_key: WgPrivateKey,
 
     /// Device identity (public key + device ID).
@@ -569,13 +576,13 @@ impl TunnelManager {
 
     /// Get the device identity.
     #[must_use]
-    pub fn device_info(&self) -> &DeviceIdentity {
+    pub const fn device_info(&self) -> &DeviceIdentity {
         &self.identity
     }
 
-    /// Get the device's WireGuard public key.
+    /// Get the device's `WireGuard` public key.
     #[must_use]
-    pub fn public_key(&self) -> &WgPublicKey {
+    pub const fn public_key(&self) -> &WgPublicKey {
         &self.identity.public_key
     }
 
@@ -585,7 +592,7 @@ impl TunnelManager {
     ///
     /// Handle the returned key carefully - it is secret material.
     #[must_use]
-    pub fn private_key(&self) -> &WgPrivateKey {
+    pub const fn private_key(&self) -> &WgPrivateKey {
         &self.private_key
     }
 
@@ -650,7 +657,7 @@ impl TunnelManager {
         Ok(())
     }
 
-    /// Configure the WireGuard tunnel for a session.
+    /// Configure the `WireGuard` tunnel for a session.
     ///
     /// Creates the boringtun tunnel instance using the device's private key
     /// and the garage's public key from the session.
@@ -671,7 +678,7 @@ impl TunnelManager {
         Ok(())
     }
 
-    /// Configure the WireGuard tunnel with custom keepalive.
+    /// Configure the `WireGuard` tunnel with custom keepalive.
     ///
     /// # Errors
     ///
@@ -693,7 +700,7 @@ impl TunnelManager {
         Ok(())
     }
 
-    /// Initiate the WireGuard handshake for a session.
+    /// Initiate the `WireGuard` handshake for a session.
     ///
     /// Returns the handshake initiation packets that should be sent to the peer.
     ///
@@ -755,9 +762,9 @@ impl TunnelManager {
 }
 
 impl Clone for TunnelSession {
-    /// Clone the session metadata without the WireGuard tunnel.
+    /// Clone the session metadata without the `WireGuard` tunnel.
     ///
-    /// Note: The WireGuard tunnel (`wg_tunnel`) is NOT cloned and will be
+    /// Note: The `WireGuard` tunnel (`wg_tunnel`) is NOT cloned and will be
     /// `None` in the cloned session. This is intentional - the tunnel state
     /// machine should not be duplicated.
     fn clone(&self) -> Self {
@@ -850,7 +857,7 @@ fn set_permissions(_path: &Path, _mode: u32) -> Result<(), TunnelError> {
     Ok(())
 }
 
-/// Load or generate the WireGuard keypair.
+/// Load or generate the `WireGuard` keypair.
 async fn load_or_generate_keypair(
     config_dir: &Path,
 ) -> Result<(WgPrivateKey, WgPublicKey), TunnelError> {

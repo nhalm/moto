@@ -1,7 +1,7 @@
 //! Platform-specific TUN abstractions.
 //!
 //! This module provides cross-platform TUN device abstractions for Linux and macOS.
-//! The TUN device is used to route IP packets through the WireGuard tunnel.
+//! The TUN device is used to route IP packets through the `WireGuard` tunnel.
 //!
 //! # Architecture
 //!
@@ -312,7 +312,7 @@ impl TunDevice {
 
     /// Inject a packet into the TUN device (for virtual TUN).
     ///
-    /// This is used to deliver decrypted packets from the WireGuard tunnel
+    /// This is used to deliver decrypted packets from the `WireGuard` tunnel
     /// to the application layer.
     ///
     /// # Errors
@@ -469,7 +469,7 @@ impl VirtualTun {
 
     /// Write a packet to the virtual TUN (outbound queue).
     ///
-    /// This queues a packet to be sent out through the WireGuard tunnel.
+    /// This queues a packet to be sent out through the `WireGuard` tunnel.
     pub fn write(&mut self, buf: &[u8]) -> Result<usize, TunError> {
         if self.closed {
             return Err(TunError::Closed);
@@ -481,7 +481,7 @@ impl VirtualTun {
 
     /// Inject a packet into the inbound queue.
     ///
-    /// This is called by the WireGuard engine when a packet is decrypted
+    /// This is called by the `WireGuard` engine when a packet is decrypted
     /// and needs to be delivered to the application.
     pub fn inject(&mut self, buf: &[u8]) -> Result<(), TunError> {
         if self.closed {

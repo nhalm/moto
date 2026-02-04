@@ -490,7 +490,7 @@ mod tests {
         let manager = create_manager();
 
         let region = create_test_region(1, "primary");
-        manager.add_region(region.clone()).unwrap();
+        manager.add_region(region).unwrap();
 
         let map = manager.get_map().unwrap();
         assert_eq!(map.len(), 1);
@@ -714,8 +714,8 @@ mod tests {
                 let m = Arc::clone(&manager);
                 thread::spawn(move || {
                     let region_id = (i % 3) as u16 + 1;
-                    let region = DerpRegion::new(region_id, &format!("region-{region_id}"))
-                        .with_node(DerpNode::with_defaults(&format!("derp{i}.example.com")));
+                    let region = DerpRegion::new(region_id, format!("region-{region_id}"))
+                        .with_node(DerpNode::with_defaults(format!("derp{i}.example.com")));
                     m.add_region(region).unwrap();
 
                     // Read back

@@ -11,7 +11,7 @@
 //! trait defines the storage interface, allowing different backends (in-memory for tests,
 //! Postgres for production).
 //!
-//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//! The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 //!
 //! # Example
 //!
@@ -70,7 +70,7 @@ pub type Result<T> = std::result::Result<T, IpamError>;
 pub trait IpamStore: Send + Sync {
     /// Get the IP allocated to a client device by public key, if any.
     ///
-    /// The WireGuard public key IS the device identity (Cloudflare WARP model).
+    /// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
     ///
     /// # Errors
     ///
@@ -79,7 +79,7 @@ pub trait IpamStore: Send + Sync {
 
     /// Store a client device IP allocation.
     ///
-    /// The WireGuard public key IS the device identity.
+    /// The `WireGuard` public key IS the device identity.
     ///
     /// # Errors
     ///
@@ -127,7 +127,7 @@ impl<S: IpamStore> Ipam<S> {
 
     /// Allocate an overlay IP for a client device.
     ///
-    /// The WireGuard public key IS the device identity (Cloudflare WARP model).
+    /// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
     /// If the device (public key) already has an allocated IP, returns the existing one.
     /// Otherwise, allocates a new IP and persists it.
     ///
@@ -155,7 +155,7 @@ impl<S: IpamStore> Ipam<S> {
 
     /// Get the IP allocated to a client device without allocating.
     ///
-    /// The WireGuard public key IS the device identity.
+    /// The `WireGuard` public key IS the device identity.
     /// Returns `None` if the device has no allocated IP.
     ///
     /// # Errors
@@ -225,7 +225,7 @@ pub struct InMemoryStore {
 
 struct InMemoryStoreInner {
     /// Device public key (base64) -> allocated IP
-    /// WireGuard public key IS the device identity
+    /// `WireGuard` public key IS the device identity
     client_ips: HashMap<String, OverlayIp>,
     /// Next host ID to allocate
     next_host_id: u64,

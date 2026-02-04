@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn debug_redacts_private_key() {
         let private = WgPrivateKey::generate();
-        let debug_str = format!("{:?}", private);
+        let debug_str = format!("{private:?}");
 
         assert!(debug_str.contains("REDACTED"));
         assert!(!debug_str.contains(&private.to_base64()));

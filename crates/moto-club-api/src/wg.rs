@@ -51,7 +51,7 @@ pub struct RegisterDeviceRequest {
 
 /// Response for device registration.
 ///
-/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceResponse {
     /// Device's `WireGuard` public key (IS the device identity).
@@ -79,7 +79,7 @@ impl From<RegisteredDevice> for DeviceResponse {
 pub struct CreateSessionRequest {
     /// Garage to connect to (name or ID).
     pub garage_id: Uuid,
-    /// Device requesting the connection (WireGuard public key IS the device identity).
+    /// Device requesting the connection (`WireGuard` public key IS the device identity).
     pub device_pubkey: WgPublicKey,
     /// Optional session TTL in seconds. Defaults to garage TTL or 4 hours.
     pub ttl_seconds: Option<u32>,
@@ -138,7 +138,7 @@ pub struct SessionInfo {
     pub garage_id: String,
     /// Human-readable garage name.
     pub garage_name: String,
-    /// Device public key (WireGuard public key IS the device identity).
+    /// Device public key (`WireGuard` public key IS the device identity).
     pub device_pubkey: WgPublicKey,
     /// Optional device name for display.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -184,9 +184,9 @@ pub struct GarageWgResponse {
     pub derp_map: DerpMap,
 }
 
-/// Response for getting garage WireGuard registration.
+/// Response for getting garage `WireGuard` registration.
 ///
-/// GET /api/v1/wg/garages/{garage_id}
+/// GET /`api/v1/wg/garages/{garage_id`}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GarageWgRegistrationResponse {
     /// Garage identifier.
@@ -239,8 +239,8 @@ pub struct GetPeersParams {
 ///
 /// GET /api/v1/wg/derp-map
 ///
-/// Note: Only Serialize is derived because `#[serde(flatten)]` with DerpMap's
-/// HashMap<u16, _> regions field causes deserialization issues due to JSON
+/// Note: Only Serialize is derived because `#[serde(flatten)]` with `DerpMap`'s
+/// `HashMap`<u16, _> regions field causes deserialization issues due to JSON
 /// object keys being strings. This type is only used for API responses.
 #[derive(Debug, Clone, Serialize)]
 pub struct DerpMapResponse {
@@ -336,10 +336,10 @@ fn extract_bearer_token(headers: &HeaderMap) -> Result<String, (StatusCode, Json
     Ok(token.to_string())
 }
 
-/// Validates K8s ServiceAccount token and verifies the pod is in the expected namespace.
+/// Validates K8s `ServiceAccount` token and verifies the pod is in the expected namespace.
 ///
 /// Per spec (lines 585-603):
-/// 1. K8s ServiceAccount token validated via TokenReview API
+/// 1. K8s `ServiceAccount` token validated via `TokenReview` API
 /// 2. Pod must be in namespace `moto-garage-{garage_id}`
 /// 3. Prevents rogue pods from registering as arbitrary garages
 ///
@@ -361,12 +361,11 @@ async fn validate_garage_token(
     garage_id: &str,
 ) -> Result<(), (StatusCode, Json<ApiError>)> {
     // If no K8s client configured, skip validation (test/local dev mode)
-    let k8s_client = match &state.k8s_client {
-        Some(client) => client,
-        None => {
-            tracing::debug!(garage_id = %garage_id, "K8s token validation skipped (no client configured)");
-            return Ok(());
-        }
+    let k8s_client = if let Some(client) = &state.k8s_client {
+        client
+    } else {
+        tracing::debug!(garage_id = %garage_id, "K8s token validation skipped (no client configured)");
+        return Ok(());
     };
 
     // Extract the bearer token
@@ -415,8 +414,7 @@ async fn validate_garage_token(
             Json(ApiError::new(
                 error_codes::NAMESPACE_MISMATCH,
                 format!(
-                    "Pod not running in expected namespace: expected '{}', got '{}'",
-                    expected_namespace, actual_namespace
+                    "Pod not running in expected namespace: expected '{expected_namespace}', got '{actual_namespace}'"
                 ),
             )),
         ));
@@ -440,7 +438,7 @@ async fn validate_garage_token(
 ///
 /// POST /api/v1/wg/devices
 ///
-/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 /// Re-registration with the same key is idempotent.
 async fn register_device(
     State(state): State<AppState>,
@@ -478,7 +476,7 @@ async fn register_device(
 
 /// Get device info.
 ///
-/// GET /api/v1/wg/devices/{public_key}
+/// GET /`api/v1/wg/devices/{public_key`}
 ///
 /// Note: Public key must be URL-encoded in the path.
 async fn get_device(
@@ -517,7 +515,7 @@ async fn get_device(
                 StatusCode::NOT_FOUND,
                 Json(ApiError::new(
                     error_codes::DEVICE_NOT_FOUND,
-                    format!("Device with public key '{}' not found", public_key_base64),
+                    format!("Device with public key '{public_key_base64}' not found"),
                 )),
             ))
         },
@@ -722,7 +720,7 @@ async fn close_session(
 /// Authorization: Bearer <k8s-service-account-token>
 ///
 /// Validates:
-/// 1. K8s ServiceAccount token via TokenReview API
+/// 1. K8s `ServiceAccount` token via `TokenReview` API
 /// 2. Pod must be in namespace `moto-garage-{garage_id}`
 async fn register_garage(
     State(state): State<AppState>,
@@ -781,18 +779,18 @@ async fn register_garage(
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
-/// Get garage WireGuard registration.
+/// Get garage `WireGuard` registration.
 ///
-/// GET /api/v1/wg/garages/{garage_id}
+/// GET /`api/v1/wg/garages/{garage_id`}
 ///
 /// Authorization: Bearer <k8s-service-account-token>
 ///
-/// Returns garage's WireGuard registration info including public key, assigned IP,
+/// Returns garage's `WireGuard` registration info including public key, assigned IP,
 /// endpoints, peer version, and DERP map. Used by garage pods to recover state
 /// after restart or check registration status.
 ///
 /// Validates:
-/// 1. K8s ServiceAccount token via TokenReview API
+/// 1. K8s `ServiceAccount` token via `TokenReview` API
 /// 2. Pod must be in namespace `moto-garage-{garage_id}`
 async fn get_garage_wg_registration(
     State(state): State<AppState>,
@@ -821,7 +819,7 @@ async fn get_garage_wg_registration(
                 StatusCode::NOT_FOUND,
                 Json(ApiError::new(
                     error_codes::GARAGE_NOT_FOUND,
-                    format!("Garage '{}' not found or not registered for WireGuard", garage_id),
+                    format!("Garage '{garage_id}' not found or not registered for WireGuard"),
                 )),
             )
         })?;
@@ -869,7 +867,7 @@ async fn get_garage_wg_registration(
 /// Authorization: Bearer <k8s-service-account-token>
 ///
 /// Validates:
-/// 1. K8s ServiceAccount token via TokenReview API
+/// 1. K8s `ServiceAccount` token via `TokenReview` API
 /// 2. Pod must be in namespace `moto-garage-{garage_id}`
 ///
 /// Returns 304 Not Modified if `?version=N` is provided and matches current version.
@@ -1056,7 +1054,7 @@ async fn get_derp_map(State(state): State<AppState>, headers: HeaderMap) -> impl
 /// peer updates when sessions are created or closed.
 ///
 /// Validates:
-/// 1. K8s ServiceAccount token via TokenReview API
+/// 1. K8s `ServiceAccount` token via `TokenReview` API
 /// 2. Pod must be in namespace `moto-garage-{garage_id}`
 async fn peers_websocket(
     State(state): State<AppState>,
@@ -1165,7 +1163,7 @@ async fn handle_peers_socket(socket: WebSocket, garage_id: String, state: AppSta
 /// - `GET /api/v1/wg/sessions` - List active sessions
 /// - `DELETE /api/v1/wg/sessions/{id}` - Close session
 /// - `POST /api/v1/wg/garages` - Register garage
-/// - `GET /api/v1/wg/garages/{id}` - Get garage WireGuard registration
+/// - `GET /api/v1/wg/garages/{id}` - Get garage `WireGuard` registration
 /// - `GET /api/v1/wg/garages/{id}/peers` - Get peer list
 /// - `GET /api/v1/wg/derp-map` - Get DERP server map
 /// - `WS /internal/wg/garages/{id}/peers` - Peer streaming WebSocket
@@ -1557,7 +1555,7 @@ mod tests {
                 .oneshot(
                     Request::builder()
                         .method("GET")
-                        .uri(format!("/api/v1/wg/devices/{}", key_encoded))
+                        .uri(format!("/api/v1/wg/devices/{key_encoded}"))
                         .header(header::AUTHORIZATION, "Bearer testuser")
                         .body(Body::empty())
                         .unwrap(),
@@ -1837,7 +1835,7 @@ mod tests {
                 .oneshot(
                     Request::builder()
                         .method("GET")
-                        .uri(format!("/api/v1/wg/garages/{}", garage_id))
+                        .uri(format!("/api/v1/wg/garages/{garage_id}"))
                         .header(header::AUTHORIZATION, "Bearer k8s-service-account")
                         .body(Body::empty())
                         .unwrap(),
@@ -2077,8 +2075,7 @@ mod tests {
                     Request::builder()
                         .method("GET")
                         .uri(format!(
-                            "/api/v1/wg/garages/test-garage/peers?version={}",
-                            version
+                            "/api/v1/wg/garages/test-garage/peers?version={version}"
                         ))
                         .header(header::AUTHORIZATION, "Bearer k8s-service-account")
                         .body(Body::empty())

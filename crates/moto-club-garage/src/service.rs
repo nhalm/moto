@@ -98,7 +98,7 @@ pub struct CreateGarageInput {
     pub engine: Option<String>,
     /// Optional repository to clone on startup.
     pub repo: Option<moto_club_k8s::RepoConfig>,
-    /// Include PostgreSQL supporting service.
+    /// Include `PostgreSQL` supporting service.
     #[serde(default)]
     pub with_postgres: bool,
     /// Include Redis supporting service.
@@ -132,7 +132,7 @@ pub struct GarageService {
 impl GarageService {
     /// Creates a new garage service.
     #[must_use]
-    pub fn new(db: DbPool, k8s: GarageK8s) -> Self {
+    pub const fn new(db: DbPool, k8s: GarageK8s) -> Self {
         Self {
             db,
             k8s,
@@ -146,7 +146,7 @@ impl GarageService {
     /// authentication. The keybox client issues the SVID which is then
     /// stored in a K8s Secret that the garage pod mounts.
     #[must_use]
-    pub fn with_keybox(db: DbPool, k8s: GarageK8s, keybox: KeyboxClient) -> Self {
+    pub const fn with_keybox(db: DbPool, k8s: GarageK8s, keybox: KeyboxClient) -> Self {
         Self {
             db,
             k8s,
@@ -478,8 +478,8 @@ impl GarageService {
     ///
     /// 4. Create K8s namespace: moto-garage-{id}
     /// 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
-    /// 6. Apply NetworkPolicy, ResourceQuota, LimitRange (per garage-isolation.md spec)
-    /// 7. Generate WireGuard keypair, create wireguard-config ConfigMap and wireguard-keys Secret
+    /// 6. Apply `NetworkPolicy`, `ResourceQuota`, `LimitRange` (per garage-isolation.md spec)
+    /// 7. Generate `WireGuard` keypair, create wireguard-config `ConfigMap` and wireguard-keys Secret
     /// 8. Issue garage SVID from keybox (POST /auth/issue-garage-svid, create garage-svid Secret)
     /// 9. If --with-postgres/--with-redis: create supporting service Deployments, Services, Secrets
     /// 10. Create workspace PVC

@@ -7,7 +7,7 @@
 //!
 //! # Architecture
 //!
-//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//! The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 //! No separate device ID is needed. Peer registration is the first step in establishing a tunnel:
 //!
 //! ```text
@@ -69,7 +69,7 @@ pub enum PeerError {
     #[error("storage error: {0}")]
     Storage(String),
 
-    /// Device not found (identified by WireGuard public key).
+    /// Device not found (identified by `WireGuard` public key).
     #[error("device not found: {0}")]
     DeviceNotFound(String),
 
@@ -83,7 +83,7 @@ pub type Result<T> = std::result::Result<T, PeerError>;
 
 /// Request to register a device.
 ///
-/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 /// No separate device ID is needed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceRegistration {
@@ -97,7 +97,7 @@ pub struct DeviceRegistration {
 
 /// Registered device information.
 ///
-/// The WireGuard public key IS the device identity.
+/// The `WireGuard` public key IS the device identity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisteredDevice {
     /// Device's `WireGuard` public key (IS the device identity).
@@ -148,7 +148,7 @@ pub struct RegisteredGarage {
 pub trait PeerStore: Send + Sync {
     /// Get a registered device by public key.
     ///
-    /// The WireGuard public key IS the device identity.
+    /// The `WireGuard` public key IS the device identity.
     ///
     /// # Errors
     ///
@@ -208,7 +208,7 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
 
     /// Register a device.
     ///
-    /// The WireGuard public key IS the device identity (Cloudflare WARP model).
+    /// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
     /// If the device (public key) is already registered, returns the existing registration.
     /// Re-registration is idempotent.
     ///
@@ -241,7 +241,7 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
 
     /// Get a registered device by public key.
     ///
-    /// The WireGuard public key IS the device identity.
+    /// The `WireGuard` public key IS the device identity.
     ///
     /// # Errors
     ///
@@ -311,7 +311,7 @@ pub struct InMemoryPeerStore {
 
 struct InMemoryPeerStoreInner {
     /// Devices keyed by public key (base64 encoded).
-    /// WireGuard public key IS the device identity.
+    /// `WireGuard` public key IS the device identity.
     devices: HashMap<String, RegisteredDevice>,
     garages: HashMap<String, RegisteredGarage>,
 }

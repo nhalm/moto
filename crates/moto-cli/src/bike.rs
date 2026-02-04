@@ -49,11 +49,11 @@ impl Default for DeployConfig {
     }
 }
 
-fn default_replicas() -> u32 {
+const fn default_replicas() -> u32 {
     2
 }
 
-fn default_port() -> u16 {
+const fn default_port() -> u16 {
     8080
 }
 
@@ -78,7 +78,7 @@ impl Default for HealthConfig {
     }
 }
 
-fn default_health_port() -> u16 {
+const fn default_health_port() -> u16 {
     8081
 }
 

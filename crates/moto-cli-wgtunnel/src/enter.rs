@@ -677,16 +677,16 @@ async fn create_connection_state(
 
 /// Register device with moto-club.
 ///
-/// Registers the device's WireGuard public key with moto-club, which
+/// Registers the device's `WireGuard` public key with moto-club, which
 /// allocates an overlay IP address. If the device is already registered,
 /// moto-club returns the existing allocation.
 ///
-/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 /// No separate device ID is used.
 ///
 /// # Returns
 ///
-/// The device's WireGuard public key (device identity) for session creation.
+/// The device's `WireGuard` public key (device identity) for session creation.
 async fn register_device_with_club(
     manager: &TunnelManager,
     client: &MotoClubClient,

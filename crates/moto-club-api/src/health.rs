@@ -112,7 +112,7 @@ pub struct LiveResponse {
 /// Ready response body.
 #[derive(Debug, Clone, Serialize)]
 pub struct ReadyResponse {
-    /// "ok" if all dependencies are connected, "not_ready" otherwise.
+    /// "ok" if all dependencies are connected, "`not_ready`" otherwise.
     pub status: &'static str,
     /// Individual dependency check results (only included if not ready).
     #[serde(skip_serializing_if = "Option::is_none")]

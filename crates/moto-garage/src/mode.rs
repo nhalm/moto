@@ -6,12 +6,13 @@ use serde::{Deserialize, Serialize};
 ///
 /// Determines whether garage operations are performed directly against K8s
 /// (local mode) or through the moto-club server (remote mode).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum GarageMode {
     /// Direct K8s access via kubeconfig (for solo dev).
     ///
     /// In this mode, the garage client talks directly to the K8s cluster
     /// using the configured kubeconfig. No moto-club server is needed.
+    #[default]
     Local,
 
     /// Access through moto-club server (for team/managed).
@@ -19,15 +20,9 @@ pub enum GarageMode {
     /// In this mode, all garage operations go through the moto-club server,
     /// which handles K8s operations, authentication, and audit logging.
     Remote {
-        /// The moto-club server endpoint (e.g., "https://club.example.com").
+        /// The moto-club server endpoint (e.g., "<https://club.example.com>").
         endpoint: String,
     },
-}
-
-impl Default for GarageMode {
-    fn default() -> Self {
-        Self::Local
-    }
 }
 
 impl GarageMode {

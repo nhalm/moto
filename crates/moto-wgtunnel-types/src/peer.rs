@@ -224,7 +224,7 @@ mod tests {
         let allowed_ip = OverlayIp::garage(123);
         let endpoint: SocketAddr = "10.0.0.1:51820".parse().unwrap();
 
-        let peer = PeerInfo::with_endpoint_addr(public_key.clone(), allowed_ip, endpoint);
+        let peer = PeerInfo::with_endpoint_addr(public_key, allowed_ip, endpoint);
         let json = serde_json::to_string(&peer).unwrap();
         let peer2: PeerInfo = serde_json::from_str(&json).unwrap();
 
@@ -252,7 +252,7 @@ mod tests {
         let allowed_ip = OverlayIp::client(1);
         let peer = PeerInfo::new(public_key.clone(), allowed_ip);
 
-        let action = PeerAction::add(peer.clone());
+        let action = PeerAction::add(peer);
 
         assert_eq!(action.public_key(), &public_key);
         assert!(matches!(action, PeerAction::Add(_)));
@@ -304,7 +304,7 @@ mod tests {
         let allowed_ip = OverlayIp::client(1);
 
         let peer1 = PeerInfo::new(public_key.clone(), allowed_ip);
-        let peer2 = PeerInfo::new(public_key.clone(), allowed_ip);
+        let peer2 = PeerInfo::new(public_key, allowed_ip);
         let peer3 = PeerInfo::new(another_public_key(), allowed_ip);
 
         assert_eq!(peer1, peer2);

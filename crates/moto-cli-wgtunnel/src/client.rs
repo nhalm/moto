@@ -185,12 +185,12 @@ impl MotoClubClient {
 
     /// Register a device with moto-club.
     ///
-    /// This registers the device's WireGuard public key with moto-club,
+    /// This registers the device's `WireGuard` public key with moto-club,
     /// which allocates an overlay IP address for the device.
     ///
     /// # Arguments
     ///
-    /// * `public_key` - Device's WireGuard public key
+    /// * `public_key` - Device's `WireGuard` public key
     /// * `device_name` - Optional human-readable device name
     ///
     /// # Returns
@@ -257,7 +257,7 @@ impl MotoClubClient {
     /// # Arguments
     ///
     /// * `garage_id` - Garage UUID
-    /// * `device_pubkey` - Device's WireGuard public key (device identity)
+    /// * `device_pubkey` - Device's `WireGuard` public key (device identity)
     /// * `ttl_seconds` - Optional session TTL (defaults to garage TTL)
     ///
     /// # Returns
@@ -387,8 +387,8 @@ impl MotoClubClient {
     ///
     /// Returns an error if:
     /// - moto-club is unreachable
-    /// - Name already exists (GARAGE_ALREADY_EXISTS)
-    /// - Invalid TTL (INVALID_TTL)
+    /// - Name already exists (`GARAGE_ALREADY_EXISTS`)
+    /// - Invalid TTL (`INVALID_TTL`)
     pub async fn create_garage(
         &self,
         request: &CreateGarageRequest,
@@ -564,7 +564,7 @@ impl MotoClubClient {
 /// Request to register a device.
 #[derive(Debug, Clone, Serialize)]
 struct RegisterDeviceRequest {
-    /// Device's WireGuard public key (base64).
+    /// Device's `WireGuard` public key (base64).
     public_key: String,
     /// Optional human-readable device name.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -573,11 +573,11 @@ struct RegisterDeviceRequest {
 
 /// Response for device registration.
 ///
-/// The WireGuard public key IS the device identity (Cloudflare WARP model).
+/// The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 /// No separate device ID - the public key is the identifier.
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeviceResponse {
-    /// Device's WireGuard public key (this IS the device identity).
+    /// Device's `WireGuard` public key (this IS the device identity).
     pub public_key: WgPublicKey,
     /// Assigned overlay IP address.
     #[serde(rename = "assigned_ip")]
@@ -588,12 +588,12 @@ pub struct DeviceResponse {
 
 /// Request to create a tunnel session.
 ///
-/// Per spec (moto-club.md v1.1): Uses `device_pubkey` (WireGuard public key IS the device identity).
+/// Per spec (moto-club.md v1.1): Uses `device_pubkey` (`WireGuard` public key IS the device identity).
 #[derive(Debug, Clone, Serialize)]
 struct CreateSessionRequest {
     /// Garage to connect to (UUID).
     garage_id: Uuid,
-    /// Device's WireGuard public key (this IS the device identity).
+    /// Device's `WireGuard` public key (this IS the device identity).
     device_pubkey: WgPublicKey,
     /// Optional session TTL in seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -618,7 +618,7 @@ pub struct SessionResponse {
 /// Garage connection information from session response.
 #[derive(Debug, Clone, Deserialize)]
 pub struct GarageInfo {
-    /// Garage's WireGuard public key (base64).
+    /// Garage's `WireGuard` public key (base64).
     pub public_key: String,
     /// Garage's overlay IP.
     pub overlay_ip: OverlayIp,
@@ -691,7 +691,7 @@ pub struct ListGaragesResponse {
 }
 
 /// Request to create a garage.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct CreateGarageRequest {
     /// Human-friendly name (auto-generated if omitted).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -708,26 +708,12 @@ pub struct CreateGarageRequest {
     /// Engine name (what the garage is working on).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub engine: Option<String>,
-    /// Include PostgreSQL database.
+    /// Include `PostgreSQL` database.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub with_postgres: Option<bool>,
     /// Include Redis cache.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub with_redis: Option<bool>,
-}
-
-impl Default for CreateGarageRequest {
-    fn default() -> Self {
-        Self {
-            name: None,
-            branch: None,
-            ttl_seconds: None,
-            image: None,
-            engine: None,
-            with_postgres: None,
-            with_redis: None,
-        }
-    }
 }
 
 /// Request to extend a garage's TTL.

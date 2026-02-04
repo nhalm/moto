@@ -15,3 +15,9 @@
 - All crates use the `moto-` prefix
 - Follow patterns in existing code for naming, structure, and style
 - See [specs/project-structure.md](specs/project-structure.md) for directory layout
+
+### Test Organization
+
+- **Tests belong in separate files.** For any module `foo.rs`, tests should be in `foo_test.rs` (same directory) or `tests/foo.rs` (integration tests).
+- **Do not use `#[cfg(test)] mod tests {}` in source files.** This bloats source files and makes navigation harder.
+- **Exception:** Small modules (<200 lines) may include inline tests if the tests are brief.

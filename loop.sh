@@ -29,6 +29,13 @@ while true; do
         echo "=== API rate limit reached ==="
         exit 1
     fi
+
+    # Check for API errors (500, api_error, etc.)
+    if grep -q 'API Error: 5[0-9][0-9]' "$OUTPUT_FILE" || grep -q '"type":"api_error"' "$OUTPUT_FILE"; then
+        echo "=== API error detected (likely transient 500 error) ==="
+        echo "Check $OUTPUT_FILE for details"
+        exit 1
+    fi
     echo "=== Task ${TASK_NUM} complete, sleeping 2s ==="
     sleep 2
 done

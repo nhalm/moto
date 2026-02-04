@@ -183,7 +183,7 @@ impl PlatformTun {
         if unsafe {
             libc::connect(
                 fd,
-                (&addr as *const SockaddrCtl).cast(),
+                (&raw const addr).cast(),
                 mem::size_of::<SockaddrCtl>() as libc::socklen_t,
             )
         } < 0
@@ -205,7 +205,7 @@ impl PlatformTun {
                 SYSPROTO_CONTROL,
                 2, // UTUN_OPT_IFNAME
                 name_buf.as_mut_ptr().cast(),
-                &mut name_len,
+                &raw mut name_len,
             )
         } < 0
         {

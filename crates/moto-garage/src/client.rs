@@ -56,7 +56,7 @@ impl GarageClient {
 
     /// Creates a garage client from an existing K8s client (for testing).
     #[must_use]
-    pub fn from_k8s(k8s: K8sClient) -> Self {
+    pub const fn from_k8s(k8s: K8sClient) -> Self {
         Self {
             mode: GarageMode::Local,
             k8s: Some(k8s),
@@ -65,7 +65,7 @@ impl GarageClient {
 
     /// Returns the operating mode.
     #[must_use]
-    pub fn mode(&self) -> &GarageMode {
+    pub const fn mode(&self) -> &GarageMode {
         &self.mode
     }
 
@@ -429,8 +429,7 @@ impl GarageClient {
         let new_ttl_seconds = (new_expires - garage.created_at).num_seconds();
         if new_ttl_seconds > MAX_TTL_SECONDS {
             return Err(Error::InvalidTtl(format!(
-                "total TTL would be {}s, which exceeds maximum of {}s",
-                new_ttl_seconds, MAX_TTL_SECONDS
+                "total TTL would be {new_ttl_seconds}s, which exceeds maximum of {MAX_TTL_SECONDS}s"
             )));
         }
 
@@ -485,8 +484,7 @@ fn namespace_to_garage_info(ns: &k8s_openapi::api::core::v1::Namespace) -> Optio
     let created_at = metadata
         .creation_timestamp
         .as_ref()
-        .map(|ts| ts.0)
-        .unwrap_or_else(Utc::now);
+        .map_or_else(Utc::now, |ts| ts.0);
 
     // Determine state based on namespace status
     // Note: K8s namespace phase only tells us if namespace is active or terminating.

@@ -11,7 +11,16 @@
       "Bash(cargo test:*)",
       "Bash(ls:*)",
       "Bash(done)",
-      "Bash(git grep:*)"
+      "Bash(git grep:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(wc:*)",
+      "Bash(while read:*)",
+      "Bash(python3:*)",
+      "Bash(for crate in /Users/nickhalm/personal/moto/crates/*/Cargo.toml)",
+      "Bash(do if grep -q '^\\\\[\\\\[bin\\\\]\\\\]' \"$crate\")",
+      "Bash(cargo check:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo fmt:*)"
     ]
   }
 }

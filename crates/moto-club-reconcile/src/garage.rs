@@ -358,7 +358,7 @@ impl GarageReconciler {
     /// Per garage-lifecycle.md and supporting-services.md specs, a garage is Ready when:
     /// 1. Pod running (containers ready) - already checked
     /// 2. Terminal daemon up (ttyd) - checked via container readiness probe
-    /// 3. WireGuard registered
+    /// 3. `WireGuard` registered
     /// 4. Repo cloned (init container completed successfully)
     /// 5. Supporting services available (if requested)
     async fn check_ready_criteria(&self, garage_id: &GarageId, uuid: Uuid, id_str: &str) -> bool {

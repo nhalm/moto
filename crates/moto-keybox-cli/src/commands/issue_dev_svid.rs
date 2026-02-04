@@ -1,6 +1,6 @@
 //! Issue dev SVID command - issues long-lived SVIDs for local development.
 //!
-//! In K8s, pods authenticate via ServiceAccount JWT. For local development
+//! In K8s, pods authenticate via `ServiceAccount` JWT. For local development
 //! without K8s, use this command to issue a dev SVID that can be used with
 //! the keybox client library.
 
@@ -19,7 +19,7 @@ const DEV_SVID_TTL_SECS: i64 = 24 * 60 * 60;
 /// Issue a dev SVID for local development.
 ///
 /// This creates a long-lived (24h) SVID that can be used for local testing
-/// without K8s. Set MOTO_KEYBOX_SVID_FILE to the output path for the client
+/// without K8s. Set `MOTO_KEYBOX_SVID_FILE` to the output path for the client
 /// library to use it.
 #[derive(Args, Debug)]
 pub struct IssueDevSvidCommand {

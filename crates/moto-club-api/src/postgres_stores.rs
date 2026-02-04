@@ -1,6 +1,6 @@
-//! PostgreSQL-backed storage implementations for WireGuard coordination.
+//! PostgreSQL-backed storage implementations for `WireGuard` coordination.
 //!
-//! This module provides PostgreSQL implementations of the storage traits
+//! This module provides `PostgreSQL` implementations of the storage traits
 //! defined in `moto-club-wg`, using the repositories from `moto-club-db`.
 
 use std::net::SocketAddr;
@@ -25,7 +25,7 @@ pub struct PostgresPeerStore {
 }
 
 impl PostgresPeerStore {
-    /// Create a new PostgreSQL peer store.
+    /// Create a new `PostgreSQL` peer store.
     #[must_use]
     pub const fn new(pool: DbPool) -> Self {
         Self { pool }
@@ -49,8 +49,8 @@ impl PeerStore for PostgresPeerStore {
         match result {
             Ok(device) => {
                 // Parse the overlay IP from string
-                let overlay_ip = parse_client_overlay_ip(&device.assigned_ip)
-                    .map_err(|e| PeerError::Storage(e.to_string()))?;
+                let overlay_ip =
+                    parse_client_overlay_ip(&device.assigned_ip).map_err(PeerError::Storage)?;
 
                 // Parse the public key
                 let public_key = WgPublicKey::from_base64(&device.public_key)
@@ -103,8 +103,8 @@ impl PeerStore for PostgresPeerStore {
         match result {
             Ok(wg_garage) => {
                 // Parse the overlay IP
-                let overlay_ip = parse_garage_overlay_ip(&wg_garage.assigned_ip)
-                    .map_err(|e| PeerError::Storage(e.to_string()))?;
+                let overlay_ip =
+                    parse_garage_overlay_ip(&wg_garage.assigned_ip).map_err(PeerError::Storage)?;
 
                 // Parse the public key
                 let public_key = WgPublicKey::from_base64(&wg_garage.public_key)
@@ -193,7 +193,7 @@ pub struct PostgresSessionStore {
 }
 
 impl PostgresSessionStore {
-    /// Create a new PostgreSQL session store.
+    /// Create a new `PostgreSQL` session store.
     #[must_use]
     pub const fn new(pool: DbPool) -> Self {
         Self { pool }
@@ -412,8 +412,8 @@ fn parse_client_overlay_ip(ip_str: &str) -> Result<OverlayIp, String> {
 
 /// Parse a garage overlay IP from a string.
 ///
-/// The DB stores IPs in format "fd00:moto:1::{hex}:{hex}:{hex}:{hex}".
-/// We need to extract the 64-bit host part and create an OverlayIp.
+/// The DB stores IPs in format "`fd00:moto:1::{hex}:{hex}:{hex}:{hex`}".
+/// We need to extract the 64-bit host part and create an `OverlayIp`.
 fn parse_garage_overlay_ip(ip_str: &str) -> Result<OverlayIp, String> {
     // Garage IPs are in fd00:moto:1:: subnet
     let suffix = ip_str

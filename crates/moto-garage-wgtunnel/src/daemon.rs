@@ -681,7 +681,7 @@ mod tests {
         let mut daemon = Daemon::new(config).unwrap();
 
         let peer_key = WgPrivateKey::generate().public_key();
-        let peer_info = PeerInfo::new(peer_key.clone(), OverlayIp::client(1));
+        let peer_info = PeerInfo::new(peer_key, OverlayIp::client(1));
 
         daemon.handle_peer_action(PeerAction::add(peer_info));
 

@@ -10,7 +10,7 @@
 //! # Architecture
 //!
 //! Sessions are created by the CLI when entering a garage. The device is identified
-//! by its WireGuard public key (Cloudflare WARP model):
+//! by its `WireGuard` public key (Cloudflare WARP model):
 //!
 //! ```text
 //! Session Creation:
@@ -110,7 +110,7 @@ pub enum SessionError {
     #[error("session not found: {0}")]
     NotFound(String),
 
-    /// Device not registered (identified by WireGuard public key).
+    /// Device not registered (identified by `WireGuard` public key).
     #[error("device not registered: {0}")]
     DeviceNotRegistered(String),
 
@@ -128,7 +128,7 @@ pub struct CreateSessionRequest {
     /// Garage to connect to.
     pub garage_id: String,
 
-    /// Device requesting the connection (WireGuard public key IS the device identity).
+    /// Device requesting the connection (`WireGuard` public key IS the device identity).
     pub device_pubkey: WgPublicKey,
 
     /// Optional session TTL in seconds. Defaults to garage TTL or 4 hours.
@@ -180,7 +180,7 @@ pub struct Session {
     /// Human-readable garage name (same as `garage_id` for now).
     pub garage_name: String,
 
-    /// Device that created this session (WireGuard public key IS the device identity).
+    /// Device that created this session (`WireGuard` public key IS the device identity).
     pub device_pubkey: WgPublicKey,
 
     /// When this session was created.
@@ -243,7 +243,7 @@ pub trait SessionStore: Send + Sync {
 
     /// List all sessions for a device (by public key).
     ///
-    /// The WireGuard public key IS the device identity.
+    /// The `WireGuard` public key IS the device identity.
     ///
     /// # Errors
     ///
@@ -362,7 +362,7 @@ impl<S: SessionStore> SessionManager<S> {
 
     /// List sessions for a device (by public key).
     ///
-    /// The WireGuard public key IS the device identity.
+    /// The `WireGuard` public key IS the device identity.
     /// Excludes expired sessions.
     ///
     /// # Errors

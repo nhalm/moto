@@ -17,7 +17,7 @@ pub enum ExitCode {
 
 impl From<ExitCode> for i32 {
     fn from(code: ExitCode) -> Self {
-        code as i32
+        code as Self
     }
 }
 
@@ -64,15 +64,15 @@ impl fmt::Display for CliError {
 
 impl std::error::Error for CliError {}
 
-/// Convert moto_k8s errors to CLI errors with appropriate exit codes.
+/// Convert `moto_k8s` errors to CLI errors with appropriate exit codes.
 impl From<moto_k8s::Error> for CliError {
     fn from(err: moto_k8s::Error) -> Self {
         match &err {
             moto_k8s::Error::NamespaceNotFound(_)
             | moto_k8s::Error::PodNotFound(_)
             | moto_k8s::Error::ContextNotFound(_)
-            | moto_k8s::Error::DeploymentNotFound(_) => CliError::not_found(err.to_string()),
-            _ => CliError::general(err.to_string()),
+            | moto_k8s::Error::DeploymentNotFound(_) => Self::not_found(err.to_string()),
+            _ => Self::general(err.to_string()),
         }
     }
 }
@@ -80,35 +80,35 @@ impl From<moto_k8s::Error> for CliError {
 /// Convert Box<dyn Error> to CLI error (defaults to general error).
 impl From<Box<dyn std::error::Error>> for CliError {
     fn from(err: Box<dyn std::error::Error>) -> Self {
-        CliError::general(err.to_string())
+        Self::general(err.to_string())
     }
 }
 
-/// Convert serde_json errors to CLI error.
+/// Convert `serde_json` errors to CLI error.
 impl From<serde_json::Error> for CliError {
     fn from(err: serde_json::Error) -> Self {
-        CliError::general(err.to_string())
+        Self::general(err.to_string())
     }
 }
 
 /// Convert io errors to CLI error.
 impl From<std::io::Error> for CliError {
     fn from(err: std::io::Error) -> Self {
-        CliError::general(err.to_string())
+        Self::general(err.to_string())
     }
 }
 
 /// Convert &str to CLI error (general error).
 impl From<&str> for CliError {
     fn from(msg: &str) -> Self {
-        CliError::general(msg)
+        Self::general(msg)
     }
 }
 
 /// Convert String to CLI error (general error).
 impl From<String> for CliError {
     fn from(msg: String) -> Self {
-        CliError::general(msg)
+        Self::general(msg)
     }
 }
 
@@ -151,6 +151,6 @@ mod tests {
     #[test]
     fn test_cli_error_display() {
         let err = CliError::general("display test");
-        assert_eq!(format!("{}", err), "display test");
+        assert_eq!(format!("{err}"), "display test");
     }
 }

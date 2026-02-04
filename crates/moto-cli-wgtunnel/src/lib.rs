@@ -1,4 +1,4 @@
-//! CLI WireGuard tunnel integration for moto.
+//! CLI `WireGuard` tunnel integration for moto.
 //!
 //! This crate provides the client-side tunnel management for moto's
 //! WireGuard-based connectivity to garages. It handles:
@@ -34,7 +34,7 @@
 //!
 //! # Key Files
 //!
-//! The WireGuard public key IS the device identity (Cloudflare WARP model).
+//! The `WireGuard` public key IS the device identity (Cloudflare WARP model).
 //! There is no separate device ID file.
 //!
 //! ```text

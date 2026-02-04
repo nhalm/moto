@@ -74,6 +74,7 @@ aes-gcm = "0.10"
 base64 = "0.22"
 secrecy = "0.10"
 sha2 = "0.10"
+subtle = "2.6"
 
 # Testing
 proptest = "1"

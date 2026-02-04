@@ -61,7 +61,7 @@ pub struct GaragePodInput {
     pub image: Option<String>,
     /// Optional repository to clone on startup.
     pub repo: Option<RepoConfig>,
-    /// Include PostgreSQL environment variables.
+    /// Include `PostgreSQL` environment variables.
     pub with_postgres: bool,
     /// Include Redis environment variables.
     pub with_redis: bool,
@@ -752,12 +752,12 @@ const fn is_not_found(e: &kube::Error) -> bool {
 /// Builds Postgres environment variables for garage pod.
 ///
 /// Per supporting-services.md spec (lines 236-255):
-/// - POSTGRES_HOST: postgres
-/// - POSTGRES_PORT: 5432
-/// - POSTGRES_USER: dev
-/// - POSTGRES_PASSWORD: from secret
-/// - POSTGRES_DB: dev
-/// - DATABASE_URL: from secret
+/// - `POSTGRES_HOST`: postgres
+/// - `POSTGRES_PORT`: 5432
+/// - `POSTGRES_USER`: dev
+/// - `POSTGRES_PASSWORD`: from secret
+/// - `POSTGRES_DB`: dev
+/// - `DATABASE_URL`: from secret
 fn build_postgres_env_vars() -> Vec<EnvVar> {
     vec![
         EnvVar {
@@ -810,10 +810,10 @@ fn build_postgres_env_vars() -> Vec<EnvVar> {
 /// Builds Redis environment variables for garage pod.
 ///
 /// Per supporting-services.md spec (lines 258-272):
-/// - REDIS_HOST: redis
-/// - REDIS_PORT: 6379
-/// - REDIS_PASSWORD: from secret
-/// - REDIS_URL: from secret
+/// - `REDIS_HOST`: redis
+/// - `REDIS_PORT`: 6379
+/// - `REDIS_PASSWORD`: from secret
+/// - `REDIS_URL`: from secret
 fn build_redis_env_vars() -> Vec<EnvVar> {
     vec![
         EnvVar {
@@ -1102,11 +1102,10 @@ mod tests {
             let volume = volumes
                 .iter()
                 .find(|v| v.name == *vol_name)
-                .unwrap_or_else(|| panic!("volume '{}' should exist", vol_name));
+                .unwrap_or_else(|| panic!("volume '{vol_name}' should exist"));
             assert!(
                 volume.empty_dir.is_some(),
-                "volume '{}' should be emptyDir",
-                vol_name
+                "volume '{vol_name}' should be emptyDir"
             );
         }
 
@@ -1115,11 +1114,10 @@ mod tests {
             let mount = mounts
                 .iter()
                 .find(|m| m.name == *vol_name)
-                .unwrap_or_else(|| panic!("mount '{}' should exist", vol_name));
+                .unwrap_or_else(|| panic!("mount '{vol_name}' should exist"));
             assert_eq!(
                 mount.mount_path, *mount_path,
-                "mount '{}' should have path '{}'",
-                vol_name, mount_path
+                "mount '{vol_name}' should have path '{mount_path}'"
             );
         }
 
@@ -1356,11 +1354,11 @@ mod tests {
 
         // Check no Postgres env vars exist
         assert!(
-            env.iter().find(|e| e.name == "POSTGRES_HOST").is_none(),
+            !env.iter().any(|e| e.name == "POSTGRES_HOST"),
             "POSTGRES_HOST should not be present"
         );
         assert!(
-            env.iter().find(|e| e.name == "DATABASE_URL").is_none(),
+            !env.iter().any(|e| e.name == "DATABASE_URL"),
             "DATABASE_URL should not be present"
         );
     }
@@ -1434,11 +1432,11 @@ mod tests {
 
         // Check no Redis env vars exist
         assert!(
-            env.iter().find(|e| e.name == "REDIS_HOST").is_none(),
+            !env.iter().any(|e| e.name == "REDIS_HOST"),
             "REDIS_HOST should not be present"
         );
         assert!(
-            env.iter().find(|e| e.name == "REDIS_URL").is_none(),
+            !env.iter().any(|e| e.name == "REDIS_URL"),
             "REDIS_URL should not be present"
         );
     }
@@ -1462,19 +1460,19 @@ mod tests {
 
         // Check both Postgres and Redis env vars exist
         assert!(
-            env.iter().find(|e| e.name == "POSTGRES_HOST").is_some(),
+            env.iter().any(|e| e.name == "POSTGRES_HOST"),
             "POSTGRES_HOST should be present"
         );
         assert!(
-            env.iter().find(|e| e.name == "DATABASE_URL").is_some(),
+            env.iter().any(|e| e.name == "DATABASE_URL"),
             "DATABASE_URL should be present"
         );
         assert!(
-            env.iter().find(|e| e.name == "REDIS_HOST").is_some(),
+            env.iter().any(|e| e.name == "REDIS_HOST"),
             "REDIS_HOST should be present"
         );
         assert!(
-            env.iter().find(|e| e.name == "REDIS_URL").is_some(),
+            env.iter().any(|e| e.name == "REDIS_URL"),
             "REDIS_URL should be present"
         );
     }

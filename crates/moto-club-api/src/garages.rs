@@ -44,7 +44,7 @@ pub struct CreateGarageRequest {
     pub ttl_seconds: Option<i32>,
     /// Override dev container image.
     pub image: Option<String>,
-    /// Include PostgreSQL supporting service (postgres:16).
+    /// Include `PostgreSQL` supporting service (postgres:16).
     #[serde(default)]
     pub with_postgres: bool,
     /// Include Redis supporting service (redis:7).
@@ -238,7 +238,7 @@ async fn create_garage(
         let garage = garage_service
             .create(&owner, input)
             .await
-            .map_err(|e| map_garage_service_error(e))?;
+            .map_err(map_garage_service_error)?;
 
         return Ok((StatusCode::CREATED, Json(GarageResponse::from(garage))));
     }
@@ -423,7 +423,7 @@ fn map_garage_service_error(e: GarageServiceError) -> (StatusCode, Json<ApiError
     }
 }
 
-/// Parse a status string into GarageStatus.
+/// Parse a status string into `GarageStatus`.
 fn parse_status(s: &str) -> Option<GarageStatus> {
     match s.trim().to_lowercase().as_str() {
         "pending" => Some(GarageStatus::Pending),
@@ -560,8 +560,8 @@ async fn get_garage(
 ///
 /// Close flow (per spec lines 903-907):
 /// 1. Update database status to Terminated
-/// 2. Set terminated_at timestamp
-/// 3. Set termination_reason
+/// 2. Set `terminated_at` timestamp
+/// 3. Set `termination_reason`
 /// 4. Delete K8s namespace (cascades to all resources)
 ///
 /// Idempotent: deleting already-terminated garage returns 204.
@@ -784,7 +784,7 @@ mod tests {
 
     #[test]
     fn create_garage_request_optional_fields() {
-        let json = r#"{}"#;
+        let json = r"{}";
         let req: CreateGarageRequest = serde_json::from_str(json).unwrap();
         assert!(req.name.is_none());
         assert!(req.branch.is_none());
