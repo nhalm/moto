@@ -76,6 +76,9 @@ secrecy = "0.10"
 sha2 = "0.10"
 subtle = "2.6"
 
+# URL parsing
+url = "2"
+
 # Testing
 proptest = "1"
 tempfile = "3"

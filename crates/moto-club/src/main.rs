@@ -75,6 +75,8 @@ struct Config {
     dev_container_image: Option<String>,
     /// Reconciliation interval.
     reconcile_interval: Duration,
+    /// Keybox URL for health checks and SVID issuance.
+    keybox_url: Option<String>,
 }
 
 impl Config {
@@ -113,6 +115,8 @@ impl Config {
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(DEFAULT_RECONCILE_INTERVAL_SECS);
 
+        let keybox_url = env::var("MOTO_CLUB_KEYBOX_URL").ok();
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -120,6 +124,7 @@ impl Config {
             metrics_bind_addr,
             dev_container_image,
             reconcile_interval: Duration::from_secs(reconcile_interval),
+            keybox_url,
         })
     }
 }
@@ -281,7 +286,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create API router with GarageService and GarageK8s for operations
     let api_garage_k8s = garage_k8s.clone();
-    let state = AppState::new(
+    let mut state = AppState::new(
         db_pool,
         peer_registry,
         session_manager,
@@ -290,6 +295,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     )
     .with_garage_k8s(api_garage_k8s)
     .with_garage_service(garage_service);
+
+    // Add keybox URL for health checks if configured
+    if let Some(ref keybox_url) = config.keybox_url {
+        info!(keybox_url = %keybox_url, "keybox health checks enabled");
+        state = state.with_keybox_url(keybox_url.clone());
+    } else {
+        info!("keybox URL not configured, health checks will skip keybox");
+    }
+
     let app = router(state.clone());
 
     // Create health server router for K8s probes (port 8081)

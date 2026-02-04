@@ -2,16 +2,17 @@
 //!
 //! Provides Kubernetes-style health check functionality per the Engine Contract (moto-bike.md):
 //! - `/health/live` - Process is alive (not deadlocked), always 200 if reachable
-//! - `/health/ready` - Ready for traffic (deps connected), checks database
+//! - `/health/ready` - Ready for traffic (deps connected), checks database and keybox
 //! - `/health/startup` - Initial startup complete
 //!
 //! These endpoints are served on a separate port (8081) from the main API (8080).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::AppState;
 
@@ -102,6 +103,75 @@ async fn check_database(pool: &moto_club_db::DbPool) -> CheckResult {
     }
 }
 
+/// Keybox health response (from `/health/ready` endpoint).
+#[derive(Debug, Clone, Deserialize)]
+struct KeyboxHealthResponse {
+    /// Status: `"ok"` or `"not_ready"`.
+    status: String,
+}
+
+/// Timeout for keybox health check requests.
+const KEYBOX_HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Check keybox health by calling its `/health/ready` endpoint.
+///
+/// Returns `CheckResult::ok()` if keybox responds with 200 and status "ok".
+/// Returns `CheckResult::error()` with details if:
+/// - Connection fails (unreachable)
+/// - Response is not 200
+/// - Response status is not "ok"
+async fn check_keybox(keybox_url: &str) -> CheckResult {
+    let client = match reqwest::Client::builder()
+        .timeout(KEYBOX_HEALTH_TIMEOUT)
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => return CheckResult::error(format!("failed to create HTTP client: {e}")),
+    };
+
+    // Keybox health endpoint is on port 8081 per moto-bike.md Engine Contract
+    // The keybox_url is the base URL (e.g., http://keybox:8080), but health is on 8081
+    // Parse the URL to construct the proper health endpoint
+    // e.g., http://keybox:8080 -> http://keybox:8081/health/ready
+    #[allow(clippy::option_if_let_else)]
+    let health_url = match url::Url::parse(keybox_url) {
+        Ok(mut url) => {
+            url.set_port(Some(8081)).ok();
+            url.set_path("/health/ready");
+            url.to_string()
+        }
+        Err(_) => {
+            // Fallback: just append port and path
+            format!("{keybox_url}:8081/health/ready")
+        }
+    };
+
+    let response = match client.get(&health_url).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            if e.is_connect() || e.is_timeout() {
+                return CheckResult::error(format!("connection failed: {e}"));
+            }
+            return CheckResult::error(format!("request failed: {e}"));
+        }
+    };
+
+    if !response.status().is_success() {
+        return CheckResult::error(format!("HTTP {}", response.status()));
+    }
+
+    match response.json::<KeyboxHealthResponse>().await {
+        Ok(body) => {
+            if body.status == "ok" {
+                CheckResult::ok()
+            } else {
+                CheckResult::error(format!("status: {}", body.status))
+            }
+        }
+        Err(e) => CheckResult::error(format!("invalid response: {e}")),
+    }
+}
+
 /// Liveness response body.
 #[derive(Debug, Clone, Serialize)]
 pub struct LiveResponse {
@@ -139,6 +209,10 @@ async fn live_handler() -> impl IntoResponse {
 ///
 /// Returns 200 if the service is ready to accept traffic (all dependencies connected).
 /// Returns 503 if dependencies are not ready.
+///
+/// Per moto-club.md v1.5, checks:
+/// - Database connectivity
+/// - Keybox `/health/ready` endpoint (returns degraded if unreachable)
 async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mut checks = HashMap::new();
 
@@ -147,12 +221,36 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let db_ready = db_check.is_ok();
     checks.insert("database".to_string(), db_check);
 
+    // Check keybox if URL is configured
+    let keybox_ready = if let Some(ref keybox_url) = state.keybox_url {
+        let keybox_check = check_keybox(keybox_url).await;
+        let is_ok = keybox_check.is_ok();
+        checks.insert("keybox".to_string(), keybox_check);
+        is_ok
+    } else {
+        // Keybox not configured (local dev mode), consider it ready
+        checks.insert("keybox".to_string(), CheckResult::ok());
+        true
+    };
+
+    // Overall ready status: database must be ready, keybox failure degrades but doesn't fail
+    // Per spec: "return degraded status if keybox unreachable"
     if db_ready {
-        let response = ReadyResponse {
-            status: "ok",
-            checks: None,
-        };
-        (StatusCode::OK, Json(response))
+        if keybox_ready {
+            let response = ReadyResponse {
+                status: "ok",
+                checks: None,
+            };
+            (StatusCode::OK, Json(response))
+        } else {
+            // Database is ready but keybox is not - degraded state
+            // Still return 200 since we can serve requests, but include checks
+            let response = ReadyResponse {
+                status: "degraded",
+                checks: Some(checks),
+            };
+            (StatusCode::OK, Json(response))
+        }
     } else {
         let response = ReadyResponse {
             status: "not_ready",
@@ -212,9 +310,14 @@ async fn health_handler(State(state): State<AppState>) -> impl IntoResponse {
         checks.insert("k8s".to_string(), CheckResult::ok());
     }
 
-    // TODO: Add Keybox health check when keybox integration is implemented
-    // For now, keybox is always reported as ok (integration not yet wired)
-    checks.insert("keybox".to_string(), CheckResult::ok());
+    // Check keybox health (per moto-club.md v1.5)
+    if let Some(ref keybox_url) = state.keybox_url {
+        let keybox_check = check_keybox(keybox_url).await;
+        checks.insert("keybox".to_string(), keybox_check);
+    } else {
+        // Keybox not configured (local dev mode), report as ok
+        checks.insert("keybox".to_string(), CheckResult::ok());
+    }
 
     // Determine overall status
     let status = if checks.values().all(CheckResult::is_ok) {
@@ -462,5 +565,70 @@ mod tests {
         assert!(json.contains(r#""database""#));
         assert!(json.contains(r#""k8s""#));
         assert!(json.contains(r#""keybox""#));
+    }
+
+    #[test]
+    fn ready_response_degraded_serialization() {
+        // Per spec v1.5: ready returns degraded if keybox unreachable but DB is ok
+        let mut checks = HashMap::new();
+        checks.insert("database".to_string(), CheckResult::ok());
+        checks.insert(
+            "keybox".to_string(),
+            CheckResult::error("connection failed"),
+        );
+
+        let response = ReadyResponse {
+            status: "degraded",
+            checks: Some(checks),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(r#""status":"degraded""#));
+        assert!(json.contains(r#""database""#));
+        assert!(json.contains(r#""keybox""#));
+    }
+
+    #[test]
+    fn keybox_url_parsing() {
+        // Test URL construction for keybox health endpoint
+        let keybox_url = "http://keybox:8080";
+        let health_url = match url::Url::parse(keybox_url) {
+            Ok(mut url) => {
+                url.set_port(Some(8081)).ok();
+                url.set_path("/health/ready");
+                url.to_string()
+            }
+            Err(_) => format!("{keybox_url}:8081/health/ready"),
+        };
+
+        assert_eq!(health_url, "http://keybox:8081/health/ready");
+    }
+
+    #[test]
+    fn keybox_url_parsing_with_port() {
+        // Test URL construction when keybox URL already has a port
+        let keybox_url = "http://keybox:8080";
+        let health_url = match url::Url::parse(keybox_url) {
+            Ok(mut url) => {
+                url.set_port(Some(8081)).ok();
+                url.set_path("/health/ready");
+                url.to_string()
+            }
+            Err(_) => format!("{keybox_url}:8081/health/ready"),
+        };
+
+        // The port 8080 should be replaced with 8081
+        assert_eq!(health_url, "http://keybox:8081/health/ready");
+    }
+
+    #[test]
+    fn keybox_health_response_deserialization() {
+        let json = r#"{"status":"ok"}"#;
+        let response: KeyboxHealthResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.status, "ok");
+
+        let json = r#"{"status":"not_ready"}"#;
+        let response: KeyboxHealthResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.status, "not_ready");
     }
 }

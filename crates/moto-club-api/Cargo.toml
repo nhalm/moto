@@ -49,6 +49,12 @@ chrono = { workspace = true }
 # UUID
 uuid = { workspace = true }
 
+# HTTP client for health checks
+reqwest = { workspace = true }
+
+# URL parsing
+url = { workspace = true }
+
 # Internal crates
 moto-club-db = { workspace = true }
 moto-club-garage = { workspace = true }
