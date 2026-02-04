@@ -46,13 +46,15 @@ pub mod abac;
 pub mod api;
 pub mod envelope;
 mod error;
+pub mod health;
 pub mod repository;
 pub mod svid;
 pub mod types;
 
 pub use abac::{AccessRequest, Action, PolicyEngine};
-pub use api::{AppState, router};
+pub use api::{AppState, GARAGE_SVID_TTL_SECS, router};
 pub use envelope::{DataEncryptionKey, EncryptedDek, EncryptedSecret, MasterKey};
 pub use error::{Error, Result};
+pub use health::{health_router, is_startup_complete, mark_startup_complete};
 pub use svid::{DEFAULT_SVID_TTL_SECS, SvidClaims, SvidIssuer, SvidValidator};
 pub use types::{AuditEntry, AuditEventType, PrincipalType, Scope, SecretMetadata, SpiffeId};

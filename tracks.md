@@ -266,11 +266,11 @@ HOW TO USE THIS FILE:
 - Service token authentication for moto-club (MOTO_KEYBOX_SERVICE_TOKEN and MOTO_KEYBOX_SERVICE_TOKEN_FILE env vars, constant-time comparison)
 - 1 MB maximum secret size limit in API validation (v0.4: MAX_SECRET_SIZE_BYTES constant, validation in set_secret handler, SECRET_TOO_LARGE error code)
 - Return 403 Forbidden for both "not found" and "access denied" to prevent secret enumeration (v0.4: map_error returns ACCESS_DENIED for both SecretNotFound and AccessDenied errors, updated client to remove dead SECRET_NOT_FOUND code path)
+- Health check endpoints per moto-bike.md spec (v0.4: /health/live, /health/ready, /health/startup on port 8081 via moto-keybox-server, health.rs module in moto-keybox)
 
 **Remaining:**
 - Wire up moto-keybox-db PostgreSQL backend for secrets and audit logs (v0.4: was in-memory only)
 - Fix bikes ABAC: enforce service field matching (v0.4: bikes can only read their own service's secrets)
-- Add health check endpoints per moto-bike.md spec (v0.4: /health/live, /health/ready, /health/startup on port 8081)
 - Endpoint authorization matrix enforcement (future - spec v0.3: SVID tokens should be denied for admin endpoints)
 - POST /admin/rotate-dek/{name} endpoint (future - Phase 2)
 - Add request logging/metrics middleware (future - Phase 2)

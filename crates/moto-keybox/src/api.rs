@@ -490,7 +490,7 @@ fn parse_scope(scope_str: &str) -> Result<Scope, (StatusCode, Json<ApiError>)> {
 /// Convert keybox error to API response.
 ///
 /// Note: Both "secret not found" and "access denied" return 403 Forbidden with
-/// the same ACCESS_DENIED error code to prevent secret enumeration attacks
+/// the same `ACCESS_DENIED` error code to prevent secret enumeration attacks
 /// (spec v0.4: attackers cannot determine which secrets exist based on response codes).
 fn map_error(e: Error) -> (StatusCode, Json<ApiError>) {
     match e {

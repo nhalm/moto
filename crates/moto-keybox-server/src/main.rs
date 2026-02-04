@@ -5,6 +5,7 @@
 //! - Secret CRUD operations with envelope encryption
 //! - ABAC (Attribute-Based Access Control)
 //! - Audit logging
+//! - Health endpoints for K8s probes (port 8081)
 //!
 //! # Configuration
 //!
@@ -14,8 +15,11 @@
 //!
 //! Optional environment variables:
 //! - `MOTO_KEYBOX_BIND_ADDR`: Server bind address (default: `0.0.0.0:8080`)
+//! - `MOTO_KEYBOX_HEALTH_BIND_ADDR`: Health server bind address (default: `0.0.0.0:8081`)
 //! - `MOTO_KEYBOX_ADMIN_SERVICE`: Service name with admin privileges (default: `moto-club`)
 //! - `MOTO_KEYBOX_SVID_TTL_SECONDS`: SVID TTL in seconds (default: `900`)
+//! - `MOTO_KEYBOX_SERVICE_TOKEN`: Static shared token for moto-club authentication
+//! - `MOTO_KEYBOX_SERVICE_TOKEN_FILE`: Path to file containing service token (alternative to env var)
 //! - `RUST_LOG`: Log filter (default: `moto_keybox=info`)
 
 use std::env;
@@ -27,10 +31,15 @@ use tokio::signal;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-use moto_keybox::{AppState, MasterKey, SvidIssuer, SvidValidator, router};
+use moto_keybox::{
+    AppState, MasterKey, SvidIssuer, SvidValidator, health_router, mark_startup_complete, router,
+};
 
 /// Default bind address for keybox API.
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
+
+/// Default bind address for health endpoints.
+const DEFAULT_HEALTH_BIND_ADDR: &str = "0.0.0.0:8081";
 
 /// Default SVID TTL in seconds (15 minutes).
 const DEFAULT_SVID_TTL_SECS: i64 = 900;
@@ -42,6 +51,8 @@ const DEFAULT_ADMIN_SERVICE: &str = "moto-club";
 struct Config {
     /// Server bind address.
     bind_addr: SocketAddr,
+    /// Health server bind address.
+    health_bind_addr: SocketAddr,
     /// Path to master key (KEK) file.
     master_key_file: PathBuf,
     /// Path to SVID signing key file.
@@ -50,6 +61,8 @@ struct Config {
     admin_service: String,
     /// SVID TTL in seconds.
     svid_ttl_secs: i64,
+    /// Service token for moto-club authentication.
+    service_token: Option<String>,
 }
 
 impl Config {
@@ -72,6 +85,13 @@ impl Config {
             .parse()
             .map_err(|_| ConfigError::Invalid("MOTO_KEYBOX_BIND_ADDR", "invalid socket address"))?;
 
+        let health_bind_addr = env::var("MOTO_KEYBOX_HEALTH_BIND_ADDR")
+            .unwrap_or_else(|_| DEFAULT_HEALTH_BIND_ADDR.to_string())
+            .parse()
+            .map_err(|_| {
+                ConfigError::Invalid("MOTO_KEYBOX_HEALTH_BIND_ADDR", "invalid socket address")
+            })?;
+
         let admin_service = env::var("MOTO_KEYBOX_ADMIN_SERVICE")
             .unwrap_or_else(|_| DEFAULT_ADMIN_SERVICE.to_string());
 
@@ -80,12 +100,22 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(DEFAULT_SVID_TTL_SECS);
 
+        // Load service token from env var or file
+        let service_token = env::var("MOTO_KEYBOX_SERVICE_TOKEN").ok().or_else(|| {
+            env::var("MOTO_KEYBOX_SERVICE_TOKEN_FILE")
+                .ok()
+                .and_then(|path| std::fs::read_to_string(path).ok())
+                .map(|s| s.trim().to_string())
+        });
+
         Ok(Self {
             bind_addr,
+            health_bind_addr,
             master_key_file,
             signing_key_file,
             admin_service,
             svid_ttl_secs,
+            service_token,
         })
     }
 }
@@ -135,8 +165,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(
         bind_addr = %config.bind_addr,
+        health_bind_addr = %config.health_bind_addr,
         svid_ttl_secs = config.svid_ttl_secs,
         admin_service = %config.admin_service,
+        service_token_configured = config.service_token.is_some(),
         "starting moto-keybox"
     );
 
@@ -155,17 +187,43 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!("SVID signing key loaded");
 
     // Create application state with in-memory repository
-    let state = AppState::new(
+    let mut state = AppState::new(
         master_key,
         svid_issuer,
         svid_validator,
         &config.admin_service,
     );
+
+    // Configure service token if provided
+    if let Some(token) = config.service_token {
+        state = state.with_service_token(token);
+        info!("service token configured for moto-club authentication");
+    } else {
+        tracing::warn!(
+            "no service token configured - POST /auth/issue-garage-svid will be unavailable"
+        );
+    }
+
     let app = router(state);
 
-    // Start API server
+    // Start health server in background (port 8081)
+    let health_app = health_router();
+    let health_listener = TcpListener::bind(config.health_bind_addr).await?;
+    info!(addr = %config.health_bind_addr, "health server listening");
+
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(health_listener, health_app).await {
+            error!(error = %e, "health server failed");
+        }
+    });
+
+    // Start main API server
     let listener = TcpListener::bind(config.bind_addr).await?;
     info!(addr = %config.bind_addr, "moto-keybox listening");
+
+    // Mark startup as complete - K8s startup probe will now return 200
+    mark_startup_complete();
+    info!("startup complete");
 
     // Graceful shutdown on SIGTERM or Ctrl+C
     axum::serve(listener, app)
