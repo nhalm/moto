@@ -45,6 +45,12 @@ use crate::repository::SecretRepository;
 use crate::svid::{SvidClaims, SvidIssuer, SvidValidator};
 use crate::types::{AuditEntry, AuditEventType, PrincipalType, Scope, SecretMetadata, SpiffeId};
 
+/// Default garage SVID TTL in seconds (1 hour per spec).
+pub const GARAGE_SVID_TTL_SECS: i64 = 3600;
+
+/// Maximum secret value size in bytes (1 MB per spec).
+pub const MAX_SECRET_SIZE_BYTES: usize = 1_048_576;
+
 /// Shared application state for the keybox API.
 #[derive(Clone)]
 pub struct AppState {
@@ -54,6 +60,8 @@ pub struct AppState {
     pub svid_issuer: Arc<SvidIssuer>,
     /// SVID validator for token verification.
     pub svid_validator: Arc<SvidValidator>,
+    /// Service token for moto-club authentication (static shared token for MVP).
+    service_token: Option<String>,
 }
 
 impl AppState {
@@ -71,7 +79,15 @@ impl AppState {
             repository: Arc::new(RwLock::new(repository)),
             svid_issuer: Arc::new(svid_issuer),
             svid_validator: Arc::new(svid_validator),
+            service_token: None,
         }
+    }
+
+    /// Sets the service token for moto-club authentication.
+    #[must_use]
+    pub fn with_service_token(mut self, token: impl Into<String>) -> Self {
+        self.service_token = Some(token.into());
+        self
     }
 
     /// Creates `AppState` from an existing repository.
@@ -85,6 +101,7 @@ impl AppState {
             repository: Arc::new(RwLock::new(repository)),
             svid_issuer: Arc::new(svid_issuer),
             svid_validator: Arc::new(svid_validator),
+            service_token: None,
         }
     }
 }
@@ -138,6 +155,14 @@ pub mod error_codes {
     pub const INVALID_REQUEST: &str = "INVALID_REQUEST";
     /// Internal server error.
     pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
+    /// Secret value exceeds maximum size limit.
+    pub const SECRET_TOO_LARGE: &str = "SECRET_TOO_LARGE";
+    /// Invalid service token.
+    pub const INVALID_SERVICE_TOKEN: &str = "INVALID_SERVICE_TOKEN";
+    /// Service token not configured.
+    pub const SERVICE_TOKEN_NOT_CONFIGURED: &str = "SERVICE_TOKEN_NOT_CONFIGURED";
+    /// Operation forbidden for this token type.
+    pub const FORBIDDEN: &str = "FORBIDDEN";
 }
 
 /// Request to issue an SVID token.
@@ -161,6 +186,32 @@ pub struct TokenResponse {
     pub token: String,
     /// Token expiration time (Unix timestamp).
     pub expires_at: i64,
+}
+
+/// Request to issue a garage SVID via moto-club delegation.
+///
+/// POST /auth/issue-garage-svid
+///
+/// This endpoint allows moto-club to request an SVID on behalf of a garage.
+/// Garages don't have K8s API access, so moto-club fetches the SVID and
+/// pushes it to the garage namespace as a Secret.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueGarageSvidRequest {
+    /// The garage UUID.
+    pub garage_id: String,
+    /// The garage owner identifier.
+    pub owner: String,
+}
+
+/// Response containing the issued garage SVID.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueGarageSvidResponse {
+    /// The signed SVID JWT (1 hour TTL).
+    pub token: String,
+    /// Token expiration time (Unix timestamp).
+    pub expires_at: i64,
+    /// The SPIFFE ID for this garage.
+    pub spiffe_id: String,
 }
 
 /// Request to create or update a secret.
@@ -359,6 +410,70 @@ fn extract_svid(
     })
 }
 
+/// Validate service token from Authorization header.
+///
+/// Returns `Ok(())` if the token matches the configured service token.
+/// Returns an error if:
+/// - No Authorization header
+/// - Invalid header format
+/// - Service token not configured
+/// - Token doesn't match
+fn validate_service_token(
+    headers: &HeaderMap,
+    expected_token: Option<&String>,
+) -> Result<(), (StatusCode, Json<ApiError>)> {
+    use subtle::ConstantTimeEq;
+
+    let auth_header = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new(
+                    error_codes::UNAUTHORIZED,
+                    "Missing Authorization header",
+                )),
+            )
+        })?;
+
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .or_else(|| auth_header.strip_prefix("bearer "))
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new(
+                    error_codes::UNAUTHORIZED,
+                    "Invalid Authorization header format, expected 'Bearer <token>'",
+                )),
+            )
+        })?;
+
+    let expected = expected_token.ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError::new(
+                error_codes::SERVICE_TOKEN_NOT_CONFIGURED,
+                "Service token not configured on server",
+            )),
+        )
+    })?;
+
+    // Constant-time comparison to prevent timing attacks
+    if token.as_bytes().ct_eq(expected.as_bytes()).into() {
+        Ok(())
+    } else {
+        Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new(
+                error_codes::INVALID_SERVICE_TOKEN,
+                "Invalid service token",
+            )),
+        ))
+    }
+}
+
 /// Parse scope from path parameter.
 fn parse_scope(scope_str: &str) -> Result<Scope, (StatusCode, Json<ApiError>)> {
     scope_str.parse::<Scope>().map_err(|_| {
@@ -448,6 +563,61 @@ async fn issue_token(
                 Json(ApiError::new(
                     error_codes::INTERNAL_ERROR,
                     "Failed to issue token",
+                )),
+            ))
+        }
+    }
+}
+
+/// Issue a garage SVID via moto-club delegation.
+///
+/// POST /auth/issue-garage-svid
+///
+/// This endpoint allows moto-club to request an SVID on behalf of a garage.
+/// Authentication is via static service token (per spec v0.3).
+/// Garage SVIDs have a 1-hour TTL (longer than the standard 15 min for bikes).
+async fn issue_garage_svid(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<IssueGarageSvidRequest>,
+) -> impl IntoResponse {
+    // Validate service token (only moto-club can call this endpoint)
+    validate_service_token(&headers, state.service_token.as_ref())?;
+
+    // Create SPIFFE ID for the garage
+    let spiffe_id = SpiffeId::garage(&req.garage_id);
+
+    // Create claims with 1-hour TTL for garages
+    let claims = SvidClaims::new(&spiffe_id, GARAGE_SVID_TTL_SECS);
+
+    match state.svid_issuer.issue_with_claims(&claims) {
+        Ok(token) => {
+            // Audit SVID issuance with owner info
+            tracing::info!(
+                garage_id = %req.garage_id,
+                owner = %req.owner,
+                spiffe_id = %spiffe_id.to_uri(),
+                expires_at = claims.exp,
+                "issued garage SVID"
+            );
+
+            let audit_entry = AuditEntry::svid_issued(&spiffe_id);
+            state.repository.write().await.add_audit_entry(audit_entry);
+
+            let response = IssueGarageSvidResponse {
+                token,
+                expires_at: claims.exp,
+                spiffe_id: spiffe_id.to_uri(),
+            };
+            Ok((StatusCode::OK, Json(response)))
+        }
+        Err(e) => {
+            tracing::error!(error = %e, garage_id = %req.garage_id, "failed to issue garage SVID");
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(
+                    error_codes::INTERNAL_ERROR,
+                    "Failed to issue garage SVID",
                 )),
             ))
         }
@@ -558,6 +728,21 @@ async fn set_secret(
                 )),
             )
         })?;
+
+    // Validate secret size (1 MB limit per spec)
+    if value.len() > MAX_SECRET_SIZE_BYTES {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new(
+                error_codes::SECRET_TOO_LARGE,
+                format!(
+                    "Secret value exceeds maximum size of {} bytes (got {} bytes)",
+                    MAX_SECRET_SIZE_BYTES,
+                    value.len()
+                ),
+            )),
+        ));
+    }
 
     let mut repo = state.repository.write().await;
 
@@ -838,7 +1023,8 @@ async fn get_audit_logs(
 /// Creates the keybox API router.
 ///
 /// Includes:
-/// - `POST /auth/token` - Issue SVID token
+/// - `POST /auth/token` - Issue SVID token (bikes, via K8s SA JWT)
+/// - `POST /auth/issue-garage-svid` - Issue garage SVID (moto-club delegation)
 /// - `GET /secrets/{scope}/{name}` - Get secret value
 /// - `POST /secrets/{scope}/{name}` - Create/update secret
 /// - `DELETE /secrets/{scope}/{name}` - Delete secret
@@ -848,8 +1034,9 @@ async fn get_audit_logs(
 /// - `GET /audit/logs` - Query audit logs (admin services only)
 pub fn router(state: AppState) -> Router {
     Router::new()
-        // Auth endpoint
+        // Auth endpoints
         .route("/auth/token", post(issue_token))
+        .route("/auth/issue-garage-svid", post(issue_garage_svid))
         // Secret CRUD endpoints
         .route(
             "/secrets/{scope}/{name}",
@@ -1044,5 +1231,136 @@ mod tests {
         assert_eq!(query.principal_id, Some("my-garage".to_string()));
         assert_eq!(query.limit, Some(50));
         assert_eq!(query.offset, Some(10));
+    }
+
+    #[test]
+    fn issue_garage_svid_request_deserialize() {
+        let json = r#"{"garage_id":"abc123","owner":"user@example.com"}"#;
+        let req: IssueGarageSvidRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(req.garage_id, "abc123");
+        assert_eq!(req.owner, "user@example.com");
+    }
+
+    #[test]
+    fn issue_garage_svid_response_serialize() {
+        let resp = IssueGarageSvidResponse {
+            token: "eyJ...".to_string(),
+            expires_at: 1700003600,
+            spiffe_id: "spiffe://moto.local/garage/abc123".to_string(),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+
+        assert!(json.contains(r#""token":"eyJ...""#));
+        assert!(json.contains(r#""expires_at":1700003600"#));
+        assert!(json.contains(r#""spiffe_id":"spiffe://moto.local/garage/abc123""#));
+    }
+
+    #[test]
+    fn garage_svid_ttl_is_one_hour() {
+        assert_eq!(GARAGE_SVID_TTL_SECS, 3600);
+    }
+
+    #[test]
+    fn validate_service_token_missing_header() {
+        let headers = HeaderMap::new();
+        let token = Some("secret-token".to_string());
+
+        let result = validate_service_token(&headers, token.as_ref());
+        assert!(result.is_err());
+        let (status, json) = result.unwrap_err();
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json.0.error.code, error_codes::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn validate_service_token_invalid_format() {
+        use axum::http::HeaderValue;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", HeaderValue::from_static("Basic abc123"));
+        let token = Some("secret-token".to_string());
+
+        let result = validate_service_token(&headers, token.as_ref());
+        assert!(result.is_err());
+        let (status, json) = result.unwrap_err();
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json.0.error.code, error_codes::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn validate_service_token_not_configured() {
+        use axum::http::HeaderValue;
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer some-token"),
+        );
+        let token: Option<String> = None;
+
+        let result = validate_service_token(&headers, token.as_ref());
+        assert!(result.is_err());
+        let (status, json) = result.unwrap_err();
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(json.0.error.code, error_codes::SERVICE_TOKEN_NOT_CONFIGURED);
+    }
+
+    #[test]
+    fn validate_service_token_wrong_token() {
+        use axum::http::HeaderValue;
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer wrong-token"),
+        );
+        let token = Some("correct-token".to_string());
+
+        let result = validate_service_token(&headers, token.as_ref());
+        assert!(result.is_err());
+        let (status, json) = result.unwrap_err();
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json.0.error.code, error_codes::INVALID_SERVICE_TOKEN);
+    }
+
+    #[test]
+    fn validate_service_token_success() {
+        use axum::http::HeaderValue;
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer secret-token"),
+        );
+        let token = Some("secret-token".to_string());
+
+        let result = validate_service_token(&headers, token.as_ref());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_service_token_case_insensitive_bearer() {
+        use axum::http::HeaderValue;
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            HeaderValue::from_static("bearer secret-token"),
+        );
+        let token = Some("secret-token".to_string());
+
+        let result = validate_service_token(&headers, token.as_ref());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn max_secret_size_is_one_mb() {
+        assert_eq!(MAX_SECRET_SIZE_BYTES, 1_048_576);
+    }
+
+    #[test]
+    fn secret_too_large_error_code_exists() {
+        assert_eq!(error_codes::SECRET_TOO_LARGE, "SECRET_TOO_LARGE");
     }
 }
