@@ -63,16 +63,16 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-wgtunnel.md v0.8
+## moto-wgtunnel.md v0.9
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - moto-wgtunnel-types crate: keys.rs, ip.rs, peer.rs, derp.rs
 - moto-wgtunnel-derp crate: protocol.rs, client.rs, map.rs
 - moto-wgtunnel-conn crate: stun.rs, endpoint.rs, path.rs, magic.rs
 - moto-wgtunnel-engine crate: config.rs, tunnel.rs, platform/
-- moto-cli-wgtunnel crate: tunnel.rs, status.rs, enter.rs (partial), ttyd.rs
+- moto-cli-wgtunnel crate: tunnel.rs, status.rs, enter.rs, ttyd.rs (complete - v0.9 updated status)
 - moto-garage-wgtunnel crate: register.rs, health.rs, daemon.rs
 - enter.rs: MagicConn for direct UDP
 - enter.rs: DerpClient for DERP relay fallback
@@ -85,7 +85,7 @@ HOW TO USE THIS FILE:
 - Remove dead SSH code from moto-cli-wgtunnel/src/enter.rs (SshConfig, spawn_ssh, etc.)
 
 **Remaining:**
-(none - moto-wgtunnel.md v0.8 implementation complete)
+(none - moto-wgtunnel.md v0.9 implementation complete)
 
 ---
 
@@ -300,9 +300,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## supporting-services.md v0.2
+## supporting-services.md v0.3
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - CLI flags: `--with-postgres` and `--with-redis` on `moto garage open` command
@@ -312,9 +312,10 @@ HOW TO USE THIS FILE:
 - Garage pod: Inject Postgres env vars (POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DATABASE_URL per spec lines 236-255)
 - Garage pod: Inject Redis env vars (REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_URL per spec lines 258-272)
 - Ready check: Wait for supporting service Deployments to be available before marking garage Ready (reconciler checks postgres_available/redis_available before transitioning to Ready)
+- Fix: Call create_garage_postgres() and create_garage_redis() in garage creation flow (v0.3: service.rs now calls GaragePostgresOps.create_garage_postgres and GarageRedisOps.create_garage_redis when with_postgres/with_redis are true)
 
 **Remaining:**
-(none - supporting-services.md v0.2 implementation complete)
+(none - supporting-services.md v0.3 implementation complete)
 
 ---
 
