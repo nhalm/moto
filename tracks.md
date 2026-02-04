@@ -325,11 +325,12 @@ HOW TO USE THIS FILE:
 
 ## project-structure.md v1.4
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - (see tracks-history.md for prior work)
 - Deprecate moto-garage crate and local mode: moto-cli garage commands now use MotoClubClient HTTP client instead of moto_garage::GarageClient, removed moto-garage dependency from moto-cli, added list_garages/create_garage/close_garage/extend_garage methods to MotoClubClient
+- Remove moto-garage crate entirely (v1.4: deleted crates/moto-garage/ directory, removed moto-garage from Cargo.toml workspace dependencies)
 
 **Remaining:**
-- Remove moto-garage crate entirely (v1.4: delete crates/moto-garage/ directory, remove from Cargo.toml workspace members)
+(none - project-structure.md v1.4 implementation complete)
