@@ -1016,9 +1016,8 @@ async fn get_derp_map(State(state): State<AppState>, headers: HeaderMap) -> impl
         )
     })?;
 
-    // For v1, version is static since DERP config comes from file
+    // For v1, version is static since DERP config comes from env var
     // and is loaded at startup. Future versions will track changes.
-    // TODO: Implement proper versioning when runtime DERP updates are added
     let version = 1;
 
     tracing::debug!(

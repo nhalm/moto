@@ -36,7 +36,7 @@
 //! # Storage
 //!
 //! This crate defines traits for storage backends ([`IpamStore`], [`PeerStore`],
-//! [`SessionStore`]). For production use, use the PostgreSQL implementations from
+//! [`SessionStore`]). For production use, use the `PostgreSQL` implementations from
 //! `moto-club-api` (`PostgresIpamStore`, `PostgresPeerStore`, `PostgresSessionStore`).
 
 pub mod broadcaster;
