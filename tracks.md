@@ -350,8 +350,8 @@ HOW TO USE THIS FILE:
 - docker-compose.test.yml: PostgreSQL 16-alpine on port 5433, healthcheck, test credentials (moto_test/moto_test/moto_test)
 - Makefile targets: test-db-up, test-db-down, test-db-migrate, test-db-reset, test-integration, test-all, test-ci (per spec lines 117-158)
 - Update test target to run unit tests only (cargo test --lib)
+- Add `integration` feature flag to database crates (moto-club-db, moto-club-api, moto-keybox-db, moto-keybox) per spec lines 94-111
 
 **Remaining:**
-- Add `integration` feature flag to workspace Cargo.toml
 - moto-test-utils crate with test_pool() helper and fixtures (future - optional)
 - CI workflow: .github/workflows/test.yml (future)
