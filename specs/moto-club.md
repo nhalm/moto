@@ -699,16 +699,15 @@ Response 200:
         { "host": "derp.example.com", "port": 443, "stun_port": 3478 }
       ]
     }
-  },
-  "version": 5                             // Incremented when DERP config changes
+  }
 }
 ```
 
 **Behavior:**
-- Returns only healthy DERP servers (`healthy = true`)
-- `version` increments when DERP servers are added/removed/change health status
-- Clients/garages can poll periodically (recommended: every 5 minutes) to detect changes
-- Initial DERP map is provided during session/garage registration; this endpoint is for updates
+- Returns all configured DERP servers (from `MOTO_CLUB_DERP_SERVERS` env var)
+- Config changes require deployment update (env var change triggers rolling update)
+- Initial DERP map is provided during session/garage registration; this endpoint is for manual refresh
+- DERP clients handle failover automatically if a server is unreachable
 
 #### Health/Info
 
@@ -950,12 +949,9 @@ MOTO_CLUB_DERP_SERVERS='[
 - Sync to `derp_servers` table via `derp_server_repo::sync_from_config()`
 - Servers not in env var are deleted from database (full sync)
 - If env var is empty or unset, no DERP servers are configured (direct UDP only)
-
-**Health checking:**
-- Health check interval: 30 seconds
-- Unhealthy threshold: 3 consecutive failures
-- Unhealthy servers marked `healthy = false`, excluded from DERP map
 - DERP map provided to clients/garages via session creation and garage registration APIs
+
+**No server-side health checking:** DERP clients (WireGuard) handle failover automatically. If a DERP server is unreachable, clients try the next server or fall back to direct UDP. Server-side health checking would duplicate this logic unnecessarily.
 
 **Future:** Admin API for runtime DERP management.
 
@@ -1024,7 +1020,7 @@ CREATE TABLE wg_garages (
     registered_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- DERP servers (monitored by moto-club)
+-- DERP servers (synced from MOTO_CLUB_DERP_SERVERS env var)
 CREATE TABLE derp_servers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     region_id INTEGER NOT NULL,
@@ -1032,8 +1028,6 @@ CREATE TABLE derp_servers (
     host TEXT NOT NULL,
     port INTEGER NOT NULL DEFAULT 443,
     stun_port INTEGER NOT NULL DEFAULT 3478,
-    healthy BOOLEAN NOT NULL DEFAULT true,
-    last_check_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -1205,9 +1199,10 @@ Identity system will replace config-based owner identity:
   These are not useful for production (no shared state across replicas). Tests should use PostgreSQL test fixtures or be marked as integration tests.
 - **Remove DERP abstractions:** Delete `DerpStore` trait and `DerpMapManager` from `moto-club-wg`. Use `derp_server_repo` directly in `moto-club`:
   - On startup: parse `MOTO_CLUB_DERP_SERVERS` env var (JSON array), sync to database
-  - Serving DERP map: `derp_server_repo::list_healthy()` to get healthy servers from database
+  - Serving DERP map: `derp_server_repo::list_all()` to get all servers from database
   - Remove `WgDerpMapManager` type alias from `moto-club-api`
-  The abstraction was premature - DERP config comes from env var, health status tracked in database. No need for store trait.
+  The abstraction was premature - DERP config comes from env var, no health tracking needed.
+- **Remove DERP health checking:** Delete `healthy` and `last_check_at` columns from `derp_servers` table. DERP clients handle failover automatically - server-side health checking is unnecessary complexity. Remove `list_healthy()` function, use `list_all()` instead.
 - **Replace config file with env var:** Remove `MOTO_CLUB_DERP_CONFIG` and config file loading. Use `MOTO_CLUB_DERP_SERVERS` env var with JSON array instead. Simpler, no file mounts needed, standard K8s pattern.
 - **Update moto-club main.rs:** Replace `InMemoryDerpStore::with_default_map()` with direct `derp_server_repo` calls. Parse env var on startup, sync to database. All replicas share DERP state via PostgreSQL.
 
