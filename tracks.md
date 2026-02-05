@@ -15,7 +15,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v1.5
+## moto-club.md v1.6
 
 **Status:** In Progress
 
@@ -60,9 +60,12 @@ HOW TO USE THIS FILE:
 - /health/ready and /health keybox integration (v1.5: checks keybox /health/ready on port 8081, returns degraded status if unreachable, adds keybox field to response; MOTO_CLUB_KEYBOX_URL env var for config; AppState.keybox_url field)
 - Store garage public_key in wg_garages table during creation (v1.5: step 7 - service.rs calls wg_garage_repo::register after creating WireGuard resources, endpoints empty initially)
 - Add owner field to RegisteredDevice and DeviceRegistration structs (v1.5: moto-club-wg peers.rs adds owner field, PostgresPeerStore now uses device.owner instead of hardcoded "unknown")
+- Consolidate status enums (v1.6: remove GarageState and GarageInfo from moto-club-types/src/garage.rs; GarageStatus in moto-club-db/src/models.rs is now the single source of truth)
 
 **Remaining:**
-(none - moto-club.md v1.5 implementation complete)
+- Extract moto-club-ws crate: Move WebSocket handlers from moto-club-api/src/wg.rs to dedicated crate (v1.6 changelog)
+- Separate test files: Move tests from wg.rs to wg_test.rs, pods.rs to pods_test.rs (v1.6 changelog)
+- Remove in-memory storage: Delete InMemoryPeerStore, InMemoryStore from moto-club-api, use PostgreSQL storage exclusively (v1.6 changelog)
 
 ---
 

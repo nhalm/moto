@@ -1,6 +1,6 @@
 [package]
 name = "moto-club-types"
-description = "Shared types between CLI and server: GarageId, GarageState, GarageInfo"
+description = "Shared types between CLI and server: GarageId"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -12,10 +12,8 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-chrono = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-proptest = { workspace = true }
 serde_json = { workspace = true }
