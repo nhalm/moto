@@ -15,6 +15,25 @@ This spec defines the testing infrastructure for the Moto project. With the remo
 - Makefile targets for running tests
 - CI considerations
 
+## Prerequisites
+
+Before running integration tests, ensure you have:
+
+1. **Docker** (Docker Desktop or Docker Engine)
+   - Verify: `docker --version`
+
+2. **Docker Compose** (v2)
+   - Verify: `docker compose version`
+
+3. **sqlx-cli** for running migrations
+   ```bash
+   cargo install sqlx-cli --no-default-features --features postgres
+   ```
+   - Verify: `sqlx --version`
+
+4. **Port 5433 available** (test database port)
+   - Check: `lsof -i :5433` (should return nothing)
+
 ## Test Dependencies
 
 ### Docker Compose for Test Infrastructure
@@ -96,6 +115,11 @@ mod integration_tests {
 ### Test Targets
 
 ```makefile
+# Test database URL (override with environment variable if needed)
+TEST_DATABASE_URL ?= postgres://moto_test:moto_test@localhost:5433/moto_test
+
+.PHONY: test test-db-up test-db-down test-db-migrate test-db-reset test-integration test-all test-ci
+
 # Run unit tests only (fast, no dependencies)
 test:
 	cargo test --lib
@@ -115,10 +139,14 @@ test-db-down:
 test-db-migrate:
 	DATABASE_URL=$(TEST_DATABASE_URL) sqlx migrate run --source crates/moto-club-db/migrations
 
+# Reset test database (drop and recreate)
+test-db-reset: test-db-down test-db-up test-db-migrate
+
 # Run integration tests (starts database if needed)
 test-integration: test-db-up test-db-migrate
-	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration
-	$(MAKE) test-db-down
+	@TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration || \
+		(echo "Tests failed, cleaning up..." && $(MAKE) test-db-down && exit 1)
+	@$(MAKE) test-db-down
 
 # Run all tests
 test-all: test test-integration
@@ -205,7 +233,7 @@ jobs:
         ports:
           - 5433:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U moto_test"
           --health-interval 2s
           --health-timeout 5s
           --health-retries 10
@@ -243,16 +271,28 @@ fn test_peer_registration() {
 #[tokio::test]
 async fn test_peer_registration() {
     let pool = test_pool().await;
-    let mut tx = pool.begin().await.unwrap();
 
-    let ipam_store = PostgresIpamStore::new_with_tx(&mut tx);
-    let peer_store = PostgresPeerStore::new_with_tx(&mut tx);
+    // Use PostgreSQL stores with the test database pool
+    let ipam_store = PostgresIpamStore::new(pool.clone());
+    let peer_store = PostgresPeerStore::new(pool.clone());
     let registry = PeerRegistry::new(peer_store, Ipam::new(ipam_store));
     // ...
 
-    // tx rolls back automatically
+    // Note: For test isolation, either:
+    // 1. Use unique identifiers (UUIDs) to avoid conflicts
+    // 2. Clean up test data after each test
+    // 3. Run integration tests serially (--test-threads=1)
 }
 ```
+
+**Test isolation strategies:**
+
+Since the PostgreSQL stores take a `DbPool` (not a transaction), choose one of these isolation approaches:
+
+1. **Unique identifiers** (recommended): Generate unique test data per test using UUIDs
+2. **Cleanup after test**: Delete test data in a cleanup block or `Drop` impl
+3. **Serial execution**: Run integration tests with `cargo test --features integration -- --test-threads=1`
+4. **Database reset**: Use `make test-db-reset` between test runs during development
 
 ### Tests That Should Remain Unit Tests
 

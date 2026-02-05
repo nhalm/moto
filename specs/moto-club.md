@@ -944,11 +944,35 @@ MOTO_CLUB_DERP_SERVERS='[
 ]'
 ```
 
+**JSON schema:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `region_id` | integer | Yes | DERP region identifier (for grouping) |
+| `region_name` | string | Yes | Human-friendly region name |
+| `host` | string | Yes | DERP server hostname or IP |
+| `port` | integer | Yes | DERP server port (typically 443) |
+| `stun_port` | integer | Yes | STUN port (typically 3478) |
+
 **Startup behavior:**
 - Parse `MOTO_CLUB_DERP_SERVERS` env var (JSON array) on startup
+- Validate all required fields are present
 - Keep parsed config in memory (static configuration, not user data)
 - If env var is empty or unset, no DERP servers are configured (direct UDP only)
 - DERP map provided to clients/garages via session creation and garage registration APIs
+
+**Error handling:**
+- If JSON is malformed: **fail startup** with error showing parse location and expected format
+- If required fields missing: **fail startup** with error listing missing fields
+- If field types invalid: **fail startup** with error showing field name and expected type
+- Log the error clearly so operators can fix the configuration
+
+Example error message:
+```
+ERROR: Failed to parse MOTO_CLUB_DERP_SERVERS
+  Expected JSON array: [{"region_id":1,"region_name":"primary","host":"derp.example.com","port":443,"stun_port":3478}]
+  Parse error: missing field `stun_port` at index 0
+```
 
 **No database storage:** DERP config is static per deployment - all replicas read the same env var. No need for database table or sync logic.
 
@@ -1184,23 +1208,58 @@ Identity system will replace config-based owner identity:
 ## Changelog
 
 ### v1.7 (2026-02-05)
-- **Remove all in-memory stores:** Delete ALL in-memory store implementations from `moto-club-wg`:
-  - `InMemoryStore` (ipam.rs)
-  - `InMemoryPeerStore` (peers.rs)
-  - `InMemorySessionStore` (sessions.rs)
-  - `InMemoryDerpStore` (derp.rs)
-  These are not useful for production (no shared state across replicas). Tests that used these stores should be converted to integration tests per [testing.md](testing.md).
-- **Remove DERP abstractions:** Delete `DerpStore` trait and `DerpMapManager` from `moto-club-wg`:
-  - On startup: parse `MOTO_CLUB_DERP_SERVERS` env var (JSON array)
-  - Keep parsed config in memory (static configuration, same across all replicas)
-  - Serve DERP map directly from memory
-  - Remove `WgDerpMapManager` type alias from `moto-club-api`
-- **Remove `derp_servers` database table:** DERP config is static per deployment - all replicas read the same env var. No database storage needed. Delete:
-  - `derp_servers` table and migration
-  - `derp_server_repo.rs`
-  - `DerpServer` model from `models.rs`
-- **Replace config file with env var:** Remove `MOTO_CLUB_DERP_CONFIG` and config file loading. Use `MOTO_CLUB_DERP_SERVERS` env var with JSON array instead. Simpler, no file mounts needed, standard K8s pattern.
-- **Update moto-club main.rs:** Replace `InMemoryDerpStore::with_default_map()` with direct `derp_server_repo` calls. Parse env var on startup, sync to database. All replicas share DERP state via PostgreSQL.
+
+**Dependencies:** Implement [testing.md](testing.md) first (test infrastructure required for converted tests).
+
+**Implementation order:**
+
+1. **Set up test infrastructure** per [testing.md](testing.md):
+   - Create `docker-compose.test.yml`
+   - Add Makefile targets (`test-db-up`, `test-db-down`, `test-integration`)
+   - Add `integration` feature flag to Cargo.toml files
+
+2. **Remove DERP database storage** from `crates/moto-club-db/`:
+   - Delete `src/derp_server_repo.rs`
+   - Remove `DerpServer` model from `src/models.rs`
+   - Remove `derp_server_repo` export from `src/lib.rs`
+   - Create migration `DROP TABLE IF EXISTS derp_servers;`
+
+3. **Remove DERP abstractions** from `crates/moto-club-wg/src/derp.rs`:
+   - Delete `DerpStore` trait
+   - Delete `DerpMapManager` struct
+   - Delete `InMemoryDerpStore` struct
+   - Keep `DerpMap`, `DerpRegion`, `DerpNode` types (used for API response)
+   - Delete `load_derp_config()` and `load_derp_config_from_path()` functions
+   - Delete `DERP_CONFIG_ENV_VAR` and `DEFAULT_DERP_CONFIG_PATH` constants
+   - Update `crates/moto-club-wg/src/lib.rs` exports
+
+4. **Remove in-memory stores** from `crates/moto-club-wg/src/`:
+   - Delete `InMemoryStore` from `ipam.rs` (lines ~220-275)
+   - Delete `InMemoryPeerStore` from `peers.rs` (lines ~315-385)
+   - Delete `InMemorySessionStore` from `sessions.rs` (lines ~420-530)
+   - Update `lib.rs` exports to remove these types
+
+5. **Update moto-club-api** (`crates/moto-club-api/src/lib.rs`):
+   - Remove `WgDerpMapManager` type alias
+   - Change `AppState.derp_manager` to `AppState.derp_map: Arc<DerpMap>`
+
+6. **Update moto-club main.rs** (`crates/moto-club/src/main.rs`):
+   - Remove `load_derp_config()` call
+   - Add `parse_derp_servers_env()` function to parse `MOTO_CLUB_DERP_SERVERS` JSON
+   - Store parsed `DerpMap` directly in `Arc<DerpMap>`
+   - Remove database sync logic for DERP
+
+7. **Convert tests to integration tests:**
+   - Move tests from `derp.rs`, `ipam.rs`, `peers.rs`, `sessions.rs` that used in-memory stores
+   - Use `#[cfg(feature = "integration")]` and `#[tokio::test]`
+   - Use `PostgresIpamStore`, `PostgresPeerStore`, `PostgresSessionStore` with test database
+
+**Success criteria:**
+- `cargo check --workspace` passes
+- `cargo test --workspace` passes (unit tests)
+- `cargo test --workspace --features integration` passes (with test DB running)
+- DERP map endpoint returns data from env var
+- No references to in-memory stores or `derp_server_repo` remain
 
 ### v1.6 (2026-02-04)
 - **Extract moto-club-ws crate:** Move WebSocket handlers from `moto-club-api/src/wg.rs` to dedicated `moto-club-ws` crate per crate structure diagram (lines 130-134). The wg.rs file is too large (2100+ lines).
