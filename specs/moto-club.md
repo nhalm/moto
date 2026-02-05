@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.6 |
-| Status | Ripping |
-| Last Updated | 2026-02-04 |
+| Version | 1.7 |
+| Status | Ready to Rip |
+| Last Updated | 2026-02-05 |
 
 ## Overview
 
@@ -1195,6 +1195,20 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v1.7 (2026-02-05)
+- **Remove all in-memory stores:** Delete ALL in-memory store implementations from `moto-club-wg`:
+  - `InMemoryStore` (ipam.rs)
+  - `InMemoryPeerStore` (peers.rs)
+  - `InMemorySessionStore` (sessions.rs)
+  - `InMemoryDerpStore` (derp.rs)
+  These are not useful for production (no shared state across replicas). Tests should use PostgreSQL test fixtures or be marked as integration tests.
+- **Remove DERP abstractions:** Delete `DerpStore` trait and `DerpMapManager` from `moto-club-wg`. Use `derp_server_repo` directly in `moto-club`:
+  - On startup: `derp_server_repo::sync_from_config()` to sync config file to database
+  - Serving DERP map: `derp_server_repo::list_healthy()` to get healthy servers from database
+  - Remove `WgDerpMapManager` type alias from `moto-club-api`
+  The abstraction was premature - DERP config comes from a file, health status tracked in database. No need for store trait.
+- **Update moto-club main.rs:** Replace `InMemoryDerpStore::with_default_map()` with direct `derp_server_repo` calls. All replicas now share DERP state via PostgreSQL.
 
 ### v1.6 (2026-02-04)
 - **Extract moto-club-ws crate:** Move WebSocket handlers from `moto-club-api/src/wg.rs` to dedicated `moto-club-ws` crate per crate structure diagram (lines 130-134). The wg.rs file is too large (2100+ lines).
