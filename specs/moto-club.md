@@ -1189,7 +1189,7 @@ Identity system will replace config-based owner identity:
   - `InMemoryPeerStore` (peers.rs)
   - `InMemorySessionStore` (sessions.rs)
   - `InMemoryDerpStore` (derp.rs)
-  These are not useful for production (no shared state across replicas). Tests should use PostgreSQL test fixtures or be marked as integration tests.
+  These are not useful for production (no shared state across replicas). Tests that used these stores should be converted to integration tests per [testing.md](testing.md).
 - **Remove DERP abstractions:** Delete `DerpStore` trait and `DerpMapManager` from `moto-club-wg`:
   - On startup: parse `MOTO_CLUB_DERP_SERVERS` env var (JSON array)
   - Keep parsed config in memory (static configuration, same across all replicas)

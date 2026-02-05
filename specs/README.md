@@ -41,6 +41,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
 | [pre-commit](pre-commit.md) | Ripping | Git hooks for fast feedback to agents |
 | [makefile](makefile.md) | Ripping | Makefile targets and conventions |
+| [testing](testing.md) | Ready to Rip | Test infrastructure, Docker Compose, integration tests |
 
 ## Phase 1: Infrastructure (The Garage)
 
