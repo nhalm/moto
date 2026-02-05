@@ -38,6 +38,9 @@ mod supporting_services;
 mod svid;
 mod wireguard;
 
+#[cfg(test)]
+mod pods_test;
+
 pub use limit_range::{GARAGE_LIMITS_NAME, GarageLimitRangeOps};
 pub use namespace::{GarageNamespaceInput, GarageNamespaceOps};
 pub use network_policy::{GARAGE_ISOLATION_POLICY_NAME, GarageNetworkPolicyOps};
