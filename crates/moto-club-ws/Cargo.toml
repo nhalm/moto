@@ -1,0 +1,33 @@
+[package]
+name = "moto-club-ws"
+description = "WebSocket handlers for moto-club"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true }
+
+# WebSocket
+futures-util = { workspace = true }
+
+# Web framework
+axum = { workspace = true, features = ["ws"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Internal crates
+moto-club-wg = { workspace = true }
+moto-wgtunnel-types = { workspace = true }

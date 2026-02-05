@@ -187,6 +187,28 @@ impl AppState {
     }
 }
 
+use moto_club_wg::{RegisteredDevice, Session};
+use moto_club_ws::PeerStreamingContext;
+use moto_wgtunnel_types::WgPublicKey;
+
+impl PeerStreamingContext for AppState {
+    fn list_sessions_for_garage(&self, garage_id: &str) -> Result<Vec<Session>, String> {
+        self.session_manager
+            .list_sessions_for_garage(garage_id)
+            .map_err(|e| e.to_string())
+    }
+
+    fn get_device(&self, pubkey: &WgPublicKey) -> Result<Option<RegisteredDevice>, String> {
+        self.peer_registry
+            .get_device(pubkey)
+            .map_err(|e| e.to_string())
+    }
+
+    fn peer_broadcaster(&self) -> Arc<PeerBroadcaster> {
+        Arc::clone(&self.peer_broadcaster)
+    }
+}
+
 /// Creates the main API router with all routes.
 ///
 /// The router includes:

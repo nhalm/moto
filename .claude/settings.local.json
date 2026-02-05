@@ -20,7 +20,14 @@
       "Bash(do if grep -q '^\\\\[\\\\[bin\\\\]\\\\]' \"$crate\")",
       "Bash(cargo check:*)",
       "Bash(cargo doc:*)",
-      "Bash(cargo fmt:*)"
+      "Bash(cargo fmt:*)",
+      "Bash(tee:*)",
+      "Bash(test:*)",
+      "Bash(cargo tree:*)",
+      "Bash(/Users/nickhalm/personal/moto/target/debug/moto:*)",
+      "Bash(/Users/nickhalm/personal/moto/target/debug/moto-keybox:*)",
+      "Bash(/Users/nickhalm/personal/moto/target/debug/moto-keybox-server:*)",
+      "Bash(git config:*)"
     ]
   }
 }

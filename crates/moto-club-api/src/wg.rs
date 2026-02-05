@@ -15,19 +15,15 @@ use std::net::SocketAddr;
 
 use axum::{
     Json, Router,
-    extract::{
-        Path, Query, State,
-        ws::{Message, WebSocket, WebSocketUpgrade},
-    },
+    extract::{Path, Query, State, ws::WebSocketUpgrade},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
 use chrono::{DateTime, Utc};
-use futures_util::{SinkExt, StreamExt};
 use moto_club_wg::{
     CreateSessionRequest as WgCreateSessionRequest, CreateSessionResponse, DeviceRegistration,
-    GarageConnectionInfo, GarageRegistration, PeerEvent, RegisteredDevice, Session,
+    GarageConnectionInfo, GarageRegistration, RegisteredDevice, Session,
 };
 use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
 use serde::{Deserialize, Serialize};
@@ -1063,87 +1059,7 @@ async fn peers_websocket(
 
     tracing::info!(garage_id = %garage_id, "Garage connecting to peer WebSocket");
 
-    Ok(ws.on_upgrade(move |socket| handle_peers_socket(socket, garage_id, state)))
-}
-
-/// Handle the WebSocket connection for peer streaming.
-async fn handle_peers_socket(socket: WebSocket, garage_id: String, state: AppState) {
-    let (mut sender, mut receiver) = socket.split();
-
-    // Subscribe to peer events for this garage
-    let mut peer_rx = state.peer_broadcaster.subscribe(&garage_id);
-
-    tracing::info!(garage_id = %garage_id, "Peer WebSocket connected");
-
-    // Send current peers (sessions) to the garage on connect
-    if let Ok(sessions) = state.session_manager.list_sessions_for_garage(&garage_id) {
-        for session in sessions {
-            if let Ok(Some(device)) = state.peer_registry.get_device(&session.device_pubkey) {
-                let event = PeerEvent::add(device.public_key, device.overlay_ip);
-                if let Ok(json) = event.to_json() {
-                    if sender.send(Message::Text(json.into())).await.is_err() {
-                        tracing::debug!(garage_id = %garage_id, "Failed to send initial peer");
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
-    loop {
-        tokio::select! {
-            // Forward peer events to the WebSocket
-            result = peer_rx.recv() => {
-                match result {
-                    Ok(event) => {
-                        match event.to_json() {
-                            Ok(json) => {
-                                if sender.send(Message::Text(json.into())).await.is_err() {
-                                    tracing::debug!(garage_id = %garage_id, "WebSocket send failed, closing");
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!(garage_id = %garage_id, error = %e, "Failed to serialize peer event");
-                            }
-                        }
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        tracing::warn!(garage_id = %garage_id, lagged = n, "Peer events lagged, some events dropped");
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                        tracing::debug!(garage_id = %garage_id, "Peer broadcast channel closed");
-                        break;
-                    }
-                }
-            }
-            // Handle incoming WebSocket messages (pings, close, etc.)
-            result = receiver.next() => {
-                match result {
-                    Some(Ok(Message::Ping(data))) => {
-                        if sender.send(Message::Pong(data)).await.is_err() {
-                            break;
-                        }
-                    }
-                    Some(Ok(Message::Close(_))) | None => {
-                        tracing::info!(garage_id = %garage_id, "Peer WebSocket closed by client");
-                        break;
-                    }
-                    Some(Err(e)) => {
-                        tracing::debug!(garage_id = %garage_id, error = %e, "WebSocket error");
-                        break;
-                    }
-                    _ => {
-                        // Ignore text/binary messages from garage
-                    }
-                }
-            }
-        }
-    }
-
-    // Cleanup when WebSocket closes
-    state.peer_broadcaster.remove_garage(&garage_id);
-    tracing::info!(garage_id = %garage_id, "Peer WebSocket disconnected");
+    Ok(ws.on_upgrade(move |socket| moto_club_ws::handle_peers_socket(socket, garage_id, state)))
 }
 
 // ============================================================================
