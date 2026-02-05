@@ -11,10 +11,9 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
-use moto_club_wg::{
-    DerpMapManager, InMemoryDerpStore, PeerBroadcaster, PeerRegistry, SessionManager, ipam::Ipam,
-};
+use moto_club_wg::{PeerBroadcaster, PeerRegistry, SessionManager, ipam::Ipam};
 use moto_wgtunnel_types::WgPrivateKey;
+use moto_wgtunnel_types::derp::{DerpNode, DerpRegion};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -250,19 +249,22 @@ mod handler_tests {
         let ipam_store = PostgresIpamStore::new(db_pool.clone());
         let peer_store = PostgresPeerStore::new(db_pool.clone());
         let session_store = PostgresSessionStore::new(db_pool.clone());
-        let derp_store = InMemoryDerpStore::with_default_map();
+
+        // Create a default DERP map for testing
+        let derp_map = DerpMap::new().with_region(
+            DerpRegion::new(1, "primary").with_node(DerpNode::with_defaults("derp.moto.dev")),
+        );
 
         let ipam = Ipam::new(ipam_store);
         let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
         let session_manager = Arc::new(SessionManager::new(session_store));
-        let derp_manager = Arc::new(DerpMapManager::new(derp_store));
         let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 
         AppState::new(
             db_pool,
             peer_registry,
             session_manager,
-            derp_manager,
+            derp_map,
             peer_broadcaster,
         )
     }

@@ -15,7 +15,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v1.6
+## moto-club.md v1.7
 
 **Status:** In Progress
 
@@ -29,7 +29,7 @@ HOW TO USE THIS FILE:
 - moto-club-reconcile crate: lib.rs, garage.rs (scaffolding)
 - moto-club binary: main.rs (scaffolding)
 - Device identity model: WireGuard public_key as primary key (spec lines 406, 1040-1046)
-- moto-club-db: PostgreSQL migrations for all tables (garages, wg_devices, wg_sessions, wg_garages, derp_servers)
+- moto-club-db: PostgreSQL migrations for all tables (garages, wg_devices, wg_sessions, wg_garages)
 - moto-club-db: models updated for spec v1.1 (removed Attached status, WgDevice uses public_key as PK, added WgGarage model, Garage has image field)
 - moto-club-db: wg_devices repository using public_key as primary key (wg_device_repo.rs)
 - moto-club-db: wg_sessions repository with garage_id ON DELETE CASCADE (wg_session_repo.rs)
@@ -40,7 +40,6 @@ HOW TO USE THIS FILE:
 - moto-club-api: GET /api/v1/wg/derp-map endpoint (returns DERP map with version for clients and garages)
 - moto-club-api: Conditional GET for peers (?version= param, 304 response)
 - moto-k8s: Labels use moto.dev/garage-id and moto.dev/garage-name per spec (labels.rs updated, all usages fixed)
-- moto-club: DERP config file loading from MOTO_CLUB_DERP_CONFIG env var (moto-club-wg DerpConfigFile, load_derp_config; moto-club-db derp_server_repo with sync_from_config; main.rs startup sync)
 - moto-club: Structured JSON logging (main.rs: flatten_event=true for flat JSON output per spec lines 1183-1194)
 - moto-club-api: K8s namespace deletion in close flow (DELETE /api/v1/garages/{name} calls GarageK8s.delete_garage_namespace per spec lines 903-913)
 - moto-club-api: GET /api/v1/info includes api_version, git_sha, features fields per spec lines 803-817
@@ -65,9 +64,12 @@ HOW TO USE THIS FILE:
 - Separate test files for wg.rs (v1.6: moved tests from moto-club-api/src/wg.rs to wg_test.rs per AGENTS.md test organization convention)
 - Separate test files for pods.rs (v1.6: moved tests from moto-club-k8s/src/pods.rs to pods_test.rs per AGENTS.md test organization convention)
 - Remove in-memory storage (v1.6: deleted InMemoryPeerStore/InMemoryStore re-exports from moto-club-api; added PostgresIpamStore; updated AppState and main.rs to use PostgreSQL storage exclusively; handler tests now require PostgreSQL)
+- Simplify DERP configuration (v1.7: replace config file + database storage with MOTO_CLUB_DERP_SERVERS JSON env var; delete derp_servers table, derp_server_repo.rs, DerpServer model, DerpStore trait, DerpMapManager, InMemoryDerpStore, config file loading; add parse_derp_servers_env function; AppState uses Arc<DerpMap> instead of DerpMapManager)
 
 **Remaining:**
-(none - moto-club.md v1.6 implementation complete)
+- Remove InMemoryStore from moto-club-wg ipam.rs (v1.7: convert affected tests to integration tests per testing.md)
+- Remove InMemoryPeerStore from moto-club-wg peers.rs (v1.7: convert affected tests to integration tests per testing.md)
+- Remove InMemorySessionStore from moto-club-wg sessions.rs (v1.7: convert affected tests to integration tests per testing.md)
 
 ---
 

@@ -207,31 +207,6 @@ pub struct WgGarage {
     pub registered_at: DateTime<Utc>,
 }
 
-/// A DERP server from the database.
-///
-/// Maps to the `derp_servers` table schema.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromRow)]
-pub struct DerpServer {
-    /// Unique identifier.
-    pub id: Uuid,
-    /// Region ID.
-    pub region_id: i32,
-    /// Region name.
-    pub region_name: String,
-    /// Server hostname.
-    pub host: String,
-    /// DERP port (default 443).
-    pub port: i32,
-    /// STUN port (default 3478).
-    pub stun_port: i32,
-    /// Whether the server is healthy.
-    pub healthy: bool,
-    /// When health was last checked.
-    pub last_check_at: Option<DateTime<Utc>>,
-    /// When the server was registered.
-    pub created_at: DateTime<Utc>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -12,7 +12,7 @@
 //! ```ignore
 //! use moto_club_api::{AppState, router, PostgresIpamStore, PostgresPeerStore, PostgresSessionStore};
 //! use moto_club_db::DbPool;
-//! use moto_club_wg::{PeerRegistry, Ipam, SessionManager, DerpMapManager, InMemoryDerpStore, PeerBroadcaster};
+//! use moto_club_wg::{PeerRegistry, Ipam, SessionManager, PeerBroadcaster, parse_derp_servers_env};
 //! use std::sync::Arc;
 //!
 //! let pool = DbPool::connect("postgres://...").await?;
@@ -21,9 +21,9 @@
 //! let session_store = PostgresSessionStore::new(pool.clone());
 //! let peer_registry = Arc::new(PeerRegistry::new(peer_store, Ipam::new(ipam_store)));
 //! let session_manager = Arc::new(SessionManager::new(session_store));
-//! let derp_manager = Arc::new(DerpMapManager::new(InMemoryDerpStore::with_default_map()));
+//! let derp_map = parse_derp_servers_env().unwrap().to_derp_map();
 //! let peer_broadcaster = Arc::new(PeerBroadcaster::new());
-//! let state = AppState::new(pool, peer_registry, session_manager, derp_manager, peer_broadcaster);
+//! let state = AppState::new(pool, peer_registry, session_manager, derp_map, peer_broadcaster);
 //! let app = router(state);
 //!
 //! // Run with axum
@@ -43,10 +43,9 @@ use axum::{Router, middleware};
 use moto_club_db::DbPool;
 use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
-use moto_club_wg::{
-    DerpMapManager, InMemoryDerpStore, PeerBroadcaster, PeerRegistry, SessionManager,
-};
+use moto_club_wg::{PeerBroadcaster, PeerRegistry, SessionManager};
 use moto_k8s::K8sClient;
+use moto_wgtunnel_types::derp::DerpMap;
 
 pub use health::{health_server_router, is_startup_complete, mark_startup_complete};
 pub use postgres_stores::{PostgresIpamStore, PostgresPeerStore, PostgresSessionStore};
@@ -56,9 +55,6 @@ pub type WgPeerRegistry = PeerRegistry<PostgresPeerStore, PostgresIpamStore>;
 
 /// Type alias for the session manager used with `PostgreSQL` storage.
 pub type WgSessionManager = SessionManager<PostgresSessionStore>;
-
-/// Type alias for the DERP map manager used in production.
-pub type WgDerpMapManager = DerpMapManager<InMemoryDerpStore>;
 
 /// Shared application state using `PostgreSQL` storage backends.
 ///
@@ -72,8 +68,8 @@ pub struct AppState {
     pub peer_registry: Arc<WgPeerRegistry>,
     /// `WireGuard` session manager for tunnel sessions.
     pub session_manager: Arc<WgSessionManager>,
-    /// DERP map manager for relay server configuration.
-    pub derp_manager: Arc<WgDerpMapManager>,
+    /// DERP map for relay server configuration (static per deployment).
+    pub derp_map: Arc<DerpMap>,
     /// Peer event broadcaster for garage WebSocket connections.
     pub peer_broadcaster: Arc<PeerBroadcaster>,
     /// Kubernetes client for `ServiceAccount` token validation.
@@ -97,14 +93,14 @@ impl AppState {
         db_pool: DbPool,
         peer_registry: Arc<WgPeerRegistry>,
         session_manager: Arc<WgSessionManager>,
-        derp_manager: Arc<WgDerpMapManager>,
+        derp_map: DerpMap,
         peer_broadcaster: Arc<PeerBroadcaster>,
     ) -> Self {
         Self {
             db_pool,
             peer_registry,
             session_manager,
-            derp_manager,
+            derp_map: Arc::new(derp_map),
             peer_broadcaster,
             k8s_client: None,
             garage_k8s: None,
@@ -139,6 +135,14 @@ impl AppState {
     pub fn with_keybox_url(mut self, keybox_url: String) -> Self {
         self.keybox_url = Some(keybox_url);
         self
+    }
+
+    /// Get the DERP map.
+    ///
+    /// DERP config is static per deployment (loaded from env var at startup).
+    /// This method always succeeds.
+    pub fn get_derp_map(&self) -> Result<DerpMap, String> {
+        Ok((*self.derp_map).clone())
     }
 }
 

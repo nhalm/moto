@@ -19,7 +19,7 @@
 //! - `MOTO_CLUB_METRICS_BIND_ADDR`: Metrics server bind address (default: `0.0.0.0:9090`)
 //! - `MOTO_CLUB_DEV_CONTAINER_IMAGE`: Dev container image (default: `ghcr.io/moto-dev/moto-garage:latest`)
 //! - `MOTO_CLUB_RECONCILE_INTERVAL_SECONDS`: Reconciliation interval (default: 30)
-//! - `MOTO_CLUB_DERP_CONFIG`: Path to DERP config file (default: `/etc/moto-club/derp.toml`)
+//! - `MOTO_CLUB_DERP_SERVERS`: JSON array of DERP servers (see moto-club-wg derp module)
 //! - `KUBECONFIG`: Path to kubeconfig file (auto-detected in-cluster)
 //! - `RUST_LOG`: Log filter (default: `moto_club=info`)
 
@@ -31,20 +31,20 @@ use std::time::Duration;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio::net::TcpListener;
 use tokio::signal;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use moto_club_api::{
     AppState, PostgresIpamStore, PostgresPeerStore, PostgresSessionStore, health_server_router,
     mark_startup_complete, router,
 };
-use moto_club_db::{DbPool, derp_server_repo};
+use moto_club_db::DbPool;
 use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
 use moto_club_reconcile::{GarageReconciler, ReconcileConfig};
 use moto_club_wg::{
-    DERP_CONFIG_ENV_VAR, DerpMapManager, InMemoryDerpStore, Ipam, PeerBroadcaster, PeerRegistry,
-    SessionManager, load_derp_config,
+    DERP_SERVERS_ENV_VAR, Ipam, PeerBroadcaster, PeerRegistry, SessionManager,
+    parse_derp_servers_env,
 };
 use moto_k8s::K8sClient;
 
@@ -189,57 +189,29 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let db_pool: DbPool = moto_club_db::connect(&config.database_url).await?;
     info!("database connected");
 
-    // Load and sync DERP config
-    let derp_config_path = env::var(DERP_CONFIG_ENV_VAR).ok();
-    match load_derp_config().await {
-        Ok(Some(config_file)) => {
-            let servers: Vec<derp_server_repo::UpsertDerpServer> = config_file
-                .regions
-                .iter()
-                .flat_map(|region| {
-                    region
-                        .nodes
-                        .iter()
-                        .map(|node| derp_server_repo::UpsertDerpServer {
-                            region_id: i32::from(region.id),
-                            region_name: region.name.clone(),
-                            host: node.host.clone(),
-                            port: i32::from(node.port),
-                            stun_port: i32::from(node.stun_port),
-                        })
-                })
-                .collect();
-
-            let server_count = servers.len();
-            let result = derp_server_repo::sync_from_config(&db_pool, servers).await?;
-
-            info!(
-                config_path = derp_config_path
-                    .as_deref()
-                    .unwrap_or("/etc/moto-club/derp.toml"),
-                servers = server_count,
-                inserted = result.inserted,
-                updated = result.updated,
-                deleted = result.deleted,
-                "DERP config synced to database"
-            );
-        }
-        Ok(None) => {
-            info!(
-                config_path = derp_config_path
-                    .as_deref()
-                    .unwrap_or("/etc/moto-club/derp.toml"),
-                "DERP config file not found, using in-memory defaults"
-            );
+    // Parse DERP servers from environment variable
+    let derp_config = match parse_derp_servers_env() {
+        Ok(config) => {
+            if config.is_empty() {
+                info!(
+                    "{} not set, DERP relay will be unavailable",
+                    DERP_SERVERS_ENV_VAR
+                );
+            } else {
+                info!(
+                    server_count = config.servers.len(),
+                    region_count = config.region_count(),
+                    "DERP servers loaded from environment"
+                );
+            }
+            config
         }
         Err(e) => {
-            warn!(
-                error = %e,
-                config_path = derp_config_path.as_deref().unwrap_or("/etc/moto-club/derp.toml"),
-                "Failed to load DERP config, using in-memory defaults"
-            );
+            error!(error = %e, "Failed to parse DERP config from environment");
+            return Err(e.into());
         }
-    }
+    };
+    let derp_map = derp_config.to_derp_map();
 
     // Create K8s client
     info!("initializing kubernetes client");
@@ -276,10 +248,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let session_store = PostgresSessionStore::new(db_pool.clone());
     let session_manager = Arc::new(SessionManager::new(session_store));
 
-    // Create DERP map manager with default configuration
-    let derp_store = InMemoryDerpStore::with_default_map();
-    let derp_manager = Arc::new(DerpMapManager::new(derp_store));
-
     // Create peer broadcaster for garage WebSocket connections
     let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 
@@ -293,7 +261,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         db_pool,
         peer_registry,
         session_manager,
-        derp_manager,
+        derp_map,
         peer_broadcaster,
     )
     .with_garage_k8s(api_garage_k8s)

@@ -584,7 +584,7 @@ async fn create_session(
         })?;
 
     // Get the DERP map
-    let derp_map = state.derp_manager.get_map().map_err(|e| {
+    let derp_map = state.get_derp_map().map_err(|e| {
         tracing::error!(error = %e, "Failed to get DERP map");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -748,7 +748,7 @@ async fn register_garage(
         })?;
 
     // Get the DERP map for relay fallback
-    let derp_map = state.derp_manager.get_map().map_err(|e| {
+    let derp_map = state.get_derp_map().map_err(|e| {
         tracing::error!(error = %e, garage_id = %req.garage_id, "Failed to get DERP map");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -820,7 +820,7 @@ async fn get_garage_wg_registration(
         })?;
 
     // Get the DERP map
-    let derp_map = state.derp_manager.get_map().map_err(|e| {
+    let derp_map = state.get_derp_map().map_err(|e| {
         tracing::error!(error = %e, garage_id = %garage_id, "Failed to get DERP map");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1005,7 +1005,7 @@ async fn get_derp_map(State(state): State<AppState>, headers: HeaderMap) -> impl
     let _has_auth = extract_bearer_token(&headers)?;
 
     // Get the DERP map
-    let derp_map = state.derp_manager.get_map().map_err(|e| {
+    let derp_map = state.get_derp_map().map_err(|e| {
         tracing::error!(error = %e, "Failed to get DERP map");
         (
             StatusCode::INTERNAL_SERVER_ERROR,

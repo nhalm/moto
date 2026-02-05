@@ -359,12 +359,8 @@ pub struct InfoFeatures {
 /// Server info handler.
 #[allow(clippy::cast_possible_truncation)] // DERP region count won't exceed u32::MAX
 async fn info_handler(State(state): State<AppState>) -> impl IntoResponse {
-    // Count DERP regions from the DERP manager
-    let derp_regions = state
-        .derp_manager
-        .region_count()
-        .map(|c| c as u32)
-        .unwrap_or(0);
+    // Count DERP regions from the static DERP map
+    let derp_regions = state.derp_map.len() as u32;
 
     let response = InfoResponse {
         name: "moto-club",
