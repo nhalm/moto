@@ -62,9 +62,10 @@ HOW TO USE THIS FILE:
 - Add owner field to RegisteredDevice and DeviceRegistration structs (v1.5: moto-club-wg peers.rs adds owner field, PostgresPeerStore now uses device.owner instead of hardcoded "unknown")
 - Consolidate status enums (v1.6: remove GarageState and GarageInfo from moto-club-types/src/garage.rs; GarageStatus in moto-club-db/src/models.rs is now the single source of truth)
 - Extract moto-club-ws crate (v1.6: WebSocket handlers moved from moto-club-api/src/wg.rs to moto-club-ws crate with PeerStreamingContext trait; AppState implements trait for peer streaming)
+- Separate test files for wg.rs (v1.6: moved tests from moto-club-api/src/wg.rs to wg_test.rs per AGENTS.md test organization convention)
 
 **Remaining:**
-- Separate test files: Move tests from wg.rs to wg_test.rs, pods.rs to pods_test.rs (v1.6 changelog)
+- Separate test files for pods.rs: Move tests from moto-club-k8s/src/pods.rs to pods_test.rs (v1.6 changelog)
 - Remove in-memory storage: Delete InMemoryPeerStore, InMemoryStore from moto-club-api, use PostgreSQL storage exclusively (v1.6 changelog)
 
 ---
