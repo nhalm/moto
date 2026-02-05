@@ -945,13 +945,14 @@ MOTO_CLUB_DERP_SERVERS='[
 ```
 
 **Startup behavior:**
-- Parse `MOTO_CLUB_DERP_SERVERS` env var (JSON array)
-- Sync to `derp_servers` table via `derp_server_repo::sync_from_config()`
-- Servers not in env var are deleted from database (full sync)
+- Parse `MOTO_CLUB_DERP_SERVERS` env var (JSON array) on startup
+- Keep parsed config in memory (static configuration, not user data)
 - If env var is empty or unset, no DERP servers are configured (direct UDP only)
 - DERP map provided to clients/garages via session creation and garage registration APIs
 
-**No server-side health checking:** DERP clients (WireGuard) handle failover automatically. If a DERP server is unreachable, clients try the next server or fall back to direct UDP. Server-side health checking would duplicate this logic unnecessarily.
+**No database storage:** DERP config is static per deployment - all replicas read the same env var. No need for database table or sync logic.
+
+**No server-side health checking:** DERP clients (WireGuard) handle failover automatically. If a DERP server is unreachable, clients try the next server or fall back to direct UDP.
 
 **Future:** Admin API for runtime DERP management.
 
@@ -1020,16 +1021,8 @@ CREATE TABLE wg_garages (
     registered_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- DERP servers (synced from MOTO_CLUB_DERP_SERVERS env var)
-CREATE TABLE derp_servers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    region_id INTEGER NOT NULL,
-    region_name TEXT NOT NULL,
-    host TEXT NOT NULL,
-    port INTEGER NOT NULL DEFAULT 443,
-    stun_port INTEGER NOT NULL DEFAULT 3478,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- Note: DERP servers are configured via MOTO_CLUB_DERP_SERVERS env var
+-- and kept in memory. No database table needed.
 ```
 
 ### Error Handling
@@ -1197,12 +1190,15 @@ Identity system will replace config-based owner identity:
   - `InMemorySessionStore` (sessions.rs)
   - `InMemoryDerpStore` (derp.rs)
   These are not useful for production (no shared state across replicas). Tests should use PostgreSQL test fixtures or be marked as integration tests.
-- **Remove DERP abstractions:** Delete `DerpStore` trait and `DerpMapManager` from `moto-club-wg`. Use `derp_server_repo` directly in `moto-club`:
-  - On startup: parse `MOTO_CLUB_DERP_SERVERS` env var (JSON array), sync to database
-  - Serving DERP map: `derp_server_repo::list_all()` to get all servers from database
+- **Remove DERP abstractions:** Delete `DerpStore` trait and `DerpMapManager` from `moto-club-wg`:
+  - On startup: parse `MOTO_CLUB_DERP_SERVERS` env var (JSON array)
+  - Keep parsed config in memory (static configuration, same across all replicas)
+  - Serve DERP map directly from memory
   - Remove `WgDerpMapManager` type alias from `moto-club-api`
-  The abstraction was premature - DERP config comes from env var, no health tracking needed.
-- **Remove DERP health checking:** Delete `healthy` and `last_check_at` columns from `derp_servers` table. DERP clients handle failover automatically - server-side health checking is unnecessary complexity. Remove `list_healthy()` function, use `list_all()` instead.
+- **Remove `derp_servers` database table:** DERP config is static per deployment - all replicas read the same env var. No database storage needed. Delete:
+  - `derp_servers` table and migration
+  - `derp_server_repo.rs`
+  - `DerpServer` model from `models.rs`
 - **Replace config file with env var:** Remove `MOTO_CLUB_DERP_CONFIG` and config file loading. Use `MOTO_CLUB_DERP_SERVERS` env var with JSON array instead. Simpler, no file mounts needed, standard K8s pattern.
 - **Update moto-club main.rs:** Replace `InMemoryDerpStore::with_default_map()` with direct `derp_server_repo` calls. Parse env var on startup, sync to database. All replicas share DERP state via PostgreSQL.
 
