@@ -345,7 +345,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## testing.md v0.1
+## testing.md v0.2
 
 **Status:** In Progress
 
@@ -354,7 +354,7 @@ HOW TO USE THIS FILE:
 - Makefile targets: test-db-up, test-db-down, test-db-migrate, test-db-reset, test-integration, test-all, test-ci (per spec lines 117-158)
 - Update test target to run unit tests only (cargo test --lib)
 - Add `integration` feature flag to database crates (moto-club-db, moto-club-api, moto-keybox-db, moto-keybox) per spec lines 94-111
+- moto-test-utils crate: test_pool(), unique_garage_name(), unique_owner(), fake_wg_pubkey() (per spec v0.2 lines 201-216)
 
 **Remaining:**
-- moto-test-utils crate with test_pool() helper and fixtures (future - optional)
 - CI workflow: .github/workflows/test.yml (future)
