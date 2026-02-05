@@ -27,9 +27,7 @@
 
 use moto_wgtunnel_types::{OverlayIp, WgPublicKey};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Mutex;
 
 use crate::ipam::{Ipam, IpamStore};
 
@@ -281,78 +279,6 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
     /// Returns error if storage operation fails.
     pub fn list_garages(&self) -> Result<Vec<RegisteredGarage>> {
         self.store.list_garages()
-    }
-}
-
-/// In-memory peer store for testing.
-///
-/// Registrations are lost when the store is dropped.
-pub struct InMemoryPeerStore {
-    inner: Mutex<InMemoryPeerStoreInner>,
-}
-
-struct InMemoryPeerStoreInner {
-    /// Devices keyed by public key (base64 encoded).
-    /// `WireGuard` public key IS the device identity.
-    devices: HashMap<String, RegisteredDevice>,
-    garages: HashMap<String, RegisteredGarage>,
-}
-
-impl InMemoryPeerStore {
-    /// Create a new empty in-memory store.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            inner: Mutex::new(InMemoryPeerStoreInner {
-                devices: HashMap::new(),
-                garages: HashMap::new(),
-            }),
-        }
-    }
-}
-
-impl Default for InMemoryPeerStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl PeerStore for InMemoryPeerStore {
-    fn get_device(&self, public_key: &WgPublicKey) -> Result<Option<RegisteredDevice>> {
-        let inner = self.inner.lock().unwrap();
-        Ok(inner.devices.get(&public_key.to_base64()).cloned())
-    }
-
-    fn set_device(&self, device: RegisteredDevice) -> Result<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .devices
-            .insert(device.public_key.to_base64(), device);
-        Ok(())
-    }
-
-    fn get_garage(&self, garage_id: &str) -> Result<Option<RegisteredGarage>> {
-        let inner = self.inner.lock().unwrap();
-        Ok(inner.garages.get(garage_id).cloned())
-    }
-
-    fn set_garage(&self, garage: RegisteredGarage) -> Result<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .garages
-            .insert(garage.garage_id.clone(), garage);
-        Ok(())
-    }
-
-    fn remove_garage(&self, garage_id: &str) -> Result<Option<RegisteredGarage>> {
-        Ok(self.inner.lock().unwrap().garages.remove(garage_id))
-    }
-
-    fn list_garages(&self) -> Result<Vec<RegisteredGarage>> {
-        let inner = self.inner.lock().unwrap();
-        Ok(inner.garages.values().cloned().collect())
     }
 }
 

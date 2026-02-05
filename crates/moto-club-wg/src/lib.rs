@@ -52,8 +52,8 @@ pub use derp::{
 };
 pub use ipam::{Ipam, IpamError, IpamStore};
 pub use peers::{
-    DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerError, PeerRegistry, PeerStore,
-    RegisteredDevice, RegisteredGarage,
+    DeviceRegistration, GarageRegistration, PeerError, PeerRegistry, PeerStore, RegisteredDevice,
+    RegisteredGarage,
 };
 pub use sessions::{
     CreateSessionRequest, CreateSessionResponse, DEFAULT_SESSION_TTL_SECS,
