@@ -7,11 +7,90 @@ use std::net::SocketAddr;
 
 use moto_club_db::{DbPool, wg_device_repo, wg_garage_repo, wg_session_repo};
 use moto_club_wg::{
+    ipam::{IpamError, IpamStore},
     peers::{PeerError, PeerStore, RegisteredDevice, RegisteredGarage},
     sessions::{Session, SessionError, SessionStore},
 };
 use moto_wgtunnel_types::{OverlayIp, WgPublicKey};
 use uuid::Uuid;
+
+// ============================================================================
+// PostgreSQL IPAM Store
+// ============================================================================
+
+/// PostgreSQL-backed IPAM store for IP address allocation.
+///
+/// Uses `wg_device_repo` from `moto-club-db` to track client IP allocations.
+/// Garage IPs are computed deterministically and don't require storage.
+#[derive(Clone)]
+pub struct PostgresIpamStore {
+    pool: DbPool,
+}
+
+impl PostgresIpamStore {
+    /// Create a new `PostgreSQL` IPAM store.
+    #[must_use]
+    pub const fn new(pool: DbPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl IpamStore for PostgresIpamStore {
+    fn get_client_ip(
+        &self,
+        public_key: &WgPublicKey,
+    ) -> moto_club_wg::ipam::Result<Option<OverlayIp>> {
+        let pool = self.pool.clone();
+        let public_key_b64 = public_key.to_base64();
+
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(async { wg_device_repo::get_by_public_key(&pool, &public_key_b64).await })
+        });
+
+        match result {
+            Ok(device) => {
+                let overlay_ip =
+                    parse_client_overlay_ip(&device.assigned_ip).map_err(IpamError::Storage)?;
+                Ok(Some(overlay_ip))
+            }
+            Err(moto_club_db::DbError::NotFound { .. }) => Ok(None),
+            Err(e) => Err(IpamError::Storage(e.to_string())),
+        }
+    }
+
+    fn set_client_ip(
+        &self,
+        _public_key: &WgPublicKey,
+        _ip: OverlayIp,
+    ) -> moto_club_wg::ipam::Result<()> {
+        // For PostgreSQL, the IP is stored via PeerStore.set_device, not separately.
+        // This is a no-op since the IP is bundled with the device record.
+        Ok(())
+    }
+
+    fn next_client_host_id(&self) -> moto_club_wg::ipam::Result<u64> {
+        let pool = self.pool.clone();
+
+        let result = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(async { wg_device_repo::get_next_client_ip(&pool).await })
+        });
+
+        match result {
+            Ok(next_ip) => {
+                // Extract the suffix from fd00:moto:2::N
+                let suffix = next_ip
+                    .strip_prefix("fd00:moto:2::")
+                    .ok_or_else(|| IpamError::Storage(format!("invalid IP format: {next_ip}")))?;
+
+                u64::from_str_radix(suffix, 16)
+                    .map_err(|e| IpamError::Storage(format!("invalid IP suffix: {e}")))
+            }
+            Err(e) => Err(IpamError::Storage(e.to_string())),
+        }
+    }
+}
 
 // ============================================================================
 // PostgreSQL Peer Store
@@ -20,6 +99,7 @@ use uuid::Uuid;
 /// PostgreSQL-backed peer store for device and garage registration.
 ///
 /// Uses `wg_device_repo` and `wg_garage_repo` from `moto-club-db`.
+#[derive(Clone)]
 pub struct PostgresPeerStore {
     pool: DbPool,
 }
@@ -187,6 +267,7 @@ impl PeerStore for PostgresPeerStore {
 /// PostgreSQL-backed session store for tunnel sessions.
 ///
 /// Uses `wg_session_repo` from `moto-club-db`.
+#[derive(Clone)]
 pub struct PostgresSessionStore {
     pool: DbPool,
 }

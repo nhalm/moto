@@ -10,18 +10,17 @@
 //! # Example
 //!
 //! ```ignore
-//! use moto_club_api::{AppState, router};
+//! use moto_club_api::{AppState, router, PostgresIpamStore, PostgresPeerStore, PostgresSessionStore};
 //! use moto_club_db::DbPool;
-//! use moto_club_wg::{PeerRegistry, InMemoryPeerStore, Ipam, InMemoryStore, SessionManager,
-//!     InMemorySessionStore, DerpMapManager, InMemoryDerpStore, PeerBroadcaster};
+//! use moto_club_wg::{PeerRegistry, Ipam, SessionManager, DerpMapManager, InMemoryDerpStore, PeerBroadcaster};
 //! use std::sync::Arc;
 //!
 //! let pool = DbPool::connect("postgres://...").await?;
-//! let peer_registry = Arc::new(PeerRegistry::new(
-//!     InMemoryPeerStore::new(),
-//!     Ipam::new(InMemoryStore::new()),
-//! ));
-//! let session_manager = Arc::new(SessionManager::new(InMemorySessionStore::new()));
+//! let ipam_store = PostgresIpamStore::new(pool.clone());
+//! let peer_store = PostgresPeerStore::new(pool.clone());
+//! let session_store = PostgresSessionStore::new(pool.clone());
+//! let peer_registry = Arc::new(PeerRegistry::new(peer_store, Ipam::new(ipam_store)));
+//! let session_manager = Arc::new(SessionManager::new(session_store));
 //! let derp_manager = Arc::new(DerpMapManager::new(InMemoryDerpStore::with_default_map()));
 //! let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 //! let state = AppState::new(pool, peer_registry, session_manager, derp_manager, peer_broadcaster);
@@ -45,40 +44,26 @@ use moto_club_db::DbPool;
 use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
 use moto_club_wg::{
-    DerpMapManager, InMemoryDerpStore, InMemoryPeerStore, InMemorySessionStore, InMemoryStore,
-    PeerBroadcaster, PeerRegistry, SessionManager, ipam::Ipam,
+    DerpMapManager, InMemoryDerpStore, PeerBroadcaster, PeerRegistry, SessionManager,
 };
 use moto_k8s::K8sClient;
 
 pub use health::{health_server_router, is_startup_complete, mark_startup_complete};
-pub use postgres_stores::{PostgresPeerStore, PostgresSessionStore};
+pub use postgres_stores::{PostgresIpamStore, PostgresPeerStore, PostgresSessionStore};
 
-/// Type alias for the peer registry used with in-memory storage (for testing).
-pub type InMemoryWgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>;
+/// Type alias for the peer registry used with `PostgreSQL` storage.
+pub type WgPeerRegistry = PeerRegistry<PostgresPeerStore, PostgresIpamStore>;
 
-/// Type alias for the session manager used with in-memory storage (for testing).
-pub type InMemoryWgSessionManager = SessionManager<InMemorySessionStore>;
-
-/// Type alias for the peer registry used with `PostgreSQL` storage (for production).
-pub type PostgresWgPeerRegistry = PeerRegistry<PostgresPeerStore, InMemoryStore>;
-
-/// Type alias for the session manager used with `PostgreSQL` storage (for production).
-pub type PostgresWgSessionManager = SessionManager<PostgresSessionStore>;
-
-/// Type alias for the peer registry used in production.
-/// Currently defaults to in-memory; will be switched to `PostgreSQL` when fully wired.
-pub type WgPeerRegistry = PeerRegistry<InMemoryPeerStore, InMemoryStore>;
-
-/// Type alias for the session manager used in production.
-/// Currently defaults to in-memory; will be switched to `PostgreSQL` when fully wired.
-pub type WgSessionManager = SessionManager<InMemorySessionStore>;
+/// Type alias for the session manager used with `PostgreSQL` storage.
+pub type WgSessionManager = SessionManager<PostgresSessionStore>;
 
 /// Type alias for the DERP map manager used in production.
 pub type WgDerpMapManager = DerpMapManager<InMemoryDerpStore>;
 
-/// Shared application state.
+/// Shared application state using `PostgreSQL` storage backends.
 ///
 /// Contains all dependencies needed by API handlers.
+/// Uses PostgreSQL-backed stores for peer registry and session management.
 #[derive(Clone)]
 pub struct AppState {
     /// Database connection pool.
@@ -108,7 +93,7 @@ pub struct AppState {
 impl AppState {
     /// Creates a new `AppState` with the given dependencies.
     #[must_use]
-    pub const fn new(
+    pub fn new(
         db_pool: DbPool,
         peer_registry: Arc<WgPeerRegistry>,
         session_manager: Arc<WgSessionManager>,
@@ -154,36 +139,6 @@ impl AppState {
     pub fn with_keybox_url(mut self, keybox_url: String) -> Self {
         self.keybox_url = Some(keybox_url);
         self
-    }
-
-    /// Creates a new `AppState` with in-memory storage (for testing).
-    ///
-    /// This uses in-memory stores that don't persist data across restarts.
-    /// K8s operations are disabled (`k8s_client`, `garage_k8s`, and `garage_service` are None).
-    #[must_use]
-    pub fn with_in_memory_storage(db_pool: DbPool) -> Self {
-        let ipam_store = InMemoryStore::new();
-        let peer_store = InMemoryPeerStore::new();
-        let session_store = InMemorySessionStore::new();
-        let derp_store = InMemoryDerpStore::with_default_map();
-
-        let ipam = Ipam::new(ipam_store);
-        let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
-        let session_manager = Arc::new(SessionManager::new(session_store));
-        let derp_manager = Arc::new(DerpMapManager::new(derp_store));
-        let peer_broadcaster = Arc::new(PeerBroadcaster::new());
-
-        Self {
-            db_pool,
-            peer_registry,
-            session_manager,
-            derp_manager,
-            peer_broadcaster,
-            k8s_client: None,
-            garage_k8s: None,
-            garage_service: None,
-            keybox_url: None,
-        }
     }
 }
 

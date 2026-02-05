@@ -34,15 +34,17 @@ use tokio::signal;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-use moto_club_api::{AppState, health_server_router, mark_startup_complete, router};
+use moto_club_api::{
+    AppState, PostgresIpamStore, PostgresPeerStore, PostgresSessionStore, health_server_router,
+    mark_startup_complete, router,
+};
 use moto_club_db::{DbPool, derp_server_repo};
 use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
 use moto_club_reconcile::{GarageReconciler, ReconcileConfig};
 use moto_club_wg::{
-    DERP_CONFIG_ENV_VAR, DerpMapManager, InMemoryDerpStore, InMemoryPeerStore,
-    InMemorySessionStore, InMemoryStore, Ipam, PeerBroadcaster, PeerRegistry, SessionManager,
-    load_derp_config,
+    DERP_CONFIG_ENV_VAR, DerpMapManager, InMemoryDerpStore, Ipam, PeerBroadcaster, PeerRegistry,
+    SessionManager, load_derp_config,
 };
 use moto_k8s::K8sClient;
 
@@ -264,14 +266,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         reconciler.run().await;
     });
 
-    // Create WireGuard peer registry (in-memory for now)
-    let ipam_store = InMemoryStore::new();
-    let peer_store = InMemoryPeerStore::new();
+    // Create WireGuard peer registry with PostgreSQL storage
+    let ipam_store = PostgresIpamStore::new(db_pool.clone());
+    let peer_store = PostgresPeerStore::new(db_pool.clone());
     let ipam = Ipam::new(ipam_store);
     let peer_registry = Arc::new(PeerRegistry::new(peer_store, ipam));
 
-    // Create WireGuard session manager (in-memory for now)
-    let session_store = InMemorySessionStore::new();
+    // Create WireGuard session manager with PostgreSQL storage
+    let session_store = PostgresSessionStore::new(db_pool.clone());
     let session_manager = Arc::new(SessionManager::new(session_store));
 
     // Create DERP map manager with default configuration

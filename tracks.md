@@ -64,9 +64,10 @@ HOW TO USE THIS FILE:
 - Extract moto-club-ws crate (v1.6: WebSocket handlers moved from moto-club-api/src/wg.rs to moto-club-ws crate with PeerStreamingContext trait; AppState implements trait for peer streaming)
 - Separate test files for wg.rs (v1.6: moved tests from moto-club-api/src/wg.rs to wg_test.rs per AGENTS.md test organization convention)
 - Separate test files for pods.rs (v1.6: moved tests from moto-club-k8s/src/pods.rs to pods_test.rs per AGENTS.md test organization convention)
+- Remove in-memory storage (v1.6: deleted InMemoryPeerStore/InMemoryStore re-exports from moto-club-api; added PostgresIpamStore; updated AppState and main.rs to use PostgreSQL storage exclusively; handler tests now require PostgreSQL)
 
 **Remaining:**
-- Remove in-memory storage: Delete InMemoryPeerStore, InMemoryStore from moto-club-api, use PostgreSQL storage exclusively (v1.6 changelog)
+(none - moto-club.md v1.6 implementation complete)
 
 ---
 
