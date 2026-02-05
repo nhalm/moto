@@ -17,7 +17,7 @@ HOW TO USE THIS FILE:
 
 ## moto-club.md v1.7
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - moto-club-types crate: GarageId, GarageState, GarageInfo
@@ -67,9 +67,10 @@ HOW TO USE THIS FILE:
 - Simplify DERP configuration (v1.7: replace config file + database storage with MOTO_CLUB_DERP_SERVERS JSON env var; delete derp_servers table, derp_server_repo.rs, DerpServer model, DerpStore trait, DerpMapManager, InMemoryDerpStore, config file loading; add parse_derp_servers_env function; AppState uses Arc<DerpMap> instead of DerpMapManager)
 - Remove InMemoryStore from moto-club-wg ipam.rs (v1.7: deleted InMemoryStore, converted tests to unit tests for pure functions only; updated lib.rs exports; added integration feature flag; updated doc examples)
 - Remove InMemoryPeerStore from moto-club-wg peers.rs (v1.7: deleted InMemoryPeerStore struct and impl; removed HashMap and Mutex imports; removed export from lib.rs; existing tests are already unit tests for serialization or marked as requiring PostgreSQL)
+- Remove InMemorySessionStore from moto-club-wg sessions.rs (v1.7: deleted InMemorySessionStore struct and impl; removed HashMap and Mutex imports; removed export from lib.rs; existing tests are already unit tests for Session methods and serde)
 
 **Remaining:**
-- Remove InMemorySessionStore from moto-club-wg sessions.rs (v1.7: convert affected tests to integration tests per testing.md)
+(none - moto-club.md v1.7 implementation complete)
 
 ---
 

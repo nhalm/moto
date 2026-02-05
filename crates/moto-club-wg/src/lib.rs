@@ -57,6 +57,6 @@ pub use peers::{
 };
 pub use sessions::{
     CreateSessionRequest, CreateSessionResponse, DEFAULT_SESSION_TTL_SECS,
-    DISCONNECT_GRACE_PERIOD_SECS, GarageConnectionInfo, InMemorySessionStore, Session,
-    SessionError, SessionManager, SessionStore,
+    DISCONNECT_GRACE_PERIOD_SECS, GarageConnectionInfo, Session, SessionError, SessionManager,
+    SessionStore,
 };

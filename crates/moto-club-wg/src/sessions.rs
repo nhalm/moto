@@ -34,9 +34,7 @@
 use chrono::{DateTime, Duration, Utc};
 use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Mutex;
 use uuid::Uuid;
 
 use crate::peers::{RegisteredDevice, RegisteredGarage};
@@ -361,118 +359,6 @@ fn generate_session_id() -> String {
     let uuid = Uuid::now_v7();
     // Use simple hex encoding of UUID for compactness
     format!("sess_{}", uuid.simple())
-}
-
-/// In-memory session store for testing.
-///
-/// Sessions are lost when the store is dropped.
-pub struct InMemorySessionStore {
-    inner: Mutex<InMemorySessionStoreInner>,
-}
-
-struct InMemorySessionStoreInner {
-    sessions: HashMap<String, Session>,
-}
-
-impl InMemorySessionStore {
-    /// Create a new empty in-memory store.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            inner: Mutex::new(InMemorySessionStoreInner {
-                sessions: HashMap::new(),
-            }),
-        }
-    }
-}
-
-impl Default for InMemorySessionStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SessionStore for InMemorySessionStore {
-    fn get_session(&self, session_id: &str) -> Result<Option<Session>> {
-        let inner = self.inner.lock().unwrap();
-        Ok(inner.sessions.get(session_id).cloned())
-    }
-
-    fn set_session(&self, session: Session) -> Result<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .sessions
-            .insert(session.session_id.clone(), session);
-        Ok(())
-    }
-
-    fn remove_session(&self, session_id: &str) -> Result<Option<Session>> {
-        Ok(self.inner.lock().unwrap().sessions.remove(session_id))
-    }
-
-    fn list_sessions_by_device(&self, device_pubkey: &WgPublicKey) -> Result<Vec<Session>> {
-        let sessions = self
-            .inner
-            .lock()
-            .unwrap()
-            .sessions
-            .values()
-            .filter(|s| s.device_pubkey == *device_pubkey)
-            .cloned()
-            .collect();
-        Ok(sessions)
-    }
-
-    fn list_sessions_by_garage(&self, garage_id: &str) -> Result<Vec<Session>> {
-        let sessions = self
-            .inner
-            .lock()
-            .unwrap()
-            .sessions
-            .values()
-            .filter(|s| s.garage_id == garage_id)
-            .cloned()
-            .collect();
-        Ok(sessions)
-    }
-
-    fn remove_sessions_by_garage(&self, garage_id: &str) -> Result<Vec<Session>> {
-        let mut inner = self.inner.lock().unwrap();
-        let session_ids: Vec<_> = inner
-            .sessions
-            .values()
-            .filter(|s| s.garage_id == garage_id)
-            .map(|s| s.session_id.clone())
-            .collect();
-
-        let mut removed = Vec::new();
-        for session_id in session_ids {
-            if let Some(session) = inner.sessions.remove(&session_id) {
-                removed.push(session);
-            }
-        }
-        Ok(removed)
-    }
-
-    fn remove_expired_sessions(&self) -> Result<Vec<Session>> {
-        let mut inner = self.inner.lock().unwrap();
-        let now = Utc::now();
-        let session_ids: Vec<_> = inner
-            .sessions
-            .values()
-            .filter(|s| s.expires_at <= now)
-            .map(|s| s.session_id.clone())
-            .collect();
-
-        let mut removed = Vec::new();
-        for session_id in session_ids {
-            if let Some(session) = inner.sessions.remove(&session_id) {
-                removed.push(session);
-            }
-        }
-        Ok(removed)
-    }
 }
 
 // Unit tests for pure functions and serde (no database needed)
