@@ -36,7 +36,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [project-structure](project-structure.md) | Ready to Rip | Directory layout, crate organization, workspace |
+| [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
 | [moto-cli](moto-cli.md) | Ripping | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
 | [pre-commit](pre-commit.md) | Ripping | Git hooks for fast feedback to agents |
@@ -46,13 +46,13 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [moto-club](moto-club.md) | Ready to Rip | Central orchestration, garage management |
-| [keybox](keybox.md) | Ready to Rip | Secrets manager, SPIFFE-based identity |
+| [moto-club](moto-club.md) | Ripping | Central orchestration, garage management |
+| [keybox](keybox.md) | Ripping | Secrets manager, SPIFFE-based identity |
 | [dev-container](dev-container.md) | Ripping | Nix dockerTools container, tooling, environment |
 | [container-system](container-system.md) | Ripping | Build pipeline, registry |
 | [local-cluster](local-cluster.md) | Ripping | Local k3s cluster, moto cluster CLI |
 | [garage-isolation](garage-isolation.md) | Ripping | Network policies, resource limits |
-| [garage-lifecycle](garage-lifecycle.md) | Ready to Rip | Full lifecycle with ttyd terminal, TTL |
+| [garage-lifecycle](garage-lifecycle.md) | Ripping | Full lifecycle with ttyd terminal, TTL |
 | [moto-bike](moto-bike.md) | Ripping | Bike base image, engine contract |
 | [supporting-services](supporting-services.md) | Ripping | Postgres, Redis deployment |
 | [moto-wgtunnel](moto-wgtunnel.md) | Ripping | WireGuard tunnels for terminal access |
