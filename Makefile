@@ -1,4 +1,5 @@
 .PHONY: install build test check fmt lint clean run fix ci
+.PHONY: test-db-up test-db-down test-db-migrate test-db-reset test-integration test-all test-ci
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
 .PHONY: build-bike test-bike
 .PHONY: registry-start registry-stop
@@ -11,9 +12,12 @@ install:
 build:
 	cargo build --workspace
 
-# Run all tests
+# Test database URL (override with environment variable if needed)
+TEST_DATABASE_URL ?= postgres://moto_test:moto_test@localhost:5433/moto_test
+
+# Run unit tests only (fast, no dependencies)
 test:
-	cargo test --workspace
+	cargo test --lib
 
 # Check compilation without building
 check:
@@ -41,6 +45,40 @@ fix: fmt
 
 # Full CI check
 ci: fmt check lint test
+
+# === Test Database ===
+
+# Start test database
+test-db-up:
+	docker compose -f docker-compose.test.yml up -d
+	@echo "Waiting for PostgreSQL..."
+	@until docker compose -f docker-compose.test.yml exec -T postgres pg_isready -U moto_test; do sleep 1; done
+	@echo "PostgreSQL is ready"
+
+# Stop test database
+test-db-down:
+	docker compose -f docker-compose.test.yml down -v
+
+# Run database migrations on test database
+test-db-migrate:
+	DATABASE_URL=$(TEST_DATABASE_URL) sqlx migrate run --source crates/moto-club-db/migrations
+
+# Reset test database (drop and recreate)
+test-db-reset: test-db-down test-db-up test-db-migrate
+
+# Run integration tests (starts database if needed)
+test-integration: test-db-up test-db-migrate
+	@TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration || \
+		(echo "Tests failed, cleaning up..." && $(MAKE) test-db-down && exit 1)
+	@$(MAKE) test-db-down
+
+# Run all tests
+test-all: test test-integration
+
+# CI target (assumes database is already running)
+test-ci:
+	cargo test --lib
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration
 
 # === Container (Garage) ===
 
