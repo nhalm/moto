@@ -33,33 +33,11 @@
 //! └─────────────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! # Example
+//! # Storage
 //!
-//! ```
-//! use moto_club_wg::ipam::{Ipam, InMemoryStore};
-//! use moto_club_wg::peers::{PeerRegistry, InMemoryPeerStore, DeviceRegistration};
-//! use moto_wgtunnel_types::keys::WgPrivateKey;
-//!
-//! # tokio_test::block_on(async {
-//! // Create IPAM and peer registry
-//! let ipam_store = InMemoryStore::new();
-//! let peer_store = InMemoryPeerStore::new();
-//! let ipam = Ipam::new(ipam_store);
-//! let registry = PeerRegistry::new(peer_store, ipam);
-//!
-//! // Register a device - public key IS the device identity
-//! let private_key = WgPrivateKey::generate();
-//!
-//! let registration = DeviceRegistration {
-//!     public_key: private_key.public_key(),
-//!     owner: "myuser".to_string(),
-//!     device_name: Some("my-laptop".to_string()),
-//! };
-//!
-//! let device = registry.register_device(registration).await.unwrap();
-//! assert!(device.overlay_ip.is_client());
-//! # });
-//! ```
+//! This crate defines traits for storage backends ([`IpamStore`], [`PeerStore`],
+//! [`SessionStore`]). For production use, use the PostgreSQL implementations from
+//! `moto-club-api` (`PostgresIpamStore`, `PostgresPeerStore`, `PostgresSessionStore`).
 
 pub mod broadcaster;
 pub mod derp;
@@ -72,7 +50,7 @@ pub use derp::{
     DERP_SERVERS_ENV_VAR, DerpConfig, DerpError, DerpServerEntry, parse_derp_servers_env,
     parse_derp_servers_json,
 };
-pub use ipam::{InMemoryStore, Ipam, IpamError, IpamStore};
+pub use ipam::{Ipam, IpamError, IpamStore};
 pub use peers::{
     DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerError, PeerRegistry, PeerStore,
     RegisteredDevice, RegisteredGarage,

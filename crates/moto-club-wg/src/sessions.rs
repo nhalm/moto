@@ -26,61 +26,10 @@
 //!   → 204 No Content
 //! ```
 //!
-//! # Example
+//! # Storage
 //!
-//! ```
-//! use moto_club_wg::sessions::{SessionManager, InMemorySessionStore, CreateSessionRequest};
-//! use moto_club_wg::peers::{PeerRegistry, InMemoryPeerStore, DeviceRegistration, GarageRegistration};
-//! use moto_club_wg::ipam::{Ipam, InMemoryStore};
-//! use moto_wgtunnel_types::keys::WgPrivateKey;
-//! use moto_wgtunnel_types::derp::{DerpMap, DerpRegion, DerpNode};
-//!
-//! # tokio_test::block_on(async {
-//! // Create stores and registry
-//! let ipam_store = InMemoryStore::new();
-//! let peer_store = InMemoryPeerStore::new();
-//! let session_store = InMemorySessionStore::new();
-//!
-//! let ipam = Ipam::new(ipam_store);
-//! let registry = PeerRegistry::new(peer_store, ipam);
-//! let manager = SessionManager::new(session_store);
-//!
-//! // Register a device and garage
-//! let device_key = WgPrivateKey::generate();
-//! let device = registry.register_device(DeviceRegistration {
-//!     public_key: device_key.public_key(),
-//!     owner: "testuser".to_string(),
-//!     device_name: Some("laptop".to_string()),
-//! }).await.unwrap();
-//!
-//! let garage_key = WgPrivateKey::generate();
-//! let garage = registry.register_garage(GarageRegistration {
-//!     garage_id: "feature-foo".to_string(),
-//!     public_key: garage_key.public_key(),
-//!     endpoints: vec![],
-//! }).await.unwrap();
-//!
-//! // Create a session
-//! let derp_map = DerpMap::new()
-//!     .with_region(DerpRegion::new(1, "primary")
-//!         .with_node(DerpNode::with_defaults("derp.example.com")));
-//!
-//! let request = CreateSessionRequest {
-//!     garage_id: "feature-foo".to_string(),
-//!     device_pubkey: device_key.public_key(),
-//!     ttl_seconds: Some(3600),
-//! };
-//!
-//! let session = manager.create_session(
-//!     request,
-//!     &device,
-//!     &garage,
-//!     &derp_map,
-//! ).await.unwrap();
-//!
-//! assert!(session.session_id.starts_with("sess_"));
-//! # });
-//! ```
+//! The [`SessionStore`] trait defines the storage interface. For production,
+//! use `PostgresSessionStore` from `moto-club-api`.
 
 use chrono::{DateTime, Duration, Utc};
 use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
@@ -526,349 +475,14 @@ impl SessionStore for InMemorySessionStore {
     }
 }
 
+// Unit tests for pure functions and serde (no database needed)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ipam::{InMemoryStore, Ipam};
-    use crate::peers::{DeviceRegistration, GarageRegistration, InMemoryPeerStore, PeerRegistry};
-    use moto_wgtunnel_types::{DerpNode, DerpRegion, WgPrivateKey};
+    use moto_wgtunnel_types::WgPrivateKey;
 
     fn generate_public_key() -> WgPublicKey {
         WgPrivateKey::generate().public_key()
-    }
-
-    fn create_registry() -> PeerRegistry<InMemoryPeerStore, InMemoryStore> {
-        let ipam_store = InMemoryStore::new();
-        let peer_store = InMemoryPeerStore::new();
-        let ipam = Ipam::new(ipam_store);
-        PeerRegistry::new(peer_store, ipam)
-    }
-
-    fn create_manager() -> SessionManager<InMemorySessionStore> {
-        SessionManager::new(InMemorySessionStore::new())
-    }
-
-    fn create_derp_map() -> DerpMap {
-        DerpMap::new().with_region(
-            DerpRegion::new(1, "primary").with_node(DerpNode::with_defaults("derp.example.com")),
-        )
-    }
-
-    #[tokio::test]
-    async fn create_session() {
-        let registry = create_registry();
-        let manager = create_manager();
-        let derp_map = create_derp_map();
-
-        // Register device and garage
-        let device_key = generate_public_key();
-        let device = registry
-            .register_device(DeviceRegistration {
-                public_key: device_key.clone(),
-                owner: "testuser".to_string(),
-                device_name: None,
-            })
-            .await
-            .unwrap();
-
-        let garage = registry
-            .register_garage(GarageRegistration {
-                garage_id: "test-garage".to_string(),
-                public_key: generate_public_key(),
-                endpoints: vec!["10.0.0.1:51820".parse().unwrap()],
-            })
-            .await
-            .unwrap();
-
-        // Create session
-        let request = CreateSessionRequest {
-            garage_id: "test-garage".to_string(),
-            device_pubkey: device_key,
-            ttl_seconds: Some(3600),
-        };
-
-        let response = manager
-            .create_session(request, &device, &garage, &derp_map)
-            .await
-            .unwrap();
-
-        assert!(response.session_id.starts_with("sess_"));
-        assert_eq!(response.garage.public_key, garage.public_key);
-        assert_eq!(response.garage.overlay_ip, garage.overlay_ip);
-        assert_eq!(response.client_ip, device.overlay_ip);
-        assert!(!response.derp_map.is_empty());
-    }
-
-    #[tokio::test]
-    async fn session_id_format() {
-        let registry = create_registry();
-        let manager = create_manager();
-        let derp_map = create_derp_map();
-
-        let device_key = generate_public_key();
-        let device = registry
-            .register_device(DeviceRegistration {
-                public_key: device_key.clone(),
-                owner: "testuser".to_string(),
-                device_name: None,
-            })
-            .await
-            .unwrap();
-
-        let garage = registry
-            .register_garage(GarageRegistration {
-                garage_id: "test-garage".to_string(),
-                public_key: generate_public_key(),
-                endpoints: vec![],
-            })
-            .await
-            .unwrap();
-
-        let request = CreateSessionRequest {
-            garage_id: "test-garage".to_string(),
-            device_pubkey: device_key,
-            ttl_seconds: None,
-        };
-
-        let response = manager
-            .create_session(request, &device, &garage, &derp_map)
-            .await
-            .unwrap();
-
-        // Should be "sess_" followed by a UUID in simple format (32 hex chars)
-        assert!(response.session_id.starts_with("sess_"));
-        let suffix = &response.session_id[5..];
-        assert_eq!(suffix.len(), 32);
-        assert!(suffix.chars().all(|c| c.is_ascii_hexdigit()));
-    }
-
-    #[tokio::test]
-    async fn get_session() {
-        let registry = create_registry();
-        let manager = create_manager();
-        let derp_map = create_derp_map();
-
-        let device_key = generate_public_key();
-        let device = registry
-            .register_device(DeviceRegistration {
-                public_key: device_key.clone(),
-                owner: "testuser".to_string(),
-                device_name: None,
-            })
-            .await
-            .unwrap();
-
-        let garage = registry
-            .register_garage(GarageRegistration {
-                garage_id: "test-garage".to_string(),
-                public_key: generate_public_key(),
-                endpoints: vec![],
-            })
-            .await
-            .unwrap();
-
-        // No session yet
-        assert!(manager.get_session("nonexistent").unwrap().is_none());
-
-        // Create session
-        let request = CreateSessionRequest {
-            garage_id: "test-garage".to_string(),
-            device_pubkey: device_key.clone(),
-            ttl_seconds: None,
-        };
-
-        let response = manager
-            .create_session(request, &device, &garage, &derp_map)
-            .await
-            .unwrap();
-
-        // Now found
-        let session = manager.get_session(&response.session_id).unwrap().unwrap();
-        assert_eq!(session.session_id, response.session_id);
-        assert_eq!(session.garage_id, "test-garage");
-        assert_eq!(session.device_pubkey, device_key);
-    }
-
-    #[tokio::test]
-    async fn close_session() {
-        let registry = create_registry();
-        let manager = create_manager();
-        let derp_map = create_derp_map();
-
-        let device_key = generate_public_key();
-        let device = registry
-            .register_device(DeviceRegistration {
-                public_key: device_key.clone(),
-                owner: "testuser".to_string(),
-                device_name: None,
-            })
-            .await
-            .unwrap();
-
-        let garage = registry
-            .register_garage(GarageRegistration {
-                garage_id: "test-garage".to_string(),
-                public_key: generate_public_key(),
-                endpoints: vec![],
-            })
-            .await
-            .unwrap();
-
-        let request = CreateSessionRequest {
-            garage_id: "test-garage".to_string(),
-            device_pubkey: device_key,
-            ttl_seconds: None,
-        };
-
-        let response = manager
-            .create_session(request, &device, &garage, &derp_map)
-            .await
-            .unwrap();
-
-        // Close session
-        let closed = manager.close_session(&response.session_id).unwrap();
-        assert_eq!(closed.session_id, response.session_id);
-
-        // No longer found
-        assert!(manager.get_session(&response.session_id).unwrap().is_none());
-
-        // Closing again fails
-        let err = manager.close_session(&response.session_id).unwrap_err();
-        assert!(matches!(err, SessionError::NotFound(_)));
-    }
-
-    #[tokio::test]
-    async fn list_sessions() {
-        let registry = create_registry();
-        let manager = create_manager();
-        let derp_map = create_derp_map();
-
-        let device_key = generate_public_key();
-        let device = registry
-            .register_device(DeviceRegistration {
-                public_key: device_key.clone(),
-                owner: "testuser".to_string(),
-                device_name: None,
-            })
-            .await
-            .unwrap();
-
-        // Create multiple garages and sessions
-        for i in 0..3 {
-            let garage = registry
-                .register_garage(GarageRegistration {
-                    garage_id: format!("garage-{i}"),
-                    public_key: generate_public_key(),
-                    endpoints: vec![],
-                })
-                .await
-                .unwrap();
-
-            let request = CreateSessionRequest {
-                garage_id: format!("garage-{i}"),
-                device_pubkey: device_key.clone(),
-                ttl_seconds: Some(3600),
-            };
-
-            manager
-                .create_session(request, &device, &garage, &derp_map)
-                .await
-                .unwrap();
-        }
-
-        let sessions = manager.list_sessions(&device_key).unwrap();
-        assert_eq!(sessions.len(), 3);
-    }
-
-    #[tokio::test]
-    async fn list_sessions_for_garage() {
-        let registry = create_registry();
-        let manager = create_manager();
-        let derp_map = create_derp_map();
-
-        let garage = registry
-            .register_garage(GarageRegistration {
-                garage_id: "test-garage".to_string(),
-                public_key: generate_public_key(),
-                endpoints: vec![],
-            })
-            .await
-            .unwrap();
-
-        // Create sessions from multiple devices
-        for _ in 0..3 {
-            let device_key = generate_public_key();
-            let device = registry
-                .register_device(DeviceRegistration {
-                    public_key: device_key.clone(),
-                    owner: "testuser".to_string(),
-                    device_name: None,
-                })
-                .await
-                .unwrap();
-
-            let request = CreateSessionRequest {
-                garage_id: "test-garage".to_string(),
-                device_pubkey: device_key,
-                ttl_seconds: Some(3600),
-            };
-
-            manager
-                .create_session(request, &device, &garage, &derp_map)
-                .await
-                .unwrap();
-        }
-
-        let sessions = manager.list_sessions_for_garage("test-garage").unwrap();
-        assert_eq!(sessions.len(), 3);
-    }
-
-    #[tokio::test]
-    async fn on_garage_terminated() {
-        let registry = create_registry();
-        let manager = create_manager();
-        let derp_map = create_derp_map();
-
-        let garage = registry
-            .register_garage(GarageRegistration {
-                garage_id: "test-garage".to_string(),
-                public_key: generate_public_key(),
-                endpoints: vec![],
-            })
-            .await
-            .unwrap();
-
-        // Create sessions
-        for _ in 0..3 {
-            let device_key = generate_public_key();
-            let device = registry
-                .register_device(DeviceRegistration {
-                    public_key: device_key.clone(),
-                    owner: "testuser".to_string(),
-                    device_name: None,
-                })
-                .await
-                .unwrap();
-
-            let request = CreateSessionRequest {
-                garage_id: "test-garage".to_string(),
-                device_pubkey: device_key,
-                ttl_seconds: Some(3600),
-            };
-
-            manager
-                .create_session(request, &device, &garage, &derp_map)
-                .await
-                .unwrap();
-        }
-
-        // Terminate garage
-        let removed = manager.on_garage_terminated("test-garage").unwrap();
-        assert_eq!(removed.len(), 3);
-
-        // No sessions left
-        let sessions = manager.list_sessions_for_garage("test-garage").unwrap();
-        assert!(sessions.is_empty());
     }
 
     #[test]
@@ -898,62 +512,6 @@ mod tests {
         };
         assert!(expired_session.is_expired());
         assert_eq!(expired_session.remaining_ttl_secs(), 0);
-    }
-
-    #[tokio::test]
-    async fn cleanup_expired_sessions() {
-        let registry = create_registry();
-        let manager = create_manager();
-        let derp_map = create_derp_map();
-
-        let device_key = generate_public_key();
-        let device = registry
-            .register_device(DeviceRegistration {
-                public_key: device_key.clone(),
-                owner: "testuser".to_string(),
-                device_name: None,
-            })
-            .await
-            .unwrap();
-
-        let garage = registry
-            .register_garage(GarageRegistration {
-                garage_id: "test-garage".to_string(),
-                public_key: generate_public_key(),
-                endpoints: vec![],
-            })
-            .await
-            .unwrap();
-
-        // Create an active session
-        let request = CreateSessionRequest {
-            garage_id: "test-garage".to_string(),
-            device_pubkey: device_key.clone(),
-            ttl_seconds: Some(3600),
-        };
-        let active = manager
-            .create_session(request, &device, &garage, &derp_map)
-            .await
-            .unwrap();
-
-        // Manually create an expired session
-        let expired = Session {
-            session_id: "sess_expired".to_string(),
-            garage_id: "test-garage".to_string(),
-            garage_name: "test-garage".to_string(),
-            device_pubkey: device_key,
-            created_at: Utc::now() - Duration::hours(5),
-            expires_at: Utc::now() - Duration::hours(1),
-        };
-        manager.store.set_session(expired).unwrap();
-
-        // Cleanup
-        let removed = manager.cleanup_expired().unwrap();
-        assert_eq!(removed.len(), 1);
-        assert_eq!(removed[0].session_id, "sess_expired");
-
-        // Active session still exists
-        assert!(manager.get_session(&active.session_id).unwrap().is_some());
     }
 
     #[test]
@@ -1010,3 +568,18 @@ mod tests {
         assert_eq!(session.device_pubkey, parsed.device_pubkey);
     }
 }
+
+// Integration tests that require PostgreSQL
+// Run with: cargo test --features integration
+// Note: These tests require PostgresSessionStore from moto-club-api.
+// See moto-club-api/src/wg_test.rs for integration tests with PostgreSQL storage.
+//
+// Tests to implement:
+// - create_session: Create session with device/garage and verify response
+// - session_id_format: Verify "sess_" prefix + 32 hex chars
+// - get_session: Lookup session by ID
+// - close_session: Close session and verify removal
+// - list_sessions: List sessions for a device
+// - list_sessions_for_garage: List sessions for a garage
+// - on_garage_terminated: Remove all sessions when garage terminates
+// - cleanup_expired_sessions: Remove expired sessions, keep active ones

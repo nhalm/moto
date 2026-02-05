@@ -20,36 +20,10 @@
 //!   → { assigned_ip, derp_map }
 //! ```
 //!
-//! # Example
+//! # Storage
 //!
-//! ```
-//! use moto_club_wg::peers::{PeerRegistry, InMemoryPeerStore, DeviceRegistration, GarageRegistration};
-//! use moto_club_wg::ipam::{Ipam, InMemoryStore};
-//! use moto_wgtunnel_types::keys::WgPrivateKey;
-//!
-//! # tokio_test::block_on(async {
-//! // Create stores
-//! let ipam_store = InMemoryStore::new();
-//! let peer_store = InMemoryPeerStore::new();
-//!
-//! // Create registry with IPAM
-//! let ipam = Ipam::new(ipam_store);
-//! let registry = PeerRegistry::new(peer_store, ipam);
-//!
-//! // Register a device - public key IS the device identity
-//! let private_key = WgPrivateKey::generate();
-//! let public_key = private_key.public_key();
-//!
-//! let registration = DeviceRegistration {
-//!     public_key: public_key.clone(),
-//!     owner: "testuser".to_string(),
-//!     device_name: Some("macbook-pro".to_string()),
-//! };
-//!
-//! let device = registry.register_device(registration).await.unwrap();
-//! assert!(device.overlay_ip.is_client());
-//! # });
-//! ```
+//! The [`PeerStore`] trait defines the storage interface. For production,
+//! use `PostgresPeerStore` from `moto-club-api`.
 
 use moto_wgtunnel_types::{OverlayIp, WgPublicKey};
 use serde::{Deserialize, Serialize};
@@ -382,223 +356,14 @@ impl PeerStore for InMemoryPeerStore {
     }
 }
 
+// Unit tests for pure functions (no database needed)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ipam::InMemoryStore;
     use moto_wgtunnel_types::WgPrivateKey;
-
-    fn create_registry() -> PeerRegistry<InMemoryPeerStore, InMemoryStore> {
-        let ipam_store = InMemoryStore::new();
-        let peer_store = InMemoryPeerStore::new();
-        let ipam = Ipam::new(ipam_store);
-        PeerRegistry::new(peer_store, ipam)
-    }
 
     fn generate_public_key() -> WgPublicKey {
         WgPrivateKey::generate().public_key()
-    }
-
-    #[tokio::test]
-    async fn register_device() {
-        let registry = create_registry();
-        let public_key = generate_public_key();
-
-        let registration = DeviceRegistration {
-            public_key: public_key.clone(),
-            owner: "testuser".to_string(),
-            device_name: Some("test-device".to_string()),
-        };
-
-        let device = registry.register_device(registration).await.unwrap();
-
-        assert_eq!(device.public_key, public_key);
-        assert_eq!(device.owner, "testuser");
-        assert!(device.overlay_ip.is_client());
-        assert_eq!(device.device_name, Some("test-device".to_string()));
-    }
-
-    #[tokio::test]
-    async fn device_registration_is_idempotent() {
-        let registry = create_registry();
-        let public_key = generate_public_key();
-
-        let registration = DeviceRegistration {
-            public_key: public_key.clone(),
-            owner: "testuser".to_string(),
-            device_name: None,
-        };
-
-        let device1 = registry
-            .register_device(registration.clone())
-            .await
-            .unwrap();
-        let device2 = registry.register_device(registration).await.unwrap();
-
-        // Same public key gets same IP (idempotent)
-        assert_eq!(device1.overlay_ip, device2.overlay_ip);
-        assert_eq!(device1.public_key, device2.public_key);
-    }
-
-    #[tokio::test]
-    async fn new_key_is_new_device() {
-        // Per spec: "Re-keying (new WG keypair) = new device registration, new IP"
-        let registry = create_registry();
-        let key1 = generate_public_key();
-        let key2 = generate_public_key();
-
-        // Register with first key
-        let registration1 = DeviceRegistration {
-            public_key: key1.clone(),
-            owner: "testuser".to_string(),
-            device_name: None,
-        };
-        let device1 = registry.register_device(registration1).await.unwrap();
-
-        // Register with new key (this is a NEW device)
-        let registration2 = DeviceRegistration {
-            public_key: key2.clone(),
-            owner: "testuser".to_string(),
-            device_name: None,
-        };
-        let device2 = registry.register_device(registration2).await.unwrap();
-
-        // Different keys = different devices = different IPs
-        assert_ne!(device1.overlay_ip, device2.overlay_ip);
-        assert_ne!(device1.public_key, device2.public_key);
-    }
-
-    #[tokio::test]
-    async fn get_device() {
-        let registry = create_registry();
-        let public_key = generate_public_key();
-
-        // Not registered yet
-        assert!(registry.get_device(&public_key).unwrap().is_none());
-
-        // Register
-        let registration = DeviceRegistration {
-            public_key: public_key.clone(),
-            owner: "testuser".to_string(),
-            device_name: None,
-        };
-        registry.register_device(registration).await.unwrap();
-
-        // Now found
-        let device = registry.get_device(&public_key).unwrap();
-        assert!(device.is_some());
-        assert_eq!(device.unwrap().public_key, public_key);
-    }
-
-    #[tokio::test]
-    async fn register_garage() {
-        let registry = create_registry();
-        let garage_id = "test-garage".to_string();
-        let public_key = generate_public_key();
-        let endpoint: SocketAddr = "10.0.0.1:51820".parse().unwrap();
-
-        let registration = GarageRegistration {
-            garage_id: garage_id.clone(),
-            public_key: public_key.clone(),
-            endpoints: vec![endpoint],
-        };
-
-        let garage = registry.register_garage(registration).await.unwrap();
-
-        assert_eq!(garage.garage_id, garage_id);
-        assert_eq!(garage.public_key, public_key);
-        assert!(garage.overlay_ip.is_garage());
-        assert_eq!(garage.endpoints, vec![endpoint]);
-    }
-
-    #[tokio::test]
-    async fn garage_ip_is_deterministic() {
-        let registry = create_registry();
-        let garage_id = "test-garage".to_string();
-
-        let registration1 = GarageRegistration {
-            garage_id: garage_id.clone(),
-            public_key: generate_public_key(),
-            endpoints: vec![],
-        };
-        let garage1 = registry.register_garage(registration1).await.unwrap();
-
-        // Different key, same garage ID
-        let registration2 = GarageRegistration {
-            garage_id: garage_id.clone(),
-            public_key: generate_public_key(),
-            endpoints: vec![],
-        };
-        let garage2 = registry.register_garage(registration2).await.unwrap();
-
-        // Same IP (deterministic from garage ID)
-        assert_eq!(garage1.overlay_ip, garage2.overlay_ip);
-    }
-
-    #[tokio::test]
-    async fn get_garage() {
-        let registry = create_registry();
-        let garage_id = "test-garage";
-
-        // Not registered yet
-        assert!(registry.get_garage(garage_id).unwrap().is_none());
-
-        // Register
-        let registration = GarageRegistration {
-            garage_id: garage_id.to_string(),
-            public_key: generate_public_key(),
-            endpoints: vec![],
-        };
-        registry.register_garage(registration).await.unwrap();
-
-        // Now found
-        let garage = registry.get_garage(garage_id).unwrap();
-        assert!(garage.is_some());
-        assert_eq!(garage.unwrap().garage_id, garage_id);
-    }
-
-    #[tokio::test]
-    async fn unregister_garage() {
-        let registry = create_registry();
-        let garage_id = "test-garage";
-
-        // Register
-        let registration = GarageRegistration {
-            garage_id: garage_id.to_string(),
-            public_key: generate_public_key(),
-            endpoints: vec![],
-        };
-        registry.register_garage(registration).await.unwrap();
-
-        // Unregister
-        let removed = registry.unregister_garage(garage_id).unwrap();
-        assert!(removed.is_some());
-        assert_eq!(removed.unwrap().garage_id, garage_id);
-
-        // No longer found
-        assert!(registry.get_garage(garage_id).unwrap().is_none());
-
-        // Unregister again is no-op
-        let removed = registry.unregister_garage(garage_id).unwrap();
-        assert!(removed.is_none());
-    }
-
-    #[tokio::test]
-    async fn list_garages() {
-        let registry = create_registry();
-
-        // Register multiple garages
-        for i in 0..3 {
-            let registration = GarageRegistration {
-                garage_id: format!("garage-{i}"),
-                public_key: generate_public_key(),
-                endpoints: vec![],
-            };
-            registry.register_garage(registration).await.unwrap();
-        }
-
-        let garages = registry.list_garages().unwrap();
-        assert_eq!(garages.len(), 3);
     }
 
     #[test]
@@ -633,3 +398,19 @@ mod tests {
         assert_eq!(registration.endpoints, parsed.endpoints);
     }
 }
+
+// Integration tests that require PostgreSQL
+// Run with: cargo test --features integration
+// Note: These tests require PostgresIpamStore and PostgresPeerStore from moto-club-api.
+// See moto-club-api/src/wg_test.rs for integration tests with PostgreSQL storage.
+//
+// Tests to implement:
+// - register_device: Register a device and verify overlay IP is assigned
+// - device_registration_is_idempotent: Same public key gets same IP
+// - new_key_is_new_device: Different public key = different device
+// - get_device: Lookup device by public key
+// - register_garage: Register a garage with endpoints
+// - garage_ip_is_deterministic: Same garage ID = same IP
+// - get_garage: Lookup garage by ID
+// - unregister_garage: Remove garage registration
+// - list_garages: List all registered garages

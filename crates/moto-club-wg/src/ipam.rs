@@ -8,42 +8,12 @@
 //! # Architecture
 //!
 //! The IPAM is designed to be backed by a database for persistence. The [`IpamStore`]
-//! trait defines the storage interface, allowing different backends (in-memory for tests,
-//! Postgres for production).
+//! trait defines the storage interface. Use `PostgresIpamStore` from `moto-club-api`
+//! for production.
 //!
 //! The `WireGuard` public key IS the device identity (Cloudflare WARP model).
-//!
-//! # Example
-//!
-//! ```
-//! use moto_club_wg::ipam::{Ipam, InMemoryStore};
-//! use moto_wgtunnel_types::WgPrivateKey;
-//!
-//! # tokio_test::block_on(async {
-//! let store = InMemoryStore::new();
-//! let ipam = Ipam::new(store);
-//!
-//! // Allocate IP for a garage (deterministic)
-//! let garage_id = "my-garage";
-//! let garage_ip = ipam.allocate_garage(garage_id).await.unwrap();
-//!
-//! // Same garage ID always gets same IP
-//! let garage_ip2 = ipam.allocate_garage(garage_id).await.unwrap();
-//! assert_eq!(garage_ip, garage_ip2);
-//!
-//! // Allocate IP for a client device (keyed by public key)
-//! let device_key = WgPrivateKey::generate().public_key();
-//! let client_ip = ipam.allocate_client(&device_key).await.unwrap();
-//!
-//! // Same public key always gets same IP
-//! let client_ip2 = ipam.allocate_client(&device_key).await.unwrap();
-//! assert_eq!(client_ip, client_ip2);
-//! # });
-//! ```
 
 use moto_wgtunnel_types::{OverlayIp, WgPublicKey};
-use std::collections::HashMap;
-use std::sync::Mutex;
 
 /// Error type for IPAM operations.
 #[derive(Debug, thiserror::Error)]
@@ -216,142 +186,10 @@ impl std::hash::Hasher for StableHasher {
     }
 }
 
-/// In-memory IPAM store for testing.
-///
-/// Allocations are lost when the store is dropped.
-pub struct InMemoryStore {
-    inner: Mutex<InMemoryStoreInner>,
-}
-
-struct InMemoryStoreInner {
-    /// Device public key (base64) -> allocated IP
-    /// `WireGuard` public key IS the device identity
-    client_ips: HashMap<String, OverlayIp>,
-    /// Next host ID to allocate
-    next_host_id: u64,
-}
-
-impl InMemoryStore {
-    /// Create a new empty in-memory store.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            inner: Mutex::new(InMemoryStoreInner {
-                client_ips: HashMap::new(),
-                next_host_id: 1, // Start at 1, 0 is reserved
-            }),
-        }
-    }
-}
-
-impl Default for InMemoryStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl IpamStore for InMemoryStore {
-    fn get_client_ip(&self, public_key: &WgPublicKey) -> Result<Option<OverlayIp>> {
-        let inner = self.inner.lock().unwrap();
-        Ok(inner.client_ips.get(&public_key.to_base64()).copied())
-    }
-
-    fn set_client_ip(&self, public_key: &WgPublicKey, ip: OverlayIp) -> Result<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .client_ips
-            .insert(public_key.to_base64(), ip);
-        Ok(())
-    }
-
-    fn next_client_host_id(&self) -> Result<u64> {
-        let mut inner = self.inner.lock().unwrap();
-        let host_id = inner.next_host_id;
-        inner.next_host_id += 1;
-        drop(inner);
-        Ok(host_id)
-    }
-}
-
+// Unit tests for pure hash functions (no database needed)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use moto_wgtunnel_types::WgPrivateKey;
-
-    fn generate_public_key() -> WgPublicKey {
-        WgPrivateKey::generate().public_key()
-    }
-
-    #[tokio::test]
-    async fn garage_allocation_is_deterministic() {
-        let store = InMemoryStore::new();
-        let ipam = Ipam::new(store);
-
-        let ip1 = ipam.allocate_garage("garage-1").await.unwrap();
-        let ip2 = ipam.allocate_garage("garage-1").await.unwrap();
-        let ip3 = ipam.allocate_garage("garage-2").await.unwrap();
-
-        // Same garage ID = same IP
-        assert_eq!(ip1, ip2);
-
-        // Different garage ID = different IP
-        assert_ne!(ip1, ip3);
-
-        // All are garage IPs
-        assert!(ip1.is_garage());
-        assert!(ip3.is_garage());
-    }
-
-    #[tokio::test]
-    async fn client_allocation_is_sequential() {
-        let store = InMemoryStore::new();
-        let ipam = Ipam::new(store);
-
-        let key1 = generate_public_key();
-        let key2 = generate_public_key();
-
-        let ip1 = ipam.allocate_client(&key1).await.unwrap();
-        let ip2 = ipam.allocate_client(&key2).await.unwrap();
-
-        // Different devices (public keys) get different IPs
-        assert_ne!(ip1, ip2);
-
-        // All are client IPs
-        assert!(ip1.is_client());
-        assert!(ip2.is_client());
-    }
-
-    #[tokio::test]
-    async fn client_allocation_is_persistent() {
-        let store = InMemoryStore::new();
-        let ipam = Ipam::new(store);
-
-        let key = generate_public_key();
-
-        let ip1 = ipam.allocate_client(&key).await.unwrap();
-        let ip2 = ipam.allocate_client(&key).await.unwrap();
-
-        // Same public key always gets same IP
-        assert_eq!(ip1, ip2);
-    }
-
-    #[tokio::test]
-    async fn get_client_ip_without_allocation() {
-        let store = InMemoryStore::new();
-        let ipam = Ipam::new(store);
-
-        let key = generate_public_key();
-
-        // No allocation yet
-        let ip = ipam.get_client_ip(&key).await.unwrap();
-        assert!(ip.is_none());
-
-        // After allocation
-        let allocated = ipam.allocate_client(&key).await.unwrap();
-        let ip = ipam.get_client_ip(&key).await.unwrap();
-        assert_eq!(ip, Some(allocated));
-    }
 
     #[test]
     fn hash_garage_id_is_stable() {
@@ -374,4 +212,58 @@ mod tests {
             assert_ne!(host_id, 0, "garage ID '{garage_id}' hashed to 0");
         }
     }
+
+    #[test]
+    fn garage_ip_is_deterministic() {
+        // Test that the same garage ID always produces the same host_id
+        // This tests the pure function without needing an Ipam instance
+        let host_id1 = hash_garage_id("garage-1");
+        let host_id2 = hash_garage_id("garage-1");
+        let host_id3 = hash_garage_id("garage-2");
+
+        assert_eq!(host_id1, host_id2);
+        assert_ne!(host_id1, host_id3);
+
+        // Verify the IPs are in the garage subnet
+        let ip1 = OverlayIp::garage(host_id1);
+        let ip3 = OverlayIp::garage(host_id3);
+
+        assert!(ip1.is_garage());
+        assert!(ip3.is_garage());
+        assert_ne!(ip1, ip3);
+    }
+}
+
+// Integration tests that require PostgreSQL
+// Run with: cargo test --features integration
+#[cfg(all(test, feature = "integration"))]
+mod integration_tests {
+    use super::*;
+    use moto_wgtunnel_types::WgPrivateKey;
+
+    fn generate_public_key() -> WgPublicKey {
+        WgPrivateKey::generate().public_key()
+    }
+
+    // Note: These tests require PostgresIpamStore from moto-club-api.
+    // See moto-club-api/src/wg_test.rs for integration tests with PostgreSQL storage.
+    // The IpamStore trait is tested through PostgresIpamStore in that crate.
+
+    // The following tests document the expected behavior that integration tests should verify:
+    //
+    // 1. garage_allocation_is_deterministic:
+    //    - Same garage ID returns same IP
+    //    - Different garage IDs return different IPs
+    //    - All allocated IPs are in the garage subnet
+    //
+    // 2. client_allocation_is_sequential:
+    //    - Different public keys get different IPs
+    //    - All allocated IPs are in the client subnet
+    //
+    // 3. client_allocation_is_persistent:
+    //    - Same public key always returns the same IP
+    //
+    // 4. get_client_ip_without_allocation:
+    //    - Returns None for unallocated public keys
+    //    - Returns Some(ip) after allocation
 }

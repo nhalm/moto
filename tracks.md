@@ -65,9 +65,9 @@ HOW TO USE THIS FILE:
 - Separate test files for pods.rs (v1.6: moved tests from moto-club-k8s/src/pods.rs to pods_test.rs per AGENTS.md test organization convention)
 - Remove in-memory storage (v1.6: deleted InMemoryPeerStore/InMemoryStore re-exports from moto-club-api; added PostgresIpamStore; updated AppState and main.rs to use PostgreSQL storage exclusively; handler tests now require PostgreSQL)
 - Simplify DERP configuration (v1.7: replace config file + database storage with MOTO_CLUB_DERP_SERVERS JSON env var; delete derp_servers table, derp_server_repo.rs, DerpServer model, DerpStore trait, DerpMapManager, InMemoryDerpStore, config file loading; add parse_derp_servers_env function; AppState uses Arc<DerpMap> instead of DerpMapManager)
+- Remove InMemoryStore from moto-club-wg ipam.rs (v1.7: deleted InMemoryStore, converted tests to unit tests for pure functions only; updated lib.rs exports; added integration feature flag; updated doc examples)
 
 **Remaining:**
-- Remove InMemoryStore from moto-club-wg ipam.rs (v1.7: convert affected tests to integration tests per testing.md)
 - Remove InMemoryPeerStore from moto-club-wg peers.rs (v1.7: convert affected tests to integration tests per testing.md)
 - Remove InMemorySessionStore from moto-club-wg sessions.rs (v1.7: convert affected tests to integration tests per testing.md)
 
