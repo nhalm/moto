@@ -339,3 +339,19 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 (none - project-structure.md v1.4 implementation complete)
+
+---
+
+## testing.md v0.1
+
+**Status:** In Progress
+
+**Implemented:**
+- docker-compose.test.yml: PostgreSQL 16-alpine on port 5433, healthcheck, test credentials (moto_test/moto_test/moto_test)
+
+**Remaining:**
+- Makefile targets: test-db-up, test-db-down, test-db-migrate, test-db-reset, test-integration, test-all, test-ci
+- Update test target to run unit tests only (cargo test --lib)
+- Add `integration` feature flag to workspace Cargo.toml
+- moto-test-utils crate with test_pool() helper and fixtures (future - optional)
+- CI workflow: .github/workflows/test.yml (future)

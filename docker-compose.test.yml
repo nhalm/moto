@@ -1,0 +1,16 @@
+# Test database infrastructure for integration tests
+# See specs/testing.md for details
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: moto_test
+      POSTGRES_PASSWORD: moto_test
+      POSTGRES_DB: moto_test
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts with dev database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moto_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
