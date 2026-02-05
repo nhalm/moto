@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.5 |
-| Status | Ripping |
+| Version | 1.6 |
+| Status | Ready to Rip |
 | Last Updated | 2026-02-04 |
 
 ## Overview
@@ -1195,6 +1195,14 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v1.6 (2026-02-04)
+- **Extract moto-club-ws crate:** Move WebSocket handlers from `moto-club-api/src/wg.rs` to dedicated `moto-club-ws` crate per crate structure diagram (lines 130-134). The wg.rs file is too large (2100+ lines).
+- **Consolidate status enums:** Remove `GarageState` from `moto-club-types/src/garage.rs`. Use `GarageStatus` from `moto-club-db/src/models.rs` everywhere. Having two identical enums creates confusion.
+- **Separate test files:** Per test organization convention (lines 176-178), move tests from large modules to separate files:
+  - `moto-club-api/src/wg.rs` → `moto-club-api/src/wg_test.rs`
+  - `moto-club-k8s/src/pods.rs` → `moto-club-k8s/src/pods_test.rs`
+- **Remove in-memory storage:** Delete `InMemoryPeerStore` and `InMemoryStore` from `moto-club-api`. Use PostgreSQL storage (`PostgresPeerStore`, `PostgresSessionStore`) exclusively. Update `WgPeerRegistry` type alias to use PostgreSQL stores.
 
 ### v1.5 (2026-02-04)
 - **Health check keybox integration:** `/health/ready` must check keybox `/health/ready`

@@ -163,7 +163,7 @@ mod tests {
             data.get("spiffe_id"),
             Some(&"spiffe://moto.local/garage/abc123".to_string())
         );
-        assert_eq!(data.get("expires_at"), Some(&"1_700_003_600".to_string()));
+        assert_eq!(data.get("expires_at"), Some(&"1700003600".to_string()));
     }
 
     #[test]

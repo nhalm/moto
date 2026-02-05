@@ -1091,7 +1091,7 @@ mod tests {
         let json = serde_json::to_string(&resp).unwrap();
 
         assert!(json.contains(r#""token":"eyJ...""#));
-        assert!(json.contains(r#""expires_at":1_700_000_000"#));
+        assert!(json.contains(r#""expires_at":1700000000"#));
     }
 
     #[test]
@@ -1247,7 +1247,7 @@ mod tests {
         let json = serde_json::to_string(&resp).unwrap();
 
         assert!(json.contains(r#""token":"eyJ...""#));
-        assert!(json.contains(r#""expires_at":1_700_003_600"#));
+        assert!(json.contains(r#""expires_at":1700003600"#));
         assert!(json.contains(r#""spiffe_id":"spiffe://moto.local/garage/abc123""#));
     }
 
