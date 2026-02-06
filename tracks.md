@@ -257,7 +257,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## keybox.md v0.5
+## keybox.md v0.6
 
 **Status:** In Progress
 
@@ -284,6 +284,7 @@ HOW TO USE THIS FILE:
 - Wire up moto-keybox-db PostgreSQL backend for secrets and audit logs (v0.4: secret_repo.rs, audit_repo.rs in moto-keybox-db; PgSecretRepository in moto-keybox/pg_repository.rs; PgAppState and pg_router in moto-keybox/pg_api.rs; server uses MOTO_KEYBOX_DATABASE_URL env var to enable PostgreSQL mode)
 - Fix bikes ABAC: enforce service field matching (v0.4: SvidClaims.service field added; bikes must have service claim to access service-scoped secrets; ABAC evaluate_service checks principal.service == resource.service)
 - Rename moto-keybox-server binary from moto-keybox to moto-keybox-server (v0.5: fixes cargo doc collision with moto-keybox library crate)
+- v0.6 integration tests: no ignored tests exist in moto-keybox or moto-keybox-db to convert (all existing tests are unit tests that don't require PostgreSQL)
 
 **Remaining:**
 - Endpoint authorization matrix enforcement (future - spec v0.3: SVID tokens should be denied for admin endpoints)
