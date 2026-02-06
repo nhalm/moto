@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.7 |
+| Version | 1.8 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-05 |
 
@@ -1206,6 +1206,9 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v1.8 (2026-02-05)
+- Convert ignored integration tests to use moto-test-utils per [testing.md](testing.md)
 
 ### v1.7 (2026-02-05)
 - **Remove all in-memory stores:** `InMemoryStore`, `InMemoryPeerStore`, `InMemorySessionStore`, `InMemoryDerpStore` don't work for multi-replica deployments (no shared state). Delete them from `moto-club-wg`. Convert affected tests to integration tests per [testing.md](testing.md).

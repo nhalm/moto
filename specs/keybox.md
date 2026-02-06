@@ -2,11 +2,15 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
-| Status | Ripping |
-| Last Updated | 2026-02-04 |
+| Version | 0.6 |
+| Status | Ready to Rip |
+| Last Updated | 2026-02-05 |
 
 ## Changelog
+
+### v0.6 (2026-02-05)
+- Add integration tests for moto-keybox-db repository functions (secret_repo, audit_repo) per [testing.md](testing.md)
+- Add API handler tests for moto-keybox (similar to wg_test.rs pattern in moto-club-api) per [testing.md](testing.md)
 
 ### v0.5 (2026-02-04)
 - **BREAKING:** Rename `moto-keybox-server` binary from `moto-keybox` to `moto-keybox-server`
