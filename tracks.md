@@ -360,3 +360,19 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 - CI workflow: .github/workflows/test.yml (future)
+
+---
+
+## pre-commit.md v0.2
+
+**Status:** Complete
+
+**Implemented:**
+- .githooks/pre-commit: blocks secrets (.pem, .key, .env files)
+- .githooks/pre-commit: cargo fmt --all --check (when Rust files changed)
+- .githooks/pre-commit: cargo clippy --all-targets -- -D warnings (when Rust files changed, v0.2 changelog)
+- .githooks/pre-commit: nix flake check --no-build (when Nix files changed)
+- make install: sets git core.hooksPath to .githooks
+
+**Remaining:**
+(none - pre-commit.md v0.2 implementation complete)
