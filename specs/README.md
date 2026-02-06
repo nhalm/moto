@@ -39,7 +39,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
 | [moto-cli](moto-cli.md) | Ripping | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
-| [pre-commit](pre-commit.md) | Ripping | Git hooks for fast feedback to agents |
+| [pre-commit](pre-commit.md) | Ready to Rip | Git hooks for fast feedback to agents |
 | [makefile](makefile.md) | Ripping | Makefile targets and conventions |
 | [testing](testing.md) | Ready to Rip | Test infrastructure, Docker Compose, integration tests |
 
@@ -48,7 +48,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | Spec | Status | Description |
 |------|--------|-------------|
 | [moto-club](moto-club.md) | Ready to Rip | Central orchestration, garage management |
-| [keybox](keybox.md) | Ripping | Secrets manager, SPIFFE-based identity |
+| [keybox](keybox.md) | Ready to Rip | Secrets manager, SPIFFE-based identity |
 | [dev-container](dev-container.md) | Ripping | Nix dockerTools container, tooling, environment |
 | [container-system](container-system.md) | Ripping | Build pipeline, registry |
 | [local-cluster](local-cluster.md) | Ripping | Local k3s cluster, moto cluster CLI |
