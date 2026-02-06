@@ -22,6 +22,7 @@ thiserror.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+moto-test-utils.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt", "macros"] }
 

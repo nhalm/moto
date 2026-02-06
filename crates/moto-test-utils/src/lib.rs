@@ -27,19 +27,18 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use rand::RngCore;
 use sqlx::PgPool;
-use std::sync::OnceLock;
+use sqlx::postgres::PgPoolOptions;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Test database URL.
 const TEST_DATABASE_URL: &str = "postgres://moto_test:moto_test@localhost:5433/moto_test";
 
-/// Global test pool instance.
-static TEST_POOL: OnceLock<PgPool> = OnceLock::new();
-
 /// Returns a connection to the test database (port 5433).
 ///
-/// This function returns a shared pool instance that is lazily initialized
-/// on first call. Subsequent calls return the same pool.
+/// Creates a fresh pool for each call. While this means each test
+/// has its own pool, `PostgreSQL` handles connection pooling efficiently
+/// and this avoids cross-runtime issues with `#[tokio::test]`.
 ///
 /// # Panics
 ///
@@ -54,29 +53,24 @@ static TEST_POOL: OnceLock<PgPool> = OnceLock::new();
 /// let result = sqlx::query("SELECT 1").fetch_one(&pool).await;
 /// ```
 pub async fn test_pool() -> PgPool {
-    if let Some(pool) = TEST_POOL.get() {
-        return pool.clone();
-    }
-
     let url = std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| TEST_DATABASE_URL.to_string());
 
-    let pool = PgPool::connect(&url).await.unwrap_or_else(|e| {
-        panic!(
-            "\n\nFailed to connect to test database.\n\n\
-            Connection URL: {url}\n\
-            Error: {e}\n\n\
-            Make sure the test database is running:\n\
-            \n\
-                make test-db-up\n\
-                make test-db-migrate\n\n"
-        );
-    });
-
-    // Try to set the global pool. If another thread beat us, use their pool.
-    match TEST_POOL.set(pool.clone()) {
-        Ok(()) => pool,
-        Err(_) => TEST_POOL.get().expect("pool was just set").clone(),
-    }
+    PgPoolOptions::new()
+        .max_connections(5)
+        .acquire_timeout(Duration::from_secs(10))
+        .connect(&url)
+        .await
+        .unwrap_or_else(|e| {
+            panic!(
+                "\n\nFailed to connect to test database.\n\n\
+                Connection URL: {url}\n\
+                Error: {e}\n\n\
+                Make sure the test database is running:\n\
+                \n\
+                    make test-db-up\n\
+                    make test-db-migrate\n\n"
+            );
+        })
 }
 
 /// Generates a unique garage name for test isolation.

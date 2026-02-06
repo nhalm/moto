@@ -347,7 +347,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## testing.md v0.2
+## testing.md v0.4
 
 **Status:** In Progress
 
@@ -357,6 +357,7 @@ HOW TO USE THIS FILE:
 - Update test target to run unit tests only (cargo test --lib)
 - Add `integration` feature flag to database crates (moto-club-db, moto-club-api, moto-keybox-db, moto-keybox) per spec lines 94-111
 - moto-test-utils crate: test_pool(), unique_garage_name(), unique_owner(), fake_wg_pubkey() (per spec v0.2 lines 201-216)
+- moto-club-db integration tests: garage_repo_test.rs (v0.4: db crates get integration tests per test architecture)
 
 **Remaining:**
 - CI workflow: .github/workflows/test.yml (future)

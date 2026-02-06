@@ -352,3 +352,7 @@ mod tests {
         assert_eq!(input.image, "ghcr.io/nhalm/moto-dev:latest");
     }
 }
+
+#[cfg(test)]
+#[path = "garage_repo_test.rs"]
+mod garage_repo_test;
