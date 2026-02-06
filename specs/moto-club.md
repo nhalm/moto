@@ -1207,8 +1207,9 @@ Identity system will replace config-based owner identity:
 
 ## Changelog
 
-### v1.8 (2026-02-05)
-- Convert ignored integration tests to use moto-test-utils per [testing.md](testing.md)
+### v1.8 (2026-02-06)
+- Add integration tests to moto-club-db for repository functions (garage_repo, wg_device_repo, wg_session_repo, wg_garage_repo) per [testing.md](testing.md)
+- Handler tests in moto-club-api should mock the database layer, not require real PostgreSQL
 
 ### v1.7 (2026-02-05)
 - **Remove all in-memory stores:** `InMemoryStore`, `InMemoryPeerStore`, `InMemorySessionStore`, `InMemoryDerpStore` don't work for multi-replica deployments (no shared state). Delete them from `moto-club-wg`. Convert affected tests to integration tests per [testing.md](testing.md).
