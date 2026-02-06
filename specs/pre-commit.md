@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.1 |
-| Status | Ripping |
-| Last Updated | 2026-01-24 |
+| Version | 0.2 |
+| Status | Ready to Rip |
+| Last Updated | 2026-02-06 |
 
 ## Overview
 
@@ -25,10 +25,14 @@ if git diff --cached --name-only | grep -qE '\.(pem|key)$|\.env'; then
     exit 1
 fi
 
-# Rust formatting (if Rust files changed)
+# Rust formatting and linting (if Rust files changed)
 if git diff --cached --name-only | grep -qE '\.(rs)$|Cargo\.'; then
     cargo fmt --all --check || {
         echo "FIX: cargo fmt --all"
+        exit 1
+    }
+    cargo clippy --all-targets -- -D warnings || {
+        echo "FIX: cargo clippy --fix --all-targets"
         exit 1
     }
 fi
@@ -51,7 +55,6 @@ fi
 
 ### What's NOT in the Hook
 
-- `cargo clippy` - too slow, run in CI
 - `cargo test` - too slow, run in CI
 - `nix build` - too slow, run in CI
 
@@ -62,3 +65,11 @@ git commit --no-verify -m "message"
 ```
 
 Agents: avoid `--no-verify`. If the hook fails, fix the issue instead.
+
+## Changelog
+
+### v0.2 (2026-02-06)
+- Add `cargo clippy` to pre-commit hook (~1s overhead)
+
+### v0.1 (2026-01-24)
+- Initial spec
