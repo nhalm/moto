@@ -224,3 +224,7 @@ mod tests {
         assert_eq!(input.device_name, None);
     }
 }
+
+#[cfg(test)]
+#[path = "wg_device_repo_test.rs"]
+mod wg_device_repo_test;

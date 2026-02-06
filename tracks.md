@@ -358,6 +358,7 @@ HOW TO USE THIS FILE:
 - Add `integration` feature flag to database crates (moto-club-db, moto-club-api, moto-keybox-db, moto-keybox) per spec lines 94-111
 - moto-test-utils crate: test_pool(), unique_garage_name(), unique_owner(), fake_wg_pubkey() (per spec v0.2 lines 201-216)
 - moto-club-db integration tests: garage_repo_test.rs (v0.4: db crates get integration tests per test architecture)
+- moto-club-db integration tests: wg_device_repo_test.rs (v0.4: tests for WireGuard device repository CRUD operations)
 
 **Remaining:**
 - CI workflow: .github/workflows/test.yml (future)
