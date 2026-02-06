@@ -21,3 +21,10 @@
 - **Tests belong in separate files.** For any module `foo.rs`, tests should be in `foo_test.rs` (same directory) or `tests/foo.rs` (integration tests).
 - **Do not use `#[cfg(test)] mod tests {}` in source files.** This bloats source files and makes navigation harder.
 - **Exception:** Small modules (<200 lines) may include inline tests if the tests are brief.
+
+### Mocking and Traits
+
+- **Use traits for external dependencies.** Database access, HTTP clients, K8s clients - anything that crosses a boundary.
+- **Mock at boundaries, not internals.** Mock the trait, not the implementation details.
+- **Handlers take trait objects.** This allows injecting mocks for testing without a database.
+- **Integration tests use real implementations.** Only `*-db` crates hit real PostgreSQL.
