@@ -154,7 +154,7 @@ mod tests {
         let response: IssueGarageSvidResponse = serde_json::from_str(json).unwrap();
 
         assert_eq!(response.token, "eyJ...");
-        assert_eq!(response.expires_at, 1700003600);
+        assert_eq!(response.expires_at, 1_700_003_600);
         assert_eq!(response.spiffe_id, "spiffe://moto.local/garage/abc123");
     }
 

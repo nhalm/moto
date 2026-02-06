@@ -334,7 +334,7 @@ impl GaragePodOps for GarageK8s {
 
 /// Builds a dev container pod spec.
 #[allow(clippy::too_many_lines)]
-pub(crate) fn build_dev_container_pod(
+pub fn build_dev_container_pod(
     namespace: &str,
     image: &str,
     branch: &str,

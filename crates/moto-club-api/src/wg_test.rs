@@ -1,21 +1,12 @@
-//! Tests for WireGuard coordination REST endpoints.
+//! Tests for `WireGuard` coordination REST endpoints.
 //!
 //! Per AGENTS.md test organization convention, tests for `wg.rs` are in this separate file.
 //!
 //! These tests use in-memory stores from `moto-club-wg` for unit testing.
-//! Integration tests that require full PostgreSQL storage belong in `tests/`.
+//! Integration tests that require full `PostgreSQL` storage belong in `tests/`.
 
 use super::*;
-use crate::{AppState, PostgresIpamStore, PostgresPeerStore, PostgresSessionStore};
-use axum::{
-    body::Body,
-    http::{Request, StatusCode, header},
-};
-use moto_club_wg::{PeerBroadcaster, PeerRegistry, SessionManager, ipam::Ipam};
 use moto_wgtunnel_types::WgPrivateKey;
-use moto_wgtunnel_types::derp::{DerpNode, DerpRegion};
-use std::sync::Arc;
-use tower::ServiceExt;
 
 // Helper to generate a valid public key
 fn test_public_key() -> WgPublicKey {

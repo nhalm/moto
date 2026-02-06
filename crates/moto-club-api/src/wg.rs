@@ -584,16 +584,7 @@ async fn create_session(
         })?;
 
     // Get the DERP map
-    let derp_map = state.get_derp_map().map_err(|e| {
-        tracing::error!(error = %e, "Failed to get DERP map");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError::new(
-                error_codes::INTERNAL_ERROR,
-                format!("Failed to get DERP map: {e}"),
-            )),
-        )
-    })?;
+    let derp_map = state.get_derp_map();
 
     // Create the session
     let wg_request = WgCreateSessionRequest {
@@ -748,16 +739,7 @@ async fn register_garage(
         })?;
 
     // Get the DERP map for relay fallback
-    let derp_map = state.get_derp_map().map_err(|e| {
-        tracing::error!(error = %e, garage_id = %req.garage_id, "Failed to get DERP map");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError::new(
-                error_codes::INTERNAL_ERROR,
-                format!("Failed to get DERP map: {e}"),
-            )),
-        )
-    })?;
+    let derp_map = state.get_derp_map();
 
     tracing::info!(
         garage_id = %garage.garage_id,
@@ -820,16 +802,7 @@ async fn get_garage_wg_registration(
         })?;
 
     // Get the DERP map
-    let derp_map = state.get_derp_map().map_err(|e| {
-        tracing::error!(error = %e, garage_id = %garage_id, "Failed to get DERP map");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError::new(
-                error_codes::INTERNAL_ERROR,
-                format!("Failed to get DERP map: {e}"),
-            )),
-        )
-    })?;
+    let derp_map = state.get_derp_map();
 
     tracing::debug!(
         garage_id = %garage.garage_id,
@@ -1005,16 +978,7 @@ async fn get_derp_map(State(state): State<AppState>, headers: HeaderMap) -> impl
     let _has_auth = extract_bearer_token(&headers)?;
 
     // Get the DERP map
-    let derp_map = state.get_derp_map().map_err(|e| {
-        tracing::error!(error = %e, "Failed to get DERP map");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError::new(
-                error_codes::INTERNAL_ERROR,
-                format!("Failed to get DERP map: {e}"),
-            )),
-        )
-    })?;
+    let derp_map = state.get_derp_map();
 
     // For v1, version is static since DERP config comes from env var
     // and is loaded at startup. Future versions will track changes.

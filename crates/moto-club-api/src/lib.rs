@@ -140,9 +140,9 @@ impl AppState {
     /// Get the DERP map.
     ///
     /// DERP config is static per deployment (loaded from env var at startup).
-    /// This method always succeeds.
-    pub fn get_derp_map(&self) -> Result<DerpMap, String> {
-        Ok((*self.derp_map).clone())
+    #[must_use]
+    pub fn get_derp_map(&self) -> DerpMap {
+        (*self.derp_map).clone()
     }
 }
 
