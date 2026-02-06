@@ -9,8 +9,7 @@
 ## Changelog
 
 ### v0.6 (2026-02-06)
-- Add integration tests to moto-keybox-db for repository functions (secret_repo, audit_repo) per [testing.md](testing.md)
-- API handler tests in moto-keybox should mock the database layer, not require real PostgreSQL
+- Add tests per [testing.md](testing.md) architecture
 
 ### v0.5 (2026-02-04)
 - **BREAKING:** Rename `moto-keybox-server` binary from `moto-keybox` to `moto-keybox-server`
