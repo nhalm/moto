@@ -353,14 +353,24 @@ HOW TO USE THIS FILE:
 
 **Implemented:**
 - docker-compose.test.yml: PostgreSQL 16-alpine on port 5433, healthcheck, test credentials (moto_test/moto_test/moto_test)
-- Makefile targets: test-db-up, test-db-down, test-db-migrate, test-db-reset, test-integration, test-all, test-ci (per spec lines 117-158)
+- Makefile target: test-ci (assumes database already running, runs unit + integration tests)
 - Update test target to run unit tests only (cargo test --lib)
-- Add `integration` feature flag to database crates (moto-club-db, moto-club-api, moto-keybox-db, moto-keybox) per spec lines 94-111
-- moto-test-utils crate: test_pool(), unique_garage_name(), unique_owner(), fake_wg_pubkey() (per spec v0.2 lines 201-216)
-- moto-club-db integration tests: garage_repo_test.rs (v0.4: db crates get integration tests per test architecture)
-- moto-club-db integration tests: wg_device_repo_test.rs (v0.4: tests for WireGuard device repository CRUD operations)
+- Add `integration` feature flag to database crates (moto-club-db, moto-club-api, moto-keybox-db, moto-keybox)
+- moto-test-utils crate: test_pool(), unique_garage_name(), unique_owner(), fake_wg_pubkey()
+- moto-club-db integration tests: garage_repo_test.rs (15 tests)
+- moto-club-db integration tests: wg_device_repo_test.rs (13 tests)
 
 **Remaining:**
+- Makefile target: test-db-up (start test database via docker-compose, wait for healthcheck)
+- Makefile target: test-db-down (stop test database, remove volumes)
+- Makefile target: test-db-migrate (run migrations for moto-club-db AND moto-keybox-db)
+- Makefile target: test-integration (fresh database cycle + run integration tests + teardown)
+- Makefile target: test-all (unit tests + integration tests)
+- Fix moto-club-api integration test compilation (19 tests, 124 errors — missing ~20 import statements)
+- moto-club-db integration tests: wg_session_repo_test.rs (11 public functions untested)
+- moto-club-db integration tests: wg_garage_repo_test.rs (7 public functions untested)
+- moto-keybox-db integration tests: secret_repo_test.rs (13 public functions untested)
+- moto-keybox-db integration tests: audit_repo_test.rs (3 public functions untested)
 - CI workflow: .github/workflows/test.yml (future)
 
 ---
