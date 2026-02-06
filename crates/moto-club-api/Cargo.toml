@@ -70,4 +70,5 @@ moto-k8s = { workspace = true }
 moto-wgtunnel-types = { workspace = true }
 
 [dev-dependencies]
+moto-test-utils = { workspace = true }
 tokio-test = { workspace = true }

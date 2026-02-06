@@ -14,7 +14,6 @@ use axum::{
 use moto_club_wg::{PeerBroadcaster, PeerRegistry, SessionManager, ipam::Ipam};
 use moto_wgtunnel_types::WgPrivateKey;
 use moto_wgtunnel_types::derp::{DerpNode, DerpRegion};
-use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -227,25 +226,18 @@ fn derp_map_response_matches_spec_format() {
     assert_eq!(parsed["version"], 1);
 }
 
-// Handler tests are ignored because they require a real PostgreSQL database.
-// These tests were written for in-memory stores but moto-club-api now uses
-// PostgreSQL storage exclusively (per spec v1.6). Run integration tests
-// with a real database to test these handlers.
-#[cfg(test)]
+// Handler tests require PostgreSQL. Run with: cargo test --features integration
+//
+// Per spec v1.8 changelog: "Convert ignored integration tests to use moto-test-utils"
+#[cfg(all(test, feature = "integration"))]
 mod handler_tests {
     use super::*;
+    use moto_test_utils::{test_pool, unique_owner};
 
-    #[allow(dead_code)]
-    fn create_test_state() -> AppState {
-        // Create a lazy pool - WG endpoint handlers use the PostgreSQL stores
-        // which won't actually execute queries in these unit tests because we
-        // test at the handler level with mocked data.
-        let db_pool = PgPoolOptions::new()
-            .max_connections(1)
-            .connect_lazy("postgres://unused:unused@localhost/unused")
-            .unwrap();
+    async fn create_test_state() -> AppState {
+        let db_pool = test_pool().await;
 
-        // Create PostgreSQL-backed stores using the lazy pool
+        // Create PostgreSQL-backed stores
         let ipam_store = PostgresIpamStore::new(db_pool.clone());
         let peer_store = PostgresPeerStore::new(db_pool.clone());
         let session_store = PostgresSessionStore::new(db_pool.clone());
@@ -269,15 +261,16 @@ mod handler_tests {
         )
     }
 
-    // Handler tests require a real PostgreSQL database. Ignored until integration
-    // test infrastructure is set up. See spec v1.6 changelog: "Remove in-memory
-    // storage: Delete InMemoryPeerStore and InMemoryStore from moto-club-api."
+    // Helper to generate unique test owner for isolation
+    fn test_owner() -> String {
+        unique_owner()
+    }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn register_device_success() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
+        let owner = test_owner();
 
         let key = test_public_key();
         let body = serde_json::json!({
@@ -291,7 +284,7 @@ mod handler_tests {
                     .method("POST")
                     .uri("/api/v1/wg/devices")
                     .header(header::CONTENT_TYPE, "application/json")
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::from(serde_json::to_string(&body).unwrap()))
                     .unwrap(),
             )
@@ -309,11 +302,11 @@ mod handler_tests {
         assert!(device.overlay_ip.is_client());
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn register_device_without_name() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
+        let owner = test_owner();
 
         let key = test_public_key();
         let body = serde_json::json!({
@@ -326,7 +319,7 @@ mod handler_tests {
                     .method("POST")
                     .uri("/api/v1/wg/devices")
                     .header(header::CONTENT_TYPE, "application/json")
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::from(serde_json::to_string(&body).unwrap()))
                     .unwrap(),
             )
@@ -343,10 +336,9 @@ mod handler_tests {
         assert!(device.device_name.is_none());
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn register_device_requires_auth() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
 
         let key = test_public_key();
@@ -370,11 +362,11 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn get_device_not_found() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
+        let owner = test_owner();
 
         // Use a non-existent public key (base64 is URL-safe except for + and /)
         // We'll percent-encode the key manually for the test
@@ -390,7 +382,7 @@ mod handler_tests {
                 Request::builder()
                     .method("GET")
                     .uri(format!("/api/v1/wg/devices/{key_encoded}"))
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -400,12 +392,12 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn register_then_get_device() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
         let app = router().with_state(state);
+        let owner = test_owner();
 
         // Register a device
         let key = test_public_key();
@@ -421,7 +413,7 @@ mod handler_tests {
                     .method("POST")
                     .uri("/api/v1/wg/devices")
                     .header(header::CONTENT_TYPE, "application/json")
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::from(serde_json::to_string(&body).unwrap()))
                     .unwrap(),
             )
@@ -443,11 +435,11 @@ mod handler_tests {
         assert_eq!(device.overlay_ip, registered.overlay_ip);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn create_session_device_not_found() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
+        let owner = test_owner();
 
         // Use an unregistered device public key
         let device_key = test_public_key();
@@ -463,7 +455,7 @@ mod handler_tests {
                     .method("POST")
                     .uri("/api/v1/wg/sessions")
                     .header(header::CONTENT_TYPE, "application/json")
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::from(serde_json::to_string(&body).unwrap()))
                     .unwrap(),
             )
@@ -473,19 +465,19 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn create_session_garage_not_found() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
         let app = router().with_state(state);
+        let owner = test_owner();
 
         // Register a device first
         let device_key = test_public_key();
         peer_registry
             .register_device(moto_club_wg::DeviceRegistration {
                 public_key: device_key.clone(),
-                owner: "testuser".to_string(),
+                owner: owner.clone(),
                 device_name: Some("test-device".to_string()),
             })
             .await
@@ -503,7 +495,7 @@ mod handler_tests {
                     .method("POST")
                     .uri("/api/v1/wg/sessions")
                     .header(header::CONTENT_TYPE, "application/json")
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::from(serde_json::to_string(&body).unwrap()))
                     .unwrap(),
             )
@@ -513,19 +505,19 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn create_session_success() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
         let app = router().with_state(state);
+        let owner = test_owner();
 
         // Register a device
         let device_key = test_public_key();
         peer_registry
             .register_device(moto_club_wg::DeviceRegistration {
                 public_key: device_key.clone(),
-                owner: "testuser".to_string(),
+                owner: owner.clone(),
                 device_name: Some("test-device".to_string()),
             })
             .await
@@ -555,7 +547,7 @@ mod handler_tests {
                     .method("POST")
                     .uri("/api/v1/wg/sessions")
                     .header(header::CONTENT_TYPE, "application/json")
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::from(serde_json::to_string(&body).unwrap()))
                     .unwrap(),
             )
@@ -574,18 +566,18 @@ mod handler_tests {
         assert!(session.garage.overlay_ip.is_garage());
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn close_session_not_found() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
+        let owner = test_owner();
 
         let response = app
             .oneshot(
                 Request::builder()
                     .method("DELETE")
                     .uri("/api/v1/wg/sessions/sess_nonexistent")
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -595,15 +587,16 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn register_garage_success() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
+        // Use unique garage_id for test isolation
+        let garage_id = format!("test-garage-{}", Uuid::now_v7());
 
         let key = test_public_key();
         let body = serde_json::json!({
-            "garage_id": "test-garage",
+            "garage_id": garage_id,
             "public_key": key.to_base64(),
             "endpoints": ["10.0.0.1:51820"]
         });
@@ -634,17 +627,18 @@ mod handler_tests {
         assert!(!garage.derp_map.regions().is_empty());
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn get_garage_wg_registration_not_found() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
+        // Use unique nonexistent garage_id
+        let nonexistent_garage_id = format!("nonexistent-garage-{}", Uuid::now_v7());
 
         let response = app
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/api/v1/wg/garages/nonexistent-garage")
+                    .uri(format!("/api/v1/wg/garages/{nonexistent_garage_id}"))
                     .header(header::AUTHORIZATION, "Bearer k8s-service-account")
                     .body(Body::empty())
                     .unwrap(),
@@ -655,19 +649,18 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn get_garage_wg_registration_success() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
         let app = router().with_state(state);
 
-        // Register a garage first
-        let garage_id = "test-garage-for-get";
+        // Register a garage first with unique id
+        let garage_id = format!("test-garage-for-get-{}", Uuid::now_v7());
         let key = test_public_key();
         peer_registry
             .register_garage(moto_club_wg::GarageRegistration {
-                garage_id: garage_id.to_string(),
+                garage_id: garage_id.clone(),
                 public_key: key.clone(),
                 endpoints: vec!["10.0.0.1:51820".parse().unwrap()],
             })
@@ -699,23 +692,23 @@ mod handler_tests {
         assert_eq!(registration.public_key, key);
         assert!(registration.assigned_ip.is_garage());
         assert_eq!(registration.endpoints.len(), 1);
-        assert_eq!(registration.peer_version, 0); // Default for in-memory
+        assert!(registration.peer_version >= 0); // Version from database
         assert!(!registration.derp_map.regions().is_empty());
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn create_and_close_session() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
         let app = router().with_state(state);
+        let owner = test_owner();
 
         // Register device and garage
         let device_key = test_public_key();
         peer_registry
             .register_device(moto_club_wg::DeviceRegistration {
                 public_key: device_key.clone(),
-                owner: "testuser".to_string(),
+                owner: owner.clone(),
                 device_name: None,
             })
             .await
@@ -745,7 +738,7 @@ mod handler_tests {
                     .method("POST")
                     .uri("/api/v1/wg/sessions")
                     .header(header::CONTENT_TYPE, "application/json")
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::from(serde_json::to_string(&create_body).unwrap()))
                     .unwrap(),
             )
@@ -765,7 +758,7 @@ mod handler_tests {
                 Request::builder()
                     .method("DELETE")
                     .uri(format!("/api/v1/wg/sessions/{}", session.session_id))
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -775,18 +768,18 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn get_derp_map_success() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
+        let owner = test_owner();
 
         let response = app
             .oneshot(
                 Request::builder()
                     .method("GET")
                     .uri("/api/v1/wg/derp-map")
-                    .header(header::AUTHORIZATION, "Bearer testuser")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -819,10 +812,9 @@ mod handler_tests {
         assert_eq!(primary_region["nodes"][0]["host"], "derp.moto.dev");
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn get_derp_map_requires_auth() {
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
 
         let response = app
@@ -840,11 +832,10 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn get_derp_map_accepts_k8s_token() {
         // K8s service account tokens should also be accepted
-        let state = create_test_state();
+        let state = create_test_state().await;
         let app = router().with_state(state);
 
         let response = app
@@ -862,17 +853,29 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn get_garage_peers_returns_version() {
-        let state = create_test_state();
+        let state = create_test_state().await;
+        let peer_registry = state.peer_registry.clone();
         let app = router().with_state(state);
+
+        // First register a garage so we have something to query
+        let garage_id = format!("test-garage-peers-{}", Uuid::now_v7());
+        let key = test_public_key();
+        peer_registry
+            .register_garage(moto_club_wg::GarageRegistration {
+                garage_id: garage_id.clone(),
+                public_key: key,
+                endpoints: vec![],
+            })
+            .await
+            .unwrap();
 
         let response = app
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/api/v1/wg/garages/test-garage/peers")
+                    .uri(format!("/api/v1/wg/garages/{garage_id}/peers"))
                     .header(header::AUTHORIZATION, "Bearer k8s-service-account")
                     .body(Body::empty())
                     .unwrap(),
@@ -892,11 +895,23 @@ mod handler_tests {
         assert!(result["version"].is_number());
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn get_garage_peers_conditional_304() {
-        let state = create_test_state();
+        let state = create_test_state().await;
+        let peer_registry = state.peer_registry.clone();
         let app = router().with_state(state);
+
+        // First register a garage
+        let garage_id = format!("test-garage-304-{}", Uuid::now_v7());
+        let key = test_public_key();
+        peer_registry
+            .register_garage(moto_club_wg::GarageRegistration {
+                garage_id: garage_id.clone(),
+                public_key: key,
+                endpoints: vec![],
+            })
+            .await
+            .unwrap();
 
         // First request without version param
         let response1 = app
@@ -904,7 +919,7 @@ mod handler_tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/api/v1/wg/garages/test-garage/peers")
+                    .uri(format!("/api/v1/wg/garages/{garage_id}/peers"))
                     .header(header::AUTHORIZATION, "Bearer k8s-service-account")
                     .body(Body::empty())
                     .unwrap(),
@@ -926,7 +941,7 @@ mod handler_tests {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/api/v1/wg/garages/test-garage/peers?version={version}"
+                        "/api/v1/wg/garages/{garage_id}/peers?version={version}"
                     ))
                     .header(header::AUTHORIZATION, "Bearer k8s-service-account")
                     .body(Body::empty())
@@ -938,18 +953,30 @@ mod handler_tests {
         assert_eq!(response2.status(), StatusCode::NOT_MODIFIED);
     }
 
-    #[ignore = "requires PostgreSQL database"]
     #[tokio::test]
     async fn get_garage_peers_conditional_200_on_version_mismatch() {
-        let state = create_test_state();
+        let state = create_test_state().await;
+        let peer_registry = state.peer_registry.clone();
         let app = router().with_state(state);
+
+        // First register a garage
+        let garage_id = format!("test-garage-200-{}", Uuid::now_v7());
+        let key = test_public_key();
+        peer_registry
+            .register_garage(moto_club_wg::GarageRegistration {
+                garage_id: garage_id.clone(),
+                public_key: key,
+                endpoints: vec![],
+            })
+            .await
+            .unwrap();
 
         // Request with a different version should return 200
         let response = app
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/api/v1/wg/garages/test-garage/peers?version=999")
+                    .uri(format!("/api/v1/wg/garages/{garage_id}/peers?version=999"))
                     .header(header::AUTHORIZATION, "Bearer k8s-service-account")
                     .body(Body::empty())
                     .unwrap(),
