@@ -4,10 +4,12 @@
 //! Local mode (direct K8s access) is deprecated per project-structure.md v1.2.
 
 use clap::{Args, Subcommand};
+use futures_util::StreamExt;
 use moto_cli_wgtunnel::{
     ClientError, ConsoleProgress, CreateGarageRequest, EnterConfig, EnterError, MotoClubClient,
     MotoClubConfig, TunnelManager, enter_garage,
 };
+use moto_k8s::{K8sClient, PodLogOptions, PodOps};
 use serde::Serialize;
 use std::io::{self, Write};
 
@@ -212,6 +214,7 @@ fn client_error_to_cli_error(e: ClientError) -> CliError {
 
 /// Run the garage command
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::future_not_send)] // StdoutLock in log streaming loop is not Send
 pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
         GarageAction::List => {
@@ -573,25 +576,78 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
         GarageAction::Logs {
             name,
             follow,
-            tail: _tail,
-            since: _since,
+            tail,
+            since,
         } => {
-            // Logs endpoint not yet implemented in HTTP client.
-            // Per spec, WebSocket streaming will handle this in a future version.
-            // For now, show an informative error.
-            if follow {
-                return Err(CliError::general(
-                    "Log streaming via --follow is not yet supported.\n\n\
-                     Use kubectl logs to view garage logs directly:\n\
-                     kubectl logs -n moto-garage-<id> garage -f",
-                ));
-            }
+            let client = create_client(flags, None)?;
 
-            return Err(CliError::general(format!(
-                "Log viewing is not yet supported via moto-club API.\n\n\
-                 Use kubectl logs to view garage '{name}' logs:\n\
-                 kubectl logs -n moto-garage-<id> garage"
-            )));
+            // Get garage details to find the namespace
+            let garage = client.get_garage(&name).await.map_err(|e| match e {
+                ClientError::GarageNotFound(_) => CliError::not_found(format!(
+                    "Garage '{name}' not found.\n\nTry: moto garage list"
+                )),
+                _ => client_error_to_cli_error(e),
+            })?;
+
+            // Derive namespace: moto-garage-{first 8 hex chars of UUID}
+            let namespace = format!("moto-garage-{}", &garage.id.to_string()[..8]);
+
+            // Parse since duration if provided
+            let since_seconds = since.as_deref().map(parse_duration).transpose()?;
+
+            let k8s_client = K8sClient::new().await?;
+
+            let log_options = PodLogOptions {
+                tail_lines: Some(tail),
+                since_seconds,
+                follow,
+            };
+
+            if follow {
+                // Streaming mode - not compatible with JSON output
+                if flags.json {
+                    return Err(CliError::invalid_input(
+                        "JSON output is not supported with --follow",
+                    ));
+                }
+
+                let mut stream = k8s_client
+                    .stream_pod_logs(&namespace, None, &log_options)
+                    .await
+                    .map_err(|_| {
+                        CliError::not_found(format!(
+                            "Garage '{name}' pod not found.\n\nThe garage may still be starting up.\nTry: moto garage list"
+                        ))
+                    })?;
+
+                let mut stdout = std::io::stdout().lock();
+                while let Some(result) = stream.next().await {
+                    match result {
+                        Ok(line) => {
+                            stdout.write_all(line.as_bytes())?;
+                            stdout.flush()?;
+                        }
+                        Err(e) => {
+                            return Err(CliError::general(format!("log stream error: {e}")));
+                        }
+                    }
+                }
+            } else {
+                let logs = k8s_client
+                    .get_pod_logs(&namespace, None, &log_options)
+                    .await?;
+
+                if logs.is_empty() {
+                    if !flags.quiet {
+                        eprintln!("No logs found for garage '{name}'.");
+                    }
+                } else {
+                    print!("{logs}");
+                    if !logs.ends_with('\n') {
+                        println!();
+                    }
+                }
+            }
         }
 
         GarageAction::Extend { name, ttl } => {

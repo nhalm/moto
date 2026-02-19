@@ -143,9 +143,10 @@ HOW TO USE THIS FILE:
 - --no-attach flag on garage open (tracked in garage-lifecycle.md v0.4)
 - Fix: --owner flag passed to API (v0.4: create_client accepts owner_override param; garage open passes --owner value to override MOTO_USER env var for Bearer token auth)
 - Fix: --context filtering for garage list (v0.4: global --context flag validated against kubeconfig contexts; --context all shows CONTEXT column with current context name; --context <name> validates context exists; JSON output includes context field when --context all; resolve_current_context helper reads kubeconfig via K8sClient; format_ttl_remaining helper reduces duplication)
+- Fix: Implement garage logs command (v0.4: get garage details via MotoClubClient to resolve UUID, derive namespace moto-garage-{short_id}, use K8sClient PodOps to fetch/stream pod logs; supports --follow/-f streaming, --tail/-n, --since; follows same pattern as bike logs)
 
 **Remaining:**
-- Fix: Implement garage logs command (currently returns error directing to kubectl)
+(none - moto-cli.md v0.4 implementation complete)
 
 ---
 
