@@ -378,9 +378,9 @@ HOW TO USE THIS FILE:
 - moto-club-db integration tests: wg_garage_repo_test.rs (18 tests covering all 7 public functions: get_by_garage_id, exists, register, update_endpoints, increment_peer_version, get_peer_version, delete)
 
 - moto-keybox-db integration tests: secret_repo_test.rs (28 tests covering all 13 public functions: create_secret, get_secret, get_secret_by_id, list_secrets, list_service_secrets, list_instance_secrets, update_secret_version, delete_secret, create_encrypted_dek, get_encrypted_dek, create_secret_version, get_current_secret_version, get_secret_with_value)
+- moto-keybox-db integration tests: audit_repo_test.rs (12 tests covering all 3 public functions: insert_audit_entry, list_audit_entries, count_audit_entries)
 
 **Remaining:**
-- moto-keybox-db integration tests: audit_repo_test.rs (3 public functions untested)
 - CI workflow: .github/workflows/test.yml (future)
 
 ---

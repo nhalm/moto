@@ -108,3 +108,7 @@ pub async fn count_audit_entries(pool: &DbPool, query: &AuditLogQuery) -> DbResu
 
     Ok(row.0)
 }
+
+#[cfg(test)]
+#[path = "audit_repo_test.rs"]
+mod audit_repo_test;
