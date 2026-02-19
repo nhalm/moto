@@ -209,10 +209,10 @@ HOW TO USE THIS FILE:
 - REGISTRY env var support (default: localhost:5000)
 - SHA tagging from git
 - .PHONY declarations for all targets
+- Testing targets: test-db-up, test-db-down, test-db-migrate, test-integration, test-all
 
 **Remaining:**
 - Service container targets: build-club, push-club, build-keybox, push-keybox (blocked: container-system.md moto-keybox-image)
-- Testing targets: test-db-down, test-db-migrate, test-integration, test-all (test-db-up implemented)
 - Local dev targets: dev-up, dev-down, dev-clean, dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image
 - Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system
 - docker-compose.yml for dev databases (port 5432)
@@ -371,10 +371,10 @@ HOW TO USE THIS FILE:
 - Makefile target: test-db-up (docker compose -f docker-compose.test.yml up -d --wait, port 5433)
 - Makefile target: test-db-down (docker compose -f docker-compose.test.yml down -v)
 - Makefile target: test-db-migrate (cargo sqlx migrate run with --ignore-missing for moto-club-db AND moto-keybox-db)
+- Makefile target: test-integration (fresh database cycle: teardown, start, migrate, run integration tests, teardown; preserves test exit status through cleanup)
+- Makefile target: test-all (unit tests via `test` target, then full `test-integration` cycle)
 
 **Remaining:**
-- Makefile target: test-integration (fresh database cycle + run integration tests + teardown)
-- Makefile target: test-all (unit tests + integration tests)
 - Fix moto-club-api integration test compilation (19 tests, 124 errors — missing ~20 import statements)
 - moto-club-db integration tests: wg_session_repo_test.rs (11 public functions untested)
 - moto-club-db integration tests: wg_garage_repo_test.rs (7 public functions untested)

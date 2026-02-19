@@ -189,3 +189,14 @@ test-db-migrate:
 	@echo "Running moto-keybox-db migrations..."
 	cargo sqlx migrate run --source crates/moto-keybox-db/migrations --database-url $(TEST_DATABASE_URL) --ignore-missing
 	@echo "All migrations complete."
+
+# Fresh database cycle: teardown, start, migrate, run integration tests, teardown
+test-integration: test-db-down test-db-up test-db-migrate
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration; \
+	status=$$?; \
+	$(MAKE) test-db-down; \
+	exit $$status
+
+# Run unit tests + integration tests (fresh database cycle)
+test-all: test
+	$(MAKE) test-integration
