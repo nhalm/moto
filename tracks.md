@@ -375,9 +375,9 @@ HOW TO USE THIS FILE:
 - Makefile target: test-all (unit tests via `test` target, then full `test-integration` cycle)
 - Fix moto-club-api integration test compilation (19 tests: added missing imports for Arc, Body, Request, header, tower::ServiceExt, PostgresIpamStore, PostgresPeerStore, PostgresSessionStore, Ipam, PeerRegistry, SessionManager, PeerBroadcaster, DerpNode, DerpRegion to handler_tests module in wg_test.rs)
 - moto-club-db integration tests: wg_session_repo_test.rs (25 tests covering all 11 public functions: get_by_id, create, list_active_by_device, list_active_by_garage, list_all_by_device, list_by_owner, list_by_owner_with_details, close, close_all_for_garage, verify_ownership, delete)
+- moto-club-db integration tests: wg_garage_repo_test.rs (18 tests covering all 7 public functions: get_by_garage_id, exists, register, update_endpoints, increment_peer_version, get_peer_version, delete)
 
 **Remaining:**
-- moto-club-db integration tests: wg_garage_repo_test.rs (7 public functions untested)
 - moto-keybox-db integration tests: secret_repo_test.rs (13 public functions untested)
 - moto-keybox-db integration tests: audit_repo_test.rs (3 public functions untested)
 - CI workflow: .github/workflows/test.yml (future)

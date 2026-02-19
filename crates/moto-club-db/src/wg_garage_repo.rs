@@ -283,3 +283,7 @@ mod tests {
         assert_eq!(parts[1].split(':').count(), 4);
     }
 }
+
+#[cfg(test)]
+#[path = "wg_garage_repo_test.rs"]
+mod wg_garage_repo_test;
