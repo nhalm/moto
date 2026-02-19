@@ -488,3 +488,7 @@ mod tests {
         assert!(filter.include_all);
     }
 }
+
+#[cfg(test)]
+#[path = "wg_session_repo_test.rs"]
+mod wg_session_repo_test;
