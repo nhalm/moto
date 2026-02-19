@@ -379,3 +379,7 @@ pub async fn get_secret_with_value(
         dek_nonce: r.dek_nonce,
     }))
 }
+
+#[cfg(test)]
+#[path = "secret_repo_test.rs"]
+mod secret_repo_test;
