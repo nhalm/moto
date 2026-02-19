@@ -212,7 +212,7 @@ HOW TO USE THIS FILE:
 
 **Remaining:**
 - Service container targets: build-club, push-club, build-keybox, push-keybox (blocked: container-system.md moto-keybox-image)
-- Testing targets: test-db-up, test-db-down, test-db-migrate, test-integration, test-all
+- Testing targets: test-db-down, test-db-migrate, test-integration, test-all (test-db-up implemented)
 - Local dev targets: dev-up, dev-down, dev-clean, dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image
 - Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system
 - docker-compose.yml for dev databases (port 5432)
@@ -368,9 +368,9 @@ HOW TO USE THIS FILE:
 - moto-test-utils crate: test_pool(), unique_garage_name(), unique_owner(), fake_wg_pubkey()
 - moto-club-db integration tests: garage_repo_test.rs (15 tests)
 - moto-club-db integration tests: wg_device_repo_test.rs (13 tests)
+- Makefile target: test-db-up (docker compose -f docker-compose.test.yml up -d --wait, port 5433)
 
 **Remaining:**
-- Makefile target: test-db-up (start test database via docker-compose, wait for healthcheck)
 - Makefile target: test-db-down (stop test database, remove volumes)
 - Makefile target: test-db-migrate (run migrations for moto-club-db AND moto-keybox-db)
 - Makefile target: test-integration (fresh database cycle + run integration tests + teardown)

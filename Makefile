@@ -1,8 +1,9 @@
 .PHONY: install build test check fmt lint clean run fix ci
-.PHONY: test-db-up test-db-down test-db-migrate test-db-reset test-integration test-all test-ci
+.PHONY: test-ci
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
 .PHONY: build-bike test-bike
 .PHONY: registry-start registry-stop
+.PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
 
 # Set up local development environment
 install:
@@ -45,35 +46,6 @@ fix: fmt
 
 # Full CI check
 ci: fmt check lint test
-
-# === Test Database ===
-
-# Start test database
-test-db-up:
-	docker compose -f docker-compose.test.yml up -d
-	@echo "Waiting for PostgreSQL..."
-	@until docker compose -f docker-compose.test.yml exec -T postgres pg_isready -U moto_test; do sleep 1; done
-	@echo "PostgreSQL is ready"
-
-# Stop test database
-test-db-down:
-	docker compose -f docker-compose.test.yml down -v
-
-# Run database migrations on test database
-test-db-migrate:
-	DATABASE_URL=$(TEST_DATABASE_URL) sqlx migrate run --source crates/moto-club-db/migrations
-
-# Reset test database (drop and recreate)
-test-db-reset: test-db-down test-db-up test-db-migrate
-
-# Run integration tests (starts database if needed)
-test-integration: test-db-up test-db-migrate
-	@TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration || \
-		(echo "Tests failed, cleaning up..." && $(MAKE) test-db-down && exit 1)
-	@$(MAKE) test-db-down
-
-# Run all tests
-test-all: test test-integration
 
 # CI target (assumes database is already running)
 test-ci:
@@ -194,3 +166,11 @@ registry-stop:
 	@echo "Stopping local registry..."
 	@docker stop moto-registry 2>/dev/null && docker rm moto-registry 2>/dev/null && echo "Registry stopped and removed." || \
 		echo "Registry not running or already removed."
+
+# === Testing ===
+
+# Start test database via docker-compose, wait for healthcheck
+test-db-up:
+	@echo "Starting test database..."
+	docker compose -f docker-compose.test.yml up -d --wait
+	@echo "Test database ready on port 5433."
