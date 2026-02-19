@@ -16,8 +16,7 @@ pub struct GlobalFlags {
     pub verbose: u8,
     /// Suppress non-essential output
     pub quiet: bool,
-    /// Kubectl context to use (reserved for future kubectl pass-through)
-    #[allow(dead_code)]
+    /// Kubectl context to use
     pub context: Option<String>,
     /// Effective color mode (considers `MOTO_NO_COLOR` env var and config)
     #[allow(dead_code)]

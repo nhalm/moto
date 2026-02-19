@@ -115,6 +115,8 @@ struct GarageListJson {
 struct GarageJson {
     id: String,
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    context: Option<String>,
     branch: String,
     status: String,
     ttl_remaining_seconds: i64,
@@ -216,6 +218,33 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             let client = create_client(flags, None)?;
             let now = chrono::Utc::now();
 
+            let effective_context = flags.context.as_deref();
+            let show_all = effective_context == Some("all");
+
+            // Validate context if specified (and not "all")
+            if let Some(ctx) = effective_context {
+                if ctx != "all" {
+                    let contexts = moto_k8s::K8sClient::list_contexts().unwrap_or_default();
+                    if !contexts.is_empty() && !contexts.contains(&ctx.to_string()) {
+                        return Err(CliError::not_found(format!(
+                            "Context '{ctx}' not found in kubeconfig.\n\n\
+                             Available contexts: {}\n\
+                             Try: moto garage list --context all",
+                            contexts.join(", ")
+                        )));
+                    }
+                }
+            }
+
+            // Resolve the context name for display (used when --context all)
+            let context_name = effective_context.map_or_else(resolve_current_context, |ctx| {
+                if ctx == "all" {
+                    resolve_current_context()
+                } else {
+                    ctx.to_string()
+                }
+            });
+
             let response = client
                 .list_garages()
                 .await
@@ -244,6 +273,11 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                             GarageJson {
                                 id: format_short_id(&g.id),
                                 name: g.name.clone(),
+                                context: if show_all {
+                                    Some(context_name.clone())
+                                } else {
+                                    None
+                                },
                                 branch: g.branch.clone(),
                                 status: g.status.clone(),
                                 ttl_remaining_seconds,
@@ -257,9 +291,33 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 if !flags.quiet {
                     println!("No garages found.");
                 }
+            } else if show_all {
+                // Output with CONTEXT column when --context all
+                println!(
+                    "{:<9} {:<24} {:<14} {:<9} {:<12} {:<10} AGE",
+                    "ID", "NAME", "CONTEXT", "BRANCH", "STATUS", "TTL"
+                );
+                for g in response.garages {
+                    let created_at = chrono::DateTime::parse_from_rfc3339(&g.created_at)
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                        .unwrap_or(now);
+                    let age = format_duration((now - created_at).num_seconds());
+
+                    let ttl = format_ttl_remaining(&g.expires_at, now);
+                    let branch = if g.branch.is_empty() { "-" } else { &g.branch };
+                    println!(
+                        "{:<9} {:<24} {:<14} {:<9} {:<12} {:<10} {}",
+                        format_short_id(&g.id),
+                        truncate(&g.name, 24),
+                        truncate(&context_name, 14),
+                        truncate(branch, 9),
+                        g.status,
+                        ttl,
+                        age
+                    );
+                }
             } else {
-                // Output format per spec v0.4:
-                // ID       NAME                    BRANCH   STATUS    TTL        AGE
+                // Default output (no context column)
                 println!(
                     "{:<9} {:<24} {:<9} {:<12} {:<10} AGE",
                     "ID", "NAME", "BRANCH", "STATUS", "TTL"
@@ -270,21 +328,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                         .unwrap_or(now);
                     let age = format_duration((now - created_at).num_seconds());
 
-                    let ttl = chrono::DateTime::parse_from_rfc3339(&g.expires_at)
-                        .ok()
-                        .map_or_else(
-                            || "-".to_string(),
-                            |exp| {
-                                let remaining =
-                                    (exp.with_timezone(&chrono::Utc) - now).num_seconds();
-                                if remaining <= 0 {
-                                    "expired".to_string()
-                                } else {
-                                    format_duration(remaining)
-                                }
-                            },
-                        );
-
+                    let ttl = format_ttl_remaining(&g.expires_at, now);
                     let branch = if g.branch.is_empty() { "-" } else { &g.branch };
                     println!(
                         "{:<9} {:<24} {:<9} {:<12} {:<10} {}",
@@ -614,6 +658,31 @@ fn truncate(s: &str, max_len: usize) -> String {
 fn format_short_id(id: &uuid::Uuid) -> String {
     let hex = id.simple().to_string();
     hex[..6].to_string()
+}
+
+/// Get the current kubectl context name from kubeconfig.
+fn resolve_current_context() -> String {
+    moto_k8s::K8sClient::current_context()
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "default".to_string())
+}
+
+/// Format an `expires_at` timestamp as a TTL remaining string.
+fn format_ttl_remaining(expires_at: &str, now: chrono::DateTime<chrono::Utc>) -> String {
+    chrono::DateTime::parse_from_rfc3339(expires_at)
+        .ok()
+        .map_or_else(
+            || "-".to_string(),
+            |exp| {
+                let remaining = (exp.with_timezone(&chrono::Utc) - now).num_seconds();
+                if remaining <= 0 {
+                    "expired".to_string()
+                } else {
+                    format_duration(remaining)
+                }
+            },
+        )
 }
 
 /// Format an ISO 8601 timestamp for display (e.g., "2026-01-20 02:48:00").

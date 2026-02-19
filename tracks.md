@@ -142,10 +142,10 @@ HOW TO USE THIS FILE:
 - --branch flag on garage open (tracked in garage-lifecycle.md v0.4)
 - --no-attach flag on garage open (tracked in garage-lifecycle.md v0.4)
 - Fix: --owner flag passed to API (v0.4: create_client accepts owner_override param; garage open passes --owner value to override MOTO_USER env var for Bearer token auth)
+- Fix: --context filtering for garage list (v0.4: global --context flag validated against kubeconfig contexts; --context all shows CONTEXT column with current context name; --context <name> validates context exists; JSON output includes context field when --context all; resolve_current_context helper reads kubeconfig via K8sClient; format_ttl_remaining helper reduces duplication)
 
 **Remaining:**
 - Fix: Implement garage logs command (currently returns error directing to kubectl)
-- Fix: --context filtering for garage list (currently not filtering)
 
 ---
 
