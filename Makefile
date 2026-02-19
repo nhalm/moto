@@ -180,3 +180,12 @@ test-db-down:
 	@echo "Stopping test database..."
 	docker compose -f docker-compose.test.yml down -v
 	@echo "Test database stopped."
+
+# Run migrations for all database crates against test database
+# --ignore-missing: both crates share one database, so each sees the other's migrations as "missing"
+test-db-migrate:
+	@echo "Running moto-club-db migrations..."
+	cargo sqlx migrate run --source crates/moto-club-db/migrations --database-url $(TEST_DATABASE_URL) --ignore-missing
+	@echo "Running moto-keybox-db migrations..."
+	cargo sqlx migrate run --source crates/moto-keybox-db/migrations --database-url $(TEST_DATABASE_URL) --ignore-missing
+	@echo "All migrations complete."

@@ -370,9 +370,9 @@ HOW TO USE THIS FILE:
 - moto-club-db integration tests: wg_device_repo_test.rs (13 tests)
 - Makefile target: test-db-up (docker compose -f docker-compose.test.yml up -d --wait, port 5433)
 - Makefile target: test-db-down (docker compose -f docker-compose.test.yml down -v)
+- Makefile target: test-db-migrate (cargo sqlx migrate run with --ignore-missing for moto-club-db AND moto-keybox-db)
 
 **Remaining:**
-- Makefile target: test-db-migrate (run migrations for moto-club-db AND moto-keybox-db)
 - Makefile target: test-integration (fresh database cycle + run integration tests + teardown)
 - Makefile target: test-all (unit tests + integration tests)
 - Fix moto-club-api integration test compilation (19 tests, 124 errors — missing ~20 import statements)
