@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.6 |
+| Version | 0.7 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-04 |
+| Last Updated | 2026-02-18 |
 
 ## Overview
 
@@ -47,7 +47,9 @@ Verify with: `nix --version`
 | **Setup** | Local development environment setup |
 | **Development** | Build, test, lint, format |
 | **Container** | Build and test container images |
-| **Cluster** | Local k3s operations |
+| **Testing** | Test database lifecycle and integration tests |
+| **Local Dev** | Run the full stack locally |
+| **Deploy** | Deploy services to K8s cluster |
 
 ### Setup Targets
 
@@ -76,15 +78,17 @@ ci:             # Full CI check (fmt + check + lint + test)
 ### Container Targets
 
 ```makefile
-# Build
+# Garage (dev container)
 build-garage:               # Build garage container (Docker-wrapped Nix, works on Mac and Linux)
-
-# Test and debug
 test-garage:                # Run smoke tests on container
 shell-garage:               # Interactive shell in container
-
-# Push
 push-garage:                # Push garage image to local registry (localhost:5000)
+
+# Service images (bike base + binary)
+build-club:                 # Build moto-club container image
+push-club:                  # Push moto-club to local registry
+build-keybox:               # Build moto-keybox container image
+push-keybox:                # Push moto-keybox to local registry
 
 # Maintenance
 scan-garage:                # Scan image for vulnerabilities (requires trivy)
@@ -92,23 +96,15 @@ clean-images:               # Remove all moto images
 clean-nix-cache:            # Remove Docker volume used for Nix store caching
 ```
 
-**How `build-garage` works:**
+**How container builds work:**
 
-1. Runs a `nixos/nix` container with the repo mounted
-2. Executes `nix build .#moto-garage` inside the container
-3. Loads the resulting image via `docker load`
-4. Pushes to local registry
+All `build-*` targets use Docker-wrapped Nix: they run `nix build` inside a `nixos/nix` container with the repo mounted, then load the resulting image via `docker load`. This keeps the Nix flake as the single source of truth while working on any platform — ARM Mac builds `aarch64-linux`, Intel builds `x86_64-linux`.
 
-This approach uses the Nix flake as the single source of truth while working on any platform (Mac or Linux). Architecture is auto-detected - ARM Mac builds `aarch64-linux`, Intel builds `x86_64-linux`.
+A named Docker volume (`nix-store`) caches the Nix store between builds. Use `clean-nix-cache` to remove it and force a fresh build.
 
 **CI builds differently:** GitHub Actions installs Nix directly on Linux runners and runs `nix build` without Docker. See [container-system.md](container-system.md) for CI workflow.
 
-**Nix cache:** The Docker-wrapped build uses a named volume (`nix-store`) to cache the Nix store between builds. This speeds up subsequent builds but can grow over time. Use `clean-nix-cache` to remove it and force a fresh build.
-
-**Error handling:** If `build-garage` fails:
-- Verify Docker is running (`docker info`)
-- Check the `nixos/nix` image is available (`docker pull nixos/nix:latest`)
-- For detailed output, the target should print the nix build command on failure
+**If `build-*` targets fail:** verify Docker is running, check that the `nixos/nix` image is available, and look for detailed output from the nix build command.
 
 ### Registry Targets
 
@@ -119,14 +115,45 @@ registry-stop:     # Stop and remove local registry
 
 Optional targets for local development with a registry.
 
-### Cluster Targets (Future)
+### Testing Targets
 
 ```makefile
-k3s-install:    # Install k3s locally
-k3s-start:      # Start local cluster
-k3s-stop:       # Stop local cluster
-k3s-status:     # Show cluster status
+test-db-up:          # Start test database via docker-compose.test.yml, wait for healthcheck
+test-db-down:        # Stop test database, remove volumes
+test-db-migrate:     # Run migrations for moto-club-db AND moto-keybox-db against test database
+test-integration:    # Fresh database cycle: test-db-up + test-db-migrate + integration tests + test-db-down
+test-all:            # Unit tests (make test) + integration tests
 ```
+
+See [testing.md](testing.md) for test infrastructure specification.
+
+### Local Dev Targets
+
+```makefile
+dev-up:              # Start full local dev stack (postgres + keybox + club)
+dev-down:            # Stop all services and database
+dev-clean:           # dev-down + remove pgdata volume + remove .dev/
+dev-db-up:           # Start dev postgres (docker-compose.yml, port 5432)
+dev-db-down:         # Stop dev postgres
+dev-db-migrate:      # Run moto-club-db migrations against dev database
+dev-keybox-init:     # Generate keybox keys in .dev/keybox/
+dev-keybox:          # Start moto-keybox-server with dev config
+dev-club:            # Start moto-club with dev config
+dev-garage-image:    # Build and push garage image to local registry
+```
+
+See [local-dev.md](local-dev.md) for full local development specification.
+
+### Deploy Targets
+
+```makefile
+deploy-secrets:      # Generate and apply K8s secrets to moto-system namespace
+deploy-system:       # Deploy all moto-system components (kubectl apply -k)
+deploy-status:       # Show status of moto-system pods
+undeploy-system:     # Delete moto-system namespace
+```
+
+See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 
 ### Naming Conventions
 
@@ -142,10 +169,22 @@ All targets should be declared `.PHONY` since they don't produce files:
 .PHONY: install build test check fmt lint clean fix ci run
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
 .PHONY: build-bike test-bike
+.PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
+.PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
+.PHONY: dev-up dev-down dev-clean dev-db-up dev-db-down dev-db-migrate
+.PHONY: dev-keybox-init dev-keybox dev-club dev-garage-image
+.PHONY: deploy-secrets deploy-system deploy-status undeploy-system
 ```
 
 ## Changelog
+
+### v0.7 (2026-02-18)
+- Add service container targets: `build-club`, `push-club`, `build-keybox`, `push-keybox`
+- Add testing targets: `test-db-up`, `test-db-down`, `test-db-migrate`, `test-integration`, `test-all`
+- Add local dev targets: `dev-up`, `dev-down`, `dev-clean`, `dev-db-up`, `dev-db-down`, `dev-db-migrate`, `dev-keybox-init`, `dev-keybox`, `dev-club`, `dev-garage-image`
+- Add deploy targets: `deploy-secrets`, `deploy-system`, `deploy-status`, `undeploy-system`
+- Replace "Cluster Targets (Future)" section with Testing, Local Dev, and Deploy sections
 
 ### v0.6 (2026-02-04)
 - Add `build-bike` and `test-bike` targets (were implemented but not documented)
@@ -180,3 +219,7 @@ All targets should be declared `.PHONY` since they don't produce files:
 
 - [pre-commit.md](pre-commit.md) - Hook setup via `make install`
 - [dev-container.md](dev-container.md) - Container build targets
+- [testing.md](testing.md) - Test infrastructure and database targets
+- [local-dev.md](local-dev.md) - Local development workflow
+- [service-deploy.md](service-deploy.md) - K8s deployment
+- [container-system.md](container-system.md) - Image build pipeline

@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.9 |
+| Version | 1.0 |
 | Status | Ready to Rip |
-| Last Updated | 2026-01-28 |
+| Last Updated | 2026-02-18 |
 
 ## Overview
 
@@ -89,8 +89,9 @@ Excludes: Shell, package manager, libc (engines are static)
 
 **Final images:** Each engine gets its own image built from the bike base:
 - `moto-bike` + club binary → `moto-club`
-- `moto-bike` + vault binary → `moto-vault`
-- `moto-bike` + proxy binary → `moto-proxy`
+- `moto-bike` + keybox-server binary → `moto-keybox`
+- `moto-bike` + vault binary → `moto-vault` (future)
+- `moto-bike` + proxy binary → `moto-proxy` (future)
 
 See [moto-bike.md](moto-bike.md) for full specification of the bike base image and engine contract.
 
@@ -105,11 +106,14 @@ moto/
 └── infra/
     ├── pkgs/                    # Container package definitions
     │   ├── default.nix          # Exports all packages
-    │   └── moto-garage.nix      # Garage container definition
+    │   ├── moto-garage.nix      # Garage container definition
+    │   ├── moto-bike.nix        # Bike base image + mkBike helper
+    │   ├── moto-club.nix        # Club engine image (bike + binary)
+    │   └── moto-keybox.nix      # Keybox engine image (bike + binary)
     ├── modules/                 # Reusable module components
     │   ├── base.nix             # Core system tools
     │   ├── dev-tools.nix        # Development tooling
-    │   ├── ssh.nix              # SSH server
+    │   ├── terminal.nix         # ttyd + tmux
     │   └── wireguard.nix        # WireGuard tools
     └── smoke-test.sh            # Container smoke tests
 ```
@@ -426,8 +430,9 @@ Images:
   moto-garage   → Development container (full toolchain)
   moto-bike     → Production base image (minimal runtime)
   moto-club     → Club engine (bike + club binary)
-  moto-vault    → Vault engine (bike + vault binary)
-  moto-proxy    → Proxy engine (bike + proxy binary)
+  moto-keybox   → Keybox engine (bike + keybox-server binary)
+  moto-vault    → Vault engine (bike + vault binary) (future)
+  moto-proxy    → Proxy engine (bike + proxy binary) (future)
 ```
 
 **Tagging strategy:**
@@ -1040,6 +1045,13 @@ nix path-info --json .#moto-club-image | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v1.0 (2026-02-18)
+- Add `moto-keybox` to final images list (bike + keybox-server binary)
+- Add `infra/pkgs/moto-keybox.nix` to directory structure
+- Update directory structure to match implementation (terminal.nix, moto-bike.nix, moto-club.nix)
+- Mark moto-vault and moto-proxy as (future)
+- Add build-club, push-club, build-keybox, push-keybox Makefile targets (see makefile.md)
 
 ### v0.9 (2026-01-28)
 - Clarified container naming: `moto-bike` is base image, `moto-club`/`moto-vault`/`moto-proxy` are final images

@@ -101,7 +101,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## container-system.md v0.9
+## container-system.md v1.0
 
 **Status:** In Progress
 
@@ -109,6 +109,9 @@ HOW TO USE THIS FILE:
 - (see tracks-history.md)
 
 **Remaining:**
+- Create `infra/pkgs/moto-keybox.nix` (bike base + moto-keybox-server binary, using mkBike helper)
+- Fix `infra/pkgs/moto-club.nix` cargoHash placeholder (replace `sha256-AAAA...` with real hash)
+- Export `moto-keybox-image` from flake.nix
 - CI workflow: .github/workflows/containers.yml (future)
 - Image signing: cosign keyless signing in CI (future)
 - SBOM generation: trivy SBOM + cosign attestation (future)
@@ -191,9 +194,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.5
+## makefile.md v0.7
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - Setup targets: install (git hooks)
@@ -208,7 +211,13 @@ HOW TO USE THIS FILE:
 - .PHONY declarations for all targets
 
 **Remaining:**
-(none - makefile.md v0.5 implementation complete)
+- Service container targets: build-club, push-club, build-keybox, push-keybox (blocked: container-system.md moto-keybox-image)
+- Testing targets: test-db-up, test-db-down, test-db-migrate, test-integration, test-all
+- Local dev targets: dev-up, dev-down, dev-clean, dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image
+- Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system
+- docker-compose.yml for dev databases (port 5432)
+- scripts/init-dev-db.sql (creates moto_keybox database)
+- .dev/ added to .gitignore
 
 ---
 
@@ -372,6 +381,48 @@ HOW TO USE THIS FILE:
 - moto-keybox-db integration tests: secret_repo_test.rs (13 public functions untested)
 - moto-keybox-db integration tests: audit_repo_test.rs (3 public functions untested)
 - CI workflow: .github/workflows/test.yml (future)
+
+---
+
+## local-dev.md v0.1
+
+**Status:** Not Started
+
+**Implemented:**
+(none)
+
+**Remaining:**
+- docker-compose.yml with dev Postgres on port 5432
+- scripts/init-dev-db.sql (creates moto_keybox database)
+- .dev/ added to .gitignore
+- Makefile targets: dev-db-up, dev-db-down, dev-db-migrate
+- Makefile target: dev-keybox-init (generate keys in .dev/keybox/)
+- Makefile target: dev-keybox (start keybox server with dev config)
+- Makefile target: dev-club (start moto-club with dev config)
+- Makefile target: dev-garage-image (build + push garage to local registry)
+- Makefile target: dev-up (full stack shortcut)
+- Makefile target: dev-down, dev-clean (teardown)
+
+---
+
+## service-deploy.md v0.1
+
+**Status:** Not Started
+
+**Implemented:**
+(none)
+
+**Remaining:**
+- infra/k8s/moto-system/namespace.yaml
+- infra/k8s/moto-system/postgres.yaml (StatefulSet + Service + init ConfigMap)
+- infra/k8s/moto-system/keybox.yaml (Deployment + Service)
+- infra/k8s/moto-system/club.yaml (Deployment + Service + ServiceAccount + RBAC)
+- infra/k8s/moto-system/kustomization.yaml
+- Makefile target: deploy-secrets (generate + apply K8s secrets)
+- Makefile target: deploy-system (kubectl apply -k)
+- Makefile target: deploy-status, undeploy-system
+- Makefile targets: build-club, push-club (blocked: container-system.md moto-club-image cargoHash)
+- Makefile targets: build-keybox, push-keybox (blocked: container-system.md moto-keybox-image)
 
 ---
 
