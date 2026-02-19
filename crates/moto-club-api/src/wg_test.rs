@@ -223,7 +223,16 @@ fn derp_map_response_matches_spec_format() {
 #[cfg(all(test, feature = "integration"))]
 mod handler_tests {
     use super::*;
+    use std::sync::Arc;
+
+    use axum::body::Body;
+    use axum::http::{Request, header};
+    use moto_club_wg::{Ipam, PeerBroadcaster, PeerRegistry, SessionManager};
     use moto_test_utils::{test_pool, unique_owner};
+    use moto_wgtunnel_types::derp::{DerpNode, DerpRegion};
+    use tower::ServiceExt;
+
+    use crate::{PostgresIpamStore, PostgresPeerStore, PostgresSessionStore};
 
     async fn create_test_state() -> AppState {
         let db_pool = test_pool().await;

@@ -373,9 +373,9 @@ HOW TO USE THIS FILE:
 - Makefile target: test-db-migrate (cargo sqlx migrate run with --ignore-missing for moto-club-db AND moto-keybox-db)
 - Makefile target: test-integration (fresh database cycle: teardown, start, migrate, run integration tests, teardown; preserves test exit status through cleanup)
 - Makefile target: test-all (unit tests via `test` target, then full `test-integration` cycle)
+- Fix moto-club-api integration test compilation (19 tests: added missing imports for Arc, Body, Request, header, tower::ServiceExt, PostgresIpamStore, PostgresPeerStore, PostgresSessionStore, Ipam, PeerRegistry, SessionManager, PeerBroadcaster, DerpNode, DerpRegion to handler_tests module in wg_test.rs)
 
 **Remaining:**
-- Fix moto-club-api integration test compilation (19 tests, 124 errors — missing ~20 import statements)
 - moto-club-db integration tests: wg_session_repo_test.rs (11 public functions untested)
 - moto-club-db integration tests: wg_garage_repo_test.rs (7 public functions untested)
 - moto-keybox-db integration tests: secret_repo_test.rs (13 public functions untested)
