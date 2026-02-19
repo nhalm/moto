@@ -369,9 +369,9 @@ HOW TO USE THIS FILE:
 - moto-club-db integration tests: garage_repo_test.rs (15 tests)
 - moto-club-db integration tests: wg_device_repo_test.rs (13 tests)
 - Makefile target: test-db-up (docker compose -f docker-compose.test.yml up -d --wait, port 5433)
+- Makefile target: test-db-down (docker compose -f docker-compose.test.yml down -v)
 
 **Remaining:**
-- Makefile target: test-db-down (stop test database, remove volumes)
 - Makefile target: test-db-migrate (run migrations for moto-club-db AND moto-keybox-db)
 - Makefile target: test-integration (fresh database cycle + run integration tests + teardown)
 - Makefile target: test-all (unit tests + integration tests)

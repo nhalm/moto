@@ -174,3 +174,9 @@ test-db-up:
 	@echo "Starting test database..."
 	docker compose -f docker-compose.test.yml up -d --wait
 	@echo "Test database ready on port 5433."
+
+# Stop test database and remove volumes
+test-db-down:
+	@echo "Stopping test database..."
+	docker compose -f docker-compose.test.yml down -v
+	@echo "Test database stopped."
