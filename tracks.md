@@ -107,11 +107,11 @@ HOW TO USE THIS FILE:
 
 **Implemented:**
 - (see tracks-history.md)
+- Create `infra/pkgs/moto-keybox.nix` (bike base + moto-keybox-server binary, using mkBike helper)
+- Export `moto-keybox-image` from flake.nix (default.nix and flake.nix updated)
 
 **Remaining:**
-- Create `infra/pkgs/moto-keybox.nix` (bike base + moto-keybox-server binary, using mkBike helper)
 - Fix `infra/pkgs/moto-club.nix` cargoHash placeholder (replace `sha256-AAAA...` with real hash)
-- Export `moto-keybox-image` from flake.nix
 - CI workflow: .github/workflows/containers.yml (future)
 - Image signing: cosign keyless signing in CI (future)
 - SBOM generation: trivy SBOM + cosign attestation (future)

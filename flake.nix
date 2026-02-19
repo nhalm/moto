@@ -28,6 +28,7 @@
           moto-garage = infraPkgs.moto-garage;
           moto-bike = infraPkgs.moto-bike;
           moto-club-image = infraPkgs.moto-club-image;
+          moto-keybox-image = infraPkgs.moto-keybox-image;
           default = infraPkgs.moto-garage;
         } else {};
 
