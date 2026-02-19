@@ -883,6 +883,44 @@ mod tests {
     }
 
     #[test]
+    fn test_cluster_init_json_created() {
+        // Test JSON output format for newly created cluster
+        let json = ClusterInitJson {
+            name: CLUSTER_NAME.to_string(),
+            status: "created".to_string(),
+            api_endpoint: format!("https://localhost:{API_PORT}"),
+            registry_endpoint: format!("localhost:{REGISTRY_PORT}"),
+        };
+
+        let output = serde_json::to_string_pretty(&json).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["name"], "moto");
+        assert_eq!(parsed["status"], "created");
+        assert_eq!(parsed["api_endpoint"], "https://localhost:6550");
+        assert_eq!(parsed["registry_endpoint"], "localhost:5000");
+    }
+
+    #[test]
+    fn test_cluster_init_json_exists() {
+        // Test JSON output format for already-existing cluster (idempotent)
+        let json = ClusterInitJson {
+            name: CLUSTER_NAME.to_string(),
+            status: "exists".to_string(),
+            api_endpoint: format!("https://localhost:{API_PORT}"),
+            registry_endpoint: format!("localhost:{REGISTRY_PORT}"),
+        };
+
+        let output = serde_json::to_string_pretty(&json).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(parsed["name"], "moto");
+        assert_eq!(parsed["status"], "exists");
+        assert_eq!(parsed["api_endpoint"], "https://localhost:6550");
+        assert_eq!(parsed["registry_endpoint"], "localhost:5000");
+    }
+
+    #[test]
     fn test_cluster_status_json_structure_matches_spec() {
         // Verify the JSON structure matches the spec exactly:
         // {

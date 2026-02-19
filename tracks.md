@@ -193,9 +193,10 @@ HOW TO USE THIS FILE:
 - Status values: running, stopped, not_found
 - Exit codes: 0 running, 1 not running/error
 - --force flag to delete and recreate
+- moto cluster init JSON output: status "created" or "exists" (v0.2 changelog: ClusterInitJson struct with name, status, api_endpoint, registry_endpoint; --json flag produces "created" for new clusters, "exists" for idempotent case)
 
 **Remaining:**
-- moto cluster init JSON output: status "created" or "exists" (v0.2 changelog)
+(none - local-cluster.md v0.2 implementation complete)
 
 ---
 
