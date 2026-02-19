@@ -167,20 +167,26 @@ struct GarageExtendJson {
 }
 
 /// Create a moto-club client from configuration.
-fn create_client(_flags: &GlobalFlags) -> Result<MotoClubClient> {
+///
+/// `owner_override` takes precedence over the `MOTO_USER` env var when set
+/// (e.g., from `--owner` flag on `garage open`).
+fn create_client(_flags: &GlobalFlags, owner_override: Option<&str>) -> Result<MotoClubClient> {
     // Get base URL from config or environment
     let base_url =
         std::env::var("MOTO_CLUB_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
-    // Get owner from environment variable
-    // Per moto-club.md spec: MOTO_USER is required for local dev
-    let owner = std::env::var("MOTO_USER").map_err(|_| {
-        CliError::invalid_input(
-            "MOTO_USER environment variable is required.\n\n\
-             Set MOTO_USER to your username, e.g.:\n\
-             export MOTO_USER=\"your-username\"",
-        )
-    })?;
+    // Owner: CLI flag > MOTO_USER env var
+    let owner = if let Some(o) = owner_override {
+        o.to_string()
+    } else {
+        std::env::var("MOTO_USER").map_err(|_| {
+            CliError::invalid_input(
+                "MOTO_USER environment variable is required.\n\n\
+                 Set MOTO_USER to your username, e.g.:\n\
+                 export MOTO_USER=\"your-username\"",
+            )
+        })?
+    };
 
     let config = MotoClubConfig::new(base_url, owner);
     MotoClubClient::new(config)
@@ -207,7 +213,7 @@ fn client_error_to_cli_error(e: ClientError) -> CliError {
 pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
     match cmd.action {
         GarageAction::List => {
-            let client = create_client(flags)?;
+            let client = create_client(flags, None)?;
             let now = chrono::Utc::now();
 
             let response = client
@@ -294,7 +300,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
         }
 
         GarageAction::Open {
-            owner: _owner,
+            owner,
             branch,
             ttl,
             engine,
@@ -302,7 +308,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             with_redis,
             no_attach,
         } => {
-            let client = create_client(flags)?;
+            let client = create_client(flags, owner.as_deref())?;
             let name = crate::names::generate();
 
             // Use CLI flag, then config default, then hardcoded default
@@ -410,7 +416,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
         }
 
         GarageAction::Enter { name } => {
-            let client = create_client(flags)?;
+            let client = create_client(flags, None)?;
 
             // Check if garage exists first
             client
@@ -478,7 +484,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
         }
 
         GarageAction::Close { name, force } => {
-            let client = create_client(flags)?;
+            let client = create_client(flags, None)?;
 
             // Check if garage exists first
             client
@@ -545,7 +551,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
         }
 
         GarageAction::Extend { name, ttl } => {
-            let client = create_client(flags)?;
+            let client = create_client(flags, None)?;
 
             // Parse TTL extension
             let seconds = parse_duration(&ttl)?;

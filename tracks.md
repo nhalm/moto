@@ -118,9 +118,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-cli.md v0.3
+## moto-cli.md v0.4
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - Global flags: --json/-j, --verbose/-v (counted), --quiet/-q, --context/-c, --help/-h, --version/-V
@@ -139,13 +139,17 @@ HOW TO USE THIS FILE:
 - moto cluster status: API health check, registry health check, JSON output
 - Exit codes: 0 (success), 1 (general), 2 (not found), 3 (invalid input)
 - Actionable error messages with suggestions
+- --branch flag on garage open (tracked in garage-lifecycle.md v0.4)
+- --no-attach flag on garage open (tracked in garage-lifecycle.md v0.4)
+- Fix: --owner flag passed to API (v0.4: create_client accepts owner_override param; garage open passes --owner value to override MOTO_USER env var for Bearer token auth)
 
 **Remaining:**
-(none - moto-cli.md v0.3 implementation complete)
+- Fix: Implement garage logs command (currently returns error directing to kubectl)
+- Fix: --context filtering for garage list (currently not filtering)
 
 ---
 
-## dev-container.md v0.13
+## dev-container.md v0.14
 
 **Status:** Complete
 
@@ -167,15 +171,16 @@ HOW TO USE THIS FILE:
 - Container config: garage-entrypoint cmd (starts ttyd), /workspace workdir, volumes, port 7681 exposed
 - Terminal daemon: ttyd on port 7681 with tmux session persistence (terminal.nix module)
 - Smoke tests: infra/smoke-test.sh (core tools, terminal tools, env vars, Rust compilation)
+- v0.14 clarifications: Claude Code installed at runtime (not build time), Cmd is garage-entrypoint, K8s env vars injected by K8s (already implemented correctly)
 
 **Remaining:**
-(none - dev-container.md v0.13 implementation complete)
+(none - dev-container.md v0.14 implementation complete)
 
 ---
 
-## local-cluster.md v0.1
+## local-cluster.md v0.2
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - moto cluster init: k3d cluster creation with moto name
@@ -190,7 +195,7 @@ HOW TO USE THIS FILE:
 - --force flag to delete and recreate
 
 **Remaining:**
-(none - local-cluster.md v0.1 implementation complete)
+- moto cluster init JSON output: status "created" or "exists" (v0.2 changelog)
 
 ---
 
