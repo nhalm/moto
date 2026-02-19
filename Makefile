@@ -2,6 +2,7 @@
 .PHONY: test-ci
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
 .PHONY: build-bike test-bike
+.PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
 
@@ -102,6 +103,30 @@ test-bike: build-bike
 	@echo "Running bike smoke tests..."
 	./infra/smoke-test-bike.sh
 
+# === Container (Service Images) ===
+
+# Build the moto-club container image using Docker-wrapped Nix
+build-club:
+	@echo "Building moto-club container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
+	docker run --rm \
+		-v $(PWD):/workspace \
+		-v nix-store:/nix \
+		-w /workspace \
+		nixos/nix:latest \
+		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-club-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
+		| docker load
+
+# Build the moto-keybox container image using Docker-wrapped Nix
+build-keybox:
+	@echo "Building moto-keybox container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
+	docker run --rm \
+		-v $(PWD):/workspace \
+		-v nix-store:/nix \
+		-w /workspace \
+		nixos/nix:latest \
+		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-keybox-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
+		| docker load
+
 # === Push ===
 
 # Default registry for pushing images
@@ -120,6 +145,32 @@ push-garage:
 	docker push $(REGISTRY)/moto-garage:latest
 	docker push $(REGISTRY)/moto-garage:$(SHA)
 	@echo "Pushed $(REGISTRY)/moto-garage:latest and $(REGISTRY)/moto-garage:$(SHA)"
+
+# Push moto-club to registry (localhost:5000 by default)
+push-club:
+	@if ! docker image inspect moto-club:latest &>/dev/null; then \
+		echo "Error: moto-club:latest not found. Run 'make build-club' first."; \
+		exit 1; \
+	fi
+	@echo "Pushing moto-club to $(REGISTRY)..."
+	docker tag moto-club:latest $(REGISTRY)/moto-club:latest
+	docker tag moto-club:latest $(REGISTRY)/moto-club:$(SHA)
+	docker push $(REGISTRY)/moto-club:latest
+	docker push $(REGISTRY)/moto-club:$(SHA)
+	@echo "Pushed $(REGISTRY)/moto-club:latest and $(REGISTRY)/moto-club:$(SHA)"
+
+# Push moto-keybox to registry (localhost:5000 by default)
+push-keybox:
+	@if ! docker image inspect moto-keybox:latest &>/dev/null; then \
+		echo "Error: moto-keybox:latest not found. Run 'make build-keybox' first."; \
+		exit 1; \
+	fi
+	@echo "Pushing moto-keybox to $(REGISTRY)..."
+	docker tag moto-keybox:latest $(REGISTRY)/moto-keybox:latest
+	docker tag moto-keybox:latest $(REGISTRY)/moto-keybox:$(SHA)
+	docker push $(REGISTRY)/moto-keybox:latest
+	docker push $(REGISTRY)/moto-keybox:$(SHA)
+	@echo "Pushed $(REGISTRY)/moto-keybox:latest and $(REGISTRY)/moto-keybox:$(SHA)"
 
 # === Scan ===
 

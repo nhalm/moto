@@ -210,14 +210,14 @@ HOW TO USE THIS FILE:
 - SHA tagging from git
 - .PHONY declarations for all targets
 - Testing targets: test-db-up, test-db-down, test-db-migrate, test-integration, test-all
+- Service container targets: build-club, push-club, build-keybox, push-keybox (Docker-wrapped Nix builds for moto-club-image and moto-keybox-image, push with latest + SHA tags)
 
 **Remaining:**
-- Service container targets: build-club, push-club, build-keybox, push-keybox (blocked: container-system.md moto-keybox-image)
-- Local dev targets: dev-up, dev-down, dev-clean, dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image
-- Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system
-- docker-compose.yml for dev databases (port 5432)
-- scripts/init-dev-db.sql (creates moto_keybox database)
-- .dev/ added to .gitignore
+- Local dev targets: dev-up, dev-down, dev-clean, dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image (blocked: local-dev.md)
+- Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (blocked: service-deploy.md)
+- docker-compose.yml for dev databases (port 5432) (blocked: local-dev.md)
+- scripts/init-dev-db.sql (creates moto_keybox database) (blocked: local-dev.md)
+- .dev/ added to .gitignore (blocked: local-dev.md)
 
 ---
 
