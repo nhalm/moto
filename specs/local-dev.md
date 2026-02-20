@@ -3,7 +3,7 @@
 | | |
 |--------|----------------------------------------------|
 | Version | 0.1 |
-| Status | Wrenching |
+| Status | Ready to Rip |
 | Last Updated | 2026-02-19 |
 
 ## Overview
@@ -76,7 +76,7 @@ A `docker-compose.yml` provides a single Postgres instance with two databases:
 
 ### Keybox Bootstrap
 
-Before first run, cryptographic keys must be generated and stored in `.dev/keybox/`:
+Before first run, cryptographic keys must be generated and stored in `.dev/keybox/`. See [keybox.md](keybox.md) for key formats and the `moto-keybox` CLI.
 
 | File | Contents |
 |------|----------|
@@ -84,7 +84,7 @@ Before first run, cryptographic keys must be generated and stored in `.dev/keybo
 | `signing.key` | Ed25519 SVID signing key (base64-encoded) |
 | `service-token` | Static hex token for moto-club → keybox auth |
 
-The `.dev/` directory is gitignored. Keys are generated once and reused across dev sessions. The `moto keybox init` CLI command can generate these, or they can be generated manually.
+The `.dev/` directory is gitignored. Keys are generated once and reused across dev sessions. Note: `moto-keybox init` generates `master.key` and `signing.key` but not `service-token` — the `dev-keybox-init` target must generate all three.
 
 ### Port Assignments
 

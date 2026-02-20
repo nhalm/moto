@@ -57,7 +57,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [moto-bike](moto-bike.md) | Ripping | Bike base image, engine contract |
 | [supporting-services](supporting-services.md) | Ripping | Postgres, Redis deployment |
 | [moto-wgtunnel](moto-wgtunnel.md) | Ripping | WireGuard tunnels for terminal access |
-| [local-dev](local-dev.md) | Wrenching | Local dev stack: cargo run + docker-compose |
+| [local-dev](local-dev.md) | Ready to Rip | Local dev stack: cargo run + docker-compose |
 | [service-deploy](service-deploy.md) | Bare Frame | K8s deployment of moto-club, keybox, postgres |
 
 ## Phase 2: Future
