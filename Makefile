@@ -5,7 +5,7 @@
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
-.PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init
+.PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox
 
 # Set up local development environment
 install:
@@ -288,3 +288,14 @@ dev-keybox-init:
 		chmod 600 .dev/keybox/service-token && \
 		echo "Keybox keys generated in .dev/keybox/"; \
 	fi
+
+# Start moto-keybox-server with dev config (runs in foreground)
+dev-keybox:
+	MOTO_KEYBOX_BIND_ADDR=0.0.0.0:8090 \
+	MOTO_KEYBOX_HEALTH_BIND_ADDR=0.0.0.0:8091 \
+	MOTO_KEYBOX_MASTER_KEY_FILE=.dev/keybox/master.key \
+	MOTO_KEYBOX_SVID_SIGNING_KEY_FILE=.dev/keybox/signing.key \
+	MOTO_KEYBOX_DATABASE_URL=postgres://moto:moto@localhost:5432/moto_keybox \
+	MOTO_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token \
+	RUST_LOG=moto_keybox=debug \
+	cargo run --bin moto-keybox-server

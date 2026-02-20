@@ -398,9 +398,9 @@ HOW TO USE THIS FILE:
 - .dev/ added to .gitignore
 - Makefile targets: dev-db-up (docker compose up --wait), dev-db-down (docker compose down), dev-db-migrate (sqlx migrate run for moto-club-db against dev database)
 - Makefile target: dev-keybox-init (generate master.key, signing.key via moto-keybox init + service-token via openssl rand in .dev/keybox/; idempotent skip if all three exist)
+- Makefile target: dev-keybox (start moto-keybox-server with dev env vars: port 8090/8091, .dev/keybox/ keys, PostgreSQL on localhost:5432/moto_keybox, RUST_LOG=moto_keybox=debug)
 
 **Remaining:**
-- Makefile target: dev-keybox (start keybox server with dev config)
 - Makefile target: dev-club (start moto-club with dev config)
 - Makefile target: dev-garage-image (build + push garage to local registry)
 - Makefile target: dev-up (full stack shortcut)
