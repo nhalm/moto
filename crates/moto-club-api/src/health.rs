@@ -120,7 +120,7 @@ const KEYBOX_HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
 /// - Connection fails (unreachable)
 /// - Response is not 200
 /// - Response status is not "ok"
-async fn check_keybox(keybox_url: &str) -> CheckResult {
+async fn check_keybox(keybox_health_url: &str) -> CheckResult {
     let client = match reqwest::Client::builder()
         .timeout(KEYBOX_HEALTH_TIMEOUT)
         .build()
@@ -129,22 +129,10 @@ async fn check_keybox(keybox_url: &str) -> CheckResult {
         Err(e) => return CheckResult::error(format!("failed to create HTTP client: {e}")),
     };
 
-    // Keybox health endpoint is on port 8081 per moto-bike.md Engine Contract
-    // The keybox_url is the base URL (e.g., http://keybox:8080), but health is on 8081
-    // Parse the URL to construct the proper health endpoint
-    // e.g., http://keybox:8080 -> http://keybox:8081/health/ready
-    #[allow(clippy::option_if_let_else)]
-    let health_url = match url::Url::parse(keybox_url) {
-        Ok(mut url) => {
-            url.set_port(Some(8081)).ok();
-            url.set_path("/health/ready");
-            url.to_string()
-        }
-        Err(_) => {
-            // Fallback: just append port and path
-            format!("{keybox_url}:8081/health/ready")
-        }
-    };
+    // keybox_health_url is already the base URL for health checks (e.g., http://keybox:8081).
+    // Per moto-club.md v1.9, this is configured via MOTO_CLUB_KEYBOX_HEALTH_URL or derived
+    // from MOTO_CLUB_KEYBOX_URL with port replaced by 8081.
+    let health_url = format!("{}/health/ready", keybox_health_url.trim_end_matches('/'));
 
     let response = match client.get(&health_url).send().await {
         Ok(r) => r,
@@ -222,7 +210,7 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     checks.insert("database".to_string(), db_check);
 
     // Check keybox if URL is configured
-    let keybox_ready = if let Some(ref keybox_url) = state.keybox_url {
+    let keybox_ready = if let Some(ref keybox_url) = state.keybox_health_url {
         let keybox_check = check_keybox(keybox_url).await;
         let is_ok = keybox_check.is_ok();
         checks.insert("keybox".to_string(), keybox_check);
@@ -311,7 +299,7 @@ async fn health_handler(State(state): State<AppState>) -> impl IntoResponse {
     }
 
     // Check keybox health (per moto-club.md v1.5)
-    if let Some(ref keybox_url) = state.keybox_url {
+    if let Some(ref keybox_url) = state.keybox_health_url {
         let keybox_check = check_keybox(keybox_url).await;
         checks.insert("keybox".to_string(), keybox_check);
     } else {
@@ -585,36 +573,19 @@ mod tests {
     }
 
     #[test]
-    fn keybox_url_parsing() {
-        // Test URL construction for keybox health endpoint
-        let keybox_url = "http://keybox:8080";
-        let health_url = url::Url::parse(keybox_url).map_or_else(
-            |_| format!("{keybox_url}:8081/health/ready"),
-            |mut url| {
-                url.set_port(Some(8081)).ok();
-                url.set_path("/health/ready");
-                url.to_string()
-            },
-        );
-
+    fn keybox_health_url_construction() {
+        // check_keybox appends /health/ready to the configured health URL
+        let keybox_health_url = "http://keybox:8081";
+        let health_url = format!("{}/health/ready", keybox_health_url.trim_end_matches('/'));
         assert_eq!(health_url, "http://keybox:8081/health/ready");
     }
 
     #[test]
-    fn keybox_url_parsing_with_port() {
-        // Test URL construction when keybox URL already has a port
-        let keybox_url = "http://keybox:8080";
-        let health_url = url::Url::parse(keybox_url).map_or_else(
-            |_| format!("{keybox_url}:8081/health/ready"),
-            |mut url| {
-                url.set_port(Some(8081)).ok();
-                url.set_path("/health/ready");
-                url.to_string()
-            },
-        );
-
-        // The port 8080 should be replaced with 8081
-        assert_eq!(health_url, "http://keybox:8081/health/ready");
+    fn keybox_health_url_trailing_slash() {
+        // Trailing slash on the configured URL should be handled
+        let keybox_health_url = "http://keybox:8091/";
+        let health_url = format!("{}/health/ready", keybox_health_url.trim_end_matches('/'));
+        assert_eq!(health_url, "http://keybox:8091/health/ready");
     }
 
     #[test]

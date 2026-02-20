@@ -81,9 +81,9 @@ pub struct AppState {
     /// Garage service for garage lifecycle management with full K8s integration.
     /// When `None`, garage create only writes to database (no K8s resources).
     pub garage_service: Option<GarageService>,
-    /// Keybox URL for health checks.
+    /// Keybox health URL for health checks (e.g., `http://keybox:8081`).
     /// When `None`, keybox health check is skipped (for testing/local dev).
-    pub keybox_url: Option<String>,
+    pub keybox_health_url: Option<String>,
 }
 
 impl AppState {
@@ -105,7 +105,7 @@ impl AppState {
             k8s_client: None,
             garage_k8s: None,
             garage_service: None,
-            keybox_url: None,
+            keybox_health_url: None,
         }
     }
 
@@ -130,10 +130,10 @@ impl AppState {
         self
     }
 
-    /// Creates a new `AppState` with a keybox URL for health checks.
+    /// Creates a new `AppState` with a keybox health URL for health checks.
     #[must_use]
-    pub fn with_keybox_url(mut self, keybox_url: String) -> Self {
-        self.keybox_url = Some(keybox_url);
+    pub fn with_keybox_health_url(mut self, keybox_health_url: String) -> Self {
+        self.keybox_health_url = Some(keybox_health_url);
         self
     }
 

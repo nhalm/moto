@@ -2080,6 +2080,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -2109,7 +2110,6 @@ dependencies = [
  "tokio-test",
  "tower",
  "tracing",
- "url",
  "uuid",
 ]
 

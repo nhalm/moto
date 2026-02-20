@@ -15,7 +15,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v1.8
+## moto-club.md v1.9
 
 **Status:** Complete
 
@@ -69,9 +69,10 @@ HOW TO USE THIS FILE:
 - Remove InMemoryPeerStore from moto-club-wg peers.rs (v1.7: deleted InMemoryPeerStore struct and impl; removed HashMap and Mutex imports; removed export from lib.rs; existing tests are already unit tests for serialization or marked as requiring PostgreSQL)
 - Remove InMemorySessionStore from moto-club-wg sessions.rs (v1.7: deleted InMemorySessionStore struct and impl; removed HashMap and Mutex imports; removed export from lib.rs; existing tests are already unit tests for Session methods and serde)
 - Convert ignored integration tests to use moto-test-utils (v1.8: moto-club-api/src/wg_test.rs handler_tests module now uses `#[cfg(feature = "integration")]` instead of `#[ignore]`; tests use test_pool() for database connection and unique_owner() for test isolation)
+- Add MOTO_CLUB_KEYBOX_HEALTH_URL env var (v1.9: configures keybox health check endpoint separately from API URL; defaults to MOTO_CLUB_KEYBOX_URL with port replaced by 8081; AppState.keybox_health_url field replaces keybox_url; check_keybox uses URL directly instead of hardcoded port replacement)
 
 **Remaining:**
-(none - moto-club.md v1.8 implementation complete)
+(none - moto-club.md v1.9 implementation complete)
 
 ---
 

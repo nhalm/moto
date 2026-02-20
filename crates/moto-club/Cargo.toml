@@ -31,6 +31,9 @@ metrics-process = { workspace = true }
 # Kubernetes
 kube = { workspace = true }
 
+# URL parsing
+url = { workspace = true }
+
 # Internal crates
 moto-club-api = { workspace = true }
 moto-club-db = { workspace = true }

@@ -77,8 +77,10 @@ struct Config {
     dev_container_image: Option<String>,
     /// Reconciliation interval.
     reconcile_interval: Duration,
-    /// Keybox URL for health checks and SVID issuance.
-    keybox_url: Option<String>,
+    /// Keybox health URL for health checks.
+    /// Configured via `MOTO_CLUB_KEYBOX_HEALTH_URL`, or derived from
+    /// `MOTO_CLUB_KEYBOX_URL` with port replaced by 8081.
+    keybox_health_url: Option<String>,
 }
 
 impl Config {
@@ -119,6 +121,16 @@ impl Config {
 
         let keybox_url = env::var("MOTO_CLUB_KEYBOX_URL").ok();
 
+        // MOTO_CLUB_KEYBOX_HEALTH_URL overrides the health check endpoint.
+        // Defaults to MOTO_CLUB_KEYBOX_URL with port replaced by 8081.
+        let keybox_health_url = env::var("MOTO_CLUB_KEYBOX_HEALTH_URL").ok().or_else(|| {
+            keybox_url.as_ref().and_then(|base| {
+                let mut url = url::Url::parse(base).ok()?;
+                url.set_port(Some(8081)).ok()?;
+                Some(url.to_string().trim_end_matches('/').to_string())
+            })
+        });
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -126,7 +138,7 @@ impl Config {
             metrics_bind_addr,
             dev_container_image,
             reconcile_interval: Duration::from_secs(reconcile_interval),
-            keybox_url,
+            keybox_health_url,
         })
     }
 }
@@ -267,10 +279,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     .with_garage_k8s(api_garage_k8s)
     .with_garage_service(garage_service);
 
-    // Add keybox URL for health checks if configured
-    if let Some(ref keybox_url) = config.keybox_url {
-        info!(keybox_url = %keybox_url, "keybox health checks enabled");
-        state = state.with_keybox_url(keybox_url.clone());
+    // Add keybox health URL for health checks if configured
+    if let Some(ref health_url) = config.keybox_health_url {
+        info!(keybox_health_url = %health_url, "keybox health checks enabled");
+        state = state.with_keybox_health_url(health_url.clone());
     } else {
         info!("keybox URL not configured, health checks will skip keybox");
     }
