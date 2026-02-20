@@ -10,6 +10,15 @@
 - **Spec index:** `specs/README.md` lists all specifications organized by phase.
 - **Changelogs are immutable.** When creating new changelog entries, old entries never change.
 
+## tracks.md
+
+**Every implementation MUST update tracks.md.** This is not optional.
+
+- **Move completed items** from Remaining to Implemented in the same commit as your code change.
+- **Match spec versions.** If the spec version is newer than the tracks.md section header, update the header and add new Remaining items from the changelog.
+- **Be accurate.** Implemented means fully working and verified. Don't move items that are partially done.
+- **Include tracks.md in your commit.** Code changes without a tracks.md update are incomplete.
+
 ## Conventions
 
 - All crates use the `moto-` prefix

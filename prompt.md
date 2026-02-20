@@ -12,9 +12,14 @@ IMPORTANT:
 - Follow the instructions in tracks.md
 - If code contradicts the spec, fix the code first (see AGENTS.md)
 - Check the spec Changelog for recent changes that might affect existing code
-- Commit your changes
 - Do NOT use TodoWrite - just do the work
 - Do NOT do multiple things - ONE thing per iteration
+
+AFTER IMPLEMENTING - you MUST do these before committing:
+
+1. Update tracks.md: move the item you implemented from **Remaining** to **Implemented**
+2. If the spec version in tracks.md doesn't match the spec file, update the section header
+3. Commit your code changes AND the tracks.md update together in one commit
 
 Output `TASK_COMPLETE: true` when done.
 Output `LOOP_COMPLETE: true` if "Remaining" is empty (only blocked items left).
