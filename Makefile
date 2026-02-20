@@ -5,7 +5,7 @@
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
-.PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club
+.PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
 
 # Set up local development environment
 install:
@@ -299,6 +299,9 @@ dev-keybox:
 	MOTO_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token \
 	RUST_LOG=moto_keybox=debug \
 	cargo run --bin moto-keybox-server
+
+# Build and push garage image to local registry (localhost:5000)
+dev-garage-image: build-garage push-garage
 
 # Start moto-club with dev config (runs in foreground)
 dev-club:
