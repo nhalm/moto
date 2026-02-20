@@ -358,6 +358,14 @@ mod integration_tests {
     // ── update_secret_version ──
 
     #[tokio::test]
+    async fn update_secret_version_not_found() {
+        let pool = test_pool().await;
+
+        let result = secret_repo::update_secret_version(&pool, Uuid::now_v7(), 2).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
     async fn update_secret_version_increments() {
         let pool = test_pool().await;
         let name = unique_secret_name();
