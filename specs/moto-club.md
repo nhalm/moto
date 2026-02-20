@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.8 |
+| Version | 1.9 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-05 |
 
@@ -1141,6 +1141,7 @@ Structured JSON logging to stdout:
 # Required
 MOTO_CLUB_DATABASE_URL="postgres://moto:password@localhost:5432/moto"
 MOTO_CLUB_KEYBOX_URL="http://keybox:8080"
+MOTO_CLUB_KEYBOX_HEALTH_URL="http://keybox:8081"  # Optional, defaults to KEYBOX_URL with port 8081
 
 # K8s (auto-detected in-cluster, or specify for out-of-cluster)
 KUBECONFIG="/path/to/kubeconfig"          # Optional, for local dev
@@ -1206,6 +1207,9 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v1.9 (2026-02-20)
+- Add `MOTO_CLUB_KEYBOX_HEALTH_URL` env var for configuring keybox health check endpoint separately from the API URL. Defaults to `MOTO_CLUB_KEYBOX_URL` with port replaced by 8081. Required for local dev where keybox health runs on a non-standard port (8091).
 
 ### v1.8 (2026-02-06)
 - Add tests per [testing.md](testing.md) architecture

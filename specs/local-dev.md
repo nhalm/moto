@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
+| Version | 0.3 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-20 |
 
@@ -115,6 +115,7 @@ Both servers default to port 8080, so local dev must use different ports:
 |----------|-----------|
 | `MOTO_CLUB_DATABASE_URL` | `postgres://moto:moto@localhost:5432/moto_club` |
 | `MOTO_CLUB_KEYBOX_URL` | `http://localhost:8090` |
+| `MOTO_CLUB_KEYBOX_HEALTH_URL` | `http://localhost:8091` |
 | `MOTO_CLUB_DEV_CONTAINER_IMAGE` | `localhost:5000/moto-garage:latest` |
 | `RUST_LOG` | `moto_club=debug` |
 
@@ -156,7 +157,7 @@ MOTO_USER=nick moto garage open --no-attach
 
 ### Shortcut
 
-`make dev-up` runs steps 2-7 automatically. Starts moto-club in foreground — Ctrl-C stops everything.
+`make dev-up` runs steps 2-4 and 6-7 automatically (skips the garage image build). Starts moto-club in foreground — Ctrl-C stops everything. The garage image (step 5) is a one-time setup — run `make dev-garage-image` separately before your first `garage open`.
 
 ### Teardown
 
@@ -224,6 +225,10 @@ moto/
 - [service-deploy.md](service-deploy.md) — K8s deployment (alternative)
 
 ## Changelog
+
+### v0.3 (2026-02-20)
+- Add `MOTO_CLUB_KEYBOX_HEALTH_URL` to moto-club env vars (keybox health port differs in local dev)
+- `dev-up` no longer rebuilds the garage image on every run — `dev-garage-image` is a one-time setup step
 
 ### v0.2 (2026-02-20)
 - Add `dev-cluster` Makefile target for k3d cluster creation (was using bare `moto cluster init` CLI)
