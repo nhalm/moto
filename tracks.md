@@ -221,9 +221,11 @@ HOW TO USE THIS FILE:
 - Testing targets: test-db-up, test-db-down, test-db-migrate, test-integration, test-all, test-ci
 - Service container targets: build-club, push-club, build-keybox, push-keybox
 
+- Local dev targets: dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image, dev-down, dev-clean
+
 **Remaining:**
-- Local dev targets: dev-up, dev-down, dev-clean, dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image
-- Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system
+- Local dev targets: dev-up
+- Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (blocked: service-deploy.md)
 
 ---
 
@@ -401,10 +403,10 @@ HOW TO USE THIS FILE:
 - Makefile target: dev-keybox (start moto-keybox-server with dev env vars: port 8090/8091, .dev/keybox/ keys, PostgreSQL on localhost:5432/moto_keybox, RUST_LOG=moto_keybox=debug)
 - Makefile target: dev-club (start moto-club with dev config: MOTO_CLUB_DATABASE_URL, MOTO_CLUB_KEYBOX_URL, MOTO_CLUB_DEV_CONTAINER_IMAGE, RUST_LOG env vars per spec)
 - Makefile target: dev-garage-image (build-garage + push-garage to localhost:5000)
+- Makefile targets: dev-down (docker compose down), dev-clean (docker compose down -v + rm .dev/)
 
 **Remaining:**
 - Makefile target: dev-up (full stack shortcut)
-- Makefile target: dev-down, dev-clean (teardown)
 
 ---
 

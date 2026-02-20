@@ -6,6 +6,7 @@
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
+.PHONY: dev-down dev-clean
 
 # Set up local development environment
 install:
@@ -310,3 +311,16 @@ dev-club:
 	MOTO_CLUB_DEV_CONTAINER_IMAGE=localhost:5000/moto-garage:latest \
 	RUST_LOG=moto_club=debug \
 	cargo run --bin moto-club
+
+# Stop all dev services and database
+dev-down:
+	@echo "Stopping dev services..."
+	docker compose down
+	@echo "Dev services stopped."
+
+# Stop all dev services, remove database volume, and remove dev state
+dev-clean:
+	@echo "Cleaning dev state..."
+	docker compose down -v
+	rm -rf .dev/
+	@echo "Dev state cleaned."
