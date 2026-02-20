@@ -266,7 +266,7 @@ dev-cluster:
 # Start full local dev stack (postgres + keybox + club in foreground)
 # Runs setup steps, then starts keybox in background and moto-club in foreground
 # Ctrl-C stops everything
-dev-up: dev-db-up dev-keybox-init dev-db-migrate dev-garage-image
+dev-up: dev-db-up dev-keybox-init dev-db-migrate
 	@echo "Starting keybox in background..."
 	@MOTO_KEYBOX_BIND_ADDR=0.0.0.0:8090 \
 	MOTO_KEYBOX_HEALTH_BIND_ADDR=0.0.0.0:8091 \
