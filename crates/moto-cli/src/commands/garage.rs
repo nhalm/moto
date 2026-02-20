@@ -239,24 +239,30 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 }
             }
 
-            // Resolve the context name for display (used when --context all)
-            let context_name = effective_context.map_or_else(resolve_current_context, |ctx| {
-                if ctx == "all" {
-                    resolve_current_context()
-                } else {
-                    ctx.to_string()
-                }
-            });
+            // Resolve the current context for filtering and display
+            let current_context = resolve_current_context();
 
             let response = client
                 .list_garages()
                 .await
                 .map_err(client_error_to_cli_error)?;
 
+            // Filter garages by context. Garages from this moto-club belong to
+            // the current kubectl context. When --context <name> targets a
+            // different context, we have no garages to show from it.
+            let garages = if let Some(ctx) = effective_context {
+                if ctx == "all" || ctx == current_context {
+                    response.garages
+                } else {
+                    Vec::new()
+                }
+            } else {
+                response.garages
+            };
+
             if flags.json {
                 let json = GarageListJson {
-                    garages: response
-                        .garages
+                    garages: garages
                         .iter()
                         .map(|g| {
                             let created_at = chrono::DateTime::parse_from_rfc3339(&g.created_at)
@@ -277,7 +283,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                                 id: format_short_id(&g.id),
                                 name: g.name.clone(),
                                 context: if show_all {
-                                    Some(context_name.clone())
+                                    Some(current_context.clone())
                                 } else {
                                     None
                                 },
@@ -290,7 +296,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                         .collect(),
                 };
                 println!("{}", serde_json::to_string_pretty(&json)?);
-            } else if response.garages.is_empty() {
+            } else if garages.is_empty() {
                 if !flags.quiet {
                     println!("No garages found.");
                 }
@@ -300,7 +306,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                     "{:<9} {:<24} {:<14} {:<9} {:<12} {:<10} AGE",
                     "ID", "NAME", "CONTEXT", "BRANCH", "STATUS", "TTL"
                 );
-                for g in response.garages {
+                for g in garages {
                     let created_at = chrono::DateTime::parse_from_rfc3339(&g.created_at)
                         .map(|dt| dt.with_timezone(&chrono::Utc))
                         .unwrap_or(now);
@@ -312,7 +318,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                         "{:<9} {:<24} {:<14} {:<9} {:<12} {:<10} {}",
                         format_short_id(&g.id),
                         truncate(&g.name, 24),
-                        truncate(&context_name, 14),
+                        truncate(&current_context, 14),
                         truncate(branch, 9),
                         g.status,
                         ttl,
@@ -325,7 +331,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                     "{:<9} {:<24} {:<9} {:<12} {:<10} AGE",
                     "ID", "NAME", "BRANCH", "STATUS", "TTL"
                 );
-                for g in response.garages {
+                for g in garages {
                     let created_at = chrono::DateTime::parse_from_rfc3339(&g.created_at)
                         .map(|dt| dt.with_timezone(&chrono::Utc))
                         .unwrap_or(now);

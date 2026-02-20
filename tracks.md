@@ -120,7 +120,7 @@ HOW TO USE THIS FILE:
 
 ## moto-cli.md v0.5
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - Global flags: --json/-j, --verbose/-v (counted), --quiet/-q, --context/-c, --help/-h, --version/-V
@@ -145,9 +145,10 @@ HOW TO USE THIS FILE:
 - Fix: Implement garage logs command (v0.4)
 - Fix: `cluster init --json` output matches spec (v0.5: added `type` field with value "k3d", removed non-spec `api_endpoint`/`registry_endpoint` fields; JSON now emits `name`, `type`, `status` per spec)
 - Fix: `garage logs` respects `--context` global flag when creating K8s client (v0.5: uses K8sClient::with_context when --context flag is set, otherwise falls back to default context)
+- Fix: `garage list --context <name>` filters results by context (v0.5: garages from the current moto-club belong to the current kubectl context; when --context targets a different context, no garages are shown since that context's moto-club is not queried)
 
 **Remaining:**
-- Fix: `garage list --context <name>` must actually filter results by context (v0.5: v0.4 fix validates context name but does not filter the API response)
+(none - moto-cli.md v0.5 implementation complete)
 
 ---
 
