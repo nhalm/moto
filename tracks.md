@@ -203,7 +203,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.8
+## makefile.md v0.9
 
 **Status:** In Progress
 
@@ -221,6 +221,7 @@ HOW TO USE THIS FILE:
 - Testing targets: test-db-up, test-db-down, test-db-migrate, test-integration, test-all, test-ci
 - Service container targets: build-club, push-club, build-keybox, push-keybox
 - Local dev targets: dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image, dev-up, dev-down, dev-clean
+- Local dev target: dev-cluster (k3d cluster creation via moto CLI)
 
 **Remaining:**
 - Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (blocked: service-deploy.md)
@@ -388,7 +389,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## local-dev.md v0.1
+## local-dev.md v0.2
 
 **Status:** In Progress
 
@@ -402,11 +403,11 @@ HOW TO USE THIS FILE:
 - Makefile target: dev-club (start moto-club with dev config: MOTO_CLUB_DATABASE_URL, MOTO_CLUB_KEYBOX_URL, MOTO_CLUB_DEV_CONTAINER_IMAGE, RUST_LOG env vars per spec)
 - Makefile target: dev-garage-image (build-garage + push-garage to localhost:5000)
 - Makefile targets: dev-down (docker compose down), dev-clean (docker compose down -v + rm .dev/)
-
 - Makefile target: dev-up (full stack shortcut: dev-db-up + dev-keybox-init + dev-db-migrate + dev-garage-image + keybox background + moto-club foreground; Ctrl-C stops everything)
+- Makefile target: dev-cluster (k3d cluster creation via moto CLI, idempotent)
 
 **Remaining:**
-(none - local-dev.md v0.1 implementation complete)
+(none - local-dev.md v0.2 implementation complete)
 
 ---
 
