@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.1 |
+| Version | 0.2 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-19 |
+| Last Updated | 2026-02-20 |
 
 ## Overview
 
@@ -130,7 +130,7 @@ Full sequence from zero to working:
 
 ```bash
 # 1. Create k3d cluster (idempotent)
-moto cluster init
+make dev-cluster
 
 # 2. Start development database
 make dev-db-up
@@ -169,6 +169,7 @@ MOTO_USER=nick moto garage open --no-attach
 
 | Target | Description |
 |--------|-------------|
+| `dev-cluster` | Create k3d cluster (idempotent, see [local-cluster.md](local-cluster.md)) |
 | `dev-up` | Start full local dev stack |
 | `dev-down` | Stop all services and database |
 | `dev-clean` | dev-down + remove all dev state |
@@ -202,7 +203,7 @@ moto/
 |---------|----------|
 | Port 5432 in use | Stop local Postgres or change port in docker-compose.yml |
 | Port 8080/8090 in use | Check for other services on those ports |
-| `moto-club` can't reach K8s | Run `moto cluster init` |
+| `moto-club` can't reach K8s | Run `make dev-cluster` |
 | Garage pod `ImagePullBackOff` | Run `make dev-garage-image` |
 | Keybox key errors | Delete `.dev/keybox/` and run `make dev-keybox-init` |
 | Migration errors | Check postgres is running: `docker compose ps` |
@@ -223,6 +224,9 @@ moto/
 - [service-deploy.md](service-deploy.md) — K8s deployment (alternative)
 
 ## Changelog
+
+### v0.2 (2026-02-20)
+- Add `dev-cluster` Makefile target for k3d cluster creation (was using bare `moto cluster init` CLI)
 
 ### v0.1 (2026-02-19)
 - Initial specification

@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.8 |
+| Version | 0.9 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-19 |
+| Last Updated | 2026-02-20 |
 
 ## Overview
 
@@ -131,6 +131,7 @@ See [testing.md](testing.md) for test infrastructure specification.
 ### Local Dev Targets
 
 ```makefile
+dev-cluster:         # Create k3d cluster via moto CLI (idempotent)
 dev-up:              # Start full local dev stack (postgres + keybox + club)
 dev-down:            # Stop all services and database
 dev-clean:           # dev-down + remove pgdata volume + remove .dev/
@@ -173,12 +174,15 @@ All targets should be declared `.PHONY` since they don't produce files:
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all test-ci
-.PHONY: dev-up dev-down dev-clean dev-db-up dev-db-down dev-db-migrate
+.PHONY: dev-cluster dev-up dev-down dev-clean dev-db-up dev-db-down dev-db-migrate
 .PHONY: dev-keybox-init dev-keybox dev-club dev-garage-image
 .PHONY: deploy-secrets deploy-system deploy-status undeploy-system
 ```
 
 ## Changelog
+
+### v0.9 (2026-02-20)
+- Add `dev-cluster` target for k3d cluster creation via moto CLI
 
 ### v0.8 (2026-02-19)
 - Add `test-ci` to testing targets (was implemented but not in spec)
