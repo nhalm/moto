@@ -384,9 +384,9 @@ HOW TO USE THIS FILE:
 - moto-keybox-db integration tests: secret_repo_test.rs (28 tests, all 13 public functions)
 - moto-keybox-db integration tests: audit_repo_test.rs (12 tests, all 3 public functions)
 - moto-keybox-db: add not-found error path test for `update_secret_version` (v0.5: verifies `fetch_one` returns error on nonexistent ID)
+- moto-keybox-db: add not-found error path test for `delete_secret` (v0.5: silently succeeds on nonexistent ID, behavior verified)
 
 **Remaining:**
-- moto-keybox-db: add not-found error path test for `delete_secret` (v0.5: silently succeeds on nonexistent ID, behavior untested)
 - CI workflow: .github/workflows/test.yml (future)
 
 ---

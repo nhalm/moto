@@ -408,6 +408,14 @@ mod integration_tests {
         assert!(result.is_none());
     }
 
+    #[tokio::test]
+    async fn delete_secret_not_found_succeeds() {
+        let pool = test_pool().await;
+
+        let result = secret_repo::delete_secret(&pool, Uuid::now_v7()).await;
+        assert!(result.is_ok());
+    }
+
     // ── create_encrypted_dek / get_encrypted_dek ──
 
     #[tokio::test]
