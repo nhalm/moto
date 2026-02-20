@@ -595,7 +595,11 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             // Parse since duration if provided
             let since_seconds = since.as_deref().map(parse_duration).transpose()?;
 
-            let k8s_client = K8sClient::new().await?;
+            let k8s_client = if let Some(ctx) = flags.context.as_deref() {
+                K8sClient::with_context(ctx).await?
+            } else {
+                K8sClient::new().await?
+            };
 
             let log_options = PodLogOptions {
                 tail_lines: Some(tail),

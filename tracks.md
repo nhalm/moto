@@ -144,10 +144,10 @@ HOW TO USE THIS FILE:
 - Fix: --owner flag passed to API (v0.4)
 - Fix: Implement garage logs command (v0.4)
 - Fix: `cluster init --json` output matches spec (v0.5: added `type` field with value "k3d", removed non-spec `api_endpoint`/`registry_endpoint` fields; JSON now emits `name`, `type`, `status` per spec)
+- Fix: `garage logs` respects `--context` global flag when creating K8s client (v0.5: uses K8sClient::with_context when --context flag is set, otherwise falls back to default context)
 
 **Remaining:**
 - Fix: `garage list --context <name>` must actually filter results by context (v0.5: v0.4 fix validates context name but does not filter the API response)
-- Fix: `garage logs` must respect `--context` global flag when creating K8s client (v0.5: currently always uses default kubectl context)
 
 ---
 
