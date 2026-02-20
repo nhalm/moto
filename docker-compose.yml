@@ -1,0 +1,22 @@
+# Development database for local dev workflow
+# See specs/local-dev.md for details
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: moto
+      POSTGRES_PASSWORD: moto
+      POSTGRES_DB: moto_club
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-dev-db.sql:/docker-entrypoint-initdb.d/init-dev-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moto"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

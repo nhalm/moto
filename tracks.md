@@ -224,9 +224,6 @@ HOW TO USE THIS FILE:
 **Remaining:**
 - Local dev targets: dev-up, dev-down, dev-clean, dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image
 - Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system
-- docker-compose.yml for dev databases (port 5432)
-- scripts/init-dev-db.sql (creates moto_keybox database)
-- .dev/ added to .gitignore
 
 ---
 
@@ -393,15 +390,14 @@ HOW TO USE THIS FILE:
 
 ## local-dev.md v0.1
 
-**Status:** Not Started
+**Status:** In Progress
 
 **Implemented:**
-(none)
+- docker-compose.yml with dev Postgres on port 5432 (postgres:16-alpine, moto/moto creds, pgdata volume, healthcheck, init script mount)
+- scripts/init-dev-db.sql (creates moto_keybox database via docker-entrypoint-initdb.d)
+- .dev/ added to .gitignore
 
 **Remaining:**
-- docker-compose.yml with dev Postgres on port 5432
-- scripts/init-dev-db.sql (creates moto_keybox database)
-- .dev/ added to .gitignore
 - Makefile targets: dev-db-up, dev-db-down, dev-db-migrate
 - Makefile target: dev-keybox-init (generate keys in .dev/keybox/)
 - Makefile target: dev-keybox (start keybox server with dev config)

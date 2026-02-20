@@ -31,6 +31,9 @@ keys/
 # Docker
 .docker/
 
+# Local dev state
+.dev/
+
 # Misc
 *.log
 tmp/
