@@ -396,9 +396,9 @@ HOW TO USE THIS FILE:
 - docker-compose.yml with dev Postgres on port 5432 (postgres:16-alpine, moto/moto creds, pgdata volume, healthcheck, init script mount)
 - scripts/init-dev-db.sql (creates moto_keybox database via docker-entrypoint-initdb.d)
 - .dev/ added to .gitignore
+- Makefile targets: dev-db-up (docker compose up --wait), dev-db-down (docker compose down), dev-db-migrate (sqlx migrate run for moto-club-db against dev database)
 
 **Remaining:**
-- Makefile targets: dev-db-up, dev-db-down, dev-db-migrate
 - Makefile target: dev-keybox-init (generate keys in .dev/keybox/)
 - Makefile target: dev-keybox (start keybox server with dev config)
 - Makefile target: dev-club (start moto-club with dev config)

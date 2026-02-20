@@ -5,6 +5,7 @@
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
+.PHONY: dev-db-up dev-db-down dev-db-migrate
 
 # Set up local development environment
 install:
@@ -251,3 +252,26 @@ test-integration: test-db-down test-db-up test-db-migrate
 # Run unit tests + integration tests (fresh database cycle)
 test-all: test
 	$(MAKE) test-integration
+
+# === Local Development ===
+
+# Dev database URL for moto-club
+DEV_DATABASE_URL ?= postgres://moto:moto@localhost:5432/moto_club
+
+# Start dev database via docker-compose, wait for healthcheck
+dev-db-up:
+	@echo "Starting dev database..."
+	docker compose up -d --wait
+	@echo "Dev database ready on port 5432."
+
+# Stop dev database
+dev-db-down:
+	@echo "Stopping dev database..."
+	docker compose down
+	@echo "Dev database stopped."
+
+# Run moto-club-db migrations against dev database
+dev-db-migrate:
+	@echo "Running moto-club-db migrations..."
+	cargo sqlx migrate run --source crates/moto-club-db/migrations --database-url $(DEV_DATABASE_URL)
+	@echo "Migrations complete."
