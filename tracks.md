@@ -222,9 +222,9 @@ HOW TO USE THIS FILE:
 - Service container targets: build-club, push-club, build-keybox, push-keybox
 
 - Local dev targets: dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image, dev-down, dev-clean
+- Local dev targets: dev-up
 
 **Remaining:**
-- Local dev targets: dev-up
 - Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (blocked: service-deploy.md)
 
 ---
@@ -405,8 +405,10 @@ HOW TO USE THIS FILE:
 - Makefile target: dev-garage-image (build-garage + push-garage to localhost:5000)
 - Makefile targets: dev-down (docker compose down), dev-clean (docker compose down -v + rm .dev/)
 
+- Makefile target: dev-up (full stack shortcut: dev-db-up + dev-keybox-init + dev-db-migrate + dev-garage-image + keybox background + moto-club foreground; Ctrl-C stops everything)
+
 **Remaining:**
-- Makefile target: dev-up (full stack shortcut)
+(none - local-dev.md v0.1 implementation complete)
 
 ---
 

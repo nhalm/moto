@@ -5,8 +5,8 @@
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
+.PHONY: dev-up dev-down dev-clean
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
-.PHONY: dev-down dev-clean
 
 # Set up local development environment
 install:
@@ -258,6 +258,29 @@ test-all: test
 
 # Dev database URL for moto-club
 DEV_DATABASE_URL ?= postgres://moto:moto@localhost:5432/moto_club
+
+# Start full local dev stack (postgres + keybox + club in foreground)
+# Runs setup steps, then starts keybox in background and moto-club in foreground
+# Ctrl-C stops everything
+dev-up: dev-db-up dev-keybox-init dev-db-migrate dev-garage-image
+	@echo "Starting keybox in background..."
+	@MOTO_KEYBOX_BIND_ADDR=0.0.0.0:8090 \
+	MOTO_KEYBOX_HEALTH_BIND_ADDR=0.0.0.0:8091 \
+	MOTO_KEYBOX_MASTER_KEY_FILE=.dev/keybox/master.key \
+	MOTO_KEYBOX_SVID_SIGNING_KEY_FILE=.dev/keybox/signing.key \
+	MOTO_KEYBOX_DATABASE_URL=postgres://moto:moto@localhost:5432/moto_keybox \
+	MOTO_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token \
+	RUST_LOG=moto_keybox=debug \
+	cargo run --bin moto-keybox-server & \
+	KEYBOX_PID=$$!; \
+	trap "kill $$KEYBOX_PID 2>/dev/null; wait $$KEYBOX_PID 2>/dev/null" EXIT INT TERM; \
+	echo "Keybox started (PID $$KEYBOX_PID)"; \
+	echo "Starting moto-club in foreground (Ctrl-C to stop all)..."; \
+	MOTO_CLUB_DATABASE_URL=postgres://moto:moto@localhost:5432/moto_club \
+	MOTO_CLUB_KEYBOX_URL=http://localhost:8090 \
+	MOTO_CLUB_DEV_CONTAINER_IMAGE=localhost:5000/moto-garage:latest \
+	RUST_LOG=moto_club=debug \
+	cargo run --bin moto-club
 
 # Start dev database via docker-compose, wait for healthcheck
 dev-db-up:
