@@ -220,9 +220,7 @@ HOW TO USE THIS FILE:
 - .PHONY declarations for all targets
 - Testing targets: test-db-up, test-db-down, test-db-migrate, test-integration, test-all, test-ci
 - Service container targets: build-club, push-club, build-keybox, push-keybox
-
-- Local dev targets: dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image, dev-down, dev-clean
-- Local dev targets: dev-up
+- Local dev targets: dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image, dev-up, dev-down, dev-clean
 
 **Remaining:**
 - Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (blocked: service-deploy.md)
