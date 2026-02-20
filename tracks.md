@@ -390,7 +390,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## local-dev.md v0.2
+## local-dev.md v0.3
 
 **Status:** In Progress
 
@@ -406,9 +406,10 @@ HOW TO USE THIS FILE:
 - Makefile targets: dev-down (docker compose down), dev-clean (docker compose down -v + rm .dev/)
 - Makefile target: dev-up (full stack shortcut: dev-db-up + dev-keybox-init + dev-db-migrate + dev-garage-image + keybox background + moto-club foreground; Ctrl-C stops everything)
 - Makefile target: dev-cluster (k3d cluster creation via moto CLI, idempotent)
+- Add MOTO_CLUB_KEYBOX_HEALTH_URL=http://localhost:8091 to dev-club and dev-up targets (v0.3: keybox health port differs from API port in local dev)
 
 **Remaining:**
-(none - local-dev.md v0.2 implementation complete)
+- Remove dev-garage-image from dev-up prerequisites (v0.3: dev-up no longer rebuilds garage image on every run; dev-garage-image is a one-time setup step)
 
 ---
 
