@@ -56,9 +56,9 @@ const API_PORT: u16 = 6550;
 #[derive(Serialize)]
 struct ClusterInitJson {
     name: String,
+    #[serde(rename = "type")]
+    cluster_type: String,
     status: String,
-    api_endpoint: String,
-    registry_endpoint: String,
 }
 
 /// JSON output for cluster status
@@ -333,9 +333,8 @@ async fn init_cluster(flags: &GlobalFlags, force: bool) -> Result<()> {
         if flags.json {
             let json = ClusterInitJson {
                 name: CLUSTER_NAME.to_string(),
+                cluster_type: "k3d".to_string(),
                 status: "exists".to_string(),
-                api_endpoint: format!("https://localhost:{API_PORT}"),
-                registry_endpoint: format!("localhost:{REGISTRY_PORT}"),
             };
             println!("{}", serde_json::to_string_pretty(&json)?);
         } else if !flags.quiet {
@@ -364,9 +363,8 @@ async fn init_cluster(flags: &GlobalFlags, force: bool) -> Result<()> {
     if flags.json {
         let json = ClusterInitJson {
             name: CLUSTER_NAME.to_string(),
+            cluster_type: "k3d".to_string(),
             status: "created".to_string(),
-            api_endpoint: format!("https://localhost:{API_PORT}"),
-            registry_endpoint: format!("localhost:{REGISTRY_PORT}"),
         };
         println!("{}", serde_json::to_string_pretty(&json)?);
     } else if !flags.quiet {
@@ -884,21 +882,20 @@ mod tests {
 
     #[test]
     fn test_cluster_init_json_created() {
-        // Test JSON output format for newly created cluster
+        // Test JSON output format matches spec:
+        // { "name": "moto", "type": "k3d", "status": "created" }
         let json = ClusterInitJson {
             name: CLUSTER_NAME.to_string(),
+            cluster_type: "k3d".to_string(),
             status: "created".to_string(),
-            api_endpoint: format!("https://localhost:{API_PORT}"),
-            registry_endpoint: format!("localhost:{REGISTRY_PORT}"),
         };
 
         let output = serde_json::to_string_pretty(&json).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
 
         assert_eq!(parsed["name"], "moto");
+        assert_eq!(parsed["type"], "k3d");
         assert_eq!(parsed["status"], "created");
-        assert_eq!(parsed["api_endpoint"], "https://localhost:6550");
-        assert_eq!(parsed["registry_endpoint"], "localhost:5000");
     }
 
     #[test]
@@ -906,18 +903,16 @@ mod tests {
         // Test JSON output format for already-existing cluster (idempotent)
         let json = ClusterInitJson {
             name: CLUSTER_NAME.to_string(),
+            cluster_type: "k3d".to_string(),
             status: "exists".to_string(),
-            api_endpoint: format!("https://localhost:{API_PORT}"),
-            registry_endpoint: format!("localhost:{REGISTRY_PORT}"),
         };
 
         let output = serde_json::to_string_pretty(&json).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
 
         assert_eq!(parsed["name"], "moto");
+        assert_eq!(parsed["type"], "k3d");
         assert_eq!(parsed["status"], "exists");
-        assert_eq!(parsed["api_endpoint"], "https://localhost:6550");
-        assert_eq!(parsed["registry_endpoint"], "localhost:5000");
     }
 
     #[test]
