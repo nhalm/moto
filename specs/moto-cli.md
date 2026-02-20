@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
+| Version | 0.5 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-04 |
+| Last Updated | 2026-02-19 |
 
 ## Overview
 
@@ -411,9 +411,9 @@ Cluster ready.
 **JSON output:**
 ```json
 {
-  "name": "local",
-  "type": "k3s",
-  "status": "ready"
+  "name": "moto",
+  "type": "k3d",
+  "status": "created"
 }
 ```
 
@@ -508,6 +508,12 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.5
+- Fix: `garage list --context <name>` must actually filter results by context (v0.4 fix validated context name but did not filter the API response)
+- Fix: `garage logs` must respect `--context` global flag when creating K8s client (currently always uses default kubectl context)
+- Fix: `cluster init --json` must include `type` field per spec (currently omitted from output)
+- Fix: `cluster init --json` example corrected: `"name": "moto"`, `"type": "k3d"`, `"status": "created"` (was stale `"local"`, `"k3s"`, `"ready"`)
 
 ### v0.4
 - Fix: Implement `garage logs` command (currently returns error directing to kubectl)

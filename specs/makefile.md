@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.7 |
+| Version | 0.8 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-18 |
+| Last Updated | 2026-02-19 |
 
 ## Overview
 
@@ -123,6 +123,7 @@ test-db-down:        # Stop test database, remove volumes
 test-db-migrate:     # Run migrations for moto-club-db AND moto-keybox-db against test database
 test-integration:    # Fresh database cycle: test-db-up + test-db-migrate + integration tests + test-db-down
 test-all:            # Unit tests (make test) + integration tests
+test-ci:             # For CI: assumes database already running, runs unit + integration tests
 ```
 
 See [testing.md](testing.md) for test infrastructure specification.
@@ -171,13 +172,16 @@ All targets should be declared `.PHONY` since they don't produce files:
 .PHONY: build-bike test-bike
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
-.PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
+.PHONY: test-db-up test-db-down test-db-migrate test-integration test-all test-ci
 .PHONY: dev-up dev-down dev-clean dev-db-up dev-db-down dev-db-migrate
 .PHONY: dev-keybox-init dev-keybox dev-club dev-garage-image
 .PHONY: deploy-secrets deploy-system deploy-status undeploy-system
 ```
 
 ## Changelog
+
+### v0.8 (2026-02-19)
+- Add `test-ci` to testing targets (was implemented but not in spec)
 
 ### v0.7 (2026-02-18)
 - Add service container targets: `build-club`, `push-club`, `build-keybox`, `push-keybox`

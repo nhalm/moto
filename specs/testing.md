@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
+| Version | 0.5 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-06 |
+| Last Updated | 2026-02-19 |
 
 ## Overview
 
@@ -36,6 +36,9 @@ Shared utilities for integration tests: database pool, unique identifier generat
 - `test-ci` - For CI (database already running)
 
 ## Changelog
+
+### v0.5 (2026-02-19)
+- All repository functions should have not-found / error path tests (e.g., `update_secret_version` and `delete_secret` in secret_repo are missing not-found coverage)
 
 ### v0.4 (2026-02-06)
 - Added test architecture: db crates get integration tests, handlers use mocks

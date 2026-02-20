@@ -118,7 +118,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-cli.md v0.4
+## moto-cli.md v0.5
 
 **Status:** In Progress
 
@@ -141,12 +141,13 @@ HOW TO USE THIS FILE:
 - Actionable error messages with suggestions
 - --branch flag on garage open (tracked in garage-lifecycle.md v0.4)
 - --no-attach flag on garage open (tracked in garage-lifecycle.md v0.4)
-- Fix: --owner flag passed to API (v0.4: create_client accepts owner_override param; garage open passes --owner value to override MOTO_USER env var for Bearer token auth)
-- Fix: --context filtering for garage list (v0.4: global --context flag validated against kubeconfig contexts; --context all shows CONTEXT column with current context name; --context <name> validates context exists; JSON output includes context field when --context all; resolve_current_context helper reads kubeconfig via K8sClient; format_ttl_remaining helper reduces duplication)
-- Fix: Implement garage logs command (v0.4: get garage details via MotoClubClient to resolve UUID, derive namespace moto-garage-{short_id}, use K8sClient PodOps to fetch/stream pod logs; supports --follow/-f streaming, --tail/-n, --since; follows same pattern as bike logs)
+- Fix: --owner flag passed to API (v0.4)
+- Fix: Implement garage logs command (v0.4)
 
 **Remaining:**
-(none - moto-cli.md v0.4 implementation complete)
+- Fix: `garage list --context <name>` must actually filter results by context (v0.5: v0.4 fix validates context name but does not filter the API response)
+- Fix: `garage logs` must respect `--context` global flag when creating K8s client (v0.5: currently always uses default kubectl context)
+- Fix: `cluster init --json` must include `type` field in output (v0.5: currently omitted)
 
 ---
 
@@ -201,7 +202,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.7
+## makefile.md v0.8
 
 **Status:** In Progress
 
@@ -216,15 +217,15 @@ HOW TO USE THIS FILE:
 - REGISTRY env var support (default: localhost:5000)
 - SHA tagging from git
 - .PHONY declarations for all targets
-- Testing targets: test-db-up, test-db-down, test-db-migrate, test-integration, test-all
-- Service container targets: build-club, push-club, build-keybox, push-keybox (Docker-wrapped Nix builds for moto-club-image and moto-keybox-image, push with latest + SHA tags)
+- Testing targets: test-db-up, test-db-down, test-db-migrate, test-integration, test-all, test-ci
+- Service container targets: build-club, push-club, build-keybox, push-keybox
 
 **Remaining:**
-- Local dev targets: dev-up, dev-down, dev-clean, dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image (blocked: local-dev.md)
-- Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (blocked: service-deploy.md)
-- docker-compose.yml for dev databases (port 5432) (blocked: local-dev.md)
-- scripts/init-dev-db.sql (creates moto_keybox database) (blocked: local-dev.md)
-- .dev/ added to .gitignore (blocked: local-dev.md)
+- Local dev targets: dev-up, dev-down, dev-clean, dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image
+- Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system
+- docker-compose.yml for dev databases (port 5432)
+- scripts/init-dev-db.sql (creates moto_keybox database)
+- .dev/ added to .gitignore
 
 ---
 
@@ -363,7 +364,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## testing.md v0.4
+## testing.md v0.5
 
 **Status:** In Progress
 
@@ -375,19 +376,16 @@ HOW TO USE THIS FILE:
 - moto-test-utils crate: test_pool(), unique_garage_name(), unique_owner(), fake_wg_pubkey()
 - moto-club-db integration tests: garage_repo_test.rs (15 tests)
 - moto-club-db integration tests: wg_device_repo_test.rs (13 tests)
-- Makefile target: test-db-up (docker compose -f docker-compose.test.yml up -d --wait, port 5433)
-- Makefile target: test-db-down (docker compose -f docker-compose.test.yml down -v)
-- Makefile target: test-db-migrate (cargo sqlx migrate run with --ignore-missing for moto-club-db AND moto-keybox-db)
-- Makefile target: test-integration (fresh database cycle: teardown, start, migrate, run integration tests, teardown; preserves test exit status through cleanup)
-- Makefile target: test-all (unit tests via `test` target, then full `test-integration` cycle)
-- Fix moto-club-api integration test compilation (19 tests: added missing imports for Arc, Body, Request, header, tower::ServiceExt, PostgresIpamStore, PostgresPeerStore, PostgresSessionStore, Ipam, PeerRegistry, SessionManager, PeerBroadcaster, DerpNode, DerpRegion to handler_tests module in wg_test.rs)
-- moto-club-db integration tests: wg_session_repo_test.rs (25 tests covering all 11 public functions: get_by_id, create, list_active_by_device, list_active_by_garage, list_all_by_device, list_by_owner, list_by_owner_with_details, close, close_all_for_garage, verify_ownership, delete)
-- moto-club-db integration tests: wg_garage_repo_test.rs (18 tests covering all 7 public functions: get_by_garage_id, exists, register, update_endpoints, increment_peer_version, get_peer_version, delete)
-
-- moto-keybox-db integration tests: secret_repo_test.rs (28 tests covering all 13 public functions: create_secret, get_secret, get_secret_by_id, list_secrets, list_service_secrets, list_instance_secrets, update_secret_version, delete_secret, create_encrypted_dek, get_encrypted_dek, create_secret_version, get_current_secret_version, get_secret_with_value)
-- moto-keybox-db integration tests: audit_repo_test.rs (12 tests covering all 3 public functions: insert_audit_entry, list_audit_entries, count_audit_entries)
+- Makefile target: test-db-up, test-db-down, test-db-migrate, test-integration, test-all
+- Fix moto-club-api integration test compilation (19 tests)
+- moto-club-db integration tests: wg_session_repo_test.rs (25 tests, all 11 public functions)
+- moto-club-db integration tests: wg_garage_repo_test.rs (18 tests, all 7 public functions)
+- moto-keybox-db integration tests: secret_repo_test.rs (28 tests, all 13 public functions)
+- moto-keybox-db integration tests: audit_repo_test.rs (12 tests, all 3 public functions)
 
 **Remaining:**
+- moto-keybox-db: add not-found error path test for `update_secret_version` (v0.5: uses `fetch_one` which surfaces raw sqlx error on missing ID)
+- moto-keybox-db: add not-found error path test for `delete_secret` (v0.5: silently succeeds on nonexistent ID, behavior untested)
 - CI workflow: .github/workflows/test.yml (future)
 
 ---
@@ -429,8 +427,6 @@ HOW TO USE THIS FILE:
 - Makefile target: deploy-secrets (generate + apply K8s secrets)
 - Makefile target: deploy-system (kubectl apply -k)
 - Makefile target: deploy-status, undeploy-system
-- Makefile targets: build-club, push-club (blocked: container-system.md moto-club-image cargoHash)
-- Makefile targets: build-keybox, push-keybox (blocked: container-system.md moto-keybox-image)
 
 ---
 
