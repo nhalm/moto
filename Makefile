@@ -5,7 +5,7 @@
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
-.PHONY: dev-db-up dev-db-down dev-db-migrate
+.PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init
 
 # Set up local development environment
 install:
@@ -275,3 +275,16 @@ dev-db-migrate:
 	@echo "Running moto-club-db migrations..."
 	cargo sqlx migrate run --source crates/moto-club-db/migrations --database-url $(DEV_DATABASE_URL)
 	@echo "Migrations complete."
+
+# Generate keybox keys in .dev/keybox/ (master.key, signing.key, service-token)
+# Idempotent: skips if all keys already exist. To regenerate: rm -rf .dev/keybox && make dev-keybox-init
+dev-keybox-init:
+	@if [ -f .dev/keybox/master.key ] && [ -f .dev/keybox/signing.key ] && [ -f .dev/keybox/service-token ]; then \
+		echo "Keybox keys already exist in .dev/keybox/"; \
+	else \
+		mkdir -p .dev/keybox && \
+		cargo run --bin moto-keybox -- init --output-dir .dev/keybox --force && \
+		openssl rand -hex 32 > .dev/keybox/service-token && \
+		chmod 600 .dev/keybox/service-token && \
+		echo "Keybox keys generated in .dev/keybox/"; \
+	fi

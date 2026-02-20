@@ -397,9 +397,9 @@ HOW TO USE THIS FILE:
 - scripts/init-dev-db.sql (creates moto_keybox database via docker-entrypoint-initdb.d)
 - .dev/ added to .gitignore
 - Makefile targets: dev-db-up (docker compose up --wait), dev-db-down (docker compose down), dev-db-migrate (sqlx migrate run for moto-club-db against dev database)
+- Makefile target: dev-keybox-init (generate master.key, signing.key via moto-keybox init + service-token via openssl rand in .dev/keybox/; idempotent skip if all three exist)
 
 **Remaining:**
-- Makefile target: dev-keybox-init (generate keys in .dev/keybox/)
 - Makefile target: dev-keybox (start keybox server with dev config)
 - Makefile target: dev-club (start moto-club with dev config)
 - Makefile target: dev-garage-image (build + push garage to local registry)
