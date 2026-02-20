@@ -261,7 +261,7 @@ DEV_DATABASE_URL ?= postgres://moto:moto@localhost:5432/moto_club
 
 # Create k3d cluster via moto CLI (idempotent)
 dev-cluster:
-	cargo run --bin moto-cli -- cluster init
+	cargo run --bin moto -- cluster init
 
 # Start full local dev stack (postgres + keybox + club in foreground)
 # Runs setup steps, then starts keybox in background and moto-club in foreground
