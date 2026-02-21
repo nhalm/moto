@@ -392,9 +392,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## local-dev.md v0.3
+## local-dev.md v0.4
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - docker-compose.yml with dev Postgres on port 5432 (postgres:16-alpine, moto/moto creds, pgdata volume, healthcheck, init script mount)
@@ -410,9 +410,10 @@ HOW TO USE THIS FILE:
 - Makefile target: dev-cluster (k3d cluster creation via moto CLI, idempotent)
 - Add MOTO_CLUB_KEYBOX_HEALTH_URL=http://localhost:8091 to dev-club and dev-up targets (v0.3: keybox health port differs from API port in local dev)
 - Remove dev-garage-image from dev-up prerequisites (v0.3: dev-up no longer rebuilds garage image on every run; dev-garage-image is a one-time setup step)
+- Add MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token to dev-club and dev-up targets (v0.4: needed for garage SVID issuance via keybox)
 
 **Remaining:**
-(none - local-dev.md v0.3 implementation complete)
+(none - local-dev.md v0.4 implementation complete)
 
 ---
 
