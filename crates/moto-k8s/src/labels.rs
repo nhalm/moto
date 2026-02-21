@@ -26,7 +26,7 @@ impl Labels {
     /// Label key for owner identifier.
     pub const OWNER: &'static str = "moto.dev/owner";
 
-    /// Label key for expiration timestamp (RFC 3339 format).
+    /// Label key for expiration timestamp (unix seconds).
     pub const EXPIRES_AT: &'static str = "moto.dev/expires-at";
 
     /// Label key for engine (what the garage is working on).
@@ -125,16 +125,10 @@ mod tests {
 
     #[test]
     fn for_garage_with_expires_at() {
-        let labels = Labels::for_garage(
-            "abc-123",
-            "my-project",
-            None,
-            Some("2026-01-21T14:00:00Z"),
-            None,
-        );
+        let labels = Labels::for_garage("abc-123", "my-project", None, Some("1737468000"), None);
         assert_eq!(
             labels.get(Labels::EXPIRES_AT),
-            Some(&"2026-01-21T14:00:00Z".to_string())
+            Some(&"1737468000".to_string())
         );
     }
 

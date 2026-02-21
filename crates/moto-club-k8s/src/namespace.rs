@@ -104,7 +104,7 @@ impl GarageNamespaceOps for GarageK8s {
     async fn create_garage_namespace(&self, input: &GarageNamespaceInput) -> Result<Namespace> {
         let namespace_name = input.namespace_name();
 
-        let expires_at_str = input.expires_at.map(|dt| dt.to_rfc3339());
+        let expires_at_str = input.expires_at.map(|dt| dt.timestamp().to_string());
         let labels = Labels::for_garage(
             &input.id.to_string(),
             &input.name,

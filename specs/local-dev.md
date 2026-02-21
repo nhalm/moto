@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
+| Version | 0.4 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-20 |
+| Last Updated | 2026-02-21 |
 
 ## Overview
 
@@ -115,6 +115,7 @@ Both servers default to port 8080, so local dev must use different ports:
 |----------|-----------|
 | `MOTO_CLUB_DATABASE_URL` | `postgres://moto:moto@localhost:5432/moto_club` |
 | `MOTO_CLUB_KEYBOX_URL` | `http://localhost:8090` |
+| `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE` | `.dev/keybox/service-token` |
 | `MOTO_CLUB_KEYBOX_HEALTH_URL` | `http://localhost:8091` |
 | `MOTO_CLUB_DEV_CONTAINER_IMAGE` | `localhost:5000/moto-garage:latest` |
 | `RUST_LOG` | `moto_club=debug` |
@@ -225,6 +226,9 @@ moto/
 - [service-deploy.md](service-deploy.md) — K8s deployment (alternative)
 
 ## Changelog
+
+### v0.4 (2026-02-21)
+- Add `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE` to moto-club env vars (same service-token file used by keybox, needed for garage SVID issuance)
 
 ### v0.3 (2026-02-20)
 - Add `MOTO_CLUB_KEYBOX_HEALTH_URL` to moto-club env vars (keybox health port differs in local dev)

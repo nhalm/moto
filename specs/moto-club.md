@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.9 |
+| Version | 2.0 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-05 |
+| Last Updated | 2026-02-21 |
 
 ## Overview
 
@@ -1141,6 +1141,7 @@ Structured JSON logging to stdout:
 # Required
 MOTO_CLUB_DATABASE_URL="postgres://moto:password@localhost:5432/moto"
 MOTO_CLUB_KEYBOX_URL="http://keybox:8080"
+MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE="/path/to/service-token"  # File containing hex token for keybox auth
 MOTO_CLUB_KEYBOX_HEALTH_URL="http://keybox:8081"  # Optional, defaults to KEYBOX_URL with port 8081
 
 # K8s (auto-detected in-cluster, or specify for out-of-cluster)
@@ -1207,6 +1208,10 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v2.0 (2026-02-21)
+- Add `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE` env var — file containing the hex service token for keybox authentication. Required for garage SVID issuance.
+- Fix `moto.dev/expires-at` namespace label to use unix timestamp instead of RFC 3339 (colons and plus signs are invalid in K8s label values).
 
 ### v1.9 (2026-02-20)
 - Add `MOTO_CLUB_KEYBOX_HEALTH_URL` env var for configuring keybox health check endpoint separately from the API URL. Defaults to `MOTO_CLUB_KEYBOX_URL` with port replaced by 8081. Required for local dev where keybox health runs on a non-standard port (8091).
