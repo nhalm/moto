@@ -20,6 +20,9 @@
 //! - `MOTO_CLUB_DEV_CONTAINER_IMAGE`: Dev container image (default: `ghcr.io/moto-dev/moto-garage:latest`)
 //! - `MOTO_CLUB_RECONCILE_INTERVAL_SECONDS`: Reconciliation interval (default: 30)
 //! - `MOTO_CLUB_DERP_SERVERS`: JSON array of DERP servers (see moto-club-wg derp module)
+//! - `MOTO_CLUB_KEYBOX_URL`: Keybox API URL (required for garage SVID issuance)
+//! - `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE`: File containing hex service token for keybox auth
+//! - `MOTO_CLUB_KEYBOX_HEALTH_URL`: Keybox health endpoint (defaults to `KEYBOX_URL` port 8081)
 //! - `KUBECONFIG`: Path to kubeconfig file (auto-detected in-cluster)
 //! - `RUST_LOG`: Log filter (default: `moto_club=info`)
 
@@ -39,7 +42,7 @@ use moto_club_api::{
     mark_startup_complete, router,
 };
 use moto_club_db::DbPool;
-use moto_club_garage::GarageService;
+use moto_club_garage::{GarageService, KeyboxClient};
 use moto_club_k8s::GarageK8s;
 use moto_club_reconcile::{GarageReconciler, ReconcileConfig};
 use moto_club_wg::{
@@ -77,10 +80,15 @@ struct Config {
     dev_container_image: Option<String>,
     /// Reconciliation interval.
     reconcile_interval: Duration,
+    /// Keybox API URL (e.g., `http://keybox:8080`).
+    keybox_url: Option<String>,
     /// Keybox health URL for health checks.
     /// Configured via `MOTO_CLUB_KEYBOX_HEALTH_URL`, or derived from
     /// `MOTO_CLUB_KEYBOX_URL` with port replaced by 8081.
     keybox_health_url: Option<String>,
+    /// Keybox service token for authentication (read from file).
+    /// Configured via `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE`.
+    keybox_service_token: Option<String>,
 }
 
 impl Config {
@@ -131,6 +139,25 @@ impl Config {
             })
         });
 
+        // MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE: read service token from file.
+        // Required for garage SVID issuance (moto-club authenticates to keybox).
+        let keybox_service_token = if let Ok(path) = env::var("MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE")
+        {
+            let token = std::fs::read_to_string(&path).map_err(|_| {
+                ConfigError::Invalid("MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE", "cannot read file")
+            })?;
+            let token = token.trim().to_string();
+            if token.is_empty() {
+                return Err(ConfigError::Invalid(
+                    "MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE",
+                    "file is empty",
+                ));
+            }
+            Some(token)
+        } else {
+            None
+        };
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -138,7 +165,9 @@ impl Config {
             metrics_bind_addr,
             dev_container_image,
             reconcile_interval: Duration::from_secs(reconcile_interval),
+            keybox_url,
             keybox_health_url,
+            keybox_service_token,
         })
     }
 }
@@ -263,9 +292,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Create peer broadcaster for garage WebSocket connections
     let peer_broadcaster = Arc::new(PeerBroadcaster::new());
 
-    // Create GarageService for full K8s integration in garage create flow
-    let garage_service = GarageService::new(db_pool.clone(), garage_k8s.clone());
-    info!("garage service initialized with full K8s integration");
+    // Create GarageService for full K8s integration in garage create flow.
+    // If keybox URL and service token are both configured, create a KeyboxClient
+    // for garage SVID issuance (spec v2.0: MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE).
+    let garage_service =
+        if let (Some(url), Some(token)) = (&config.keybox_url, &config.keybox_service_token) {
+            info!(keybox_url = %url, "garage service initialized with keybox SVID issuance");
+            GarageService::with_keybox(
+                db_pool.clone(),
+                garage_k8s.clone(),
+                KeyboxClient::new(url, token),
+            )
+        } else {
+            info!("garage service initialized without keybox (SVID issuance disabled)");
+            GarageService::new(db_pool.clone(), garage_k8s.clone())
+        };
 
     // Create API router with GarageService and GarageK8s for operations
     let api_garage_k8s = garage_k8s.clone();

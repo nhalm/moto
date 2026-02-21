@@ -15,7 +15,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v1.9
+## moto-club.md v2.0
 
 **Status:** Complete
 
@@ -70,9 +70,11 @@ HOW TO USE THIS FILE:
 - Remove InMemorySessionStore from moto-club-wg sessions.rs (v1.7: deleted InMemorySessionStore struct and impl; removed HashMap and Mutex imports; removed export from lib.rs; existing tests are already unit tests for Session methods and serde)
 - Convert ignored integration tests to use moto-test-utils (v1.8: moto-club-api/src/wg_test.rs handler_tests module now uses `#[cfg(feature = "integration")]` instead of `#[ignore]`; tests use test_pool() for database connection and unique_owner() for test isolation)
 - Add MOTO_CLUB_KEYBOX_HEALTH_URL env var (v1.9: configures keybox health check endpoint separately from API URL; defaults to MOTO_CLUB_KEYBOX_URL with port replaced by 8081; AppState.keybox_health_url field replaces keybox_url; check_keybox uses URL directly instead of hardcoded port replacement)
+- Add MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE env var (v2.0: reads service token from file for keybox authentication; Config.keybox_service_token field; when both KEYBOX_URL and service token are configured, creates KeyboxClient and uses GarageService::with_keybox for SVID issuance)
+- Fix moto.dev/expires-at namespace label to use unix timestamp (v2.0: namespace.rs uses dt.timestamp() instead of dt.to_rfc3339(); labels.rs doc comment updated; colons and plus signs in RFC 3339 are invalid K8s label values)
 
 **Remaining:**
-(none - moto-club.md v1.9 implementation complete)
+(none - moto-club.md v2.0 implementation complete)
 
 ---
 
