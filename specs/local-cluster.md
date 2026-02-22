@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
+| Version | 0.3 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-04 |
+| Last Updated | 2026-02-21 |
 
 ## Overview
 
@@ -49,7 +49,7 @@ k3d cluster create moto \
   --api-port 6550 \
   --port "80:80@loadbalancer" \
   --port "443:443@loadbalancer" \
-  --registry-create moto-registry:5000 \
+  --registry-create moto-registry:0.0.0.0:5050 \
   --k3s-arg "--disable=traefik@server:0"
 ```
 
@@ -57,7 +57,7 @@ k3d cluster create moto \
 |------|---------|
 | `--api-port 6550` | K8s API on predictable port |
 | `--port 80/443` | HTTP(S) ingress |
-| `--registry-create` | Local registry for images |
+| `--registry-create` | Local registry for images (port 5050 avoids macOS AirPlay conflict on 5000) |
 | `--disable=traefik` | Don't need default ingress |
 
 **kubeconfig:** k3d merges into `~/.kube/config` with context `k3d-moto`.
@@ -83,7 +83,7 @@ Cluster: moto (k3d)
 Status: running
 
   K8s API:   healthy (https://localhost:6550)
-  Registry:  healthy (localhost:5000)
+  Registry:  healthy (localhost:5050)
 ```
 
 **JSON output (`--json`):**
@@ -98,7 +98,7 @@ Status: running
     "healthy": true
   },
   "registry": {
-    "endpoint": "localhost:5000",
+    "endpoint": "localhost:5050",
     "healthy": true
   }
 }
@@ -119,7 +119,7 @@ Status: running
 | 6550 | K8s API |
 | 80 | HTTP ingress |
 | 443 | HTTPS ingress |
-| 5000 | Container registry |
+| 5050 | Container registry |
 
 ### Error Handling
 
@@ -166,6 +166,10 @@ Options:
 - [container-system.md](container-system.md) - How images are built
 
 ## Changelog
+
+### v0.3 (2026-02-21)
+- Change registry port from 5000 to 5050 to avoid macOS AirPlay Receiver conflict on port 5000
+- Use `--registry-create moto-registry:0.0.0.0:5050` format to bind to all interfaces
 
 ### v0.2 (2026-02-04)
 - Add k3d as explicit prerequisite

@@ -132,7 +132,7 @@ build-keybox:
 # === Push ===
 
 # Default registry for pushing images
-REGISTRY ?= localhost:5000
+REGISTRY ?= localhost:5050
 SHA := $(shell git rev-parse --short HEAD)
 
 # Push moto-garage to registry (localhost:5000 by default)
@@ -284,7 +284,7 @@ dev-up: dev-db-up dev-keybox-init dev-db-migrate
 	MOTO_CLUB_KEYBOX_URL=http://localhost:8090 \
 	MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token \
 	MOTO_CLUB_KEYBOX_HEALTH_URL=http://localhost:8091 \
-	MOTO_CLUB_DEV_CONTAINER_IMAGE=localhost:5000/moto-garage:latest \
+	MOTO_CLUB_DEV_CONTAINER_IMAGE=moto-registry:5000/moto-garage:latest \
 	RUST_LOG=moto_club=debug \
 	cargo run --bin moto-club
 
@@ -339,7 +339,7 @@ dev-club:
 	MOTO_CLUB_KEYBOX_URL=http://localhost:8090 \
 	MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token \
 	MOTO_CLUB_KEYBOX_HEALTH_URL=http://localhost:8091 \
-	MOTO_CLUB_DEV_CONTAINER_IMAGE=localhost:5000/moto-garage:latest \
+	MOTO_CLUB_DEV_CONTAINER_IMAGE=moto-registry:5000/moto-garage:latest \
 	RUST_LOG=moto_club=debug \
 	cargo run --bin moto-club
 

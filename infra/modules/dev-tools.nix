@@ -11,10 +11,6 @@
     rustToolchain
     cargo-watch
     cargo-nextest
-    cargo-audit
-    cargo-deny
-    cargo-edit
-    cargo-expand
     mold
     sccache
     sqlx-cli
@@ -32,7 +28,6 @@
 
     # Database clients
     postgresql
-    redis
 
     # General tools
     curl
@@ -46,8 +41,6 @@
 
     # Kubernetes
     kubectl
-    k9s
-    kubernetes-helm
   ];
 
   env = [

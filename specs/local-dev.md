@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
+| Version | 0.5 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-21 |
 
@@ -117,14 +117,14 @@ Both servers default to port 8080, so local dev must use different ports:
 | `MOTO_CLUB_KEYBOX_URL` | `http://localhost:8090` |
 | `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE` | `.dev/keybox/service-token` |
 | `MOTO_CLUB_KEYBOX_HEALTH_URL` | `http://localhost:8091` |
-| `MOTO_CLUB_DEV_CONTAINER_IMAGE` | `localhost:5000/moto-garage:latest` |
+| `MOTO_CLUB_DEV_CONTAINER_IMAGE` | `moto-registry:5000/moto-garage:latest` |
 | `RUST_LOG` | `moto_club=debug` |
 
 K8s access comes from `~/.kube/config` (the `k3d-moto` context created by `moto cluster init`).
 
 ### Garage Image
 
-The garage dev container image must be built and available in the k3d cluster's local registry (`localhost:5000`) before creating garages.
+The garage dev container image must be built and pushed to the k3d registry (`localhost:5050` from the host, `moto-registry:5000` from inside k3d). The `MOTO_CLUB_DEV_CONTAINER_IMAGE` must use the in-cluster registry name (`moto-registry:5000`) since pods pull images from inside k3d, not from the host.
 
 ### Startup Sequence
 
@@ -226,6 +226,10 @@ moto/
 - [service-deploy.md](service-deploy.md) — K8s deployment (alternative)
 
 ## Changelog
+
+### v0.5 (2026-02-21)
+- Fix `MOTO_CLUB_DEV_CONTAINER_IMAGE` to use `moto-registry:5000` (in-cluster k3d registry name) instead of `localhost:5000` (host-only). Pods inside k3d can't reach `localhost:5000`.
+- Update host registry push address from `localhost:5000` to `localhost:5050` (matches local-cluster.md v0.3 port change)
 
 ### v0.4 (2026-02-21)
 - Add `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE` to moto-club env vars (same service-token file used by keybox, needed for garage SVID issuance)

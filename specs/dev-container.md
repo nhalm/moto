@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.14 |
+| Version | 0.15 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-04 |
+| Last Updated | 2026-02-21 |
 
 ## Overview
 
@@ -97,10 +97,6 @@ All tools are installed via Nix in the devShell/container.
 | rust-analyzer | `rust-analyzer` | IDE support |
 | cargo-watch | `cargo-watch` | Auto-rebuild on changes |
 | cargo-nextest | `cargo-nextest` | Modern test runner |
-| cargo-audit | `cargo-audit` | Security vulnerability scanner |
-| cargo-deny | `cargo-deny` | License/vulnerability auditing |
-| cargo-edit | `cargo-edit` | Cargo.toml manipulation |
-| cargo-expand | `cargo-expand` | Macro debugging |
 | mold | `mold` | Fast linker |
 | sccache | `sccache` | Shared compilation cache |
 | sqlx-cli | `sqlx-cli` | Database migrations |
@@ -127,7 +123,6 @@ All tools are installed via Nix in the devShell/container.
 | Tool | Nix Package | Purpose |
 |------|-------------|---------|
 | psql | `postgresql` | PostgreSQL client |
-| redis-cli | `redis` | Redis client |
 
 **General tools:**
 
@@ -147,8 +142,6 @@ All tools are installed via Nix in the devShell/container.
 | Tool | Nix Package | Purpose |
 |------|-------------|---------|
 | kubectl | `kubectl` | K8s CLI |
-| k9s | `k9s` | K8s TUI |
-| helm | `kubernetes-helm` | Package manager |
 
 **AI:**
 
@@ -482,6 +475,11 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.15 (2026-02-21)
+- Reduce image size: remove cargo-audit, cargo-deny, cargo-edit, cargo-expand (CI tools, not needed in dev container)
+- Reduce image size: remove k9s and helm (kubectl is sufficient, k9s/helm can be installed on demand)
+- Reduce image size: remove redis package (redis-cli available via supporting service container if needed)
 
 ### v0.14 (2026-02-04)
 - Clarify: Claude Code is installed at runtime via install script, not at container build time

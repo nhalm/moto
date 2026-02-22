@@ -47,7 +47,7 @@ const CLUSTER_NAME: &str = "moto";
 
 /// Registry name and port
 const REGISTRY_NAME: &str = "moto-registry";
-const REGISTRY_PORT: u16 = 5000;
+const REGISTRY_PORT: u16 = 5050;
 
 /// K8s API port
 const API_PORT: u16 = 6550;
@@ -188,7 +188,7 @@ fn create_cluster(quiet: bool) -> Result<()> {
             "--port",
             "443:443@loadbalancer",
             "--registry-create",
-            &format!("{REGISTRY_NAME}:{REGISTRY_PORT}"),
+            &format!("{REGISTRY_NAME}:0.0.0.0:{REGISTRY_PORT}"),
             "--k3s-arg",
             "--disable=traefik@server:0",
         ])
@@ -547,7 +547,7 @@ mod tests {
     #[test]
     fn test_registry_config() {
         assert_eq!(REGISTRY_NAME, "moto-registry");
-        assert_eq!(REGISTRY_PORT, 5000);
+        assert_eq!(REGISTRY_PORT, 5050);
     }
 
     #[test]
@@ -572,7 +572,7 @@ mod tests {
         //     --api-port 6550 \
         //     --port "80:80@loadbalancer" \
         //     --port "443:443@loadbalancer" \
-        //     --registry-create moto-registry:5000 \
+        //     --registry-create moto-registry:0.0.0.0:5050 \
         //     --k3s-arg "--disable=traefik@server:0"
 
         let expected_args = [
@@ -586,7 +586,7 @@ mod tests {
             "--port",
             "443:443@loadbalancer",
             "--registry-create",
-            &format!("{REGISTRY_NAME}:{REGISTRY_PORT}"),
+            &format!("{REGISTRY_NAME}:0.0.0.0:{REGISTRY_PORT}"),
             "--k3s-arg",
             "--disable=traefik@server:0",
         ];
@@ -596,7 +596,7 @@ mod tests {
         assert_eq!(expected_args[4], "6550");
         assert_eq!(expected_args[6], "80:80@loadbalancer");
         assert_eq!(expected_args[8], "443:443@loadbalancer");
-        assert_eq!(expected_args[10], "moto-registry:5000");
+        assert_eq!(expected_args[10], "moto-registry:0.0.0.0:5050");
         assert_eq!(expected_args[12], "--disable=traefik@server:0");
     }
 
@@ -695,7 +695,7 @@ mod tests {
         // curl http://localhost:5000/v2/
         // This should return HTTP 200 when healthy
         let expected_endpoint = format!("http://localhost:{REGISTRY_PORT}/v2/");
-        assert_eq!(expected_endpoint, "http://localhost:5000/v2/");
+        assert_eq!(expected_endpoint, "http://localhost:5050/v2/");
     }
 
     #[test]
@@ -826,7 +826,7 @@ mod tests {
         assert_eq!(parsed["status"], "running");
         assert_eq!(parsed["api"]["endpoint"], "https://localhost:6550");
         assert_eq!(parsed["api"]["healthy"], true);
-        assert_eq!(parsed["registry"]["endpoint"], "localhost:5000");
+        assert_eq!(parsed["registry"]["endpoint"], "localhost:5050");
         assert_eq!(parsed["registry"]["healthy"], true);
     }
 
