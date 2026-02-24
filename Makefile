@@ -135,7 +135,7 @@ build-keybox:
 REGISTRY ?= localhost:5050
 SHA := $(shell git rev-parse --short HEAD)
 
-# Push moto-garage to registry (localhost:5000 by default)
+# Push moto-garage to registry, clean up local copies (saves ~10GB VM disk)
 push-garage:
 	@if ! docker image inspect moto-garage:latest &>/dev/null; then \
 		echo "Error: moto-garage:latest not found. Run 'make build-garage' first."; \
@@ -147,8 +147,11 @@ push-garage:
 	docker push $(REGISTRY)/moto-garage:latest
 	docker push $(REGISTRY)/moto-garage:$(SHA)
 	@echo "Pushed $(REGISTRY)/moto-garage:latest and $(REGISTRY)/moto-garage:$(SHA)"
+	@echo "Cleaning up local Docker copies..."
+	-docker rmi moto-garage:latest $(REGISTRY)/moto-garage:latest $(REGISTRY)/moto-garage:$(SHA) 2>/dev/null
+	@echo "Local copies removed (image lives in registry)."
 
-# Push moto-club to registry (localhost:5000 by default)
+# Push moto-club to registry
 push-club:
 	@if ! docker image inspect moto-club:latest &>/dev/null; then \
 		echo "Error: moto-club:latest not found. Run 'make build-club' first."; \
@@ -161,7 +164,7 @@ push-club:
 	docker push $(REGISTRY)/moto-club:$(SHA)
 	@echo "Pushed $(REGISTRY)/moto-club:latest and $(REGISTRY)/moto-club:$(SHA)"
 
-# Push moto-keybox to registry (localhost:5000 by default)
+# Push moto-keybox to registry
 push-keybox:
 	@if ! docker image inspect moto-keybox:latest &>/dev/null; then \
 		echo "Error: moto-keybox:latest not found. Run 'make build-keybox' first."; \
@@ -330,7 +333,7 @@ dev-keybox:
 	RUST_LOG=moto_keybox=debug \
 	cargo run --bin moto-keybox-server
 
-# Build and push garage image to local registry (localhost:5000)
+# Build and push garage image to local registry
 dev-garage-image: build-garage push-garage
 
 # Start moto-club with dev config (runs in foreground)

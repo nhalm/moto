@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
-| Last Updated | 2026-02-02 |
+| Version | 0.4 |
+| Last Updated | 2026-02-22 |
 
 ## Overview
 
@@ -88,10 +88,11 @@ volumes:
     emptyDir: {}
   - name: home
     emptyDir: {}
-  - name: nix
-    emptyDir: {}
   - name: cargo
     emptyDir: {}
+  # Note: /nix is NOT mounted as a volume. The image provides /nix/store
+  # with all tools pre-installed. Mounting emptyDir over /nix would shadow
+  # the image contents and break all tool symlinks.
 
   # For apt package installation
   - name: var-lib-apt
@@ -121,8 +122,6 @@ volumeMounts:
     mountPath: /var/tmp
   - name: home
     mountPath: /root
-  - name: nix
-    mountPath: /nix
   - name: cargo
     mountPath: /root/.cargo
   - name: var-lib-apt
@@ -403,6 +402,9 @@ Secrets are pull-based and on-demand. Garage only gets secrets it explicitly req
 | moto-club knows WG private key | Key is per-garage, ephemeral; moto-club already controls lifecycle |
 
 ## Changelog
+
+### v0.4 (2026-02-22)
+- Fix: remove `/nix` emptyDir volume and mount — mounting emptyDir over `/nix` shadows the image's pre-installed `/nix/store` contents, breaking all tool symlinks (including `garage-entrypoint`). The image provides `/nix/store` read-only via `readOnlyRootFilesystem`.
 
 ### v0.3 (2026-02-02)
 - Workspace volume changed to PVC (survives pod restarts)

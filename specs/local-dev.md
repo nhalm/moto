@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
+| Version | 0.6 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-21 |
+| Last Updated | 2026-02-22 |
 
 ## Overview
 
@@ -126,6 +126,8 @@ K8s access comes from `~/.kube/config` (the `k3d-moto` context created by `moto 
 
 The garage dev container image must be built and pushed to the k3d registry (`localhost:5050` from the host, `moto-registry:5000` from inside k3d). The `MOTO_CLUB_DEV_CONTAINER_IMAGE` must use the in-cluster registry name (`moto-registry:5000`) since pods pull images from inside k3d, not from the host.
 
+`make push-garage` cleans up the local Docker daemon copy after pushing to the registry. The image only needs to live in the registry (for k3d to pull) — keeping it in Docker wastes ~10GB of VM disk.
+
 ### Startup Sequence
 
 Full sequence from zero to working:
@@ -226,6 +228,9 @@ moto/
 - [service-deploy.md](service-deploy.md) — K8s deployment (alternative)
 
 ## Changelog
+
+### v0.6 (2026-02-22)
+- `push-garage` now cleans up local Docker daemon copy after pushing to registry (saves ~10GB VM disk)
 
 ### v0.5 (2026-02-21)
 - Fix `MOTO_CLUB_DEV_CONTAINER_IMAGE` to use `moto-registry:5000` (in-cluster k3d registry name) instead of `localhost:5000` (host-only). Pods inside k3d can't reach `localhost:5000`.

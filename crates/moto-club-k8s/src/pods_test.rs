@@ -226,7 +226,6 @@ fn build_pod_has_writable_volumes_per_spec() {
         ("tmp", "/tmp"),
         ("var-tmp", "/var/tmp"),
         ("home", "/root"),
-        ("nix", "/nix"),
         ("cargo", "/root/.cargo"),
         ("var-lib-apt", "/var/lib/apt"),
         ("var-cache-apt", "/var/cache/apt"),
@@ -349,9 +348,9 @@ fn build_pod_has_writable_volumes_per_spec() {
         "garage-svid should be read-only"
     );
 
-    // Total volume count: 1 PVC (workspace) + 8 emptyDir + 1 ConfigMap + 2 Secrets = 12
-    assert_eq!(volumes.len(), 12, "should have exactly 12 volumes");
-    assert_eq!(mounts.len(), 12, "should have exactly 12 mounts");
+    // Total volume count: 1 PVC (workspace) + 7 emptyDir + 1 ConfigMap + 2 Secrets = 11
+    assert_eq!(volumes.len(), 11, "should have exactly 11 volumes");
+    assert_eq!(mounts.len(), 11, "should have exactly 11 mounts");
 }
 
 #[test]

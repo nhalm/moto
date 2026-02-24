@@ -313,7 +313,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## garage-isolation.md v0.3
+## garage-isolation.md v0.4
 
 **Status:** In Progress
 
@@ -321,15 +321,16 @@ HOW TO USE THIS FILE:
 - Pod security context: runAsUser/runAsGroup: 0, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, seccompProfile: RuntimeDefault, capabilities (drop ALL, add CHOWN/DAC_OVERRIDE/FOWNER/SETGID/SETUID/NET_BIND_SERVICE)
 - Pod spec: automountServiceAccountToken: false, host_network/host_pid/host_ipc: false
 - Pod resource limits: 3 CPU / 7Gi per spec (requests: 100m CPU / 256Mi)
-- Pod volumes: writable emptyDir mounts for tmp, var-tmp, home, nix, cargo, var-lib-apt, var-cache-apt, usr-local
+- Pod volumes: writable emptyDir mounts for tmp, var-tmp, home, cargo, var-lib-apt, var-cache-apt, usr-local
 - Workspace PVC: workspace volume uses PersistentVolumeClaim per spec (moto-k8s PvcOps trait, moto-club-k8s GarageWorkspacePvcOps trait, pods.rs uses PVC for /workspace mount)
 - Pod volumes: wireguard-config ConfigMap mount, wireguard-keys Secret mount, garage-svid Secret mount (pods.rs volumes and volumeMounts per spec)
 - NetworkPolicy: garage-isolation policy per spec (moto-k8s NetworkPolicyOps trait, moto-club-k8s GarageNetworkPolicyOps trait and build_garage_isolation_policy, integrated into GarageService.create_k8s_resources)
 - ResourceQuota: garage-quota per spec (moto-k8s ResourceQuotaOps trait, moto-club-k8s GarageResourceQuotaOps trait and build_garage_quota, integrated into GarageService.create_k8s_resources)
 - LimitRange: garage-limits per spec (moto-k8s LimitRangeOps trait, moto-club-k8s GarageLimitRangeOps trait and build_garage_limits, integrated into GarageService.create_k8s_resources)
+- Fix: remove /nix emptyDir volume and mount (v0.4: mounting emptyDir over /nix shadows the image's pre-installed /nix/store contents, breaking all tool symlinks; image provides /nix/store read-only via readOnlyRootFilesystem)
 
 **Remaining:**
-(none - garage-isolation.md v0.3 implementation complete)
+(none - garage-isolation.md v0.4 implementation complete)
 
 ---
 
@@ -392,7 +393,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## local-dev.md v0.4
+## local-dev.md v0.6
 
 **Status:** Complete
 
@@ -411,9 +412,12 @@ HOW TO USE THIS FILE:
 - Add MOTO_CLUB_KEYBOX_HEALTH_URL=http://localhost:8091 to dev-club and dev-up targets (v0.3: keybox health port differs from API port in local dev)
 - Remove dev-garage-image from dev-up prerequisites (v0.3: dev-up no longer rebuilds garage image on every run; dev-garage-image is a one-time setup step)
 - Add MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token to dev-club and dev-up targets (v0.4: needed for garage SVID issuance via keybox)
+- Fix MOTO_CLUB_DEV_CONTAINER_IMAGE to use moto-registry:5000 (v0.5: in-cluster k3d registry name; pods inside k3d can't reach localhost:5000)
+- Update host registry push address from localhost:5000 to localhost:5050 (v0.5: matches local-cluster.md v0.3 port change)
+- push-garage cleans up local Docker daemon copy after pushing to registry (v0.6: saves ~10GB VM disk; image only needs to live in registry)
 
 **Remaining:**
-(none - local-dev.md v0.4 implementation complete)
+(none - local-dev.md v0.6 implementation complete)
 
 ---
 

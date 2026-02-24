@@ -438,11 +438,6 @@ pub fn build_dev_container_pod(
             ..Default::default()
         },
         VolumeMount {
-            name: "nix".to_string(),
-            mount_path: "/nix".to_string(),
-            ..Default::default()
-        },
-        VolumeMount {
             name: "cargo".to_string(),
             mount_path: "/root/.cargo".to_string(),
             ..Default::default()
@@ -520,7 +515,7 @@ pub fn build_dev_container_pod(
 
     // Volumes per garage-isolation.md spec:
     // - workspace: PersistentVolumeClaim (survives pod restarts per spec)
-    // - tmp, var-tmp, home, nix, cargo: ephemeral writable paths
+    // - tmp, var-tmp, home, cargo: ephemeral writable paths
     // - var-lib-apt, var-cache-apt, usr-local: for apt package installation
     let volumes = vec![
         Volume {
@@ -543,11 +538,6 @@ pub fn build_dev_container_pod(
         },
         Volume {
             name: "home".to_string(),
-            empty_dir: Some(EmptyDirVolumeSource::default()),
-            ..Default::default()
-        },
-        Volume {
-            name: "nix".to_string(),
             empty_dir: Some(EmptyDirVolumeSource::default()),
             ..Default::default()
         },
