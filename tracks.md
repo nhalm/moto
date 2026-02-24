@@ -183,9 +183,10 @@ HOW TO USE THIS FILE:
 - Reduce image size: remove redis package from container (v0.15: redis-cli available via supporting service container)
 - Reduce image size: switch Rust toolchain from .default to .minimal profile, add rustfmt+clippy extensions explicitly (v0.16: excludes rust-docs, ~700MB savings)
 - Reduce image size: drop clang from container, update RUSTFLAGS to `-C link-arg=-fuse-ld=mold` (v0.16: ~1.4GB savings, use default cc linker with mold)
+- Remove /nix volume declaration from container image config (v0.16: Docker VOLUME for /nix shadows image's /nix/store contents)
 
 **Remaining:**
-- Remove /nix volume declaration from container image config (v0.16: Docker VOLUME for /nix shadows image's /nix/store contents)
+(none - dev-container.md v0.16 implementation complete)
 
 ---
 

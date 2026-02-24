@@ -41,7 +41,6 @@ pkgs.dockerTools.buildLayeredImage {
     Volumes = {
       "/workspace" = {};
       "/root/.cargo" = {};
-      "/nix" = {};
     };
   };
 
