@@ -19,7 +19,6 @@
     pkg-config
     openssl
     postgresql.lib
-    clang
 
     # Version control
     git
@@ -50,7 +49,7 @@
     "RUST_BACKTRACE=1"
     "RUST_LOG=info"
     "RUSTC_WRAPPER=sccache"
-    "RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=mold"
+    "RUSTFLAGS=-C link-arg=-fuse-ld=mold"
     "NIX_PATH=nixpkgs=flake:nixpkgs"
     # In dockerTools containers, binaries are symlinked to /bin
     "PATH=/root/.local/bin:/bin:/usr/bin"

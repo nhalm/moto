@@ -155,22 +155,22 @@ HOW TO USE THIS FILE:
 
 ---
 
-## dev-container.md v0.14
+## dev-container.md v0.16
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - Nix dockerTools.buildLayeredImage with buildEnv wrapper
 - Modular structure: infra/pkgs/moto-garage.nix, infra/modules/{base,dev-tools,terminal,wireguard}.nix
 - Root flake at moto/flake.nix exports moto-garage package
 - Multi-arch via eachDefaultSystem (x86_64-linux, aarch64-linux)
-- Rust 1.85 stable toolchain with extensions (rust-src, rust-analyzer)
-- All Rust tools: cargo-watch, cargo-nextest, cargo-audit, cargo-deny, cargo-edit, cargo-expand, mold, sccache, sqlx-cli
-- System libraries: pkg-config, openssl, postgresql.lib, clang
+- Rust 1.85 stable toolchain with extensions (rust-src, rust-analyzer, rustfmt, clippy)
+- Rust tools: cargo-watch, cargo-nextest, mold, sccache, sqlx-cli
+- System libraries: pkg-config, openssl, postgresql.lib
 - Version control: git, jujutsu, gh
-- Database clients: postgresql, redis
+- Database clients: postgresql
 - General tools: curl, jq, yq, ripgrep, fd, bat, htop, tree
-- Kubernetes: kubectl, k9s, kubernetes-helm
+- Kubernetes: kubectl
 - Node.js 22.x LTS
 - Connectivity: wireguard-tools, ttyd, tmux (no openssh - WireGuard tunnel is auth boundary)
 - Environment variables: WORKSPACE, CARGO_HOME, CARGO_TARGET_DIR, RUST_BACKTRACE, RUST_LOG, RUSTC_WRAPPER, RUSTFLAGS, NIX_PATH, SSL_CERT_FILE, DO_NOT_TRACK
@@ -178,19 +178,24 @@ HOW TO USE THIS FILE:
 - Terminal daemon: ttyd on port 7681 with tmux session persistence (terminal.nix module)
 - Smoke tests: infra/smoke-test.sh (core tools, terminal tools, env vars, Rust compilation)
 - v0.14 clarifications: Claude Code installed at runtime (not build time), Cmd is garage-entrypoint, K8s env vars injected by K8s (already implemented correctly)
+- Reduce image size: remove cargo-audit, cargo-deny, cargo-edit, cargo-expand from container (v0.15: CI tools not needed in dev container)
+- Reduce image size: remove k9s and helm from container (v0.15: kubectl is sufficient)
+- Reduce image size: remove redis package from container (v0.15: redis-cli available via supporting service container)
+- Reduce image size: switch Rust toolchain from .default to .minimal profile, add rustfmt+clippy extensions explicitly (v0.16: excludes rust-docs, ~700MB savings)
+- Reduce image size: drop clang from container, update RUSTFLAGS to `-C link-arg=-fuse-ld=mold` (v0.16: ~1.4GB savings, use default cc linker with mold)
 
 **Remaining:**
-(none - dev-container.md v0.14 implementation complete)
+- Remove /nix volume declaration from container image config (v0.16: Docker VOLUME for /nix shadows image's /nix/store contents)
 
 ---
 
-## local-cluster.md v0.2
+## local-cluster.md v0.3
 
-**Status:** In Progress
+**Status:** Complete
 
 **Implemented:**
 - moto cluster init: k3d cluster creation with moto name
-- k3d create args: --api-port 6550, --port 80:80, --port 443:443, --registry-create moto-registry:5000, --disable=traefik
+- k3d create args: --api-port 6550, --port 80:80, --port 443:443, --registry-create moto-registry:0.0.0.0:5050, --disable=traefik
 - Idempotent: returns success if cluster already exists (unless --force)
 - Docker running check
 - Wait for API ready
@@ -200,9 +205,10 @@ HOW TO USE THIS FILE:
 - Exit codes: 0 running, 1 not running/error
 - --force flag to delete and recreate
 - moto cluster init JSON output: status "created" or "exists" (v0.2 changelog: ClusterInitJson struct with name, status, api_endpoint, registry_endpoint; --json flag produces "created" for new clusters, "exists" for idempotent case)
+- Change registry port from 5000 to 5050 (v0.3: avoids macOS AirPlay Receiver conflict; --registry-create moto-registry:0.0.0.0:5050 format binds to all interfaces)
 
 **Remaining:**
-(none - local-cluster.md v0.2 implementation complete)
+(none - local-cluster.md v0.3 implementation complete)
 
 ---
 
