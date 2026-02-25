@@ -221,7 +221,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.9
+## makefile.md v0.10
 
 **Status:** In Progress
 
@@ -241,9 +241,10 @@ HOW TO USE THIS FILE:
 - Local dev targets: dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image, dev-up, dev-down, dev-clean
 - Local dev target: dev-cluster (k3d cluster creation via moto CLI)
 - Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (v0.9: implemented via service-deploy.md; idempotent credential generation, kubectl apply -k, rollout wait with status, namespace+RBAC cleanup)
+- deploy-images target: builds and pushes all three service images (garage, club, keybox) to local registry (v0.10)
 
 **Remaining:**
-(none - makefile.md v0.9 implementation complete)
+- `deploy` target: full deployment flow (deploy-images + deploy-secrets + deploy-system + deploy-status)
 
 ---
 
@@ -442,7 +443,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## service-deploy.md v0.3
+## service-deploy.md v0.4
 
 **Status:** In Progress
 
@@ -457,9 +458,10 @@ HOW TO USE THIS FILE:
 - Makefile target: deploy-system (kubectl apply -k infra/k8s/moto-system/)
 - Makefile target: deploy-status (wait for rollout, show status, exit 0/1)
 - Makefile target: undeploy-system (delete moto-system namespace AND cluster-scoped moto-club ClusterRole/ClusterRoleBinding; --ignore-not-found for idempotency)
+- Makefile target: deploy-images (v0.4: builds and pushes all three service images to local registry)
 
 **Remaining:**
-(none - service-deploy.md v0.3 implementation complete)
+- Makefile target: `deploy` (full deployment flow: deploy-images + deploy-secrets + deploy-system + deploy-status)
 
 ---
 

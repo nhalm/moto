@@ -7,7 +7,7 @@
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
 .PHONY: dev dev-cluster dev-up dev-down dev-clean
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
-.PHONY: deploy-secrets deploy-system deploy-status undeploy-system
+.PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy undeploy-system
 
 # Set up local development environment
 install:
@@ -365,6 +365,9 @@ dev-clean:
 	@echo "Dev state cleaned."
 
 # === K8s Deployment ===
+
+# Build and push all service images (garage, club, keybox) to local registry
+deploy-images: build-garage push-garage build-club push-club build-keybox push-keybox
 
 # Secret generation directory for K8s deployment
 K8S_SECRETS_DIR := .dev/k8s-secrets
