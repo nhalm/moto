@@ -1,0 +1,91 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: moto-keybox
+  namespace: moto-system
+  labels:
+    app.kubernetes.io/part-of: moto
+    app.kubernetes.io/component: moto-keybox
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: moto-keybox
+  ports:
+    - name: api
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: health
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moto-keybox
+  namespace: moto-system
+  labels:
+    app.kubernetes.io/part-of: moto
+    app.kubernetes.io/component: moto-keybox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: moto-keybox
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: moto
+        app.kubernetes.io/component: moto-keybox
+    spec:
+      containers:
+        - name: moto-keybox
+          image: moto-registry:5000/moto-keybox:latest
+          ports:
+            - containerPort: 8080
+            - containerPort: 8081
+          env:
+            - name: MOTO_KEYBOX_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: keybox-db-credentials
+                  key: url
+            - name: MOTO_KEYBOX_MASTER_KEY_FILE
+              value: /run/secrets/keybox/master.key
+            - name: MOTO_KEYBOX_SVID_SIGNING_KEY_FILE
+              value: /run/secrets/keybox/signing.key
+            - name: MOTO_KEYBOX_SERVICE_TOKEN_FILE
+              value: /run/secrets/keybox/service-token
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8081
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8081
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: 8081
+            failureThreshold: 30
+            periodSeconds: 1
+          volumeMounts:
+            - name: keybox-keys
+              mountPath: /run/secrets/keybox
+              readOnly: true
+      volumes:
+        - name: keybox-keys
+          secret:
+            secretName: keybox-keys
