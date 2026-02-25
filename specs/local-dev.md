@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.6 |
+| Version | 0.7 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-22 |
+| Last Updated | 2026-02-24 |
 
 ## Overview
 
@@ -128,9 +128,82 @@ The garage dev container image must be built and pushed to the k3d registry (`lo
 
 `make push-garage` cleans up the local Docker daemon copy after pushing to the registry. The image only needs to live in the registry (for k3d to pull) — keeping it in Docker wastes ~10GB of VM disk.
 
-### Startup Sequence
+### `moto dev` — One Command Local Dev
 
-Full sequence from zero to working:
+The `moto dev` subcommand orchestrates the full local dev flow. One command, one terminal:
+
+```bash
+moto dev up
+```
+
+This performs all steps: cluster check, postgres, keybox keys, migrations, starts keybox and club as background subprocesses, and opens a garage. Ctrl-C tears everything down.
+
+#### `moto dev up`
+
+```
+moto dev up [--no-garage] [--rebuild-image] [--skip-image]
+```
+
+| Flag | Behavior |
+|------|----------|
+| `--no-garage` | Start services only, don't open a garage |
+| `--rebuild-image` | Force rebuild and push the garage container image |
+| `--skip-image` | Skip the registry image check entirely |
+
+Orchestration steps (each idempotent, with progress output):
+
+```
+[1/9] Checking prerequisites...     docker, k3d, MOTO_USER
+[2/9] Ensuring cluster...           cluster_exists → init if missing
+[3/9] Checking garage image...      GET registry tags list → prompt if missing
+[4/9] Starting postgres...          docker compose up -d --wait
+[5/9] Generating keybox keys...     check .dev/keybox/ → generate if missing
+[6/9] Running migrations...         cargo sqlx migrate run
+[7/9] Starting keybox...            subprocess + health wait on :8091
+[8/9] Starting moto-club...         subprocess + health wait on :8081
+[9/9] Opening garage...             POST to club API
+```
+
+**Image handling:** Step 3 checks `http://localhost:5050/v2/moto-garage/tags/list`. If the image exists, the build is skipped. If missing, `dev up` prints instructions to run `make dev-garage-image`. Use `--rebuild-image` to force a build inline, or `--skip-image` to skip the check entirely (for service-only work).
+
+**Subprocess management:** Keybox and club run as `cargo run` subprocesses with `kill_on_drop(true)`. On Ctrl-C, both are killed. If either dies unexpectedly, an error is printed. Log output is suppressed by default, visible with `-v`.
+
+**DevConfig:** All 12 env vars use hardcoded dev defaults (matching the tables above). Each is overridable via environment variable for non-standard setups.
+
+#### `moto dev down`
+
+```
+moto dev down [--clean]
+```
+
+| Flag | Behavior |
+|------|----------|
+| (none) | Stop club, keybox, postgres |
+| `--clean` | Also remove `.dev/` and pgdata volume |
+
+Finds running processes by checking ports 8080 and 8090.
+
+#### `moto dev status`
+
+```
+moto dev status
+```
+
+Health-check dashboard:
+
+```
+Cluster:   running (k3d-moto)
+Registry:  healthy (localhost:5050)
+Postgres:  healthy (localhost:5432)
+Keybox:    healthy (localhost:8090)
+Club:      healthy (localhost:8080)
+Image:     moto-garage:latest (in registry)
+Garages:   1 running
+```
+
+### Manual Startup Sequence (Advanced)
+
+For running services individually or debugging, the manual steps are still available:
 
 ```bash
 # 1. Create k3d cluster (idempotent)
@@ -158,23 +231,22 @@ make dev-club
 MOTO_USER=nick moto garage open --no-attach
 ```
 
-### Shortcut
-
-`make dev-up` runs steps 2-4 and 6-7 automatically (skips the garage image build). Starts moto-club in foreground — Ctrl-C stops everything. The garage image (step 5) is a one-time setup — run `make dev-garage-image` separately before your first `garage open`.
-
 ### Teardown
 
-| Target | Behavior |
-|--------|----------|
-| `dev-down` | Stop all services and postgres |
-| `dev-clean` | dev-down + remove pgdata volume + remove `.dev/` |
+| Command | Behavior |
+|---------|----------|
+| `moto dev down` | Stop club, keybox, and postgres |
+| `moto dev down --clean` | Stop everything + remove `.dev/` + pgdata volume |
+| `make dev-down` | Stop postgres only |
+| `make dev-clean` | dev-down + remove pgdata volume + `.dev/` |
 
 ### Makefile Targets
 
 | Target | Description |
 |--------|-------------|
+| `dev` | Alias for `moto dev up` |
 | `dev-cluster` | Create k3d cluster (idempotent, see [local-cluster.md](local-cluster.md)) |
-| `dev-up` | Start full local dev stack |
+| `dev-up` | Start full local dev stack (legacy, use `moto dev up` instead) |
 | `dev-down` | Stop all services and database |
 | `dev-clean` | dev-down + remove all dev state |
 | `dev-db-up` | Start postgres only |
@@ -228,6 +300,15 @@ moto/
 - [service-deploy.md](service-deploy.md) — K8s deployment (alternative)
 
 ## Changelog
+
+### v0.7 (2026-02-24)
+- Add `moto dev` subcommand: `up`, `down`, `status` — one command to start the full local dev stack
+- `moto dev up` orchestrates: cluster check, postgres, keybox keys, migrations, starts services, opens garage
+- `moto dev down` stops all services; `--clean` removes dev state
+- `moto dev status` shows health dashboard for all components
+- DevConfig: hardcoded dev defaults for all env vars, overridable per-variable
+- Subprocess management: keybox and club run as `cargo run` children with `kill_on_drop`
+- Add `dev` Makefile target as alias for `moto dev up`
 
 ### v0.6 (2026-02-22)
 - `push-garage` now cleans up local Docker daemon copy after pushing to registry (saves ~10GB VM disk)
