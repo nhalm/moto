@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: moto-system
+  labels:
+    app.kubernetes.io/part-of: moto
+    app.kubernetes.io/managed-by: moto
+    moto.dev/type: system
