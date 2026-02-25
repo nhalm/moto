@@ -15,7 +15,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v2.2
+## moto-club.md v2.3
 
 **Status:** In Progress
 
@@ -75,9 +75,10 @@ HOW TO USE THIS FILE:
 
 - Fix: GarageResponse includes updated_at field from database model (v2.2: added updated_at: DateTime<Utc> to GarageResponse struct and From<Garage> impl in garages.rs)
 - Fix: /health/ready on port 8081 includes K8s API reachability check (v2.2: ready_handler now checks database, K8s API, and keybox; K8s failure degrades but doesn't fail; uses existing check_k8s function with state.k8s_client)
+- Embed migrations and auto-run on startup (v2.3: moto-club-db adds MIGRATIONS static with sqlx::migrate!(), run_migrations() function, Migration error variant; moto-club main.rs calls run_migrations() after connect() before serving requests; same pattern as moto-keybox-db)
 
 **Remaining:**
-(none - moto-club.md v2.2 implementation complete)
+- ClusterRole for K8s operations (blocked: service-deploy.md)
 
 ---
 
@@ -289,7 +290,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## keybox.md v0.8
+## keybox.md v0.9
 
 **Status:** In Progress
 
@@ -407,7 +408,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## local-dev.md v0.8
+## local-dev.md v0.9
 
 **Status:** In Progress
 
@@ -435,7 +436,7 @@ HOW TO USE THIS FILE:
 - `moto dev up` command: 9-step orchestration (prerequisites, cluster, image, postgres, keys, migrations, keybox, club, garage) with subprocess management via tokio::process, health checks with exponential backoff, Ctrl-C handling, --no-garage/--rebuild-image/--skip-image flags, DevConfig env var methods, JSON output, idempotent restart (v0.7/v0.8)
 
 **Remaining:**
-(none - local-dev.md v0.8 implementation complete)
+(none - local-dev.md v0.9 implementation complete)
 
 ---
 

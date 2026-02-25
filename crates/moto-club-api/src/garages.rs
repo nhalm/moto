@@ -321,7 +321,7 @@ async fn create_garage(
                         Json(ApiError::new(error_codes::DATABASE_ERROR, "Database error")),
                     )
                 }
-                DbError::NotFound { .. } | DbError::NotOwned { .. } => {
+                DbError::NotFound { .. } | DbError::NotOwned { .. } | DbError::Migration(_) => {
                     // Shouldn't happen for create
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -531,7 +531,7 @@ async fn get_garage(
                     Json(ApiError::new(error_codes::DATABASE_ERROR, "Database error")),
                 )
             }
-            DbError::AlreadyExists { .. } | DbError::NotOwned { .. } => {
+            DbError::AlreadyExists { .. } | DbError::NotOwned { .. } | DbError::Migration(_) => {
                 // Shouldn't happen for get
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,

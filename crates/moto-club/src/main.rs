@@ -230,6 +230,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let db_pool: DbPool = moto_club_db::connect(&config.database_url).await?;
     info!("database connected");
 
+    // Run embedded migrations before serving requests (moto-club.md v2.3)
+    info!("running database migrations");
+    moto_club_db::run_migrations(&db_pool)
+        .await
+        .map_err(|e| format!("failed to run migrations: {e}"))?;
+    info!("database migrations complete");
+
     // Parse DERP servers from environment variable
     let derp_config = match parse_derp_servers_env() {
         Ok(config) => {
