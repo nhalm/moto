@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 2.1 |
+| Version | 2.2 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-24 |
 
@@ -130,8 +130,7 @@ crates/
 ├── moto-club-ws/             # Library: WebSocket handlers
 │   └── src/
 │       ├── lib.rs
-│       ├── logs.rs           # Log streaming
-│       └── events.rs         # Real-time events
+│       └── peers.rs          # Peer streaming
 │
 ├── moto-club-wg/             # Library: WireGuard coordination
 │   └── src/
@@ -152,13 +151,26 @@ crates/
 │       ├── lib.rs
 │       ├── namespace.rs      # Namespace management
 │       ├── pods.rs           # Pod lifecycle
-│       └── resources.rs      # Quotas, policies
+│       ├── network_policy.rs # Network policies
+│       ├── limit_range.rs    # LimitRange resources
+│       ├── resource_quota.rs # ResourceQuota resources
+│       ├── pvc.rs            # PersistentVolumeClaim management
+│       ├── supporting_services.rs  # Supporting service deployments
+│       ├── svid.rs           # SVID secret management
+│       └── wireguard.rs      # WireGuard config/secrets
 │
 ├── moto-club-db/             # Library: Database layer
 │   └── src/
 │       ├── lib.rs
 │       ├── models.rs         # Data models
-│       └── garage_repo.rs    # Garage repository
+│       ├── garage_repo.rs    # Garage repository
+│       ├── wg_device_repo.rs # WireGuard device repository
+│       ├── wg_session_repo.rs # WireGuard session repository
+│       └── wg_garage_repo.rs # Garage WireGuard registration repository
+│   └── migrations/
+│       ├── 20260128000000_initial_schema.sql
+│       ├── 20260128000001_derp_servers_unique_constraint.sql
+│       └── 20260205000000_drop_derp_servers.sql
 │
 ├── moto-club-reconcile/      # Library: K8s → DB reconciliation
 │   └── src/
@@ -168,9 +180,7 @@ crates/
 └── moto-club-types/          # Library: Shared types (used by CLI too)
     └── src/
         ├── lib.rs
-        ├── garage.rs         # Garage types
-        ├── error.rs          # Error types
-        └── api.rs            # Request/response types
+        └── garage.rs         # Garage types
 ```
 
 **Test Organization:** Tests for large modules should be in separate files per AGENTS.md convention:
@@ -288,7 +298,7 @@ Response 201 Created:
 
 **Errors:**
 - `GARAGE_ALREADY_EXISTS` (409) - Name already taken
-- `INVALID_TTL` (400) - TTL below minimum (60s) or above maximum (48h default)
+- `INVALID_TTL` (400) - TTL below minimum (300s) or above maximum (48h default)
 
 ##### List Garages
 
@@ -400,7 +410,7 @@ Response 200:
 - `GARAGE_NOT_OWNED` (403)
 - `GARAGE_EXPIRED` (410) - Cannot extend expired garage
 - `GARAGE_TERMINATED` (410) - Cannot extend terminated garage
-- `INVALID_TTL` (400) - Would exceed max TTL or below minimum (1 minute)
+- `INVALID_TTL` (400) - Would exceed max TTL or below minimum (5 minutes)
 
 #### WireGuard Coordination
 
@@ -1067,6 +1077,7 @@ All API errors use a standard format:
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
+| `UNAUTHORIZED` | 401 | Missing or malformed Authorization header |
 | `GARAGE_NOT_FOUND` | 404 | Garage doesn't exist |
 | `GARAGE_NOT_OWNED` | 403 | Garage exists but owned by someone else |
 | `GARAGE_ALREADY_EXISTS` | 409 | Garage name already taken |
@@ -1159,6 +1170,8 @@ Structured JSON logging to stdout:
 ```bash
 # Required
 MOTO_CLUB_DATABASE_URL="postgres://moto:password@localhost:5432/moto"
+
+# Optional (when absent, SVID issuance is disabled and garage creation degrades gracefully)
 MOTO_CLUB_KEYBOX_URL="http://keybox:8080"
 MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE="/path/to/service-token"  # File containing hex token for keybox auth
 MOTO_CLUB_KEYBOX_HEALTH_URL="http://keybox:8081"  # Optional, defaults to KEYBOX_URL with port 8081
@@ -1168,7 +1181,7 @@ KUBECONFIG="/path/to/kubeconfig"          # Optional, for local dev
 
 # Optional
 MOTO_CLUB_BIND_ADDR="0.0.0.0:8080"
-MOTO_CLUB_MIN_TTL_SECONDS="60"            # 1 minute minimum
+MOTO_CLUB_MIN_TTL_SECONDS="300"           # 5 minutes minimum
 MOTO_CLUB_DEFAULT_TTL_SECONDS="14400"     # 4 hours
 MOTO_CLUB_MAX_TTL_SECONDS="172800"        # 48 hours
 MOTO_CLUB_DEV_CONTAINER_IMAGE="ghcr.io/nhalm/moto-dev:latest"
@@ -1227,6 +1240,14 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v2.2 (2026-02-24)
+- Fix: `/health/ready` on port 8081 must include K8s API reachability check (currently only checks database and keybox)
+- Fix: `GarageResponse` must include `updated_at` field from database model
+- Docs: Update crate structure diagram to match current codebase
+- Docs: Min TTL corrected from 60s to 300s (5 minutes) to match implementation
+- Docs: KEYBOX env vars changed from Required to Optional (graceful degradation when absent, SVID issuance disabled)
+- Docs: Add `UNAUTHORIZED` error code to error table (401 — missing or malformed Authorization header)
 
 ### v2.1 (2026-02-24)
 - Document health port (8081) endpoints: `/health/live`, `/health/ready`, `/health/startup`

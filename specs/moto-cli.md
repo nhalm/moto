@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.6 |
+| Version | 0.7 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-24 |
 
@@ -122,9 +122,11 @@ Options:
 **Example:**
 ```
 $ moto garage open
-Created garage: bold-mongoose
-  Engine: moto-club
-  TTL: 4h
+Garage created: abc123
+  Name:    bold-mongoose
+  Branch:  main
+  TTL:     4h (expires 2026-01-20 02:48:00)
+  Status:  running
 
 To connect: moto garage enter bold-mongoose
 ```
@@ -132,9 +134,11 @@ To connect: moto garage enter bold-mongoose
 **JSON output:**
 ```json
 {
+  "id": "abc123",
   "name": "bold-mongoose",
-  "engine": "moto-club",
+  "branch": "main",
   "ttl_seconds": 14400,
+  "expires_at": "2026-01-20T02:48:00Z",
   "status": "running"
 }
 ```
@@ -204,9 +208,9 @@ Options:
 **Example:**
 ```
 $ moto garage list
-NAME            STATUS    AGE     TTL       ENGINE
-bold-mongoose   running   2h15m   1h45m     moto-club
-quiet-falcon    running   45m     3h15m     keybox
+ID       NAME            BRANCH   STATUS    TTL       AGE
+abc123   bold-mongoose   main     running   1h45m     2h15m
+def456   quiet-falcon    main     running   3h15m     45m
 ```
 
 **JSON output:**
@@ -214,11 +218,12 @@ quiet-falcon    running   45m     3h15m     keybox
 {
   "garages": [
     {
+      "id": "abc123",
       "name": "bold-mongoose",
+      "branch": "main",
       "status": "running",
-      "age_seconds": 8100,
       "ttl_remaining_seconds": 6300,
-      "engine": "moto-club"
+      "age_seconds": 8100
     }
   ]
 }
@@ -628,6 +633,11 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.7 (2026-02-24)
+- Docs: Update `garage open` output format and JSON to match garage-lifecycle.md v0.4 (add id, branch, expires_at; remove engine)
+- Docs: Update `garage list` table columns to match garage-lifecycle.md v0.4 (ID, NAME, BRANCH, STATUS, TTL, AGE)
+- Docs: Update `garage list` JSON to match garage-lifecycle.md v0.4 (add id, branch; remove engine)
 
 ### v0.6 (2026-02-24)
 - Add `dev` subcommand to command hierarchy: `up`, `down`, `status`

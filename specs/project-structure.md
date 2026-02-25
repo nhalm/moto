@@ -1,8 +1,8 @@
 # Project Structure Specification
 
-**Version:** 1.4
+**Version:** 1.5
 **Status:** Ripping
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-02-24
 
 ---
 
@@ -124,6 +124,7 @@ moto/
 │   │── moto-club-types/              # Library: shared types (CLI + Club)
 │   │── moto-club-wg/                 # Library: WireGuard coordination
 │   │── moto-club-reconcile/          # Library: K8s → DB reconciliation
+│   │── moto-club-ws/                 # Library: WebSocket handlers for peer streaming
 │   │
 │   │── moto-wgtunnel-types/          # Library: WireGuard types
 │   │── moto-wgtunnel-conn/           # Library: MagicConn, STUN
@@ -137,6 +138,8 @@ moto/
 │   │── moto-keybox-client/           # Library: Keybox client
 │   │── moto-keybox-cli/              # Binary: Keybox admin CLI
 │   │── moto-keybox-db/               # Library: Keybox database layer
+│   │
+│   │── moto-test-utils/              # Library: Test utilities for integration tests
 │   │
 │   │── moto-ai-proxy/                # AI provider proxy (future)
 │   │── moto-tank/                    # Vault/storage (future)
@@ -210,6 +213,7 @@ moto/
 | `moto-club-db` | lib | Database: migrations, repositories |
 | `moto-club-wg` | lib | WireGuard coordination: IPAM, peers, sessions, DERP |
 | `moto-club-reconcile` | lib | K8s → DB reconciliation loop |
+| `moto-club-ws` | lib | WebSocket handlers for peer streaming |
 
 ### WireGuard Tunnel Crates
 
@@ -231,6 +235,12 @@ moto/
 | `moto-keybox-client` | lib | Client for garages/bikes: SVID cache, secret fetching |
 | `moto-keybox-cli` | bin | Admin CLI: init, set/get secrets, issue dev SVIDs |
 | `moto-keybox-db` | lib | Database: models, migrations, repositories |
+
+### Test Crates
+
+| Crate | Type | Purpose |
+|-------|------|---------|
+| `moto-test-utils` | lib | Test utilities: `test_pool()`, `unique_garage_name()`, `unique_owner()`, `fake_wg_pubkey()` |
 
 ### Infrastructure Crates (Future)
 
@@ -391,6 +401,10 @@ Both CLI and server need the same types (GarageInfo, etc). Put them in `moto-clu
 ---
 
 ## Changelog
+
+### v1.5 (2026-02-24)
+- Docs: Add `moto-club-ws` crate to Club Crates table and directory tree (re-introduced by moto-club.md v1.6)
+- Docs: Add `moto-test-utils` crate to crate tables and directory tree (test utilities for integration tests)
 
 ### v1.4 (2026-02-04)
 

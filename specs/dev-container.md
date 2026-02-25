@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.16 |
+| Version | 0.17 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-22 |
+| Last Updated | 2026-02-24 |
 
 ## Overview
 
@@ -194,7 +194,7 @@ The container includes these services (configured in Dockerfile):
 - Spawns tmux for session persistence
 - Working directory: `/workspace/<repo-name>/` (set after repo clone)
 - Runs as: root
-- Process management: systemd service, restarts on failure
+- Process management: shell entrypoint (`exec ttyd`), K8s pod restart policy handles restarts
 - Health check: TCP probe on port 7681
 - No authentication required (WireGuard tunnel is auth boundary)
 - See [moto-wgtunnel.md](moto-wgtunnel.md) for connection details
@@ -237,9 +237,17 @@ Garage needs access to:
 
 | Mount | Path | Type | Purpose |
 |-------|------|------|---------|
-| Code | `/workspace` | PVC | Repo checkout, persists across restarts |
-| Cargo cache | `/root/.cargo` | emptyDir | Rust build cache, ephemeral |
-| Target dir | `/workspace/target` | emptyDir | Build artifacts, ephemeral |
+| workspace | `/workspace` | PersistentVolumeClaim | Repo checkout, persists across restarts |
+| tmp | `/tmp` | emptyDir | Temporary files, ephemeral |
+| var-tmp | `/var/tmp` | emptyDir | Temporary files, ephemeral |
+| home | `/root` | emptyDir | Home directory, ephemeral |
+| cargo | `/root/.cargo` | emptyDir | Rust build cache, ephemeral |
+| var-lib-apt | `/var/lib/apt` | emptyDir | apt package state, ephemeral |
+| var-cache-apt | `/var/cache/apt` | emptyDir | apt package cache, ephemeral |
+| usr-local | `/usr/local` | emptyDir | Locally installed tools, ephemeral |
+| wireguard-config | `/etc/wireguard` | ConfigMap | WireGuard config pushed by moto-club |
+| wireguard-keys | `/run/wireguard` | Secret | WireGuard private/public keys |
+| garage-svid | `/run/svid` | Secret | SPIFFE SVID for keybox auth |
 
 **Notes:**
 - `/workspace` is a PVC so uncommitted work survives pod restarts
@@ -255,10 +263,8 @@ TERM="xterm-256color"
 SHELL="/bin/bash"
 
 # Identity (injected by K8s)
-GARAGE_ID="abc123"
-GARAGE_NAME="feature-tokenization"
-POD_NAME="moto-garage-abc123"
-POD_NAMESPACE="moto-garage-abc123"
+MOTO_GARAGE_BRANCH="feature-tokenization"
+MOTO_GARAGE_NAMESPACE="moto-garage-abc123"
 
 # Paths
 WORKSPACE="/workspace"
@@ -274,13 +280,19 @@ RUSTC_WRAPPER="sccache"
 # AI (v1 - user provides key)
 # ANTHROPIC_API_KEY set by user
 
-# Database (credentials from env or keybox)
-DATABASE_HOST="postgres.moto-garage-${GARAGE_ID}.svc.cluster.local"
-DATABASE_PORT="5432"
-DATABASE_NAME="moto"
+# Database (injected when --with-postgres is used)
+POSTGRES_HOST="postgres.moto-garage-abc123.svc.cluster.local"
+POSTGRES_PORT="5432"
+POSTGRES_DB="dev"
+POSTGRES_USER="dev"
+POSTGRES_PASSWORD="<from secret>"
+DATABASE_URL="postgresql://dev:<password>@postgres:5432/dev"
 
-# Redis
-REDIS_URL="redis://redis.moto-garage-${GARAGE_ID}.svc.cluster.local:6379"
+# Redis (injected when --with-redis is used)
+REDIS_HOST="redis.moto-garage-abc123.svc.cluster.local"
+REDIS_PORT="6379"
+REDIS_PASSWORD="<from secret>"
+REDIS_URL="redis://:password@redis:6379"
 
 # Nix
 NIX_PATH="nixpkgs=flake:nixpkgs"
@@ -325,17 +337,31 @@ Inside the garage, Claude Code has full control. Isolation comes from the contai
 - Create/modify K8s resources outside own namespace
 
 **Tool restrictions:**
-- `kubectl`/`helm`: RBAC limited to read-only access to own namespace
+- `kubectl`/`helm`: No K8s API access from inside the container — `automountServiceAccountToken: false` means no service account token is mounted
 - `gh` CLI: Token scoped to repo read/write only (no org admin, no other repos)
 - `git`/`jj`: Auth via scoped deploy key or token (not user credentials)
 
 **Container security context:**
 ```yaml
 securityContext:
+  runAsUser: 0
+  runAsGroup: 0
   allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
   seccompProfile:
     type: RuntimeDefault
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
   # Note: runs as root inside, but constrained by namespace/network
+  # readOnlyRootFilesystem requires writable emptyDir mounts (see Volume Mounts)
 ```
 
 ### Resource Limits
@@ -344,20 +370,14 @@ Default limits per garage:
 
 | Resource | Request | Limit |
 |----------|---------|-------|
-| CPU | 2 cores | 4 cores |
-| Memory | 4Gi | 8Gi |
-| Ephemeral storage | 10Gi | 20Gi |
+| CPU | 100m | 3 |
+| Memory | 256Mi | 7Gi |
 
 **Rationale:**
-- Rust compilation is CPU and memory intensive
-- 8Gi memory prevents OOM during `cargo build`
-- 4 cores allows parallel compilation
-- 20Gi storage for cargo cache, target directory
-
-Can be overridden per-garage:
-```bash
-moto garage open --cpu 8 --memory 16Gi
-```
+- 7Gi memory prevents OOM during `cargo build` while leaving headroom for supporting services
+- 3 CPU cores allows parallel compilation
+- Low requests (100m CPU, 256Mi memory) allow efficient scheduling on shared nodes
+- See [garage-isolation.md](garage-isolation.md) for the authoritative resource limits and quota definitions
 
 ### Building the Container
 
@@ -475,6 +495,14 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.17 (2026-02-24)
+- Docs: Fix resource limits table to match garage-isolation.md (100m/3 CPU, 256Mi/7Gi memory)
+- Docs: Update volume mounts table to list all 11 actual mounts (was only 3)
+- Docs: Remove systemd reference — container uses shell entrypoint (`exec ttyd`) with K8s restart policy
+- Docs: Fix K8s-injected env var names to match supporting-services.md (POSTGRES_* prefix); use MOTO_GARAGE_BRANCH and MOTO_GARAGE_NAMESPACE for garage identity
+- Docs: Update security context to match garage-isolation.md (readOnlyRootFilesystem, capabilities)
+- Docs: Update tool restrictions — kubectl has no K8s API access (automountServiceAccountToken=false)
 
 ### v0.16 (2026-02-22)
 - Reduce image size: switch Rust toolchain from `.default` to `.minimal` profile, exclude rust-docs (~700MB savings)

@@ -284,7 +284,7 @@ MOTO_USER=nick moto garage open --no-attach
 | `dev` | Alias for `moto dev up` |
 | `dev-cluster` | Create k3d cluster (idempotent, see [local-cluster.md](local-cluster.md)) |
 | `dev-up` | Start full local dev stack (legacy, use `moto dev up` instead) |
-| `dev-down` | Stop all services and database |
+| `dev-down` | Stop postgres only |
 | `dev-clean` | dev-down + remove all dev state |
 | `dev-db-up` | Start postgres only |
 | `dev-db-down` | Stop postgres |
@@ -337,6 +337,9 @@ moto/
 - [service-deploy.md](service-deploy.md) — K8s deployment (alternative)
 
 ## Changelog
+
+### v0.9 (2026-02-24)
+- Docs: Fix `dev-down` description in Makefile Targets table (stops postgres only, not all services)
 
 ### v0.8 (2026-02-24)
 - Clarify `moto dev up` step details: what each step checks, what happens on failure, abort vs continue

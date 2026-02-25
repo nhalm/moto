@@ -2,11 +2,14 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.7 |
+| Version | 0.8 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-24 |
 
 ## Changelog
+
+### v0.8 (2026-02-24)
+- Fix: Secret retrieval handlers must enforce pod UID binding — API handlers (`get_secret`, `set_secret`, `delete_secret`) must call `validate_with_pod_uid()` instead of `validate()` when the SVID contains a `pod_uid` claim (spec: "Checks pod UID matches (still alive)" in Secret Retrieval Flow step 2)
 
 ### v0.7 (2026-02-24)
 - Document that `moto keybox init` only generates `master.key` and `signing.key`, not `service-token`

@@ -214,7 +214,7 @@ No shell. No init system. Single binary.
 
 Each main engine crate has a `bike.toml` in its crate root. Shared/tool crates don't need one - only the final deployable engines (club, vault, proxy).
 
-**Location:** `engines/moto-club/bike.toml`
+**Location:** `crates/moto-club/bike.toml`
 
 ```toml
 name = "club"
@@ -533,6 +533,9 @@ moto bike logs club -f --tail 100
 ---
 
 ## Changelog
+
+### v0.4
+- Docs: Fix bike.toml location from `engines/moto-club/` to `crates/moto-club/`
 
 ### v0.3
 - Restructured spec: bike is base image, engine is binary, running bike is both

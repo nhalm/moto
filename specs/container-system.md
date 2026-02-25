@@ -394,7 +394,7 @@ pkgs.dockerTools.buildLayeredImage {
 
 | Environment | Registry | Purpose |
 |-------------|----------|---------|
-| Local dev | `localhost:5000` | Fast iteration, no auth |
+| Local dev | `localhost:5050` | Fast iteration, no auth |
 | K3s cluster | `registry.moto-system:5000` | In-cluster registry |
 | Production | `ghcr.io/<org>` | Public/private remote (optional) |
 
@@ -402,7 +402,7 @@ The active registry is set via environment variable:
 
 ```bash
 # Local development (default)
-export MOTO_REGISTRY="localhost:5000"
+export MOTO_REGISTRY="localhost:5050"
 
 # K3s in-cluster
 export MOTO_REGISTRY="registry.moto-system:5000"
@@ -415,7 +415,7 @@ export MOTO_REGISTRY="ghcr.io/nhalm"
 
 ```bash
 # Run local registry (one-time setup)
-docker run -d -p 5000:5000 --name moto-registry registry:2
+docker run -d -p 5050:5050 --name moto-registry registry:2
 
 # Or via k3s (built-in option)
 # k3s ships with containerd, can use embedded registry
@@ -448,9 +448,9 @@ Images:
 
 ```bash
 # Local development
-localhost:5000/moto-garage:latest
-localhost:5000/moto-bike:latest
-localhost:5000/moto-club:a1b2c3d
+localhost:5050/moto-garage:latest
+localhost:5050/moto-bike:latest
+localhost:5050/moto-club:a1b2c3d
 
 # K3s cluster
 registry.moto-system:5000/moto-club:v1.0.0
@@ -732,10 +732,10 @@ cosign generate-key-pair
 # Creates cosign.key (private) and cosign.pub (public)
 
 # Sign an image
-cosign sign --key cosign.key localhost:5000/moto-club:latest
+cosign sign --key cosign.key localhost:5050/moto-club:latest
 
 # Verify an image
-cosign verify --key cosign.pub localhost:5000/moto-club:latest
+cosign verify --key cosign.pub localhost:5050/moto-club:latest
 ```
 
 **CI workflow addition:**
@@ -808,7 +808,7 @@ trivy image --format json --output results.json moto-club:latest
 # Scan before pushing (recommended flow)
 nix build .#moto-club-image && docker load < result
 trivy image --exit-code 1 --severity HIGH,CRITICAL moto-club:latest
-docker push localhost:5000/moto-club:latest
+docker push localhost:5050/moto-club:latest
 ```
 
 **CI workflow addition:**
@@ -862,11 +862,11 @@ syft moto-club:latest -o spdx-json > sbom.spdx.json
 ```bash
 # Sign and attach SBOM
 cosign attest --predicate sbom.spdx.json --type spdx \
-  localhost:5000/moto-club:latest
+  localhost:5050/moto-club:latest
 
 # Verify attestation exists
 cosign verify-attestation --type spdx \
-  localhost:5000/moto-club:latest
+  localhost:5050/moto-club:latest
 ```
 
 **CI workflow addition:**
@@ -1012,10 +1012,10 @@ docker rm temp
 
 ```bash
 # Test registry connectivity
-curl -s http://localhost:5000/v2/_catalog
+curl -s http://localhost:5050/v2/_catalog
 
 # Check if image exists
-curl -s http://localhost:5000/v2/moto-garage/tags/list
+curl -s http://localhost:5050/v2/moto-garage/tags/list
 
 # Registry logs (if using container)
 docker logs moto-registry
@@ -1045,6 +1045,9 @@ nix path-info --json .#moto-club-image | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v1.1 (2026-02-24)
+- Docs: Update registry port from 5000 to 5050 (matches local-cluster.md v0.3)
 
 ### v1.0 (2026-02-18)
 - Add `moto-keybox` to final images list (bike + keybox-server binary)

@@ -168,7 +168,7 @@ spec:
           image: redis:7
           ports:
             - containerPort: 6379
-          args: ["--requirepass", "$(REDIS_PASSWORD)"]
+          args: ["sh", "-c", "redis-server --requirepass $REDIS_PASSWORD"]
           env:
             - name: REDIS_PASSWORD
               valueFrom:
@@ -187,7 +187,7 @@ spec:
               mountPath: /data
           readinessProbe:
             exec:
-              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "ping"]
+              command: ["sh", "-c", "redis-cli -a $REDIS_PASSWORD ping"]
             initialDelaySeconds: 5
             periodSeconds: 5
       volumes:
@@ -321,6 +321,9 @@ Additional services can be added following the same pattern:
 - **MinIO** - S3-compatible storage (future)
 
 ## Changelog
+
+### v0.4 (2026-02-24)
+- Docs: Fix Redis args and readiness probe to use shell wrapper for env var expansion
 
 ### v0.3 (2026-02-04)
 - Fix: Actually create K8s Deployments, Services, and Secrets for supporting services
