@@ -105,6 +105,8 @@ pub struct GarageResponse {
     pub pod_name: String,
     /// When the garage was created.
     pub created_at: DateTime<Utc>,
+    /// When the garage was last updated.
+    pub updated_at: DateTime<Utc>,
     /// When the garage was terminated (if applicable).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub terminated_at: Option<DateTime<Utc>>,
@@ -127,6 +129,7 @@ impl From<Garage> for GarageResponse {
             namespace: g.namespace,
             pod_name: g.pod_name,
             created_at: g.created_at,
+            updated_at: g.updated_at,
             terminated_at: g.terminated_at,
             termination_reason: g.termination_reason,
         }
@@ -853,6 +856,7 @@ mod tests {
         assert!(json.contains(r#""name":"bold-mongoose""#));
         assert!(json.contains(r#""owner":"nick""#));
         assert!(json.contains(r#""status":"ready""#));
+        assert!(json.contains("updated_at"));
         // terminated_at and termination_reason should not be present when None
         assert!(!json.contains("terminated_at"));
         assert!(!json.contains("termination_reason"));

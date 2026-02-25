@@ -15,9 +15,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v2.1
+## moto-club.md v2.2
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - moto-club-types crate: GarageId, GarageState, GarageInfo
@@ -73,8 +73,10 @@ HOW TO USE THIS FILE:
 - Add MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE env var (v2.0: reads service token from file for keybox authentication; Config.keybox_service_token field; when both KEYBOX_URL and service token are configured, creates KeyboxClient and uses GarageService::with_keybox for SVID issuance)
 - Fix moto.dev/expires-at namespace label to use unix timestamp (v2.0: namespace.rs uses dt.timestamp() instead of dt.to_rfc3339(); labels.rs doc comment updated; colons and plus signs in RFC 3339 are invalid K8s label values)
 
+- Fix: GarageResponse includes updated_at field from database model (v2.2: added updated_at: DateTime<Utc> to GarageResponse struct and From<Garage> impl in garages.rs)
+
 **Remaining:**
-(none - v2.1 changes are documentation-only: health port endpoint docs, readiness criteria, response format clarification)
+- Fix: /health/ready on port 8081 must include K8s API reachability check (v2.2)
 
 ---
 
