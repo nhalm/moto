@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.9 |
+| Version | 0.10 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-20 |
+| Last Updated | 2026-02-25 |
 
 ## Overview
 
@@ -149,11 +149,17 @@ See [local-dev.md](local-dev.md) for full local development specification.
 ### Deploy Targets
 
 ```makefile
+deploy-images:       # Build and push all service images (garage, club, keybox)
 deploy-secrets:      # Generate and apply K8s secrets to moto-system namespace
 deploy-system:       # Deploy all moto-system components (kubectl apply -k)
 deploy-status:       # Show status of moto-system pods
+deploy:              # Full deploy: deploy-images + deploy-secrets + deploy-system + deploy-status
 undeploy-system:     # Delete moto-system namespace
 ```
+
+`deploy-images` builds and pushes all three images (`moto-garage`, `moto-club`, `moto-keybox`) to the local registry. It is a prerequisite for `deploy-system` — without it, pods will enter `ImagePullBackOff`.
+
+`deploy` is the one-command deployment path: it runs the full sequence from images through status verification. Equivalent to the manual Deployment Flow in [service-deploy.md](service-deploy.md) (steps 2-5).
 
 See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 
@@ -176,10 +182,14 @@ All targets should be declared `.PHONY` since they don't produce files:
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all test-ci
 .PHONY: dev-cluster dev-up dev-down dev-clean dev-db-up dev-db-down dev-db-migrate
 .PHONY: dev-keybox-init dev-keybox dev-club dev-garage-image
-.PHONY: deploy-secrets deploy-system deploy-status undeploy-system
+.PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy undeploy-system
 ```
 
 ## Changelog
+
+### v0.10 (2026-02-25)
+- Add `deploy-images` target: builds and pushes all three service images (garage, club, keybox) to local registry
+- Add `deploy` target: full deployment flow (deploy-images + deploy-secrets + deploy-system + deploy-status)
 
 ### v0.9 (2026-02-20)
 - Add `dev-cluster` target for k3d cluster creation via moto CLI

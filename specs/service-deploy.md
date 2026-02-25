@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
-| Status | Bare Frame |
+| Version | 0.4 |
+| Status | Ripping |
 | Last Updated | 2026-02-25 |
 
 ## Overview
@@ -211,14 +211,30 @@ K8s handles runtime ordering via readiness probes — each service won't become 
 
 ### Deployment Flow
 
+**Quick path** (one command after cluster exists):
+
+```bash
+# 1. Cluster must exist
+moto cluster init
+
+# 2. Build images, generate secrets, deploy, verify
+make deploy
+
+# 3. Port-forward for CLI access
+kubectl -n moto-system port-forward svc/moto-club 8080:8080 &
+
+# 4. Use it
+moto garage open
+```
+
+**Step-by-step** (for debugging or partial deploys):
+
 ```bash
 # 1. Cluster must exist
 moto cluster init
 
 # 2. Build and push all images
-make build-garage push-garage
-make build-club push-club
-make build-keybox push-keybox
+make deploy-images
 
 # 3. Generate and apply secrets
 make deploy-secrets
@@ -251,12 +267,14 @@ V1 uses port-forward. NodePort can be added later if needed.
 
 | Target | Description |
 |--------|-------------|
+| `deploy-images` | Build and push all service images (garage, club, keybox) to local registry |
 | `deploy-secrets` | Generate credentials/keys (idempotent), create K8s secrets in moto-system |
 | `deploy-system` | `kubectl apply -k infra/k8s/moto-system/` |
 | `deploy-status` | Wait for all Deployments to be available, then show pod/service status. Exit 0 if all healthy, exit 1 if any pod not ready. |
+| `deploy` | Full deploy: `deploy-images` + `deploy-secrets` + `deploy-system` + `deploy-status` |
 | `undeploy-system` | Delete moto-system namespace AND cluster-scoped ClusterRole/ClusterRoleBinding for moto-club |
 
-**Note:** `build-club`, `push-club`, `build-keybox`, `push-keybox`, `build-garage`, `push-garage` already exist in the Makefile (per [makefile.md](makefile.md)).
+**Note:** `deploy-images` combines the individual `build-*` and `push-*` targets from [makefile.md](makefile.md). Without it, pods will enter `ImagePullBackOff` because the images don't exist in the registry.
 
 ### Troubleshooting
 
@@ -294,6 +312,13 @@ V1 uses port-forward. NodePort can be added later if needed.
 - [garage-isolation.md](garage-isolation.md) — What K8s resources moto-club creates per garage
 
 ## Changelog
+
+### v0.4 (2026-02-25)
+- Fix Status from Bare Frame to Ripping (implementation complete per tracks.md)
+- Add `deploy-images` target: builds and pushes all three images to registry
+- Add `deploy` target: one-command full deployment (images + secrets + system + status)
+- Rewrite Deployment Flow with quick path (`make deploy`) and step-by-step path
+- Add `deploy-images` and `deploy` to Makefile Targets table
 
 ### v0.3 (2026-02-25)
 - Remove deploy-secrets bash script — spec defines WHAT (requirements), not HOW (implementation)
