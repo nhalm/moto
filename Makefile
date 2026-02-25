@@ -413,3 +413,25 @@ deploy-secrets:
 # Deploy moto-system manifests to K8s cluster
 deploy-system:
 	kubectl apply -k infra/k8s/moto-system/
+
+# Wait for all moto-system rollouts, show status, exit 0/1
+deploy-status:
+	@echo "Waiting for postgres rollout..."
+	@kubectl -n moto-system rollout status statefulset/postgres --timeout=120s
+	@echo "Waiting for moto-keybox rollout..."
+	@kubectl -n moto-system rollout status deployment/moto-keybox --timeout=120s
+	@echo "Waiting for moto-club rollout..."
+	@kubectl -n moto-system rollout status deployment/moto-club --timeout=120s
+	@echo ""
+	@echo "=== Pods ==="
+	@kubectl -n moto-system get pods
+	@echo ""
+	@echo "=== Services ==="
+	@kubectl -n moto-system get services
+	@echo ""
+	@NOT_READY=$$(kubectl -n moto-system get pods --no-headers | grep -v "Running\|Completed" | wc -l | tr -d ' '); \
+	if [ "$$NOT_READY" -gt 0 ]; then \
+		echo "ERROR: $$NOT_READY pod(s) not ready."; \
+		exit 1; \
+	fi
+	@echo "All pods healthy."

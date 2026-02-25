@@ -453,9 +453,9 @@ HOW TO USE THIS FILE:
 - infra/k8s/moto-system/kustomization.yaml (combines namespace, postgres, keybox, club resources)
 - Makefile target: deploy-secrets (idempotent credential generation to .dev/k8s-secrets/ via moto-keybox init + openssl rand; creates namespace if needed; applies 5 K8s secrets: postgres-credentials, keybox-keys, keybox-db-credentials, club-db-credentials, keybox-service-token)
 - Makefile target: deploy-system (kubectl apply -k infra/k8s/moto-system/)
+- Makefile target: deploy-status (wait for rollout, show status, exit 0/1)
 
 **Remaining:**
-- Makefile target: deploy-status (wait for rollout, show status, exit 0/1)
 - Makefile target: undeploy-system (delete namespace AND cluster-scoped ClusterRole/ClusterRoleBinding)
 
 ---
