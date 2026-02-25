@@ -409,3 +409,7 @@ deploy-secrets:
 		--from-file=service-token=$(K8S_SECRETS_DIR)/service-token \
 		--dry-run=client -o yaml | kubectl apply -f - && \
 	echo "All secrets applied to moto-system namespace."
+
+# Deploy moto-system manifests to K8s cluster
+deploy-system:
+	kubectl apply -k infra/k8s/moto-system/
