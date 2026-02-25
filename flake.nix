@@ -92,7 +92,7 @@
 
           shellHook = ''
             export RUST_BACKTRACE=1
-            export RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=mold"
+            export RUSTFLAGS="-C link-arg=-fuse-ld=mold"
           '';
         };
       }

@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.15 |
+| Version | 0.16 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-21 |
+| Last Updated | 2026-02-22 |
 
 ## Overview
 
@@ -89,12 +89,15 @@ All tools are installed via Nix in the devShell/container.
 
 **Rust toolchain:**
 
+The Rust toolchain uses `rust-bin.stable."X.Y".minimal` (not `.default`) to avoid pulling in rust-docs (~700MB). Required components are added via `extensions`.
+
 | Tool | Nix Package | Purpose |
 |------|-------------|---------|
 | cargo | (bundled with rust) | Build, run, test |
-| rustfmt | (bundled with rust) | Code formatting |
-| clippy | (bundled with rust) | Linting |
-| rust-analyzer | `rust-analyzer` | IDE support |
+| rustfmt | extension: `rustfmt` | Code formatting |
+| clippy | extension: `clippy` | Linting |
+| rust-analyzer | extension: `rust-analyzer` | IDE support |
+| rust-src | extension: `rust-src` | Source for IDE navigation |
 | cargo-watch | `cargo-watch` | Auto-rebuild on changes |
 | cargo-nextest | `cargo-nextest` | Modern test runner |
 | mold | `mold` | Fast linker |
@@ -108,7 +111,6 @@ All tools are installed via Nix in the devShell/container.
 | pkg-config | `pkg-config` | Build system helper |
 | openssl | `openssl` | TLS/crypto |
 | libpq | `postgresql.lib` | PostgreSQL client library |
-| clang | `clang` | C compiler (for mold linker) |
 
 **Version control:**
 
@@ -236,15 +238,13 @@ Garage needs access to:
 | Mount | Path | Type | Purpose |
 |-------|------|------|---------|
 | Code | `/workspace` | PVC | Repo checkout, persists across restarts |
-| Cargo cache | `/root/.cargo` | PVC | Rust build cache, shared across garages |
+| Cargo cache | `/root/.cargo` | emptyDir | Rust build cache, ephemeral |
 | Target dir | `/workspace/target` | emptyDir | Build artifacts, ephemeral |
-| Nix store | `/nix` | PVC | Nix store, shared across garages |
 
 **Notes:**
 - `/workspace` is a PVC so uncommitted work survives pod restarts
-- Cargo cache is shared PVC to speed up builds across garages
 - Target directory is ephemeral (large, regenerable)
-- Nix store is shared to avoid re-downloading packages
+- `/nix` is NOT mounted as a volume — the image provides `/nix/store` with all tools pre-installed (read-only via `readOnlyRootFilesystem`). Mounting an emptyDir over `/nix` would shadow the image contents and break all symlinks.
 
 ### Environment Variables
 
@@ -268,7 +268,7 @@ CARGO_TARGET_DIR="/workspace/target"
 # Rust
 RUST_BACKTRACE="1"
 RUST_LOG="info"
-RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=mold"
+RUSTFLAGS="-C link-arg=-fuse-ld=mold"
 RUSTC_WRAPPER="sccache"
 
 # AI (v1 - user provides key)
@@ -475,6 +475,12 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.16 (2026-02-22)
+- Reduce image size: switch Rust toolchain from `.default` to `.minimal` profile, exclude rust-docs (~700MB savings)
+- Reduce image size: drop `clang` from container, use default `cc` linker with mold (~1.4GB savings). RUSTFLAGS changes from `-C linker=clang -C link-arg=-fuse-ld=mold` to `-C link-arg=-fuse-ld=mold`
+- Fix: remove `/nix` emptyDir volume mount — it shadowed the image's `/nix/store`, breaking all tool symlinks and causing `garage-entrypoint: not found` at pod startup
+- Clarify: `/nix` is provided by the image (read-only), not mounted as a volume
 
 ### v0.15 (2026-02-21)
 - Reduce image size: remove cargo-audit, cargo-deny, cargo-edit, cargo-expand (CI tools, not needed in dev container)
