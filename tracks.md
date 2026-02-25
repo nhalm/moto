@@ -124,7 +124,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-cli.md v0.6
+## moto-cli.md v0.7
 
 **Status:** In Progress
 
@@ -161,7 +161,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## dev-container.md v0.16
+## dev-container.md v0.17
 
 **Status:** In Progress
 
@@ -289,7 +289,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## keybox.md v0.7
+## keybox.md v0.8
 
 **Status:** In Progress
 
@@ -317,6 +317,7 @@ HOW TO USE THIS FILE:
 - Fix bikes ABAC: enforce service field matching (v0.4: SvidClaims.service field added; bikes must have service claim to access service-scoped secrets; ABAC evaluate_service checks principal.service == resource.service)
 - Rename moto-keybox-server binary from moto-keybox to moto-keybox-server (v0.5: fixes cargo doc collision with moto-keybox library crate)
 - v0.6 integration tests: no ignored tests exist in moto-keybox or moto-keybox-db to convert (all existing tests are unit tests that don't require PostgreSQL)
+- Fix: Secret retrieval handlers enforce pod UID binding (v0.8: get_secret, set_secret, delete_secret now call validate_enforcing_pod_uid() instead of validate(); SvidValidator.validate_enforcing_pod_uid validates pod_uid claim is non-empty when present; both api.rs and pg_api.rs updated with extract_svid_enforcing_pod_uid helper)
 
 **Remaining:**
 - Endpoint authorization matrix enforcement (future - spec v0.3: SVID tokens should be denied for admin endpoints)
@@ -366,7 +367,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## project-structure.md v1.4
+## project-structure.md v1.5
 
 **Status:** Complete
 

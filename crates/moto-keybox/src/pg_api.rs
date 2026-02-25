@@ -134,6 +134,72 @@ fn extract_svid(
     })
 }
 
+/// Extract SVID from Authorization header with pod UID binding enforcement.
+///
+/// Like [`extract_svid`], but uses [`SvidValidator::validate_enforcing_pod_uid`]
+/// to enforce pod UID binding when the SVID contains a `pod_uid` claim.
+/// Use this for secret CRUD handlers (get, set, delete) per spec.
+fn extract_svid_enforcing_pod_uid(
+    headers: &HeaderMap,
+    validator: &SvidValidator,
+) -> Result<SvidClaims, (StatusCode, Json<ApiError>)> {
+    let auth_header = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new(
+                    error_codes::UNAUTHORIZED,
+                    "Missing Authorization header",
+                )),
+            )
+        })?;
+
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .or_else(|| auth_header.strip_prefix("bearer "))
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new(
+                    error_codes::UNAUTHORIZED,
+                    "Invalid Authorization header format, expected 'Bearer <token>'",
+                )),
+            )
+        })?;
+
+    if token.is_empty() {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new(
+                error_codes::UNAUTHORIZED,
+                "Empty Bearer token",
+            )),
+        ));
+    }
+
+    validator
+        .validate_enforcing_pod_uid(token)
+        .map_err(|e| match e {
+            Error::SvidExpired => (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new(error_codes::SVID_EXPIRED, "SVID has expired")),
+            ),
+            Error::InvalidSvidSignature => (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new(
+                    error_codes::INVALID_SVID,
+                    "Invalid SVID signature",
+                )),
+            ),
+            _ => (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new(error_codes::INVALID_SVID, e.to_string())),
+            ),
+        })
+}
+
 /// Validate service token from Authorization header.
 fn validate_service_token(
     headers: &HeaderMap,
@@ -322,7 +388,7 @@ async fn get_secret(
     headers: HeaderMap,
     Path((scope_str, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let claims = extract_svid(&headers, &state.svid_validator)?;
+    let claims = extract_svid_enforcing_pod_uid(&headers, &state.svid_validator)?;
     let scope = parse_scope(&scope_str)?;
 
     let value = match scope {
@@ -392,7 +458,7 @@ async fn set_secret(
     Path((scope_str, name)): Path<(String, String)>,
     Json(req): Json<SetSecretRequest>,
 ) -> impl IntoResponse {
-    let claims = extract_svid(&headers, &state.svid_validator)?;
+    let claims = extract_svid_enforcing_pod_uid(&headers, &state.svid_validator)?;
     let scope = parse_scope(&scope_str)?;
 
     let value = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &req.value)
@@ -502,7 +568,7 @@ async fn delete_secret(
     headers: HeaderMap,
     Path((scope_str, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let claims = extract_svid(&headers, &state.svid_validator)?;
+    let claims = extract_svid_enforcing_pod_uid(&headers, &state.svid_validator)?;
     let scope = parse_scope(&scope_str)?;
 
     match scope {
