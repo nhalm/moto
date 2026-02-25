@@ -5,7 +5,7 @@
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
-.PHONY: dev-cluster dev-up dev-down dev-clean
+.PHONY: dev dev-cluster dev-up dev-down dev-clean
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
 
 # Set up local development environment
@@ -261,6 +261,10 @@ test-all: test
 
 # Dev database URL for moto-club
 DEV_DATABASE_URL ?= postgres://moto:moto@localhost:5432/moto_club
+
+# Alias for moto dev up
+dev:
+	cargo run --bin moto -- dev up
 
 # Create k3d cluster via moto CLI (idempotent)
 dev-cluster:

@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 
 use crate::commands::bike::BikeCommand;
 use crate::commands::cluster::ClusterCommand;
+use crate::commands::dev::DevCommand;
 use crate::commands::garage::GarageCommand;
 use crate::config::{ColorMode, Config};
 
@@ -73,6 +74,8 @@ pub enum Command {
     Bike(BikeCommand),
     /// Manage the local Kubernetes cluster
     Cluster(ClusterCommand),
+    /// Local development environment
+    Dev(DevCommand),
     /// Manage development garages (isolated environments)
     Garage(GarageCommand),
 }

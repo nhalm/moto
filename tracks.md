@@ -15,7 +15,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-club.md v2.0
+## moto-club.md v2.1
 
 **Status:** Complete
 
@@ -74,7 +74,7 @@ HOW TO USE THIS FILE:
 - Fix moto.dev/expires-at namespace label to use unix timestamp (v2.0: namespace.rs uses dt.timestamp() instead of dt.to_rfc3339(); labels.rs doc comment updated; colons and plus signs in RFC 3339 are invalid K8s label values)
 
 **Remaining:**
-(none - moto-club.md v2.0 implementation complete)
+(none - v2.1 changes are documentation-only: health port endpoint docs, readiness criteria, response format clarification)
 
 ---
 
@@ -121,9 +121,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-cli.md v0.5
+## moto-cli.md v0.6
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - Global flags: --json/-j, --verbose/-v (counted), --quiet/-q, --context/-c, --help/-h, --version/-V
@@ -149,9 +149,11 @@ HOW TO USE THIS FILE:
 - Fix: `cluster init --json` output matches spec (v0.5: added `type` field with value "k3d", removed non-spec `api_endpoint`/`registry_endpoint` fields; JSON now emits `name`, `type`, `status` per spec)
 - Fix: `garage logs` respects `--context` global flag when creating K8s client (v0.5: uses K8sClient::with_context when --context flag is set, otherwise falls back to default context)
 - Fix: `garage list --context <name>` filters results by context (v0.5: garages from the current moto-club belong to the current kubectl context; when --context targets a different context, no garages are shown since that context's moto-club is not queried)
+- `moto dev` subcommand: `dev status` health check dashboard (v0.6: dev subcommand in command hierarchy with up/down/status; status checks cluster, registry, postgres, keybox, club, image, garages; JSON output; exit code 0/1)
 
 **Remaining:**
-(none - moto-cli.md v0.5 implementation complete)
+- `moto dev up` command implementation (v0.6: see local-dev.md for full spec)
+- `moto dev down` command implementation (v0.6: see local-dev.md for full spec)
 
 ---
 
@@ -283,7 +285,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## keybox.md v0.6
+## keybox.md v0.7
 
 **Status:** In Progress
 
@@ -400,9 +402,9 @@ HOW TO USE THIS FILE:
 
 ---
 
-## local-dev.md v0.6
+## local-dev.md v0.8
 
-**Status:** Complete
+**Status:** In Progress
 
 **Implemented:**
 - docker-compose.yml with dev Postgres on port 5432 (postgres:16-alpine, moto/moto creds, pgdata volume, healthcheck, init script mount)
@@ -422,9 +424,12 @@ HOW TO USE THIS FILE:
 - Fix MOTO_CLUB_DEV_CONTAINER_IMAGE to use moto-registry:5000 (v0.5: in-cluster k3d registry name; pods inside k3d can't reach localhost:5000)
 - Update host registry push address from localhost:5000 to localhost:5050 (v0.5: matches local-cluster.md v0.3 port change)
 - push-garage cleans up local Docker daemon copy after pushing to registry (v0.6: saves ~10GB VM disk; image only needs to live in registry)
+- `moto dev status` command: health check dashboard for cluster, registry, postgres, keybox, club, image, garages (v0.7/v0.8: CLI scaffolding for dev subcommand with up/down/status; DevConfig with hardcoded defaults and env var overrides; JSON output; exit code 1 if any unhealthy)
+- Makefile target: `dev` as alias for `moto dev up` (v0.7)
 
 **Remaining:**
-(none - local-dev.md v0.6 implementation complete)
+- `moto dev up` command: 9-step orchestration (prerequisites, cluster, image, postgres, keys, migrations, keybox, club, garage) with subprocess management, health checks, Ctrl-C handling (v0.7/v0.8)
+- `moto dev down` command: SIGTERM to port processes, docker compose down, --clean flag (v0.7/v0.8)
 
 ---
 
