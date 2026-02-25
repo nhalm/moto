@@ -151,9 +151,10 @@ HOW TO USE THIS FILE:
 - Fix: `garage list --context <name>` filters results by context (v0.5: garages from the current moto-club belong to the current kubectl context; when --context targets a different context, no garages are shown since that context's moto-club is not queried)
 - `moto dev` subcommand: `dev status` health check dashboard (v0.6: dev subcommand in command hierarchy with up/down/status; status checks cluster, registry, postgres, keybox, club, image, garages; JSON output; exit code 0/1)
 - `moto dev down` command implementation (v0.6: SIGTERM to port processes via lsof, docker compose down, --clean flag removes .dev/ and pgdata volume; DevConfig.keybox_api field for port lookup)
+- `moto dev up` command implementation (v0.6: 9-step orchestration with --no-garage/--rebuild-image/--skip-image flags; DevConfig env var methods for subprocess spawning; prerequisites/cluster/image/postgres/keys/migrations/keybox/club/garage steps; subprocess management with tokio::process; health check with exponential backoff; Ctrl-C handling kills subprocesses; JSON output; idempotent restart)
 
 **Remaining:**
-- `moto dev up` command implementation (v0.6: see local-dev.md for full spec)
+(none - moto-cli.md v0.6 implementation complete)
 
 ---
 
@@ -427,9 +428,10 @@ HOW TO USE THIS FILE:
 - `moto dev status` command: health check dashboard for cluster, registry, postgres, keybox, club, image, garages (v0.7/v0.8: CLI scaffolding for dev subcommand with up/down/status; DevConfig with hardcoded defaults and env var overrides; JSON output; exit code 1 if any unhealthy)
 - Makefile target: `dev` as alias for `moto dev up` (v0.7)
 - `moto dev down` command: SIGTERM to club (port 8080) and keybox (port 8090) processes via lsof, docker compose down, --clean flag removes .dev/ directory and pgdata volume; DevConfig.keybox_api field added for port lookup (v0.7/v0.8)
+- `moto dev up` command: 9-step orchestration (prerequisites, cluster, image, postgres, keys, migrations, keybox, club, garage) with subprocess management via tokio::process, health checks with exponential backoff, Ctrl-C handling, --no-garage/--rebuild-image/--skip-image flags, DevConfig env var methods, JSON output, idempotent restart (v0.7/v0.8)
 
 **Remaining:**
-- `moto dev up` command: 9-step orchestration (prerequisites, cluster, image, postgres, keys, migrations, keybox, club, garage) with subprocess management, health checks, Ctrl-C handling (v0.7/v0.8)
+(none - local-dev.md v0.8 implementation complete)
 
 ---
 
