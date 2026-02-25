@@ -2,11 +2,15 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.6 |
+| Version | 0.7 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-05 |
+| Last Updated | 2026-02-24 |
 
 ## Changelog
+
+### v0.7 (2026-02-24)
+- Document that `moto keybox init` only generates `master.key` and `signing.key`, not `service-token`
+- Add note on separate service-token generation
 
 ### v0.6 (2026-02-06)
 - Add tests per [testing.md](testing.md) architecture
@@ -375,6 +379,8 @@ moto keybox init --output-dir=./keybox-keys
 #   ./keybox-keys/master.key      (KEK, AES-256, base64-encoded)
 #   ./keybox-keys/signing.key     (Ed25519 private key)
 ```
+
+**Note:** `moto keybox init` generates `master.key` and `signing.key` only. The `service-token` (a random hex string used for moto-club → keybox auth) is generated separately, e.g., `openssl rand -hex 32 > service-token`. See [local-dev.md](local-dev.md) for the full local dev key generation flow.
 
 **Secret management (local dev):**
 ```bash

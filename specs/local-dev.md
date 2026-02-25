@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.7 |
+| Version | 0.8 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-24 |
 
@@ -154,21 +154,41 @@ Orchestration steps (each idempotent, with progress output):
 
 ```
 [1/9] Checking prerequisites...     docker, k3d, MOTO_USER
-[2/9] Ensuring cluster...           cluster_exists → init if missing
-[3/9] Checking garage image...      GET registry tags list → prompt if missing
-[4/9] Starting postgres...          docker compose up -d --wait
-[5/9] Generating keybox keys...     check .dev/keybox/ → generate if missing
-[6/9] Running migrations...         cargo sqlx migrate run
-[7/9] Starting keybox...            subprocess + health wait on :8091
-[8/9] Starting moto-club...         subprocess + health wait on :8081
-[9/9] Opening garage...             POST to club API
+[2/9] Ensuring cluster...           exists / created
+[3/9] Checking garage image...      found in registry / missing
+[4/9] Starting postgres...          ready (localhost:5432)
+[5/9] Generating keybox keys...     found (.dev/keybox/) / generated
+[6/9] Running migrations...         up to date
+[7/9] Starting keybox...            healthy (localhost:8090)
+[8/9] Starting moto-club...         healthy (localhost:8080)
+[9/9] Opening garage...             bold-mongoose
 ```
 
-**Image handling:** Step 3 checks `http://localhost:5050/v2/moto-garage/tags/list`. If the image exists, the build is skipped. If missing, `dev up` prints instructions to run `make dev-garage-image`. Use `--rebuild-image` to force a build inline, or `--skip-image` to skip the check entirely (for service-only work).
+**Step details:**
 
-**Subprocess management:** Keybox and club run as `cargo run` subprocesses with `kill_on_drop(true)`. On Ctrl-C, both are killed. If either dies unexpectedly, an error is printed. Log output is suppressed by default, visible with `-v`.
+| Step | What it checks / does | On failure |
+|------|----------------------|------------|
+| 1. Prerequisites | Docker running, k3d installed, `MOTO_USER` set (falls back to `whoami`). With `--no-garage`, MOTO_USER is not required. | Abort with actionable error message |
+| 2. Cluster | If k3d cluster `moto` exists, skip. If not, create it (same as `moto cluster init`). | Abort |
+| 3. Image | `GET http://localhost:5050/v2/moto-garage/tags/list` — if response contains a `latest` tag, skip. If missing or registry unreachable: with `--rebuild-image`, run the Nix build + push inline; otherwise abort with instructions to run `make dev-garage-image`. With `--skip-image`, skip entirely. `--skip-image` and `--rebuild-image` together is invalid (abort with error). | Abort (unless `--skip-image`) |
+| 4. Postgres | Run `docker compose up -d --wait`. Idempotent — no-op if already running. | Abort |
+| 5. Keys | Check if all three files exist in `.dev/keybox/` (`master.key`, `signing.key`, `service-token`). If any missing, regenerate all: run `moto-keybox init --output-dir .dev/keybox --force`, then generate service-token (`openssl rand -hex 32`), set permissions to 600. | Abort |
+| 6. Migrations | Run `cargo sqlx migrate run --source crates/moto-club-db/migrations` against the club database. Keybox migrations run automatically on keybox startup (step 7). | Abort |
+| 7. Keybox | Spawn `moto-keybox-server` as subprocess with dev env vars. Wait for `GET http://localhost:8091/health/ready` to return 200. Timeout: 30 seconds with exponential backoff. | Abort (kill keybox subprocess) |
+| 8. Club | Spawn `moto-club` as subprocess with dev env vars. Wait for `GET http://localhost:8081/health/ready` to return 200. Timeout: 30 seconds with exponential backoff. | Abort (kill both subprocesses) |
+| 9. Garage | `POST http://localhost:8080/api/v1/garages` with auto-generated name and default TTL. Skipped with `--no-garage`. | Print warning, continue (services are still running) |
 
-**DevConfig:** All 12 env vars use hardcoded dev defaults (matching the tables above). Each is overridable via environment variable for non-standard setups.
+**Failure behavior:** Steps 1-8 abort on failure. Step 9 is best-effort — if garage creation fails, services keep running and the user can open a garage manually. On abort, any already-started subprocesses are killed and postgres is left running (fast restart).
+
+**Image build inline:** When `--rebuild-image` triggers a build, it runs the same Docker-wrapped Nix build as `make build-garage` + `make push-garage`, with progress output. This can take 15-20 minutes on first run.
+
+**Subprocess management:** Keybox and club are spawned as subprocesses. On Ctrl-C (SIGINT), both subprocesses are killed. Postgres is left running (fast restart on next `dev up`). Exit code is 0 on Ctrl-C. If either subprocess dies unexpectedly, an error is printed and the other subprocess is killed.
+
+**Subprocess output:** Log output from keybox and club is suppressed by default. With `-v`, subprocess stderr is forwarded to the terminal. With `-vv`, both stdout and stderr are forwarded.
+
+**DevConfig:** All env vars from the tables above use hardcoded dev defaults. Each is overridable via the same environment variable name (e.g., set `MOTO_KEYBOX_BIND_ADDR=0.0.0.0:9090` to override the default `0.0.0.0:8090`). Total: 13 env vars (7 keybox + 6 club).
+
+**Idempotency:** Running `moto dev up` while services are already running restarts the services (kills existing subprocesses, starts new ones). Cluster, postgres, keys, and migrations are all idempotent checks that skip if already done.
 
 #### `moto dev down`
 
@@ -178,10 +198,15 @@ moto dev down [--clean]
 
 | Flag | Behavior |
 |------|----------|
-| (none) | Stop club, keybox, postgres |
-| `--clean` | Also remove `.dev/` and pgdata volume |
+| (none) | Stop club, keybox, and postgres |
+| `--clean` | Also remove `.dev/` directory and pgdata docker volume |
 
-Finds running processes by checking ports 8080 and 8090.
+Stops services by:
+1. Finding processes listening on ports 8080 (club) and 8090 (keybox) and sending SIGTERM
+2. Running `docker compose down` to stop postgres (or `docker compose down -v` with `--clean`)
+3. With `--clean`: removing `.dev/` directory
+
+Running garages in k3d are not affected by `dev down`. The k3d cluster stays running.
 
 #### `moto dev status`
 
@@ -200,6 +225,18 @@ Club:      healthy (localhost:8080)
 Image:     moto-garage:latest (in registry)
 Garages:   1 running
 ```
+
+**Health check methods:**
+
+| Component | How checked |
+|-----------|------------|
+| Cluster | `k3d cluster list` — check if `moto` cluster exists and running |
+| Registry | `GET http://localhost:5050/v2/` — returns 200 |
+| Postgres | `docker compose ps` — check container is running and healthy |
+| Keybox | `GET http://localhost:8091/health/ready` — returns 200 |
+| Club | `GET http://localhost:8081/health/ready` — returns 200 |
+| Image | `GET http://localhost:5050/v2/moto-garage/tags/list` — contains `latest` tag |
+| Garages | `GET http://localhost:8080/api/v1/garages` — count non-terminated garages |
 
 ### Manual Startup Sequence (Advanced)
 
@@ -301,13 +338,23 @@ moto/
 
 ## Changelog
 
+### v0.8 (2026-02-24)
+- Clarify `moto dev up` step details: what each step checks, what happens on failure, abort vs continue
+- Specify health check endpoints: keybox `/health/ready` on :8091, club `/health/ready` on :8081
+- Specify health check timeout: 30 seconds with exponential backoff
+- Clarify key generation: all three files regenerated if any missing, permissions set to 600
+- Clarify Ctrl-C behavior: kill subprocesses, leave postgres running, exit code 0
+- Clarify idempotency: running `dev up` twice restarts services
+- Clarify subprocess output: suppressed by default, `-v` shows stderr, `-vv` shows all
+- Specify flag validation: `--skip-image` + `--rebuild-image` is invalid
+- Specify `dev down` behavior: SIGTERM to port processes, docker compose down, k3d unaffected
+- Specify `dev status` health check methods for each component
+- Fix env var count: 13 (was 12), add RUST_LOG for both services
+- Step 9 (garage open) is best-effort: failure prints warning but services stay running
+
 ### v0.7 (2026-02-24)
 - Add `moto dev` subcommand: `up`, `down`, `status` — one command to start the full local dev stack
-- `moto dev up` orchestrates: cluster check, postgres, keybox keys, migrations, starts services, opens garage
-- `moto dev down` stops all services; `--clean` removes dev state
-- `moto dev status` shows health dashboard for all components
 - DevConfig: hardcoded dev defaults for all env vars, overridable per-variable
-- Subprocess management: keybox and club run as `cargo run` children with `kill_on_drop`
 - Add `dev` Makefile target as alias for `moto dev up`
 
 ### v0.6 (2026-02-22)

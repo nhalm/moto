@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
+| Version | 0.6 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-19 |
+| Last Updated | 2026-02-24 |
 
 ## Overview
 
@@ -30,6 +30,10 @@ moto
 │   ├── deploy      # Deploy a bike
 │   ├── list        # List bikes
 │   └── logs        # View bike logs
+├── dev
+│   ├── up          # Start local dev stack
+│   ├── down        # Stop local dev stack
+│   └── status      # Dev environment health check
 └── cluster
     ├── init        # Bootstrap cluster
     └── status      # Cluster health check
@@ -460,6 +464,122 @@ Components:
 
 ---
 
+### Dev Commands
+
+#### `moto dev up`
+
+Starts the full local dev stack: cluster, postgres, keybox, moto-club, and optionally opens a garage. Runs in foreground — Ctrl-C stops everything.
+
+See [local-dev.md](local-dev.md) for the full specification.
+
+```
+Usage: moto dev up [options]
+
+Options:
+  --no-garage       Start services only, don't open a garage
+  --rebuild-image   Force rebuild and push the garage container image
+  --skip-image      Skip the registry image check entirely
+```
+
+**Example:**
+```
+$ moto dev up
+[1/9] Checking prerequisites...     ok
+[2/9] Ensuring cluster...           exists
+[3/9] Checking garage image...      found in registry
+[4/9] Starting postgres...          ready (localhost:5432)
+[5/9] Generating keybox keys...     found (.dev/keybox/)
+[6/9] Running migrations...         up to date
+[7/9] Starting keybox...            healthy (localhost:8090)
+[8/9] Starting moto-club...         healthy (localhost:8080)
+[9/9] Opening garage...             bold-mongoose
+
+moto dev environment ready!
+
+  Postgres:  localhost:5432
+  Keybox:    localhost:8090
+  Club:      localhost:8080
+  Garage:    bold-mongoose
+
+  To connect: moto garage enter bold-mongoose
+  To stop:    Ctrl-C
+```
+
+**JSON output:**
+```json
+{
+  "cluster": "running",
+  "postgres": "healthy",
+  "keybox": "healthy",
+  "club": "healthy",
+  "garage": "bold-mongoose"
+}
+```
+
+**Exit codes:** 0 success (on Ctrl-C), 1 error
+
+---
+
+#### `moto dev down`
+
+Stops running dev services and postgres.
+
+```
+Usage: moto dev down [options]
+
+Options:
+  --clean    Also remove .dev/ directory and postgres data volume
+```
+
+**Example:**
+```
+$ moto dev down
+Stopping moto-club... done
+Stopping keybox... done
+Stopping postgres... done
+```
+
+**Exit codes:** 0 success, 1 error
+
+---
+
+#### `moto dev status`
+
+Shows health of all local dev components.
+
+```
+Usage: moto dev status
+```
+
+**Example:**
+```
+$ moto dev status
+Cluster:   running (k3d-moto)
+Registry:  healthy (localhost:5050)
+Postgres:  healthy (localhost:5432)
+Keybox:    healthy (localhost:8090)
+Club:      healthy (localhost:8080)
+Image:     moto-garage:latest (in registry)
+Garages:   1 running
+```
+
+**JSON output:**
+```json
+{
+  "cluster": "running",
+  "registry": "healthy",
+  "postgres": "healthy",
+  "keybox": "healthy",
+  "club": "healthy",
+  "image": "found",
+  "garages": 1
+}
+```
+
+**Exit codes:** 0 all healthy, 1 any component unhealthy
+
+---
+
 ## Error Handling
 
 Errors include actionable suggestions:
@@ -508,6 +628,10 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.6 (2026-02-24)
+- Add `dev` subcommand to command hierarchy: `up`, `down`, `status`
+- Add Dev Commands reference section with usage, examples, JSON output, exit codes
 
 ### v0.5
 - Fix: `garage list --context <name>` must actually filter results by context (v0.4 fix validated context name but did not filter the API response)

@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 2.0 |
+| Version | 2.1 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-21 |
+| Last Updated | 2026-02-24 |
 
 ## Overview
 
@@ -1085,7 +1085,11 @@ All API errors use a standard format:
 | `K8S_ERROR` | 502 | Kubernetes API error |
 | `DATABASE_ERROR` | 503 | Database connection error |
 
-### Health Check
+### Health Checks
+
+moto-club exposes health endpoints on two ports:
+
+**Main port (8080):** Comprehensive health check with component details.
 
 ```
 GET /health
@@ -1112,6 +1116,21 @@ Response 200 (degraded):
 ```
 
 **Behavior:** Health check always returns 200 and reports status. Individual check failures don't cause hard failure - moto-club continues serving what it can.
+
+**Health port (8081):** K8s probe endpoints for orchestration and monitoring.
+
+| Endpoint | Returns 200 when |
+|----------|------------------|
+| `GET /health/live` | Process is alive (not deadlocked) |
+| `GET /health/ready` | Ready for traffic (database connected, keybox reachable) |
+| `GET /health/startup` | Initial startup complete |
+
+**Readiness criteria for `/health/ready`:**
+- Database connection pool is established
+- K8s API is reachable
+- Keybox `/health/ready` returns 200 (if keybox URL configured)
+
+These endpoints return plain 200 (healthy) or 503 (not ready). They are used by K8s probes and by `moto dev status` to check service health.
 
 ### Logging
 
@@ -1208,6 +1227,11 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v2.1 (2026-02-24)
+- Document health port (8081) endpoints: `/health/live`, `/health/ready`, `/health/startup`
+- Specify readiness criteria for `/health/ready` (database, K8s, keybox)
+- Clarify that health port returns plain 200/503 (vs main port `/health` which returns JSON)
 
 ### v2.0 (2026-02-21)
 - Add `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE` env var — file containing the hex service token for keybox authentication. Required for garage SVID issuance.
