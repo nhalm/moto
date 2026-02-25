@@ -76,9 +76,10 @@ HOW TO USE THIS FILE:
 - Fix: GarageResponse includes updated_at field from database model (v2.2: added updated_at: DateTime<Utc> to GarageResponse struct and From<Garage> impl in garages.rs)
 - Fix: /health/ready on port 8081 includes K8s API reachability check (v2.2: ready_handler now checks database, K8s API, and keybox; K8s failure degrades but doesn't fail; uses existing check_k8s function with state.k8s_client)
 - Embed migrations and auto-run on startup (v2.3: moto-club-db adds MIGRATIONS static with sqlx::migrate!(), run_migrations() function, Migration error variant; moto-club main.rs calls run_migrations() after connect() before serving requests; same pattern as moto-keybox-db)
+- ClusterRole for K8s operations (v2.3: defined in infra/k8s/moto-system/club.yaml via service-deploy.md; ClusterRole with 11 resource types including namespaces with patch, ClusterRoleBinding to moto-club ServiceAccount)
 
 **Remaining:**
-- ClusterRole for K8s operations (blocked: service-deploy.md)
+(none - moto-club.md v2.3 implementation complete)
 
 ---
 
@@ -158,7 +159,7 @@ HOW TO USE THIS FILE:
 - `moto dev up` command implementation (v0.6: 9-step orchestration with --no-garage/--rebuild-image/--skip-image flags; DevConfig env var methods for subprocess spawning; prerequisites/cluster/image/postgres/keys/migrations/keybox/club/garage steps; subprocess management with tokio::process; health check with exponential backoff; Ctrl-C handling kills subprocesses; JSON output; idempotent restart)
 
 **Remaining:**
-(none - moto-cli.md v0.6 implementation complete)
+(none - moto-cli.md v0.7 implementation complete)
 
 ---
 
@@ -193,7 +194,7 @@ HOW TO USE THIS FILE:
 - Remove /nix volume declaration from container image config (v0.16: Docker VOLUME for /nix shadows image's /nix/store contents)
 
 **Remaining:**
-(none - dev-container.md v0.16 implementation complete)
+(none - dev-container.md v0.17 implementation complete)
 
 ---
 
@@ -239,9 +240,10 @@ HOW TO USE THIS FILE:
 - Service container targets: build-club, push-club, build-keybox, push-keybox
 - Local dev targets: dev-db-up, dev-db-down, dev-db-migrate, dev-keybox-init, dev-keybox, dev-club, dev-garage-image, dev-up, dev-down, dev-clean
 - Local dev target: dev-cluster (k3d cluster creation via moto CLI)
+- Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (v0.9: implemented via service-deploy.md; idempotent credential generation, kubectl apply -k, rollout wait with status, namespace+RBAC cleanup)
 
 **Remaining:**
-- Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (blocked: service-deploy.md)
+(none - makefile.md v0.9 implementation complete)
 
 ---
 
@@ -378,7 +380,7 @@ HOW TO USE THIS FILE:
 - Remove moto-garage crate entirely (v1.4: deleted crates/moto-garage/ directory, removed moto-garage from Cargo.toml workspace dependencies)
 
 **Remaining:**
-(none - project-structure.md v1.4 implementation complete)
+(none - project-structure.md v1.5 implementation complete)
 
 ---
 
