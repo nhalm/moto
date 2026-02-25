@@ -2,7 +2,7 @@
 //!
 //! Provides Kubernetes-style health check functionality per the Engine Contract (moto-bike.md):
 //! - `/health/live` - Process is alive (not deadlocked), always 200 if reachable
-//! - `/health/ready` - Ready for traffic (deps connected), checks database and keybox
+//! - `/health/ready` - Ready for traffic (deps connected), checks database, K8s, and keybox
 //! - `/health/startup` - Initial startup complete
 //!
 //! These endpoints are served on a separate port (8081) from the main API (8080).
@@ -198,8 +198,9 @@ async fn live_handler() -> impl IntoResponse {
 /// Returns 200 if the service is ready to accept traffic (all dependencies connected).
 /// Returns 503 if dependencies are not ready.
 ///
-/// Per moto-club.md v1.5, checks:
+/// Per moto-club.md v2.2, checks:
 /// - Database connectivity
+/// - K8s API reachability (returns degraded if unreachable)
 /// - Keybox `/health/ready` endpoint (returns degraded if unreachable)
 async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mut checks = HashMap::new();
@@ -208,6 +209,18 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let db_check = check_database(&state.db_pool).await;
     let db_ready = db_check.is_ok();
     checks.insert("database".to_string(), db_check);
+
+    // Check K8s API if client is available
+    let k8s_ready = if let Some(ref k8s_client) = state.k8s_client {
+        let k8s_check = check_k8s(k8s_client).await;
+        let is_ok = k8s_check.is_ok();
+        checks.insert("k8s".to_string(), k8s_check);
+        is_ok
+    } else {
+        // K8s client not configured (local dev mode), consider it ready
+        checks.insert("k8s".to_string(), CheckResult::ok());
+        true
+    };
 
     // Check keybox if URL is configured
     let keybox_ready = if let Some(ref keybox_url) = state.keybox_health_url {
@@ -221,17 +234,16 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
         true
     };
 
-    // Overall ready status: database must be ready, keybox failure degrades but doesn't fail
-    // Per spec: "return degraded status if keybox unreachable"
+    // Overall ready status: database must be ready, K8s/keybox failure degrades but doesn't fail
     if db_ready {
-        if keybox_ready {
+        if k8s_ready && keybox_ready {
             let response = ReadyResponse {
                 status: "ok",
                 checks: None,
             };
             (StatusCode::OK, Json(response))
         } else {
-            // Database is ready but keybox is not - degraded state
+            // Database is ready but K8s or keybox is not - degraded state
             // Still return 200 since we can serve requests, but include checks
             let response = ReadyResponse {
                 status: "degraded",
@@ -552,10 +564,11 @@ mod tests {
     }
 
     #[test]
-    fn ready_response_degraded_serialization() {
-        // Per spec v1.5: ready returns degraded if keybox unreachable but DB is ok
+    fn ready_response_degraded_keybox_serialization() {
+        // Per spec v1.5: ready returns degraded if keybox unreachable but DB and K8s are ok
         let mut checks = HashMap::new();
         checks.insert("database".to_string(), CheckResult::ok());
+        checks.insert("k8s".to_string(), CheckResult::ok());
         checks.insert(
             "keybox".to_string(),
             CheckResult::error("connection failed"),
@@ -569,7 +582,27 @@ mod tests {
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains(r#""status":"degraded""#));
         assert!(json.contains(r#""database""#));
+        assert!(json.contains(r#""k8s""#));
         assert!(json.contains(r#""keybox""#));
+    }
+
+    #[test]
+    fn ready_response_degraded_k8s_serialization() {
+        // Per spec v2.2: ready returns degraded if K8s unreachable but DB is ok
+        let mut checks = HashMap::new();
+        checks.insert("database".to_string(), CheckResult::ok());
+        checks.insert("k8s".to_string(), CheckResult::error("connection refused"));
+        checks.insert("keybox".to_string(), CheckResult::ok());
+
+        let response = ReadyResponse {
+            status: "degraded",
+            checks: Some(checks),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(r#""status":"degraded""#));
+        assert!(json.contains(r#""k8s""#));
+        assert!(json.contains(r#""database""#));
     }
 
     #[test]

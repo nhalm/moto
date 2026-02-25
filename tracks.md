@@ -74,9 +74,10 @@ HOW TO USE THIS FILE:
 - Fix moto.dev/expires-at namespace label to use unix timestamp (v2.0: namespace.rs uses dt.timestamp() instead of dt.to_rfc3339(); labels.rs doc comment updated; colons and plus signs in RFC 3339 are invalid K8s label values)
 
 - Fix: GarageResponse includes updated_at field from database model (v2.2: added updated_at: DateTime<Utc> to GarageResponse struct and From<Garage> impl in garages.rs)
+- Fix: /health/ready on port 8081 includes K8s API reachability check (v2.2: ready_handler now checks database, K8s API, and keybox; K8s failure degrades but doesn't fail; uses existing check_k8s function with state.k8s_client)
 
 **Remaining:**
-- Fix: /health/ready on port 8081 must include K8s API reachability check (v2.2)
+(none - moto-club.md v2.2 implementation complete)
 
 ---
 
