@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 2.2 |
+| Version | 2.3 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-24 |
 
@@ -1240,6 +1240,10 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v2.3 (2026-02-25)
+- moto-club-db must embed migrations and auto-run on startup before serving requests — same pattern as moto-keybox-db (`sqlx::migrate!()` + `run_migrations()`). This keeps the bike image small (no sqlx-cli binary needed). Required for K8s deployment per [service-deploy.md](service-deploy.md).
+- moto-club requires a ClusterRole for K8s operations — see [service-deploy.md](service-deploy.md) for the full RBAC permission table.
 
 ### v2.2 (2026-02-24)
 - Fix: `/health/ready` on port 8081 must include K8s API reachability check (currently only checks database and keybox)

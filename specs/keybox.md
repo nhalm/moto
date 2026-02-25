@@ -2,11 +2,14 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.8 |
+| Version | 0.9 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-24 |
 
 ## Changelog
+
+### v0.9 (2026-02-25)
+- Add missing env vars to Configuration section: `MOTO_KEYBOX_SERVICE_TOKEN_FILE`, `MOTO_KEYBOX_BIND_ADDR`, `MOTO_KEYBOX_HEALTH_BIND_ADDR`
 
 ### v0.8 (2026-02-24)
 - Fix: Secret retrieval handlers must enforce pod UID binding — API handlers (`get_secret`, `set_secret`, `delete_secret`) must call `validate_with_pod_uid()` instead of `validate()` when the SVID contains a `pod_uid` claim (spec: "Checks pod UID matches (still alive)" in Secret Retrieval Flow step 2)
@@ -415,7 +418,10 @@ MOTO_KEYBOX_SVID_SIGNING_KEY_FILE="/run/secrets/svid-signing-key"
 MOTO_KEYBOX_DATABASE_URL="postgres://keybox:password@localhost:5432/keybox"
 
 # Optional
-MOTO_KEYBOX_SVID_TTL_SECONDS="900"  # Default 15 min
+MOTO_KEYBOX_SVID_TTL_SECONDS="900"              # Default 15 min
+MOTO_KEYBOX_SERVICE_TOKEN_FILE="/run/secrets/service-token"  # Alternative to MOTO_KEYBOX_SERVICE_TOKEN env var
+MOTO_KEYBOX_BIND_ADDR="0.0.0.0:8080"            # Default 0.0.0.0:8080
+MOTO_KEYBOX_HEALTH_BIND_ADDR="0.0.0.0:8081"     # Default 0.0.0.0:8081
 ```
 
 ### Database Schema (PostgreSQL)
