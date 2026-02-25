@@ -366,6 +366,9 @@ dev-clean:
 
 # === K8s Deployment ===
 
+# Full deploy: build images, generate secrets, deploy manifests, verify status
+deploy: deploy-images deploy-secrets deploy-system deploy-status
+
 # Build and push all service images (garage, club, keybox) to local registry
 deploy-images: build-garage push-garage build-club push-club build-keybox push-keybox
 
