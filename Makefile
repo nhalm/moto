@@ -7,6 +7,7 @@
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
 .PHONY: dev dev-cluster dev-up dev-down dev-clean
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
+.PHONY: deploy-secrets deploy-system deploy-status undeploy-system
 
 # Set up local development environment
 install:
@@ -362,3 +363,49 @@ dev-clean:
 	docker compose down -v
 	rm -rf .dev/
 	@echo "Dev state cleaned."
+
+# === K8s Deployment ===
+
+# Secret generation directory for K8s deployment
+K8S_SECRETS_DIR := .dev/k8s-secrets
+
+# Generate credentials/keys (idempotent), create K8s secrets in moto-system
+deploy-secrets:
+	@if [ -f $(K8S_SECRETS_DIR)/db-password ] && [ -f $(K8S_SECRETS_DIR)/service-token ] && \
+	    [ -f $(K8S_SECRETS_DIR)/master.key ] && [ -f $(K8S_SECRETS_DIR)/signing.key ]; then \
+		echo "Credentials already exist in $(K8S_SECRETS_DIR)/"; \
+	else \
+		echo "Generating credentials in $(K8S_SECRETS_DIR)/..." && \
+		mkdir -p $(K8S_SECRETS_DIR) && \
+		openssl rand -hex 32 > $(K8S_SECRETS_DIR)/db-password && \
+		openssl rand -hex 32 > $(K8S_SECRETS_DIR)/service-token && \
+		cargo run --bin moto-keybox -- init --output-dir $(K8S_SECRETS_DIR) --force && \
+		chmod 600 $(K8S_SECRETS_DIR)/* && \
+		echo "Credentials generated in $(K8S_SECRETS_DIR)/"; \
+	fi
+	@echo "Ensuring moto-system namespace exists..."
+	@kubectl create namespace moto-system --dry-run=client -o yaml | kubectl apply -f -
+	@DB_PASSWORD=$$(cat $(K8S_SECRETS_DIR)/db-password) && \
+	echo "Applying postgres-credentials..." && \
+	kubectl -n moto-system create secret generic postgres-credentials \
+		--from-literal=password="$$DB_PASSWORD" \
+		--dry-run=client -o yaml | kubectl apply -f - && \
+	echo "Applying keybox-keys..." && \
+	kubectl -n moto-system create secret generic keybox-keys \
+		--from-file=master.key=$(K8S_SECRETS_DIR)/master.key \
+		--from-file=signing.key=$(K8S_SECRETS_DIR)/signing.key \
+		--from-file=service-token=$(K8S_SECRETS_DIR)/service-token \
+		--dry-run=client -o yaml | kubectl apply -f - && \
+	echo "Applying keybox-db-credentials..." && \
+	kubectl -n moto-system create secret generic keybox-db-credentials \
+		--from-literal=url="postgres://moto:$$DB_PASSWORD@postgres.moto-system:5432/moto_keybox" \
+		--dry-run=client -o yaml | kubectl apply -f - && \
+	echo "Applying club-db-credentials..." && \
+	kubectl -n moto-system create secret generic club-db-credentials \
+		--from-literal=url="postgres://moto:$$DB_PASSWORD@postgres.moto-system:5432/moto_club" \
+		--dry-run=client -o yaml | kubectl apply -f - && \
+	echo "Applying keybox-service-token..." && \
+	kubectl -n moto-system create secret generic keybox-service-token \
+		--from-file=service-token=$(K8S_SECRETS_DIR)/service-token \
+		--dry-run=client -o yaml | kubectl apply -f - && \
+	echo "All secrets applied to moto-system namespace."
