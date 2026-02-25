@@ -454,9 +454,10 @@ HOW TO USE THIS FILE:
 - Makefile target: deploy-secrets (idempotent credential generation to .dev/k8s-secrets/ via moto-keybox init + openssl rand; creates namespace if needed; applies 5 K8s secrets: postgres-credentials, keybox-keys, keybox-db-credentials, club-db-credentials, keybox-service-token)
 - Makefile target: deploy-system (kubectl apply -k infra/k8s/moto-system/)
 - Makefile target: deploy-status (wait for rollout, show status, exit 0/1)
+- Makefile target: undeploy-system (delete moto-system namespace AND cluster-scoped moto-club ClusterRole/ClusterRoleBinding; --ignore-not-found for idempotency)
 
 **Remaining:**
-- Makefile target: undeploy-system (delete namespace AND cluster-scoped ClusterRole/ClusterRoleBinding)
+(none - service-deploy.md v0.3 implementation complete)
 
 ---
 

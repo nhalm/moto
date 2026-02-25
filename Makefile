@@ -435,3 +435,12 @@ deploy-status:
 		exit 1; \
 	fi
 	@echo "All pods healthy."
+
+# Delete moto-system namespace and cluster-scoped RBAC resources
+undeploy-system:
+	@echo "Deleting moto-system namespace..."
+	-kubectl delete namespace moto-system --ignore-not-found
+	@echo "Deleting cluster-scoped ClusterRole/ClusterRoleBinding..."
+	-kubectl delete clusterrole moto-club --ignore-not-found
+	-kubectl delete clusterrolebinding moto-club --ignore-not-found
+	@echo "moto-system undeployed."
