@@ -14,6 +14,7 @@ use crate::error::{CliError, Result};
 /// Each value can be overridden via the corresponding environment variable.
 pub struct DevConfig {
     pub keybox_health: String,
+    pub keybox_api: String,
     pub club_health: String,
     pub club_api: String,
     pub registry: String,
@@ -22,12 +23,17 @@ pub struct DevConfig {
 impl DevConfig {
     /// Load dev config from env vars with hardcoded defaults.
     pub fn load() -> Self {
+        let keybox_bind =
+            std::env::var("MOTO_KEYBOX_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8090".to_string());
+        let keybox_api_port = keybox_bind.rsplit(':').next().unwrap_or("8090");
+
         let keybox_health_bind = std::env::var("MOTO_KEYBOX_HEALTH_BIND_ADDR")
             .unwrap_or_else(|_| "0.0.0.0:8091".to_string());
         let keybox_health_port = keybox_health_bind.rsplit(':').next().unwrap_or("8091");
 
         Self {
             keybox_health: format!("localhost:{keybox_health_port}"),
+            keybox_api: format!("localhost:{keybox_api_port}"),
             club_health: "localhost:8081".to_string(),
             club_api: "localhost:8080".to_string(),
             registry: "localhost:5050".to_string(),
@@ -87,10 +93,109 @@ pub async fn run(cmd: DevCommand, flags: &GlobalFlags) -> Result<()> {
         DevAction::Up { .. } => Err(CliError::general(
             "moto dev up is not yet implemented.\n\nUse the manual workflow instead:\n  make dev-up",
         )),
-        DevAction::Down { .. } => Err(CliError::general(
-            "moto dev down is not yet implemented.\n\nUse the manual workflow instead:\n  make dev-down",
-        )),
+        DevAction::Down { clean } => dev_down(clean, flags),
     }
+}
+
+/// Stop the local dev stack.
+///
+/// 1. Send SIGTERM to club and keybox processes (by port)
+/// 2. Run `docker compose down` (with `-v` if `--clean`)
+/// 3. With `--clean`: remove `.dev/` directory
+#[allow(clippy::unnecessary_wraps)]
+fn dev_down(clean: bool, flags: &GlobalFlags) -> Result<()> {
+    let config = DevConfig::load();
+
+    let club_port = extract_port(&config.club_api, "8080");
+    let keybox_port = extract_port(&config.keybox_api, "8090");
+
+    // Step 1: Stop club process
+    stop_port_process(club_port, "club", flags);
+
+    // Step 2: Stop keybox process
+    stop_port_process(keybox_port, "keybox", flags);
+
+    // Step 3: Stop postgres
+    if !flags.quiet {
+        println!("Stopping postgres...");
+    }
+
+    let mut compose_args = vec!["compose", "down"];
+    if clean {
+        compose_args.push("-v");
+    }
+
+    let output = ProcessCommand::new("docker").args(&compose_args).output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            if !flags.quiet {
+                println!("Postgres stopped");
+            }
+        }
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            if !flags.quiet {
+                eprintln!("Warning: docker compose down failed: {}", stderr.trim());
+            }
+        }
+        Err(e) => {
+            if !flags.quiet {
+                eprintln!("Warning: could not run docker compose: {e}");
+            }
+        }
+    }
+
+    // Step 4: With --clean, remove .dev/ directory
+    if clean {
+        if !flags.quiet {
+            println!("Removing .dev/ directory...");
+        }
+        match std::fs::remove_dir_all(".dev") {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                if !flags.quiet {
+                    eprintln!("Warning: could not remove .dev/: {e}");
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Find a process listening on the given TCP port and send SIGTERM.
+fn stop_port_process(port: &str, name: &str, flags: &GlobalFlags) {
+    let output = ProcessCommand::new("lsof")
+        .args(["-ti", &format!("tcp:{port}")])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            let pids = String::from_utf8_lossy(&o.stdout);
+            for pid_str in pids.lines() {
+                let pid_str = pid_str.trim();
+                if pid_str.is_empty() {
+                    continue;
+                }
+                if !flags.quiet {
+                    println!("Stopping {name} (pid {pid_str})...");
+                }
+                let _ = ProcessCommand::new("kill").arg(pid_str).output();
+            }
+        }
+        _ => {
+            if !flags.quiet {
+                println!("{name}: not running");
+            }
+        }
+    }
+}
+
+/// Extract the port from a "host:port" string.
+fn extract_port<'a>(addr: &'a str, default: &'a str) -> &'a str {
+    addr.rsplit(':').next().unwrap_or(default)
 }
 
 /// Check if a HTTP endpoint returns 200 using curl.
@@ -294,13 +399,15 @@ mod tests {
     #[test]
     fn test_dev_config_default_ports() {
         // Verify the hardcoded dev defaults match the spec
-        // keybox health: 8091, club health: 8081, club API: 8080, registry: 5050
+        // keybox API: 8090, keybox health: 8091, club health: 8081, club API: 8080, registry: 5050
         let config = DevConfig {
             keybox_health: "localhost:8091".to_string(),
+            keybox_api: "localhost:8090".to_string(),
             club_health: "localhost:8081".to_string(),
             club_api: "localhost:8080".to_string(),
             registry: "localhost:5050".to_string(),
         };
+        assert_eq!(config.keybox_api, "localhost:8090");
         assert_eq!(config.keybox_health, "localhost:8091");
         assert_eq!(config.club_health, "localhost:8081");
         assert_eq!(config.club_api, "localhost:8080");
@@ -329,6 +436,27 @@ mod tests {
         assert_eq!(parsed["club"], "healthy");
         assert_eq!(parsed["image"], "found");
         assert_eq!(parsed["garages"], 1);
+    }
+
+    #[test]
+    fn test_extract_port() {
+        assert_eq!(extract_port("localhost:8080", "0"), "8080");
+        assert_eq!(extract_port("0.0.0.0:8090", "0"), "8090");
+        assert_eq!(extract_port("localhost:9999", "0"), "9999");
+    }
+
+    #[test]
+    fn test_dev_config_keybox_api_default() {
+        let config = DevConfig {
+            keybox_health: "localhost:8091".to_string(),
+            keybox_api: "localhost:8090".to_string(),
+            club_health: "localhost:8081".to_string(),
+            club_api: "localhost:8080".to_string(),
+            registry: "localhost:5050".to_string(),
+        };
+        assert_eq!(config.keybox_api, "localhost:8090");
+        assert_eq!(extract_port(&config.keybox_api, "8090"), "8090");
+        assert_eq!(extract_port(&config.club_api, "8080"), "8080");
     }
 
     #[test]

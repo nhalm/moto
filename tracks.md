@@ -150,10 +150,10 @@ HOW TO USE THIS FILE:
 - Fix: `garage logs` respects `--context` global flag when creating K8s client (v0.5: uses K8sClient::with_context when --context flag is set, otherwise falls back to default context)
 - Fix: `garage list --context <name>` filters results by context (v0.5: garages from the current moto-club belong to the current kubectl context; when --context targets a different context, no garages are shown since that context's moto-club is not queried)
 - `moto dev` subcommand: `dev status` health check dashboard (v0.6: dev subcommand in command hierarchy with up/down/status; status checks cluster, registry, postgres, keybox, club, image, garages; JSON output; exit code 0/1)
+- `moto dev down` command implementation (v0.6: SIGTERM to port processes via lsof, docker compose down, --clean flag removes .dev/ and pgdata volume; DevConfig.keybox_api field for port lookup)
 
 **Remaining:**
 - `moto dev up` command implementation (v0.6: see local-dev.md for full spec)
-- `moto dev down` command implementation (v0.6: see local-dev.md for full spec)
 
 ---
 
@@ -426,10 +426,10 @@ HOW TO USE THIS FILE:
 - push-garage cleans up local Docker daemon copy after pushing to registry (v0.6: saves ~10GB VM disk; image only needs to live in registry)
 - `moto dev status` command: health check dashboard for cluster, registry, postgres, keybox, club, image, garages (v0.7/v0.8: CLI scaffolding for dev subcommand with up/down/status; DevConfig with hardcoded defaults and env var overrides; JSON output; exit code 1 if any unhealthy)
 - Makefile target: `dev` as alias for `moto dev up` (v0.7)
+- `moto dev down` command: SIGTERM to club (port 8080) and keybox (port 8090) processes via lsof, docker compose down, --clean flag removes .dev/ directory and pgdata volume; DevConfig.keybox_api field added for port lookup (v0.7/v0.8)
 
 **Remaining:**
 - `moto dev up` command: 9-step orchestration (prerequisites, cluster, image, postgres, keys, migrations, keybox, club, garage) with subprocess management, health checks, Ctrl-C handling (v0.7/v0.8)
-- `moto dev down` command: SIGTERM to port processes, docker compose down, --clean flag (v0.7/v0.8)
 
 ---
 
