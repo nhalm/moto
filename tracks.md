@@ -440,22 +440,23 @@ HOW TO USE THIS FILE:
 
 ---
 
-## service-deploy.md v0.1
+## service-deploy.md v0.3
 
-**Status:** Not Started
+**Status:** In Progress
 
 **Implemented:**
-(none)
+- moto-club-db embedded migrations and auto-run on startup (prerequisite for K8s deployment — see moto-club.md v2.3)
 
 **Remaining:**
-- infra/k8s/moto-system/namespace.yaml
-- infra/k8s/moto-system/postgres.yaml (StatefulSet + Service + init ConfigMap)
-- infra/k8s/moto-system/keybox.yaml (Deployment + Service)
-- infra/k8s/moto-system/club.yaml (Deployment + Service + ServiceAccount + RBAC)
+- infra/k8s/moto-system/namespace.yaml (namespace with labels)
+- infra/k8s/moto-system/postgres.yaml (StatefulSet + Service on 5432 + 1Gi PVC with local-path StorageClass + postgres-init ConfigMap with CREATE DATABASE moto_keybox)
+- infra/k8s/moto-system/keybox.yaml (Deployment with moto-registry:5000/moto-keybox image, resource limits 50m/128Mi→500m/512Mi, health probes on 8081, keybox-keys Secret volume at /run/secrets/keybox/ + Service on 8080+8081)
+- infra/k8s/moto-system/club.yaml (Deployment with moto-registry:5000/moto-club image, resource limits, health probes on 8081, DERP_SERVERS=[], keybox-service-token Secret volume at /run/secrets/club/ + Service on 8080+8081+9090 + ServiceAccount moto-club + ClusterRole with 11 resource types including namespaces with patch + ClusterRoleBinding)
 - infra/k8s/moto-system/kustomization.yaml
-- Makefile target: deploy-secrets (generate + apply K8s secrets)
-- Makefile target: deploy-system (kubectl apply -k)
-- Makefile target: deploy-status, undeploy-system
+- Makefile target: deploy-secrets (idempotent credential generation to .dev/k8s-secrets/, apply 5 K8s secrets)
+- Makefile target: deploy-system (kubectl apply -k infra/k8s/moto-system/)
+- Makefile target: deploy-status (wait for rollout, show status, exit 0/1)
+- Makefile target: undeploy-system (delete namespace AND cluster-scoped ClusterRole/ClusterRoleBinding)
 
 ---
 
