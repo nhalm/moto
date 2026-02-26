@@ -1,4 +1,6 @@
-.PHONY: install build test check fmt lint clean run fix ci
+.DEFAULT_GOAL := help
+
+.PHONY: help install build test check fmt lint clean run fix ci
 .PHONY: test-ci
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
 .PHONY: build-bike test-bike
@@ -9,62 +11,52 @@
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
 .PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy undeploy-system
 
-# Set up local development environment
-install:
+help: ## Show all available targets
+	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make \033[36m<target>\033[0m\n"} /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } /^[a-zA-Z_-]+:.*?## / { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
+##@ Setup
+
+install: ## Set up local development environment
 	git config core.hooksPath .githooks
 
-# Build all crates
-build:
+##@ Development
+
+build: ## Build all crates
 	cargo build --workspace
 
 # Test database URL (override with environment variable if needed)
 TEST_DATABASE_URL ?= postgres://moto_test:moto_test@localhost:5433/moto_test
 
-# Run unit tests only (fast, no dependencies)
-test:
+test: ## Run unit tests only (fast, no dependencies)
 	cargo test --lib
 
-# Check compilation without building
-check:
+check: ## Check compilation without building
 	cargo check --workspace
 
-# Format code
-fmt:
+fmt: ## Format code
 	cargo fmt --all
 
-# Run clippy lints
-lint:
+lint: ## Run clippy lints
 	cargo clippy --workspace --all-targets -- -D warnings
 
-# Clean build artifacts
-clean:
+clean: ## Clean build artifacts
 	cargo clean
 
-# Run the CLI (when implemented)
-run:
+run: ## Run the CLI
 	cargo run --bin moto-cli
 
-# Format and lint
-fix: fmt
+fix: fmt ## Auto-fix lint issues
 	cargo clippy --workspace --all-targets --fix --allow-dirty
 
-# Full CI check
-ci: fmt check lint test
+ci: fmt check lint test ## Full CI check (fmt + check + lint + test)
 
-# CI target (assumes database is already running)
-test-ci:
-	cargo test --lib
-	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration
-
-# === Container (Garage) ===
+##@ Container
 
 # Detect Linux target based on host architecture
 # aarch64-darwin -> aarch64-linux, x86_64-darwin -> x86_64-linux
 NIX_LINUX_SYSTEM := $(shell uname -m | sed 's/arm64/aarch64/')-linux
 
-# Build the moto-garage container image using Docker-wrapped Nix
-# This runs nix build inside a nixos/nix container, works on Mac without configuring a Linux builder
-build-garage:
+build-garage: ## Build garage container (Docker-wrapped Nix)
 	@echo "Building moto-garage container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
 	docker run --rm \
 		-v $(PWD):/workspace \
@@ -74,24 +66,18 @@ build-garage:
 		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-garage --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
 		| docker load
 
-# Build and run smoke tests on the container
-test-garage: build-garage
+test-garage: build-garage ## Run smoke tests on garage container
 	@echo "Running smoke tests..."
 	./infra/smoke-test.sh
 
-# Interactive shell in the container for debugging
-shell-garage:
+shell-garage: ## Interactive shell in garage container
 	@if ! docker image inspect moto-garage:latest &>/dev/null; then \
 		echo "Image not found, building..."; \
 		$(MAKE) build-garage; \
 	fi
 	docker run -it --rm moto-garage:latest
 
-# === Container (Bike) ===
-
-# Build the moto-bike base container image using Docker-wrapped Nix
-# This is the minimal production image (CA certs, tzdata, non-root user only)
-build-bike:
+build-bike: ## Build moto-bike base container
 	@echo "Building moto-bike container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
 	docker run --rm \
 		-v $(PWD):/workspace \
@@ -101,15 +87,11 @@ build-bike:
 		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-bike --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
 		| docker load
 
-# Build and run smoke tests on the bike container
-test-bike: build-bike
+test-bike: build-bike ## Run smoke tests on bike container
 	@echo "Running bike smoke tests..."
 	./infra/smoke-test-bike.sh
 
-# === Container (Service Images) ===
-
-# Build the moto-club container image using Docker-wrapped Nix
-build-club:
+build-club: ## Build moto-club container image
 	@echo "Building moto-club container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
 	docker run --rm \
 		-v $(PWD):/workspace \
@@ -119,8 +101,7 @@ build-club:
 		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-club-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
 		| docker load
 
-# Build the moto-keybox container image using Docker-wrapped Nix
-build-keybox:
+build-keybox: ## Build moto-keybox container image
 	@echo "Building moto-keybox container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
 	docker run --rm \
 		-v $(PWD):/workspace \
@@ -130,14 +111,11 @@ build-keybox:
 		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-keybox-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
 		| docker load
 
-# === Push ===
-
 # Default registry for pushing images
 REGISTRY ?= localhost:5050
 SHA := $(shell git rev-parse --short HEAD)
 
-# Push moto-garage to registry, clean up local copies (saves ~10GB VM disk)
-push-garage:
+push-garage: ## Push garage image to registry, clean up local copy
 	@if ! docker image inspect moto-garage:latest &>/dev/null; then \
 		echo "Error: moto-garage:latest not found. Run 'make build-garage' first."; \
 		exit 1; \
@@ -152,8 +130,7 @@ push-garage:
 	-docker rmi moto-garage:latest $(REGISTRY)/moto-garage:latest $(REGISTRY)/moto-garage:$(SHA) 2>/dev/null
 	@echo "Local copies removed (image lives in registry)."
 
-# Push moto-club to registry, clean up local copies
-push-club:
+push-club: ## Push moto-club to registry, clean up local copy
 	@if ! docker image inspect moto-club:latest &>/dev/null; then \
 		echo "Error: moto-club:latest not found. Run 'make build-club' first."; \
 		exit 1; \
@@ -168,8 +145,7 @@ push-club:
 	-docker rmi moto-club:latest $(REGISTRY)/moto-club:latest $(REGISTRY)/moto-club:$(SHA) 2>/dev/null
 	@echo "Local copies removed (image lives in registry)."
 
-# Push moto-keybox to registry, clean up local copies
-push-keybox:
+push-keybox: ## Push moto-keybox to registry, clean up local copy
 	@if ! docker image inspect moto-keybox:latest &>/dev/null; then \
 		echo "Error: moto-keybox:latest not found. Run 'make build-keybox' first."; \
 		exit 1; \
@@ -184,10 +160,7 @@ push-keybox:
 	-docker rmi moto-keybox:latest $(REGISTRY)/moto-keybox:latest $(REGISTRY)/moto-keybox:$(SHA) 2>/dev/null
 	@echo "Local copies removed (image lives in registry)."
 
-# === Scan ===
-
-# Scan images for vulnerabilities using trivy
-scan-garage:
+scan-garage: ## Scan garage image for vulnerabilities (requires trivy)
 	@if ! command -v trivy &>/dev/null; then \
 		echo "Error: trivy is not installed. Install with 'brew install trivy' or 'nix-shell -p trivy'"; \
 		exit 1; \
@@ -199,88 +172,75 @@ scan-garage:
 	fi
 	trivy image --severity HIGH,CRITICAL moto-garage:latest
 
-# === Cleanup ===
-
-# Remove all moto container images
-clean-images:
+clean-images: ## Remove all moto container images
 	@echo "Removing moto images..."
 	-docker images --filter=reference='moto-*' -q | xargs docker rmi -f 2>/dev/null || true
 	-docker images --filter=reference='*/moto-*' -q | xargs docker rmi -f 2>/dev/null || true
 	@echo "Done."
 
-# Remove Docker volume used for Nix store caching
-# This forces a fresh build but speeds up subsequent builds after running
-clean-nix-cache:
+clean-nix-cache: ## Remove Nix store cache volume
 	@echo "Removing Nix store cache volume..."
 	-docker volume rm nix-store 2>/dev/null && echo "Removed nix-store volume." || \
 		echo "nix-store volume does not exist or is in use."
 
-# === Registry ===
+##@ Registry
 
-# Start local registry for development
-registry-start:
+registry-start: ## Start local Docker registry
 	@echo "Starting local registry on localhost:5000..."
 	@docker run -d -p 5000:5000 --name moto-registry registry:2 2>/dev/null || \
 		(docker start moto-registry 2>/dev/null && echo "Registry already exists, started.") || \
 		echo "Registry already running."
 
-# Stop local registry
-registry-stop:
+registry-stop: ## Stop and remove local registry
 	@echo "Stopping local registry..."
 	@docker stop moto-registry 2>/dev/null && docker rm moto-registry 2>/dev/null && echo "Registry stopped and removed." || \
 		echo "Registry not running or already removed."
 
-# === Testing ===
+##@ Testing
 
-# Start test database via docker-compose, wait for healthcheck
-test-db-up:
+test-db-up: ## Start test database (port 5433)
 	@echo "Starting test database..."
 	docker compose -f docker-compose.test.yml up -d --wait
 	@echo "Test database ready on port 5433."
 
-# Stop test database and remove volumes
-test-db-down:
+test-db-down: ## Stop test database, remove volumes
 	@echo "Stopping test database..."
 	docker compose -f docker-compose.test.yml down -v
 	@echo "Test database stopped."
 
-# Run migrations for all database crates against test database
 # --ignore-missing: both crates share one database, so each sees the other's migrations as "missing"
-test-db-migrate:
+test-db-migrate: ## Run migrations against test database
 	@echo "Running moto-club-db migrations..."
 	cargo sqlx migrate run --source crates/moto-club-db/migrations --database-url $(TEST_DATABASE_URL) --ignore-missing
 	@echo "Running moto-keybox-db migrations..."
 	cargo sqlx migrate run --source crates/moto-keybox-db/migrations --database-url $(TEST_DATABASE_URL) --ignore-missing
 	@echo "All migrations complete."
 
-# Fresh database cycle: teardown, start, migrate, run integration tests, teardown
-test-integration: test-db-down test-db-up test-db-migrate
+test-integration: test-db-down test-db-up test-db-migrate ## Fresh database cycle + integration tests
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration; \
 	status=$$?; \
 	$(MAKE) test-db-down; \
 	exit $$status
 
-# Run unit tests + integration tests (fresh database cycle)
-test-all: test
+test-all: test ## Unit tests + integration tests
 	$(MAKE) test-integration
 
-# === Local Development ===
+test-ci: ## CI tests (assumes database running)
+	cargo test --lib
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration
+
+##@ Local Dev
 
 # Dev database URL for moto-club
 DEV_DATABASE_URL ?= postgres://moto:moto@localhost:5432/moto_club
 
-# Alias for moto dev up
-dev:
+dev: ## Start full dev stack via moto CLI
 	cargo run --bin moto -- dev up
 
-# Create k3d cluster via moto CLI (idempotent)
-dev-cluster:
+dev-cluster: ## Create k3d cluster (idempotent)
 	cargo run --bin moto -- cluster init
 
-# Start full local dev stack (postgres + keybox + club in foreground)
-# Runs setup steps, then starts keybox in background and moto-club in foreground
-# Ctrl-C stops everything
-dev-up: dev-db-up dev-keybox-init dev-db-migrate
+dev-up: dev-db-up dev-keybox-init dev-db-migrate ## Start postgres + keybox + club
 	@echo "Starting keybox in background..."
 	@MOTO_KEYBOX_BIND_ADDR=0.0.0.0:8090 \
 	MOTO_KEYBOX_HEALTH_BIND_ADDR=0.0.0.0:8091 \
@@ -302,27 +262,23 @@ dev-up: dev-db-up dev-keybox-init dev-db-migrate
 	RUST_LOG=moto_club=debug \
 	cargo run --bin moto-club
 
-# Start dev database via docker-compose, wait for healthcheck
-dev-db-up:
+dev-db-up: ## Start dev database (port 5432)
 	@echo "Starting dev database..."
 	docker compose up -d --wait
 	@echo "Dev database ready on port 5432."
 
-# Stop dev database
-dev-db-down:
+dev-db-down: ## Stop dev database
 	@echo "Stopping dev database..."
 	docker compose down
 	@echo "Dev database stopped."
 
-# Run moto-club-db migrations against dev database
-dev-db-migrate:
+dev-db-migrate: ## Run migrations against dev database
 	@echo "Running moto-club-db migrations..."
 	cargo sqlx migrate run --source crates/moto-club-db/migrations --database-url $(DEV_DATABASE_URL)
 	@echo "Migrations complete."
 
-# Generate keybox keys in .dev/keybox/ (master.key, signing.key, service-token)
 # Idempotent: skips if all keys already exist. To regenerate: rm -rf .dev/keybox && make dev-keybox-init
-dev-keybox-init:
+dev-keybox-init: ## Generate keybox keys in .dev/keybox/
 	@if [ -f .dev/keybox/master.key ] && [ -f .dev/keybox/signing.key ] && [ -f .dev/keybox/service-token ]; then \
 		echo "Keybox keys already exist in .dev/keybox/"; \
 	else \
@@ -333,8 +289,7 @@ dev-keybox-init:
 		echo "Keybox keys generated in .dev/keybox/"; \
 	fi
 
-# Start moto-keybox-server with dev config (runs in foreground)
-dev-keybox:
+dev-keybox: ## Start moto-keybox-server with dev config
 	MOTO_KEYBOX_BIND_ADDR=0.0.0.0:8090 \
 	MOTO_KEYBOX_HEALTH_BIND_ADDR=0.0.0.0:8091 \
 	MOTO_KEYBOX_MASTER_KEY_FILE=.dev/keybox/master.key \
@@ -344,11 +299,9 @@ dev-keybox:
 	RUST_LOG=moto_keybox=debug \
 	cargo run --bin moto-keybox-server
 
-# Build and push garage image to local registry
-dev-garage-image: build-garage push-garage
+dev-garage-image: build-garage push-garage ## Build and push garage image to registry
 
-# Start moto-club with dev config (runs in foreground)
-dev-club:
+dev-club: ## Start moto-club with dev config
 	MOTO_CLUB_DATABASE_URL=postgres://moto:moto@localhost:5432/moto_club \
 	MOTO_CLUB_KEYBOX_URL=http://localhost:8090 \
 	MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token \
@@ -357,32 +310,27 @@ dev-club:
 	RUST_LOG=moto_club=debug \
 	cargo run --bin moto-club
 
-# Stop all dev services and database
-dev-down:
+dev-down: ## Stop all dev services and database
 	@echo "Stopping dev services..."
 	docker compose down
 	@echo "Dev services stopped."
 
-# Stop all dev services, remove database volume, and remove dev state
-dev-clean:
+dev-clean: ## Stop services, remove volumes and dev state
 	@echo "Cleaning dev state..."
 	docker compose down -v
 	rm -rf .dev/
 	@echo "Dev state cleaned."
 
-# === K8s Deployment ===
+##@ Deploy
 
-# Full deploy: build images, generate secrets, deploy manifests, verify status
-deploy: deploy-images deploy-secrets deploy-system deploy-status
+deploy: deploy-images deploy-secrets deploy-system deploy-status ## Full deploy (images + secrets + system + status)
 
-# Build and push all service images (garage, club, keybox) to local registry
-deploy-images: build-garage push-garage build-club push-club build-keybox push-keybox
+deploy-images: build-garage push-garage build-club push-club build-keybox push-keybox ## Build and push all service images
 
 # Secret generation directory for K8s deployment
 K8S_SECRETS_DIR := .dev/k8s-secrets
 
-# Generate credentials/keys (idempotent), create K8s secrets in moto-system
-deploy-secrets:
+deploy-secrets: ## Generate and apply K8s secrets
 	@if [ -f $(K8S_SECRETS_DIR)/db-password ] && [ -f $(K8S_SECRETS_DIR)/service-token ] && \
 	    [ -f $(K8S_SECRETS_DIR)/master.key ] && [ -f $(K8S_SECRETS_DIR)/signing.key ]; then \
 		echo "Credentials already exist in $(K8S_SECRETS_DIR)/"; \
@@ -422,12 +370,10 @@ deploy-secrets:
 		--dry-run=client -o yaml | kubectl apply -f - && \
 	echo "All secrets applied to moto-system namespace."
 
-# Deploy moto-system manifests to K8s cluster
-deploy-system:
+deploy-system: ## Deploy moto-system manifests (kubectl apply -k)
 	kubectl apply -k infra/k8s/moto-system/
 
-# Wait for all moto-system rollouts, show status, exit 0/1
-deploy-status:
+deploy-status: ## Show status of moto-system pods
 	@echo "Waiting for postgres rollout..."
 	@kubectl -n moto-system rollout status statefulset/postgres --timeout=120s
 	@echo "Waiting for moto-keybox rollout..."
@@ -448,8 +394,7 @@ deploy-status:
 	fi
 	@echo "All pods healthy."
 
-# Delete moto-system namespace and cluster-scoped RBAC resources
-undeploy-system:
+undeploy-system: ## Delete moto-system namespace and RBAC
 	@echo "Deleting moto-system namespace..."
 	-kubectl delete namespace moto-system --ignore-not-found
 	@echo "Deleting cluster-scoped ClusterRole/ClusterRoleBinding..."

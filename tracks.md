@@ -221,7 +221,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.11
+## makefile.md v0.12
 
 **Status:** In Progress
 
@@ -244,9 +244,10 @@ HOW TO USE THIS FILE:
 - deploy-images target: builds and pushes all three service images (garage, club, keybox) to local registry (v0.10)
 - `deploy` target: full deployment flow (deploy-images + deploy-secrets + deploy-system + deploy-status) (v0.10)
 - push-club and push-keybox clean up local Docker images after pushing (v0.11: same as push-garage; saves disk space since images only need to live in the registry)
+- `help` as default target: `.DEFAULT_GOAL := help`; `make` with no arguments prints all available targets grouped by category (v0.12: inline `##` comments on targets, `##@` section headers, awk-based help parser)
 
 **Remaining:**
-(none - makefile.md v0.11 implementation complete)
+(none - makefile.md v0.12 implementation complete)
 
 ---
 
