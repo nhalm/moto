@@ -222,8 +222,13 @@ test-integration: test-db-down test-db-up test-db-migrate ## Fresh database cycl
 	$(MAKE) test-db-down; \
 	exit $$status
 
-test-all: test ## Unit tests + integration tests
-	$(MAKE) test-integration
+test-all: ## Every test: unit + integration + ignored (K8s) — no test left behind
+	$(MAKE) test-db-down test-db-up test-db-migrate
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration; \
+	status=$$?; \
+	$(MAKE) test-db-down; \
+	if [ $$status -ne 0 ]; then exit $$status; fi
+	cargo test -- --ignored
 
 test-ci: ## CI tests (assumes database running)
 	cargo test --lib

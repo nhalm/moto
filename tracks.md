@@ -221,7 +221,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.12
+## makefile.md v0.13
 
 **Status:** In Progress
 
@@ -245,9 +245,10 @@ HOW TO USE THIS FILE:
 - `deploy` target: full deployment flow (deploy-images + deploy-secrets + deploy-system + deploy-status) (v0.10)
 - push-club and push-keybox clean up local Docker images after pushing (v0.11: same as push-garage; saves disk space since images only need to live in the registry)
 - `help` as default target: `.DEFAULT_GOAL := help`; `make` with no arguments prints all available targets grouped by category (v0.12: inline `##` comments on targets, `##@` section headers, awk-based help parser)
+- `test-all` runs every test category: unit + integration + ignored (K8s); each category runs exactly once (v0.13: single `cargo test --features integration` pass for unit+integration, separate `cargo test -- --ignored` for K8s tests; no duplicate unit test runs)
 
 **Remaining:**
-(none - makefile.md v0.12 implementation complete)
+(none - makefile.md v0.13 implementation complete)
 
 ---
 
