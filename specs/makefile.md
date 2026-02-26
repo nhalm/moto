@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.11 |
+| Version | 0.12 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-26 |
 
@@ -50,6 +50,18 @@ Verify with: `nix --version`
 | **Testing** | Test database lifecycle and integration tests |
 | **Local Dev** | Run the full stack locally |
 | **Deploy** | Deploy services to K8s cluster |
+
+### Default Target
+
+Running `make` with no arguments prints all available targets grouped by category. `make help` does the same thing.
+
+```makefile
+.DEFAULT_GOAL := help
+
+help:            # Show all available targets
+```
+
+The output should list every target with its comment, grouped by section headers (Setup, Development, Container, etc.).
 
 ### Setup Targets
 
@@ -174,7 +186,7 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 All targets should be declared `.PHONY` since they don't produce files:
 
 ```makefile
-.PHONY: install build test check fmt lint clean fix ci run
+.PHONY: help install build test check fmt lint clean fix ci run
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
 .PHONY: build-bike test-bike
 .PHONY: build-club push-club build-keybox push-keybox
@@ -186,6 +198,10 @@ All targets should be declared `.PHONY` since they don't produce files:
 ```
 
 ## Changelog
+
+### v0.12 (2026-02-26)
+- Add `help` as default target: `make` with no arguments prints all available targets grouped by category
+- `.DEFAULT_GOAL := help`
 
 ### v0.11 (2026-02-26)
 - `push-club` and `push-keybox` clean up local Docker images after pushing (same as `push-garage`; saves disk space since images only need to live in the registry)
