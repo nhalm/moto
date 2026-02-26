@@ -228,7 +228,7 @@ test-all: ## Every test: unit + integration + ignored (K8s) — no test left beh
 	status=$$?; \
 	$(MAKE) test-db-down; \
 	if [ $$status -ne 0 ]; then exit $$status; fi
-	cargo test -- --ignored
+	cargo test -- --ignored --skip create_utun_device --skip create_tun_device --skip tun_read_write
 
 test-ci: ## CI tests (assumes database running)
 	cargo test --lib

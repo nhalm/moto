@@ -40,7 +40,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [moto-cli](moto-cli.md) | Ripping | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
 | [pre-commit](pre-commit.md) | Ready to Rip | Git hooks for fast feedback to agents |
-| [makefile](makefile.md) | Ripping | Makefile targets and conventions |
+| [makefile](makefile.md) | Ready to Rip | Makefile targets and conventions |
 | [testing](testing.md) | Ready to Rip | Test infrastructure, Docker Compose, integration tests |
 
 ## Phase 1: Infrastructure (The Garage)
