@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.10 |
+| Version | 0.11 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-25 |
+| Last Updated | 2026-02-26 |
 
 ## Overview
 
@@ -86,9 +86,9 @@ push-garage:                # Push garage image to local registry (localhost:500
 
 # Service images (bike base + binary)
 build-club:                 # Build moto-club container image
-push-club:                  # Push moto-club to local registry
+push-club:                  # Push moto-club to local registry, clean up local copy
 build-keybox:               # Build moto-keybox container image
-push-keybox:                # Push moto-keybox to local registry
+push-keybox:                # Push moto-keybox to local registry, clean up local copy
 
 # Maintenance
 scan-garage:                # Scan image for vulnerabilities (requires trivy)
@@ -186,6 +186,9 @@ All targets should be declared `.PHONY` since they don't produce files:
 ```
 
 ## Changelog
+
+### v0.11 (2026-02-26)
+- `push-club` and `push-keybox` clean up local Docker images after pushing (same as `push-garage`; saves disk space since images only need to live in the registry)
 
 ### v0.10 (2026-02-25)
 - Add `deploy-images` target: builds and pushes all three service images (garage, club, keybox) to local registry
