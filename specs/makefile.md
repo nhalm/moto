@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.12 |
+| Version | 0.13 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-26 |
 
@@ -134,9 +134,17 @@ test-db-up:          # Start test database via docker-compose.test.yml, wait for
 test-db-down:        # Stop test database, remove volumes
 test-db-migrate:     # Run migrations for moto-club-db AND moto-keybox-db against test database
 test-integration:    # Fresh database cycle: test-db-up + test-db-migrate + integration tests + test-db-down
-test-all:            # Unit tests (make test) + integration tests
+test-all:            # Every test: unit + integration + ignored (K8s) — no test left behind
 test-ci:             # For CI: assumes database already running, runs unit + integration tests
 ```
+
+`test-all` runs every test in the project:
+
+- Unit tests (`cargo test --lib`)
+- Integration tests (with fresh test database)
+- Ignored tests (`#[ignore]` — e.g., tests requiring a running K8s cluster)
+
+Each category runs once (no duplicate runs). Tests that require root are excluded.
 
 See [testing.md](testing.md) for test infrastructure specification.
 
@@ -198,6 +206,11 @@ All targets should be declared `.PHONY` since they don't produce files:
 ```
 
 ## Changelog
+
+### v0.13 (2026-02-26)
+- `test-all` runs every test category: unit, integration, and `#[ignore]` tests (K8s)
+- Each category runs exactly once (no duplicate unit test runs)
+- Tests requiring root remain excluded
 
 ### v0.12 (2026-02-26)
 - Add `help` as default target: `make` with no arguments prints all available targets grouped by category
