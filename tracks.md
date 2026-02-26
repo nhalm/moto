@@ -221,7 +221,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.10
+## makefile.md v0.11
 
 **Status:** In Progress
 
@@ -243,9 +243,10 @@ HOW TO USE THIS FILE:
 - Deploy targets: deploy-secrets, deploy-system, deploy-status, undeploy-system (v0.9: implemented via service-deploy.md; idempotent credential generation, kubectl apply -k, rollout wait with status, namespace+RBAC cleanup)
 - deploy-images target: builds and pushes all three service images (garage, club, keybox) to local registry (v0.10)
 - `deploy` target: full deployment flow (deploy-images + deploy-secrets + deploy-system + deploy-status) (v0.10)
+- push-club and push-keybox clean up local Docker images after pushing (v0.11: same as push-garage; saves disk space since images only need to live in the registry)
 
 **Remaining:**
-(none - makefile.md v0.10 implementation complete)
+(none - makefile.md v0.11 implementation complete)
 
 ---
 

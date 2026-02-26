@@ -152,7 +152,7 @@ push-garage:
 	-docker rmi moto-garage:latest $(REGISTRY)/moto-garage:latest $(REGISTRY)/moto-garage:$(SHA) 2>/dev/null
 	@echo "Local copies removed (image lives in registry)."
 
-# Push moto-club to registry
+# Push moto-club to registry, clean up local copies
 push-club:
 	@if ! docker image inspect moto-club:latest &>/dev/null; then \
 		echo "Error: moto-club:latest not found. Run 'make build-club' first."; \
@@ -164,8 +164,11 @@ push-club:
 	docker push $(REGISTRY)/moto-club:latest
 	docker push $(REGISTRY)/moto-club:$(SHA)
 	@echo "Pushed $(REGISTRY)/moto-club:latest and $(REGISTRY)/moto-club:$(SHA)"
+	@echo "Cleaning up local Docker copies..."
+	-docker rmi moto-club:latest $(REGISTRY)/moto-club:latest $(REGISTRY)/moto-club:$(SHA) 2>/dev/null
+	@echo "Local copies removed (image lives in registry)."
 
-# Push moto-keybox to registry
+# Push moto-keybox to registry, clean up local copies
 push-keybox:
 	@if ! docker image inspect moto-keybox:latest &>/dev/null; then \
 		echo "Error: moto-keybox:latest not found. Run 'make build-keybox' first."; \
@@ -177,6 +180,9 @@ push-keybox:
 	docker push $(REGISTRY)/moto-keybox:latest
 	docker push $(REGISTRY)/moto-keybox:$(SHA)
 	@echo "Pushed $(REGISTRY)/moto-keybox:latest and $(REGISTRY)/moto-keybox:$(SHA)"
+	@echo "Cleaning up local Docker copies..."
+	-docker rmi moto-keybox:latest $(REGISTRY)/moto-keybox:latest $(REGISTRY)/moto-keybox:$(SHA) 2>/dev/null
+	@echo "Local copies removed (image lives in registry)."
 
 # === Scan ===
 
