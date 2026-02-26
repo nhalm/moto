@@ -65,6 +65,7 @@ mod integration_tests {
 
         let expires_at = Utc::now() + Duration::hours(4);
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at,
@@ -103,6 +104,7 @@ mod integration_tests {
 
         // Create an active session (expires in 4 hours)
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -123,6 +125,7 @@ mod integration_tests {
 
         // Create an expired session (expired 1 hour ago)
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() - Duration::hours(1),
@@ -142,6 +145,7 @@ mod integration_tests {
 
         // Create a session and close it
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -161,6 +165,7 @@ mod integration_tests {
         let (garage_id, pubkey, _owner) = setup_garage_and_device(&pool).await;
 
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -181,6 +186,7 @@ mod integration_tests {
 
         // Create an expired session
         let expired_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() - Duration::hours(1),
@@ -189,6 +195,7 @@ mod integration_tests {
 
         // Create and close a session
         let closed_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -211,6 +218,7 @@ mod integration_tests {
 
         // Active session
         let active_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -219,6 +227,7 @@ mod integration_tests {
 
         // Expired session
         let expired_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() - Duration::hours(1),
@@ -227,6 +236,7 @@ mod integration_tests {
 
         // Closed session
         let closed_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -249,6 +259,7 @@ mod integration_tests {
 
         // Active session
         let active_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -257,6 +268,7 @@ mod integration_tests {
 
         // Expired session
         let expired_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() - Duration::hours(1),
@@ -277,6 +289,7 @@ mod integration_tests {
 
         // Active session
         let active_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -285,6 +298,7 @@ mod integration_tests {
 
         // Expired session
         let expired_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() - Duration::hours(1),
@@ -326,6 +340,7 @@ mod integration_tests {
 
         // Session on garage1
         let input1 = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id: garage1.id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -334,6 +349,7 @@ mod integration_tests {
 
         // Session on garage2
         let input2 = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id: garage2.id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -358,6 +374,7 @@ mod integration_tests {
         let (garage_id, pubkey, owner) = setup_garage_and_device(&pool).await;
 
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -380,6 +397,7 @@ mod integration_tests {
 
         // Active session
         let active_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -388,6 +406,7 @@ mod integration_tests {
 
         // Expired session
         let expired_input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() - Duration::hours(1),
@@ -428,6 +447,7 @@ mod integration_tests {
 
         // Session on each garage
         let input1 = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id: garage1.id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -435,6 +455,7 @@ mod integration_tests {
         wg_session_repo::create(&pool, input1).await.unwrap();
 
         let input2 = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id: garage2.id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -458,6 +479,7 @@ mod integration_tests {
         let (garage_id, pubkey, _owner) = setup_garage_and_device(&pool).await;
 
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey,
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -475,6 +497,7 @@ mod integration_tests {
         let (garage_id, pubkey, _owner) = setup_garage_and_device(&pool).await;
 
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey,
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -511,6 +534,7 @@ mod integration_tests {
         // Create two active sessions
         for _ in 0..2 {
             let input = CreateWgSession {
+                id: None,
                 device_pubkey: pubkey.clone(),
                 garage_id,
                 expires_at: Utc::now() + Duration::hours(4),
@@ -537,6 +561,7 @@ mod integration_tests {
 
         // Create and close one session
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -546,6 +571,7 @@ mod integration_tests {
 
         // Create one active session
         let input2 = CreateWgSession {
+            id: None,
             device_pubkey: pubkey.clone(),
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -576,6 +602,7 @@ mod integration_tests {
         let (garage_id, pubkey, owner) = setup_garage_and_device(&pool).await;
 
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey,
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -594,6 +621,7 @@ mod integration_tests {
         let (garage_id, pubkey, _owner) = setup_garage_and_device(&pool).await;
 
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey,
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),
@@ -632,6 +660,7 @@ mod integration_tests {
         let (garage_id, pubkey, _owner) = setup_garage_and_device(&pool).await;
 
         let input = CreateWgSession {
+            id: None,
             device_pubkey: pubkey,
             garage_id,
             expires_at: Utc::now() + Duration::hours(4),

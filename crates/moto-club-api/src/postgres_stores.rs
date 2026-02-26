@@ -79,9 +79,10 @@ impl IpamStore for PostgresIpamStore {
 
         match result {
             Ok(next_ip) => {
-                // Extract the suffix from fd00:moto:2::N
+                // Extract the suffix — accept both fd00:moto:2::N and fd00:6d6f:746f:2::N
                 let suffix = next_ip
                     .strip_prefix("fd00:moto:2::")
+                    .or_else(|| next_ip.strip_prefix("fd00:6d6f:746f:2::"))
                     .ok_or_else(|| IpamError::Storage(format!("invalid IP format: {next_ip}")))?;
 
                 u64::from_str_radix(suffix, 16)
@@ -170,9 +171,10 @@ impl PeerStore for PostgresPeerStore {
 
     fn get_garage(&self, garage_id: &str) -> moto_club_wg::peers::Result<Option<RegisteredGarage>> {
         let pool = self.pool.clone();
-        let garage_uuid = garage_id
-            .parse::<Uuid>()
-            .map_err(|_| PeerError::GarageNotFound(garage_id.to_string()))?;
+        let Ok(garage_uuid) = garage_id.parse::<Uuid>() else {
+            // Invalid UUID means garage doesn't exist
+            return Ok(None);
+        };
 
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current()
@@ -321,7 +323,14 @@ impl SessionStore for PostgresSessionStore {
             SessionError::Storage(format!("invalid garage_id: {}", session.garage_id))
         })?;
 
+        // Parse session ID (sess_{uuid}) to store with the same ID
+        let session_uuid = session
+            .session_id
+            .strip_prefix("sess_")
+            .and_then(|s| Uuid::parse_str(s).ok());
+
         let input = wg_session_repo::CreateWgSession {
+            id: session_uuid,
             device_pubkey: session.device_pubkey.to_base64(),
             garage_id: garage_uuid,
             expires_at: session.expires_at,
@@ -479,8 +488,18 @@ impl SessionStore for PostgresSessionStore {
 // ============================================================================
 
 /// Parse a client overlay IP from a string.
+///
+/// Accepts both the expanded IPv6 form (`fd00:6d6f:746f:2::1`) and the
+/// shorthand form (`fd00:moto:2::1`) used by the DB repo layer.
 fn parse_client_overlay_ip(ip_str: &str) -> Result<OverlayIp, String> {
-    // Extract the suffix from fd00:moto:2::xxx
+    // Try parsing as standard IPv6 first (handles fd00:6d6f:746f:2::N)
+    if let Ok(overlay_ip) = ip_str.parse::<OverlayIp>() {
+        if overlay_ip.is_client() {
+            return Ok(overlay_ip);
+        }
+    }
+
+    // Fall back to shorthand fd00:moto:2::N format
     let suffix = ip_str
         .strip_prefix("fd00:moto:2::")
         .ok_or_else(|| format!("invalid client IP format: {ip_str}"))?;
@@ -492,10 +511,17 @@ fn parse_client_overlay_ip(ip_str: &str) -> Result<OverlayIp, String> {
 
 /// Parse a garage overlay IP from a string.
 ///
-/// The DB stores IPs in format "`fd00:moto:1::{hex}:{hex}:{hex}:{hex`}".
-/// We need to extract the 64-bit host part and create an `OverlayIp`.
+/// Accepts both the expanded IPv6 form (`fd00:6d6f:746f:1::abcd:1234:5678:9abc`)
+/// and the shorthand form (`fd00:moto:1::abcd:1234:5678:9abc`) used by the DB repo layer.
 fn parse_garage_overlay_ip(ip_str: &str) -> Result<OverlayIp, String> {
-    // Garage IPs are in fd00:moto:1:: subnet
+    // Try parsing as standard IPv6 first (handles fd00:6d6f:746f:1::N)
+    if let Ok(overlay_ip) = ip_str.parse::<OverlayIp>() {
+        if overlay_ip.is_garage() {
+            return Ok(overlay_ip);
+        }
+    }
+
+    // Fall back to shorthand fd00:moto:1:: format
     let suffix = ip_str
         .strip_prefix("fd00:moto:1::")
         .ok_or_else(|| format!("invalid garage IP format: {ip_str}"))?;

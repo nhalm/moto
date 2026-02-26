@@ -266,7 +266,28 @@ mod handler_tests {
         unique_owner()
     }
 
-    #[tokio::test]
+    // Helper to create a garage record in the DB (satisfies wg_garages FK)
+    async fn create_test_garage(pool: &moto_club_db::DbPool) -> uuid::Uuid {
+        let id = uuid::Uuid::now_v7();
+        moto_club_db::garage_repo::create(
+            pool,
+            moto_club_db::garage_repo::CreateGarage {
+                id,
+                name: format!("test-{id}"),
+                owner: "test-owner".to_string(),
+                branch: "main".to_string(),
+                image: "moto-registry:5000/moto-garage:latest".to_string(),
+                ttl_seconds: 3600,
+                namespace: format!("moto-garage-{id}"),
+                pod_name: "dev-container".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        id
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn register_device_success() {
         let state = create_test_state().await;
         let app = router().with_state(state);
@@ -302,7 +323,7 @@ mod handler_tests {
         assert!(device.overlay_ip.is_client());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn register_device_without_name() {
         let state = create_test_state().await;
         let app = router().with_state(state);
@@ -336,7 +357,7 @@ mod handler_tests {
         assert!(device.device_name.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn register_device_requires_auth() {
         let state = create_test_state().await;
         let app = router().with_state(state);
@@ -362,7 +383,7 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn get_device_not_found() {
         let state = create_test_state().await;
         let app = router().with_state(state);
@@ -392,7 +413,7 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn register_then_get_device() {
         let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
@@ -435,7 +456,7 @@ mod handler_tests {
         assert_eq!(device.overlay_ip, registered.overlay_ip);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn create_session_device_not_found() {
         let state = create_test_state().await;
         let app = router().with_state(state);
@@ -465,7 +486,7 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn create_session_garage_not_found() {
         let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
@@ -505,11 +526,11 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn create_session_success() {
         let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
-        let app = router().with_state(state);
+        let app = router().with_state(state.clone());
         let owner = test_owner();
 
         // Register a device
@@ -523,8 +544,8 @@ mod handler_tests {
             .await
             .unwrap();
 
-        // Register a garage (using UUID as garage_id)
-        let garage_id = Uuid::now_v7();
+        // Create garage DB record (satisfies FK), then register WG
+        let garage_id = create_test_garage(&state.db_pool).await;
         let garage_key = test_public_key();
         peer_registry
             .register_garage(moto_club_wg::GarageRegistration {
@@ -566,7 +587,7 @@ mod handler_tests {
         assert!(session.garage.overlay_ip.is_garage());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn close_session_not_found() {
         let state = create_test_state().await;
         let app = router().with_state(state);
@@ -587,12 +608,13 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn register_garage_success() {
         let state = create_test_state().await;
-        let app = router().with_state(state);
-        // Use unique garage_id for test isolation
-        let garage_id = format!("test-garage-{}", Uuid::now_v7());
+        let app = router().with_state(state.clone());
+        // Create garage DB record (satisfies wg_garages FK)
+        let garage_id = create_test_garage(&state.db_pool).await;
+        let garage_id = garage_id.to_string();
 
         let key = test_public_key();
         let body = serde_json::json!({
@@ -627,7 +649,7 @@ mod handler_tests {
         assert!(!garage.derp_map.regions().is_empty());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn get_garage_wg_registration_not_found() {
         let state = create_test_state().await;
         let app = router().with_state(state);
@@ -649,14 +671,14 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn get_garage_wg_registration_success() {
         let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
-        let app = router().with_state(state);
+        let app = router().with_state(state.clone());
 
-        // Register a garage first with unique id
-        let garage_id = format!("test-garage-for-get-{}", Uuid::now_v7());
+        // Create garage DB record (satisfies wg_garages FK)
+        let garage_id = create_test_garage(&state.db_pool).await.to_string();
         let key = test_public_key();
         peer_registry
             .register_garage(moto_club_wg::GarageRegistration {
@@ -696,11 +718,11 @@ mod handler_tests {
         assert!(!registration.derp_map.regions().is_empty());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn create_and_close_session() {
         let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
-        let app = router().with_state(state);
+        let app = router().with_state(state.clone());
         let owner = test_owner();
 
         // Register device and garage
@@ -714,7 +736,8 @@ mod handler_tests {
             .await
             .unwrap();
 
-        let garage_id = Uuid::now_v7();
+        // Create garage DB record (satisfies wg_garages FK)
+        let garage_id = create_test_garage(&state.db_pool).await;
         let garage_key = test_public_key();
         peer_registry
             .register_garage(moto_club_wg::GarageRegistration {
@@ -768,7 +791,7 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn get_derp_map_success() {
         let state = create_test_state().await;
         let app = router().with_state(state);
@@ -812,7 +835,7 @@ mod handler_tests {
         assert_eq!(primary_region["nodes"][0]["host"], "derp.moto.dev");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn get_derp_map_requires_auth() {
         let state = create_test_state().await;
         let app = router().with_state(state);
@@ -832,7 +855,7 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn get_derp_map_accepts_k8s_token() {
         // K8s service account tokens should also be accepted
         let state = create_test_state().await;
@@ -853,14 +876,14 @@ mod handler_tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn get_garage_peers_returns_version() {
         let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
-        let app = router().with_state(state);
+        let app = router().with_state(state.clone());
 
-        // First register a garage so we have something to query
-        let garage_id = format!("test-garage-peers-{}", Uuid::now_v7());
+        // Create garage DB record (satisfies wg_garages FK)
+        let garage_id = create_test_garage(&state.db_pool).await.to_string();
         let key = test_public_key();
         peer_registry
             .register_garage(moto_club_wg::GarageRegistration {
@@ -895,14 +918,14 @@ mod handler_tests {
         assert!(result["version"].is_number());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn get_garage_peers_conditional_304() {
         let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
-        let app = router().with_state(state);
+        let app = router().with_state(state.clone());
 
-        // First register a garage
-        let garage_id = format!("test-garage-304-{}", Uuid::now_v7());
+        // Create garage DB record (satisfies wg_garages FK)
+        let garage_id = create_test_garage(&state.db_pool).await.to_string();
         let key = test_public_key();
         peer_registry
             .register_garage(moto_club_wg::GarageRegistration {
@@ -953,14 +976,14 @@ mod handler_tests {
         assert_eq!(response2.status(), StatusCode::NOT_MODIFIED);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn get_garage_peers_conditional_200_on_version_mismatch() {
         let state = create_test_state().await;
         let peer_registry = state.peer_registry.clone();
-        let app = router().with_state(state);
+        let app = router().with_state(state.clone());
 
-        // First register a garage
-        let garage_id = format!("test-garage-200-{}", Uuid::now_v7());
+        // Create garage DB record (satisfies wg_garages FK)
+        let garage_id = create_test_garage(&state.db_pool).await.to_string();
         let key = test_public_key();
         peer_registry
             .register_garage(moto_club_wg::GarageRegistration {
