@@ -55,7 +55,7 @@ let
 
     # Cargo hash - must be updated when dependencies change
     # To update: run `nix build .#moto-keybox-image` and use the hash from the error
-    cargoHash = "sha256-3TF2iIUQ2hjtneqiJhSdYQX/2aDo8pSqvAM57Zl5irM=";
+    cargoHash = "sha256-nGteJhBX3KpykL5Lun8x2fGxu6n8hUSMDuG50hoyjJ4=";
 
     # Post-install: rename binary to match mkBike expectation
     # mkBike expects $out/bin/{name} where name="keybox"
