@@ -177,7 +177,7 @@ struct GarageExtendJson {
 fn create_client(_flags: &GlobalFlags, owner_override: Option<&str>) -> Result<MotoClubClient> {
     // Get base URL from config or environment
     let base_url =
-        std::env::var("MOTO_CLUB_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+        std::env::var("MOTO_CLUB_URL").unwrap_or_else(|_| "http://localhost:18080".to_string());
 
     // Owner: CLI flag > MOTO_USER env var
     let owner = if let Some(o) = owner_override {

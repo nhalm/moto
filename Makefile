@@ -9,7 +9,7 @@
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
 .PHONY: dev dev-cluster dev-cluster-down dev-up dev-down dev-clean
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
-.PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy undeploy-system
+.PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy
 
 help: ## Show all available targets
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make \033[36m<target>\033[0m\n"} /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } /^[a-zA-Z_-]+:.*?## / { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -380,8 +380,12 @@ deploy-secrets: ## Generate and apply K8s secrets
 		--dry-run=client -o yaml | kubectl apply -f - && \
 	echo "All secrets applied to moto-system namespace."
 
-deploy-system: ## Deploy moto-system manifests (kubectl apply -k)
+deploy-system: ## Deploy moto-system manifests (kubectl apply -k) + port-forward
 	kubectl apply -k infra/k8s/moto-system/
+	@# Kill any existing port-forward to moto-club
+	@-pkill -f 'kubectl.*port-forward.*svc/moto-club' 2>/dev/null || true
+	@echo "Starting port-forward: localhost:18080 -> svc/moto-club:8080"
+	@kubectl -n moto-system port-forward svc/moto-club 18080:8080 >/dev/null 2>&1 &
 
 deploy-status: ## Show status of moto-system pods
 	@echo "Waiting for postgres rollout..."
@@ -404,10 +408,3 @@ deploy-status: ## Show status of moto-system pods
 	fi
 	@echo "All pods healthy."
 
-undeploy-system: ## Delete moto-system namespace and RBAC
-	@echo "Deleting moto-system namespace..."
-	-kubectl delete namespace moto-system --ignore-not-found
-	@echo "Deleting cluster-scoped ClusterRole/ClusterRoleBinding..."
-	-kubectl delete clusterrole moto-club --ignore-not-found
-	-kubectl delete clusterrolebinding moto-club --ignore-not-found
-	@echo "moto-system undeployed."

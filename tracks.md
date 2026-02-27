@@ -448,7 +448,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## service-deploy.md v0.4
+## service-deploy.md v0.5
 
 **Status:** In Progress
 
@@ -462,12 +462,13 @@ HOW TO USE THIS FILE:
 - Makefile target: deploy-secrets (idempotent credential generation to .dev/k8s-secrets/ via moto-keybox init + openssl rand; creates namespace if needed; applies 5 K8s secrets: postgres-credentials, keybox-keys, keybox-db-credentials, club-db-credentials, keybox-service-token)
 - Makefile target: deploy-system (kubectl apply -k infra/k8s/moto-system/)
 - Makefile target: deploy-status (wait for rollout, show status, exit 0/1)
-- Makefile target: undeploy-system (delete moto-system namespace AND cluster-scoped moto-club ClusterRole/ClusterRoleBinding; --ignore-not-found for idempotency)
 - Makefile target: deploy-images (v0.4: builds and pushes all three service images to local registry)
 - Makefile target: `deploy` (v0.4: full deployment flow: deploy-images + deploy-secrets + deploy-system + deploy-status)
+- Auto port-forward on deploy, CLI uses port 18080 (v0.5: deploy-system starts background `kubectl port-forward` from localhost:18080 to svc/moto-club:8080; CLI defaults to http://localhost:18080 via MOTO_CLUB_URL; port 18080 avoids conflicts with 80/443/8080)
+- Drop `undeploy-system` target (v0.5: use `dev-cluster-down` instead; cluster deletion cleans up everything including port-forward)
 
 **Remaining:**
-(none - service-deploy.md v0.4 implementation complete)
+(none - service-deploy.md v0.5 implementation complete)
 
 ---
 
