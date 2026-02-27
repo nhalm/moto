@@ -223,6 +223,7 @@ test-integration: test-db-down test-db-up test-db-migrate ## Fresh database cycl
 	exit $$status
 
 test-all: ## Every test: unit + integration + ignored (K8s) — no test left behind
+	@k3d cluster list 2>/dev/null | grep -q moto || { echo "Error: k3d cluster 'moto' is not running. Start it with: make dev-cluster"; exit 1; }
 	$(MAKE) test-db-down test-db-up test-db-migrate
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration; \
 	status=$$?; \
@@ -247,6 +248,7 @@ dev-cluster: ## Create k3d cluster (idempotent)
 
 dev-cluster-down: ## Delete the k3d cluster and local registry
 	k3d cluster delete moto
+	k3d registry delete moto-registry 2>/dev/null || true
 
 dev-up: dev-db-up dev-keybox-init dev-db-migrate ## Start postgres + keybox + club
 	@echo "Starting keybox in background..."
