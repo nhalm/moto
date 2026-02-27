@@ -180,24 +180,27 @@ struct GarageExtendJson {
 
 /// Create a moto-club client from configuration.
 ///
-/// `owner_override` takes precedence over the `MOTO_USER` env var when set
-/// (e.g., from `--owner` flag on `garage open`).
-fn create_client(_flags: &GlobalFlags, owner_override: Option<&str>) -> Result<MotoClubClient> {
+/// Owner precedence: `--owner` flag > `MOTO_USER` env var > config file `user` > error.
+fn create_client(flags: &GlobalFlags, owner_override: Option<&str>) -> Result<MotoClubClient> {
     // Get base URL from config or environment
     let base_url =
         std::env::var("MOTO_CLUB_URL").unwrap_or_else(|_| "http://localhost:18080".to_string());
 
-    // Owner: CLI flag > MOTO_USER env var
+    // Owner: CLI flag > MOTO_USER env var > config file user > error
     let owner = if let Some(o) = owner_override {
         o.to_string()
+    } else if let Ok(u) = std::env::var("MOTO_USER") {
+        u
+    } else if let Some(u) = flags.config.user.as_deref() {
+        u.to_string()
     } else {
-        std::env::var("MOTO_USER").map_err(|_| {
-            CliError::invalid_input(
-                "MOTO_USER environment variable is required.\n\n\
-                 Set MOTO_USER to your username, e.g.:\n\
-                 export MOTO_USER=\"your-username\"",
-            )
-        })?
+        return Err(CliError::invalid_input(
+            "No user identity configured.\n\n\
+             Set one of the following (in precedence order):\n\
+             1. --owner flag on garage open\n\
+             2. MOTO_USER environment variable\n\
+             3. user field in ~/.config/moto/config.toml",
+        ));
     };
 
     let config = MotoClubConfig::new(base_url, owner);

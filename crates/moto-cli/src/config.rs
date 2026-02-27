@@ -66,6 +66,8 @@ pub struct GarageConfig {
 /// Top-level configuration structure.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Config {
+    /// Default owner for garage commands
+    pub user: Option<String>,
     /// Output configuration
     #[serde(default)]
     pub output: OutputConfig,
@@ -151,6 +153,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
+        assert!(config.user.is_none());
         assert_eq!(config.output.color, ColorMode::Auto);
         assert!(config.garage.ttl.is_none());
     }
@@ -158,6 +161,8 @@ mod tests {
     #[test]
     fn test_parse_config() {
         let toml = r#"
+user = "nick"
+
 [output]
 color = "always"
 
@@ -165,6 +170,7 @@ color = "always"
 ttl = "8h"
 "#;
         let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.user, Some("nick".to_string()));
         assert_eq!(config.output.color, ColorMode::Always);
         assert_eq!(config.garage.ttl, Some("8h".to_string()));
     }
@@ -176,8 +182,18 @@ ttl = "8h"
 ttl = "2h"
 "#;
         let config: Config = toml::from_str(toml).unwrap();
+        assert!(config.user.is_none());
         assert_eq!(config.output.color, ColorMode::Auto);
         assert_eq!(config.garage.ttl, Some("2h".to_string()));
+    }
+
+    #[test]
+    fn test_parse_user_only() {
+        let toml = r#"user = "alice""#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.user, Some("alice".to_string()));
+        assert_eq!(config.output.color, ColorMode::Auto);
+        assert!(config.garage.ttl.is_none());
     }
 
     #[test]
