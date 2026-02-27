@@ -192,19 +192,7 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 
 ### Phony Targets
 
-All targets should be declared `.PHONY` since they don't produce files:
-
-```makefile
-.PHONY: help install build test check fmt lint clean fix ci run
-.PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
-.PHONY: build-bike test-bike
-.PHONY: build-club push-club build-keybox push-keybox
-.PHONY: registry-start registry-stop
-.PHONY: test-db-up test-db-down test-db-migrate test-integration test-all test-ci
-.PHONY: dev-cluster dev-cluster-down dev-up dev-down dev-clean dev-db-up dev-db-down dev-db-migrate
-.PHONY: dev-keybox-init dev-keybox dev-club dev-garage-image
-.PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy undeploy-system
-```
+All targets should be declared `.PHONY` since they don't produce files.
 
 ## Changelog
 
