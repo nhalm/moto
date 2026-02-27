@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
-| Status | Ripping |
+| Version | 0.5 |
+| Status | Ready to Rip |
 | Last Updated | 2026-02-25 |
 
 ## Overview
@@ -245,23 +245,17 @@ make deploy-system
 # 5. Wait for rollout and verify
 make deploy-status
 
-# 6. Port-forward for CLI access
-kubectl -n moto-system port-forward svc/moto-club 8080:8080 &
-
-# 7. Use it
+# 6. Use it
 moto garage open
 ```
 
 ### CLI Access
 
-The CLI needs to reach moto-club. Two options:
+`deploy-system` automatically starts a background `kubectl port-forward` from `localhost:18080` to `svc/moto-club:8080` in the `moto-system` namespace. The CLI defaults to `http://localhost:18080` for moto-club API access.
 
-| Option | Pros | Cons |
-|--------|------|------|
-| Port-forward | Simple, no config changes | Background process, can drop |
-| NodePort service | Stable, no background process | Requires additional Service resource |
+Port 18080 is chosen to avoid conflicts with common services on 80, 443, and 8080.
 
-V1 uses port-forward. NodePort can be added later if needed.
+`dev-cluster-down` tears down the cluster (and the port-forward with it).
 
 ### Makefile Targets
 
@@ -272,7 +266,6 @@ V1 uses port-forward. NodePort can be added later if needed.
 | `deploy-system` | `kubectl apply -k infra/k8s/moto-system/` |
 | `deploy-status` | Wait for all Deployments to be available, then show pod/service status. Exit 0 if all healthy, exit 1 if any pod not ready. |
 | `deploy` | Full deploy: `deploy-images` + `deploy-secrets` + `deploy-system` + `deploy-status` |
-| `undeploy-system` | Delete moto-system namespace AND cluster-scoped ClusterRole/ClusterRoleBinding for moto-club |
 
 **Note:** `deploy-images` combines the individual `build-*` and `push-*` targets from [makefile.md](makefile.md). Without it, pods will enter `ImagePullBackOff` because the images don't exist in the registry.
 
@@ -312,6 +305,12 @@ V1 uses port-forward. NodePort can be added later if needed.
 - [garage-isolation.md](garage-isolation.md) — What K8s resources moto-club creates per garage
 
 ## Changelog
+
+### v0.5 (2026-02-26)
+- `deploy-system` automatically starts a port-forward from `localhost:18080` to moto-club
+- CLI defaults to `http://localhost:18080`
+- Remove manual port-forward step from deployment flow
+- Drop `undeploy-system` — use `dev-cluster-down` instead
 
 ### v0.4 (2026-02-25)
 - Fix Status from Bare Frame to Ripping (implementation complete per tracks.md)

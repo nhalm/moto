@@ -175,7 +175,6 @@ deploy-secrets:      # Generate and apply K8s secrets to moto-system namespace
 deploy-system:       # Deploy all moto-system components (kubectl apply -k)
 deploy-status:       # Show status of moto-system pods
 deploy:              # Full deploy: deploy-images + deploy-secrets + deploy-system + deploy-status
-undeploy-system:     # Delete moto-system namespace
 ```
 
 `deploy-images` builds and pushes all three images (`moto-garage`, `moto-club`, `moto-keybox`) to the local registry. It is a prerequisite for `deploy-system` — without it, pods will enter `ImagePullBackOff`.
@@ -189,10 +188,6 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 - Use hyphens, not underscores: `build-garage` not `build_garage`
 - Pattern: `<action>-<target>` (e.g., `build-garage`, `test-garage`, `push-garage`)
 - Keep names short but clear
-
-### Phony Targets
-
-All targets should be declared `.PHONY` since they don't produce files.
 
 ## Changelog
 
