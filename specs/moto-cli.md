@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.7 |
+| Version | 0.8 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-24 |
+| Last Updated | 2026-02-27 |
 
 ## Overview
 
@@ -152,13 +152,31 @@ To connect: moto garage enter bold-mongoose
 Connects to a garage terminal session.
 
 ```
-Usage: moto garage enter <name>
+Usage: moto garage enter <name> [options]
+
+Options:
+  --kubectl    Connect via kubectl exec instead of WireGuard tunnel
 ```
 
-**Example:**
+**Connection modes:**
+- **Default (no flag):** WireGuard tunnel (existing behavior, unchanged).
+- **`--kubectl`:** Skips WireGuard entirely. Connects via `kubectl exec -it -n {namespace} {pod_name} -- tmux attach-session -t garage`. Useful for local dev before the garage pod's WireGuard daemon is running.
+
+`namespace` and `pod_name` come from the `get_garage` API response (falling back to `moto-garage-{id[..8]}` and `dev-container` if empty).
+
+The `--kubectl` flag also works on `garage open` (when `--no-attach` is not set) to attach via kubectl after creation.
+
+**Example (default, WireGuard):**
 ```
 $ moto garage enter bold-mongoose
 Connecting to bold-mongoose...
+[garage: bold-mongoose] $
+```
+
+**Example (kubectl):**
+```
+$ moto garage enter bold-mongoose --kubectl
+Connecting to bold-mongoose via kubectl...
 [garage: bold-mongoose] $
 ```
 
@@ -633,6 +651,12 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.8 (2026-02-27)
+- Add `--kubectl` flag to `garage enter`: connects via `kubectl exec -it -n {namespace} {pod_name} -- tmux attach-session -t garage` instead of WireGuard tunnel
+- Add `--kubectl` flag to `garage open`: same kubectl attach path when `--no-attach` is not set
+- `get_garage` API response provides namespace and pod_name; defaults to `moto-garage-{id[..8]}` / `dev-container` if empty
+- WireGuard path is unchanged; `--kubectl` is a separate, explicit mode
 
 ### v0.7 (2026-02-24)
 - Docs: Update `garage open` output format and JSON to match garage-lifecycle.md v0.4 (add id, branch, expires_at; remove engine)
