@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.0 |
+| Version | 1.2 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-18 |
+| Last Updated | 2026-02-27 |
 
 ## Overview
 
@@ -101,15 +101,15 @@ Modular structure with packages and modules:
 
 ```
 moto/
-├── flake.nix                    # Root flake - devShells + imports infra/pkgs
-├── flake.lock                   # Pinned dependencies
+├── flake.nix                    # Root flake - devShells + crane + imports infra/pkgs
+├── flake.lock                   # Pinned dependencies (includes crane input)
 └── infra/
     ├── pkgs/                    # Container package definitions
     │   ├── default.nix          # Exports all packages
     │   ├── moto-garage.nix      # Garage container definition
     │   ├── moto-bike.nix        # Bike base image + mkBike helper
-    │   ├── moto-club.nix        # Club engine image (bike + binary)
-    │   └── moto-keybox.nix      # Keybox engine image (bike + binary)
+    │   ├── moto-club.nix        # Club engine image (crane + bike)
+    │   └── moto-keybox.nix      # Keybox engine image (crane + bike)
     ├── modules/                 # Reusable module components
     │   ├── base.nix             # Core system tools
     │   ├── dev-tools.nix        # Development tooling
@@ -147,11 +147,13 @@ src/**
 
 **Key insight:** Nix handles the build-vs-runtime separation automatically. The build stage has full toolchain; the output is a minimal closure.
 
-### Complete Flake Example (Reference)
+**Rust builds use crane.** Engine packages (`moto-club.nix`, `moto-keybox.nix`) receive `craneLib` from `flake.nix` and use `craneLib.buildPackage` instead of `rustPlatform.buildRustPackage`. This eliminates manual `cargoHash` maintenance — crane vendors dependencies directly from `Cargo.lock`.
 
-> **Note:** This is a reference implementation showing the ideal pattern with crane for cached Rust builds. The current implementation uses a simpler approach without crane. Consider adopting crane when build times become a bottleneck.
+### Complete Flake Example
 
-Full `flake.nix` with crane for cached Rust builds:
+Engine binaries (moto-club, moto-keybox) MUST be built with crane. Crane reads `Cargo.lock` directly to vendor dependencies — no manual `cargoHash` required. When `Cargo.lock` changes (adding/removing dependencies), builds just work without updating hashes.
+
+`flake.nix` with crane for Rust builds:
 
 ```nix
 {
@@ -662,25 +664,29 @@ docker manifest create ghcr.io/nhalm/moto-club:v1.0.0 \
 | Nix store | Cachix (`moto.cachix.org`) | Built Nix derivations |
 | Cargo deps | Crane `buildDepsOnly` | Rust dependency artifacts |
 
-**Note:** sccache does NOT work with Nix sandboxed builds. Use `crane` for Rust caching:
+**Note:** sccache does NOT work with Nix sandboxed builds. Crane provides Rust caching by building dependencies separately:
 
 ```nix
-# Using crane for cached Rust builds
-let
-  craneLib = crane.lib.${system};
+# In flake.nix: create craneLib and shared artifacts
+craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+src = craneLib.cleanCargoSource ./.;
+commonArgs = {
+  inherit src;
+  strictDeps = true;
+  nativeBuildInputs = [ pkgs.pkg-config ];
+  buildInputs = [ pkgs.openssl ];
+  OPENSSL_NO_VENDOR = "1";
+};
+cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-  # Build dependencies separately (cached)
-  cargoArtifacts = craneLib.buildDepsOnly {
-    src = ./.;
-  };
-
-  # Build package using cached deps
-  moto-club = craneLib.buildPackage {
-    inherit cargoArtifacts;
-    src = ./.;
-  };
-in { ... }
+# In moto-club.nix: build using shared artifacts (no cargoHash needed)
+craneLib.buildPackage (commonArgs // {
+  inherit cargoArtifacts;
+  cargoExtraArgs = "--package moto-club --bin moto-club";
+});
 ```
+
+**Engine packages receive `craneLib`, `commonArgs`, and `cargoArtifacts` from flake.nix** — they do not create their own. This ensures dependency artifacts are built once and shared across all engine builds.
 
 **Layer caching:**
 
@@ -1045,6 +1051,14 @@ nix path-info --json .#moto-club-image | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v1.2 (2026-02-27)
+- Switch engine builds from `rustPlatform.buildRustPackage` (manual `cargoHash`) to crane (`craneLib.buildPackage`)
+- Crane reads `Cargo.lock` directly — no manual hash updates when dependencies change
+- Add `crane` flake input to `flake.nix`; pass `craneLib`, `commonArgs`, and `cargoArtifacts` to engine packages
+- Engine packages (`moto-club.nix`, `moto-keybox.nix`) receive crane args and use `craneLib.buildPackage`
+- Remove `cargoHash` from engine packages entirely
+- Dependencies are built once via `craneLib.buildDepsOnly` and shared across all engine builds
 
 ### v1.1 (2026-02-24)
 - Docs: Update registry port from 5000 to 5050 (matches local-cluster.md v0.3)
