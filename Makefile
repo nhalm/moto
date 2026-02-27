@@ -7,7 +7,7 @@
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
-.PHONY: dev dev-cluster dev-up dev-down dev-clean
+.PHONY: dev dev-cluster dev-cluster-down dev-up dev-down dev-clean
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
 .PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy undeploy-system
 
@@ -244,6 +244,9 @@ dev: ## Start full dev stack via moto CLI
 
 dev-cluster: ## Create k3d cluster (idempotent)
 	cargo run --bin moto -- cluster init
+
+dev-cluster-down: ## Delete the k3d cluster and local registry
+	k3d cluster delete moto
 
 dev-up: dev-db-up dev-keybox-init dev-db-migrate ## Start postgres + keybox + club
 	@echo "Starting keybox in background..."
