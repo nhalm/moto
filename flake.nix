@@ -9,9 +9,10 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crane.url = "github:ipetkov/crane";
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, crane }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = [ (import rust-overlay) ];
@@ -20,8 +21,34 @@
         rustToolchain = pkgs.rust-bin.stable."1.85.0".minimal.override {
           extensions = [ "rust-src" "rust-analyzer" "rustfmt" "clippy" ];
         };
+
+        # Crane for Rust builds — reads Cargo.lock directly, no manual cargoHash
+        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+
+        # Source filtering: Cargo/Rust files + SQL migrations (for sqlx::migrate!)
+        src = let
+          sqlFilter = path: _type: builtins.match ".*\\.sql$" path != null;
+        in
+          pkgs.lib.cleanSourceWith {
+            src = ./.;
+            filter = path: type:
+              (craneLib.filterCargoSources path type) || (sqlFilter path type);
+          };
+
+        # Shared build args for all engine packages
+        commonArgs = {
+          inherit src;
+          strictDeps = true;
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs = with pkgs; [ openssl ];
+          OPENSSL_NO_VENDOR = "1";
+        };
+
+        # Build deps once, shared across all engine builds
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
         # Import container packages from infra/pkgs/
-        infraPkgs = import ./infra/pkgs { inherit pkgs rustToolchain; };
+        infraPkgs = import ./infra/pkgs { inherit pkgs rustToolchain craneLib commonArgs cargoArtifacts; };
       in {
         # Container packages (Linux only - both x86_64 and aarch64)
         packages = if pkgs.stdenv.isLinux then {

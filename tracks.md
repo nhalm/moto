@@ -109,7 +109,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## container-system.md v1.0
+## container-system.md v1.2
 
 **Status:** In Progress
 
@@ -118,6 +118,7 @@ HOW TO USE THIS FILE:
 - Create `infra/pkgs/moto-keybox.nix` (bike base + moto-keybox-server binary, using mkBike helper)
 - Export `moto-keybox-image` from flake.nix (default.nix and flake.nix updated)
 - Fix `infra/pkgs/moto-club.nix` cargoHash placeholder (replaced with real hash; also fixed moto-keybox.nix; committed Cargo.lock to git for Nix flake source access)
+- Switch engine builds to crane (v1.2: add crane flake input; craneLib, commonArgs, cargoArtifacts in flake.nix; moto-club.nix and moto-keybox.nix use craneLib.buildPackage; removed cargoHash from engine packages; deps built once via buildDepsOnly and shared)
 
 **Remaining:**
 - CI workflow: .github/workflows/containers.yml (future)

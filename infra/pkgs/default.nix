@@ -1,11 +1,11 @@
 # infra/pkgs/default.nix
 # Exports all container package definitions
-{ pkgs, rustToolchain }:
+{ pkgs, rustToolchain, craneLib, commonArgs, cargoArtifacts }:
 
 let
   motoBike = import ./moto-bike.nix { inherit pkgs; };
-  motoClub = import ./moto-club.nix { inherit pkgs rustToolchain; };
-  motoKeybox = import ./moto-keybox.nix { inherit pkgs rustToolchain; };
+  motoClub = import ./moto-club.nix { inherit pkgs craneLib commonArgs cargoArtifacts; };
+  motoKeybox = import ./moto-keybox.nix { inherit pkgs craneLib commonArgs cargoArtifacts; };
 in {
   moto-garage = import ./moto-garage.nix { inherit pkgs rustToolchain; };
 
