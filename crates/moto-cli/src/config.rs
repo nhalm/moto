@@ -80,10 +80,23 @@ impl Config {
     /// Returns the path to the config file.
     ///
     /// Uses `$XDG_CONFIG_HOME/moto/config.toml` if set,
-    /// otherwise falls back to `~/.config/moto/config.toml`.
+    /// otherwise falls back to `$HOME/.config/moto/config.toml`.
+    ///
+    /// Does NOT use `dirs::config_dir()` which returns
+    /// `~/Library/Application Support/` on macOS.
     #[must_use]
     pub fn config_path() -> Option<PathBuf> {
-        dirs::config_dir().map(|p| p.join("moto").join("config.toml"))
+        if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+            if !xdg.is_empty() {
+                return Some(PathBuf::from(xdg).join("moto").join("config.toml"));
+            }
+        }
+        std::env::var("HOME").ok().map(|home| {
+            PathBuf::from(home)
+                .join(".config")
+                .join("moto")
+                .join("config.toml")
+        })
     }
 
     /// Loads config from the default location.
@@ -237,5 +250,26 @@ ttl = "2h"
         assert!(ColorMode::Always.should_colorize());
 
         // Auto mode depends on terminal detection (we can't easily test this)
+    }
+
+    #[test]
+    fn test_config_path_uses_home_not_dirs() {
+        // config_path should return $HOME/.config/moto/config.toml
+        // NOT ~/Library/Application Support/ (which dirs::config_dir returns on macOS)
+        let path = Config::config_path();
+        assert!(
+            path.is_some(),
+            "config_path should return Some when HOME is set"
+        );
+        let path = path.unwrap();
+        let path_str = path.to_string_lossy();
+        assert!(
+            path_str.ends_with(".config/moto/config.toml"),
+            "config path should end with .config/moto/config.toml, got: {path_str}"
+        );
+        assert!(
+            !path_str.contains("Library/Application Support"),
+            "config path should NOT use Library/Application Support, got: {path_str}"
+        );
     }
 }

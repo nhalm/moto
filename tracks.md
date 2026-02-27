@@ -126,7 +126,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-cli.md v0.9
+## moto-cli.md v0.10
 
 **Status:** In Progress
 
@@ -159,9 +159,10 @@ HOW TO USE THIS FILE:
 - `moto dev up` command implementation (v0.6: 9-step orchestration with --no-garage/--rebuild-image/--skip-image flags; DevConfig env var methods for subprocess spawning; prerequisites/cluster/image/postgres/keys/migrations/keybox/club/garage steps; subprocess management with tokio::process; health check with exponential backoff; Ctrl-C handling kills subprocesses; JSON output; idempotent restart)
 - `--kubectl` flag on `garage enter` and `garage open` (v0.8: connects via `kubectl exec -it -n {namespace} {pod_name} -- tmux attach-session -t garage` instead of WireGuard tunnel; namespace/pod_name from API response with fallback to `moto-garage-{id[..8]}`/`dev-container`; respects --context flag)
 - Config file `user` field and MOTO_USER env var for user identity (v0.9: Config.user top-level field in config.toml; owner precedence: --owner flag > MOTO_USER env var > config file user > error with actionable message)
+- Fix: Config path uses `$HOME/.config/moto/config.toml` directly instead of `dirs::config_dir()` (v0.10: avoids macOS `~/Library/Application Support/` path; respects `$XDG_CONFIG_HOME` if set; removed `dirs` dependency from moto-cli)
 
 **Remaining:**
-(none - moto-cli.md v0.9 implementation complete)
+(none - moto-cli.md v0.10 implementation complete)
 
 ---
 
