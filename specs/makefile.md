@@ -70,7 +70,6 @@ The output should list every target with its comment, grouped by section headers
 install:
 	git config core.hooksPath .githooks
 	cargo build --release --bin moto
-	mkdir -p ~/.local/bin
 	cp target/release/moto ~/.local/bin/moto
 ```
 

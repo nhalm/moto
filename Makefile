@@ -18,7 +18,8 @@ help: ## Show all available targets
 
 install: ## Set up local development environment
 	git config core.hooksPath .githooks
-	cargo install --path crates/moto-cli
+	cargo build --release --bin moto
+	cp target/release/moto ~/.local/bin/moto
 
 ##@ Development
 
