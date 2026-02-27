@@ -44,7 +44,7 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
-use crate::client::{ClientError, MotoClubClient, MotoClubConfig};
+use crate::client::{ClientError, DEFAULT_MOTO_CLUB_URL, MotoClubClient, MotoClubConfig};
 use crate::ttyd::{DEFAULT_TTYD_PORT, TtydClient, TtydConfig, TtydError};
 use crate::{TunnelError, TunnelManager, TunnelSession, TunnelStatus};
 
@@ -108,7 +108,7 @@ pub struct EnterConfig {
     /// Force DERP only (skip direct connection attempts).
     pub derp_only: bool,
 
-    /// moto-club base URL (e.g., `http://localhost:8080`).
+    /// moto-club base URL (e.g., `http://localhost:18080`).
     pub moto_club_url: String,
 
     /// Owner/username for authentication.
@@ -123,7 +123,7 @@ impl Default for EnterConfig {
             session_ttl: None,
             derp_only: std::env::var("MOTO_WGTUNNEL_DERP_ONLY").is_ok(),
             moto_club_url: std::env::var("MOTO_CLUB_URL")
-                .unwrap_or_else(|_| "http://localhost:8080".to_string()),
+                .unwrap_or_else(|_| DEFAULT_MOTO_CLUB_URL.to_string()),
             owner: std::env::var("MOTO_USER").unwrap_or_default(),
         }
     }

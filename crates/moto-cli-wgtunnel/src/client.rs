@@ -34,7 +34,7 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 /// Default moto-club base URL for local development.
-pub const DEFAULT_MOTO_CLUB_URL: &str = "http://localhost:8080";
+pub const DEFAULT_MOTO_CLUB_URL: &str = "http://localhost:18080";
 
 /// Default request timeout in seconds.
 pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
@@ -135,7 +135,7 @@ impl MotoClubConfig {
     /// Create configuration from environment variables.
     ///
     /// Uses:
-    /// - `MOTO_CLUB_URL` for base URL (default: `http://localhost:8080`)
+    /// - `MOTO_CLUB_URL` for base URL (default: `http://localhost:18080`)
     /// - `MOTO_USER` for owner (required)
     ///
     /// # Errors

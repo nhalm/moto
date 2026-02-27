@@ -146,7 +146,7 @@ moto-club needs a ServiceAccount with a ClusterRole granting cluster-wide access
 
 **Note:** `namespaces` needs `patch` for label updates (e.g., TTL extension via `moto garage extend`).
 
-**Important:** The ClusterRole and ClusterRoleBinding are cluster-scoped resources — they are NOT deleted by `kubectl delete namespace`. The `undeploy-system` target must explicitly clean these up.
+**Important:** The ClusterRole and ClusterRoleBinding are cluster-scoped resources — they are NOT deleted by `kubectl delete namespace`. They are cleaned up when the cluster is deleted via `dev-cluster-down`.
 
 ### Secrets
 

@@ -247,6 +247,7 @@ dev-cluster: ## Create k3d cluster (idempotent)
 	cargo run --bin moto -- cluster init
 
 dev-cluster-down: ## Delete the k3d cluster and local registry
+	@-pkill -f 'kubectl.*port-forward.*svc/moto-club' 2>/dev/null || true
 	k3d cluster delete moto
 	k3d registry delete moto-registry 2>/dev/null || true
 
