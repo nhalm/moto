@@ -126,7 +126,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## moto-cli.md v0.10
+## moto-cli.md v0.11
 
 **Status:** In Progress
 
@@ -160,9 +160,10 @@ HOW TO USE THIS FILE:
 - `--kubectl` flag on `garage enter` and `garage open` (v0.8: connects via `kubectl exec -it -n {namespace} {pod_name} -- tmux attach-session -t garage` instead of WireGuard tunnel; namespace/pod_name from API response with fallback to `moto-garage-{id[..8]}`/`dev-container`; respects --context flag)
 - Config file `user` field and MOTO_USER env var for user identity (v0.9: Config.user top-level field in config.toml; owner precedence: --owner flag > MOTO_USER env var > config file user > error with actionable message)
 - Fix: Config path uses `$HOME/.config/moto/config.toml` directly instead of `dirs::config_dir()` (v0.10: avoids macOS `~/Library/Application Support/` path; respects `$XDG_CONFIG_HOME` if set; removed `dirs` dependency from moto-cli)
+- Fix: `--kubectl` uses `tmux new-session -A -s garage` instead of `tmux attach-session -t garage` (v0.11: `-A` creates the session if it doesn't exist, matching ttyd behavior)
 
 **Remaining:**
-(none - moto-cli.md v0.10 implementation complete)
+(none - moto-cli.md v0.11 implementation complete)
 
 ---
 

@@ -771,8 +771,9 @@ fn resolve_pod_name(pod: &str) -> String {
 
 /// Connect to a garage via `kubectl exec`.
 ///
-/// Runs `kubectl exec -it -n {namespace} {pod_name} -- tmux attach-session -t garage`
-/// which takes over the terminal until the user detaches.
+/// Runs `kubectl exec -it -n {namespace} {pod_name} -- tmux new-session -A -s garage`
+/// which takes over the terminal until the user detaches. The `-A` flag attaches to
+/// an existing `garage` session or creates one if it doesn't exist.
 async fn kubectl_exec(namespace: &str, pod_name: &str, flags: &GlobalFlags) -> Result<()> {
     let mut cmd = tokio::process::Command::new("kubectl");
 
@@ -789,8 +790,9 @@ async fn kubectl_exec(namespace: &str, pod_name: &str, flags: &GlobalFlags) -> R
         pod_name,
         "--",
         "tmux",
-        "attach-session",
-        "-t",
+        "new-session",
+        "-A",
+        "-s",
         "garage",
     ]);
 
