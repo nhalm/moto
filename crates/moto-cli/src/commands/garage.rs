@@ -59,12 +59,20 @@ pub enum GarageAction {
         /// Create garage but don't connect to it
         #[arg(long)]
         no_attach: bool,
+
+        /// Connect via kubectl exec instead of `WireGuard` tunnel
+        #[arg(long)]
+        kubectl: bool,
     },
 
     /// Connect to a garage terminal session
     Enter {
         /// Name of the garage to enter
         name: String,
+
+        /// Connect via kubectl exec instead of `WireGuard` tunnel
+        #[arg(long)]
+        kubectl: bool,
     },
 
     /// Close an existing garage
@@ -360,6 +368,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             with_postgres,
             with_redis,
             no_attach,
+            kubectl,
         } => {
             let client = create_client(flags, owner.as_deref())?;
             let name = crate::names::generate();
@@ -420,8 +429,20 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 if no_attach {
                     // --no-attach: just show how to connect later
                     println!("To connect: moto garage enter {}", garage.name);
+                } else if kubectl {
+                    // --kubectl: connect via kubectl exec
+                    println!(
+                        "Connecting via kubectl... (use `moto garage enter {}` to reconnect)",
+                        garage.name
+                    );
+                    println!();
+
+                    let namespace = resolve_namespace(&garage.namespace, &garage.id);
+                    let pod_name = resolve_pod_name(&garage.pod_name);
+
+                    kubectl_exec(&namespace, &pod_name, flags).await?;
                 } else {
-                    // Default: connect to the garage
+                    // Default: connect via WireGuard tunnel
                     println!(
                         "Connecting... (use `moto garage enter {}` to reconnect)",
                         garage.name
@@ -468,71 +489,83 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             }
         }
 
-        GarageAction::Enter { name } => {
+        GarageAction::Enter { name, kubectl } => {
             let client = create_client(flags, None)?;
 
-            // Check if garage exists first
-            client
+            // Get garage details
+            let garage = client
                 .get_garage(&name)
                 .await
                 .map_err(client_error_to_cli_error)?;
 
-            if !flags.quiet && !flags.json {
-                eprintln!("Connecting to garage {name}...");
-            }
-
-            // Initialize tunnel manager
-            let manager = TunnelManager::new()
-                .await
-                .map_err(|e| CliError::general(format!("failed to initialize tunnel: {e}")))?;
-
-            // Configure enter
-            let config = EnterConfig::default();
-            let progress = ConsoleProgress::new(flags.quiet);
-
-            // Enter the garage
-            let session = Box::pin(enter_garage(&manager, &name, config, &progress))
-                .await
-                .map_err(|e| match e {
-                    EnterError::GarageNotFound(_) => CliError::not_found(format!(
-                        "Garage '{name}' not found.\n\nTry: moto garage list"
-                    )),
-                    EnterError::NotAuthorized(_) => CliError::general(format!(
-                        "Not authorized to access garage '{name}'.\n\nCheck your permissions."
-                    )),
-                    EnterError::ConnectionFailed(msg) => CliError::general(format!(
-                        "Connection failed: {msg}\n\nTry: moto garage logs {name}"
-                    )),
-                    _ => CliError::general(e.to_string()),
-                })?;
-
-            if flags.json {
-                // JSON mode: output session info without connecting
-                let json = GarageEnterJson {
-                    name: session.garage_name().to_string(),
-                    session_id: session.session_id().to_string(),
-                    client_ip: String::new(), // Not exposed on session handle
-                    garage_ip: session.garage_ip().to_string(),
-                    path_type: "derp".to_string(), // Default for now
-                    path_detail: "primary".to_string(),
-                };
-                println!("{}", serde_json::to_string_pretty(&json)?);
-            } else {
-                // Interactive mode: connect to ttyd terminal
-                if !flags.quiet {
-                    eprintln!("  Opening terminal session... done");
-                    eprintln!();
+            if kubectl {
+                // --kubectl: connect via kubectl exec
+                if !flags.quiet && !flags.json {
+                    eprintln!("Connecting to {name} via kubectl...");
                 }
 
-                // Connect to ttyd - this blocks until the terminal session ends
-                session.connect_ttyd().await.map_err(|e| match e {
-                    EnterError::TtydFailed(msg) => CliError::general(format!(
-                        "Terminal connection failed: {msg}\n\n\
-                         This may happen if the garage is still starting up.\n\
-                         Try: moto garage logs {name}"
-                    )),
-                    _ => CliError::general(e.to_string()),
-                })?;
+                let namespace = resolve_namespace(&garage.namespace, &garage.id);
+                let pod_name = resolve_pod_name(&garage.pod_name);
+
+                kubectl_exec(&namespace, &pod_name, flags).await?;
+            } else {
+                if !flags.quiet && !flags.json {
+                    eprintln!("Connecting to garage {name}...");
+                }
+
+                // Initialize tunnel manager
+                let manager = TunnelManager::new()
+                    .await
+                    .map_err(|e| CliError::general(format!("failed to initialize tunnel: {e}")))?;
+
+                // Configure enter
+                let config = EnterConfig::default();
+                let progress = ConsoleProgress::new(flags.quiet);
+
+                // Enter the garage
+                let session = Box::pin(enter_garage(&manager, &name, config, &progress))
+                    .await
+                    .map_err(|e| match e {
+                        EnterError::GarageNotFound(_) => CliError::not_found(format!(
+                            "Garage '{name}' not found.\n\nTry: moto garage list"
+                        )),
+                        EnterError::NotAuthorized(_) => CliError::general(format!(
+                            "Not authorized to access garage '{name}'.\n\nCheck your permissions."
+                        )),
+                        EnterError::ConnectionFailed(msg) => CliError::general(format!(
+                            "Connection failed: {msg}\n\nTry: moto garage logs {name}"
+                        )),
+                        _ => CliError::general(e.to_string()),
+                    })?;
+
+                if flags.json {
+                    // JSON mode: output session info without connecting
+                    let json = GarageEnterJson {
+                        name: session.garage_name().to_string(),
+                        session_id: session.session_id().to_string(),
+                        client_ip: String::new(), // Not exposed on session handle
+                        garage_ip: session.garage_ip().to_string(),
+                        path_type: "derp".to_string(), // Default for now
+                        path_detail: "primary".to_string(),
+                    };
+                    println!("{}", serde_json::to_string_pretty(&json)?);
+                } else {
+                    // Interactive mode: connect to ttyd terminal
+                    if !flags.quiet {
+                        eprintln!("  Opening terminal session... done");
+                        eprintln!();
+                    }
+
+                    // Connect to ttyd - this blocks until the terminal session ends
+                    session.connect_ttyd().await.map_err(|e| match e {
+                        EnterError::TtydFailed(msg) => CliError::general(format!(
+                            "Terminal connection failed: {msg}\n\n\
+                             This may happen if the garage is still starting up.\n\
+                             Try: moto garage logs {name}"
+                        )),
+                        _ => CliError::general(e.to_string()),
+                    })?;
+                }
             }
         }
 
@@ -705,6 +738,73 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 println!("  Expires: {}", response.expires_at);
             }
         }
+    }
+
+    Ok(())
+}
+
+/// Resolve the K8s namespace for a garage.
+///
+/// Uses the API response value, falling back to `moto-garage-{id[..8]}` if empty.
+fn resolve_namespace(ns: &str, id: &uuid::Uuid) -> String {
+    if ns.is_empty() {
+        let hex = id.simple().to_string();
+        format!("moto-garage-{}", &hex[..8])
+    } else {
+        ns.to_string()
+    }
+}
+
+/// Resolve the K8s pod name for a garage.
+///
+/// Uses the API response value, falling back to `dev-container` if empty.
+fn resolve_pod_name(pod: &str) -> String {
+    if pod.is_empty() {
+        "dev-container".to_string()
+    } else {
+        pod.to_string()
+    }
+}
+
+/// Connect to a garage via `kubectl exec`.
+///
+/// Runs `kubectl exec -it -n {namespace} {pod_name} -- tmux attach-session -t garage`
+/// which takes over the terminal until the user detaches.
+async fn kubectl_exec(namespace: &str, pod_name: &str, flags: &GlobalFlags) -> Result<()> {
+    let mut cmd = tokio::process::Command::new("kubectl");
+
+    // Global flags must come before the subcommand
+    if let Some(ctx) = flags.context.as_deref() {
+        cmd.args(["--context", ctx]);
+    }
+
+    cmd.args([
+        "exec",
+        "-it",
+        "-n",
+        namespace,
+        pod_name,
+        "--",
+        "tmux",
+        "attach-session",
+        "-t",
+        "garage",
+    ]);
+
+    let status = cmd.status().await.map_err(|e| {
+        CliError::general(format!(
+            "failed to run kubectl: {e}\n\n\
+             Make sure kubectl is installed and in your PATH."
+        ))
+    })?;
+
+    if !status.success() {
+        let code = status.code().unwrap_or(1);
+        return Err(CliError::general(format!(
+            "kubectl exec exited with code {code}\n\n\
+             The garage pod may not be ready yet.\n\
+             Try: moto garage list"
+        )));
     }
 
     Ok(())
