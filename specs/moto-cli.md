@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.10 |
+| Version | 0.11 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-27 |
 
@@ -173,7 +173,7 @@ Options:
 
 **Connection modes:**
 - **Default (no flag):** WireGuard tunnel (existing behavior, unchanged).
-- **`--kubectl`:** Skips WireGuard entirely. Connects via `kubectl exec -it -n {namespace} {pod_name} -- tmux attach-session -t garage`. Useful for local dev before the garage pod's WireGuard daemon is running.
+- **`--kubectl`:** Skips WireGuard entirely. Connects via `kubectl exec -it -n {namespace} {pod_name} -- tmux new-session -A -s garage`. The `-A` flag attaches to an existing `garage` session or creates one if it doesn't exist. Useful for local dev before the garage pod's WireGuard daemon is running.
 
 `namespace` and `pod_name` come from the `get_garage` API response (falling back to `moto-garage-{id[..8]}` and `dev-container` if empty).
 
@@ -664,6 +664,9 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.11 (2026-02-27)
+- Fix: `--kubectl` uses `tmux new-session -A -s garage` instead of `tmux attach-session -t garage`; `-A` creates the session if it doesn't exist, matching ttyd behavior
 
 ### v0.10 (2026-02-27)
 - Fix: Config path must be `~/.config/moto/config.toml` on all platforms; do not use `dirs::config_dir()` which returns `~/Library/Application Support/` on macOS; use `$HOME/.config/moto/` directly, respecting `$XDG_CONFIG_HOME` if set
