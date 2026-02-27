@@ -416,7 +416,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## local-dev.md v0.9
+## local-dev.md v0.10
 
 **Status:** In Progress
 
@@ -442,9 +442,10 @@ HOW TO USE THIS FILE:
 - Makefile target: `dev` as alias for `moto dev up` (v0.7)
 - `moto dev down` command: SIGTERM to club (port 8080) and keybox (port 8090) processes via lsof, docker compose down, --clean flag removes .dev/ directory and pgdata volume; DevConfig.keybox_api field added for port lookup (v0.7/v0.8)
 - `moto dev up` command: 9-step orchestration (prerequisites, cluster, image, postgres, keys, migrations, keybox, club, garage) with subprocess management via tokio::process, health checks with exponential backoff, Ctrl-C handling, --no-garage/--rebuild-image/--skip-image flags, DevConfig env var methods, JSON output, idempotent restart (v0.7/v0.8)
+- Add MOTO_CLUB_BIND_ADDR=0.0.0.0:18080 to dev-club and dev-up Makefile targets (v0.10: moto-club API port changed from 8080 to 18080 to match k3d deploy path; CLI default works for both local dev and k3d deploy modes)
 
 **Remaining:**
-(none - local-dev.md v0.9 implementation complete)
+(none - local-dev.md v0.10 implementation complete)
 
 ---
 

@@ -42,7 +42,7 @@ impl DevConfig {
             keybox_health: format!("localhost:{keybox_health_port}"),
             keybox_api: format!("localhost:{keybox_api_port}"),
             club_health: "localhost:8081".to_string(),
-            club_api: "localhost:8080".to_string(),
+            club_api: "localhost:18080".to_string(),
             registry: "localhost:5050".to_string(),
         }
     }
@@ -90,6 +90,10 @@ impl DevConfig {
     /// Environment variables for spawning moto-club.
     fn club_env() -> Vec<(&'static str, String)> {
         vec![
+            (
+                "MOTO_CLUB_BIND_ADDR",
+                env_or("MOTO_CLUB_BIND_ADDR", "0.0.0.0:18080"),
+            ),
             (
                 "MOTO_CLUB_DATABASE_URL",
                 env_or(
@@ -521,7 +525,11 @@ async fn dev_up(
         quiet: true,
         ..GlobalFlags::default()
     };
-    stop_port_process(extract_port(&config.club_api, "8080"), "club", &quiet_flags);
+    stop_port_process(
+        extract_port(&config.club_api, "18080"),
+        "club",
+        &quiet_flags,
+    );
     stop_port_process(
         extract_port(&config.keybox_api, "8090"),
         "keybox",
@@ -716,7 +724,7 @@ async fn dev_up(
 fn dev_down(clean: bool, flags: &GlobalFlags) -> Result<()> {
     let config = DevConfig::load();
 
-    let club_port = extract_port(&config.club_api, "8080");
+    let club_port = extract_port(&config.club_api, "18080");
     let keybox_port = extract_port(&config.keybox_api, "8090");
 
     // Step 1: Stop club process
@@ -971,7 +979,7 @@ fn dev_status(flags: &GlobalFlags) -> Result<()> {
         println!("Registry:  {registry_str} ({})", config.registry);
         println!("Postgres:  {postgres_str} (localhost:5432)");
         println!("Keybox:    {keybox_str} (localhost:8090)");
-        println!("Club:      {club_str} (localhost:8080)");
+        println!("Club:      {club_str} (localhost:18080)");
         println!("Image:     {image_detail}");
         println!("Garages:   {garage_detail}");
     }
@@ -1009,18 +1017,18 @@ mod tests {
     #[test]
     fn test_dev_config_default_ports() {
         // Verify the hardcoded dev defaults match the spec
-        // keybox API: 8090, keybox health: 8091, club health: 8081, club API: 8080, registry: 5050
+        // keybox API: 8090, keybox health: 8091, club health: 8081, club API: 18080, registry: 5050
         let config = DevConfig {
             keybox_health: "localhost:8091".to_string(),
             keybox_api: "localhost:8090".to_string(),
             club_health: "localhost:8081".to_string(),
-            club_api: "localhost:8080".to_string(),
+            club_api: "localhost:18080".to_string(),
             registry: "localhost:5050".to_string(),
         };
         assert_eq!(config.keybox_api, "localhost:8090");
         assert_eq!(config.keybox_health, "localhost:8091");
         assert_eq!(config.club_health, "localhost:8081");
-        assert_eq!(config.club_api, "localhost:8080");
+        assert_eq!(config.club_api, "localhost:18080");
         assert_eq!(config.registry, "localhost:5050");
     }
 
@@ -1061,12 +1069,12 @@ mod tests {
             keybox_health: "localhost:8091".to_string(),
             keybox_api: "localhost:8090".to_string(),
             club_health: "localhost:8081".to_string(),
-            club_api: "localhost:8080".to_string(),
+            club_api: "localhost:18080".to_string(),
             registry: "localhost:5050".to_string(),
         };
         assert_eq!(config.keybox_api, "localhost:8090");
         assert_eq!(extract_port(&config.keybox_api, "8090"), "8090");
-        assert_eq!(extract_port(&config.club_api, "8080"), "8080");
+        assert_eq!(extract_port(&config.club_api, "18080"), "18080");
     }
 
     #[test]

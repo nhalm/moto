@@ -265,6 +265,7 @@ dev-up: dev-db-up dev-keybox-init dev-db-migrate ## Start postgres + keybox + cl
 	trap "kill $$KEYBOX_PID 2>/dev/null; wait $$KEYBOX_PID 2>/dev/null" EXIT INT TERM; \
 	echo "Keybox started (PID $$KEYBOX_PID)"; \
 	echo "Starting moto-club in foreground (Ctrl-C to stop all)..."; \
+	MOTO_CLUB_BIND_ADDR=0.0.0.0:18080 \
 	MOTO_CLUB_DATABASE_URL=postgres://moto:moto@localhost:5432/moto_club \
 	MOTO_CLUB_KEYBOX_URL=http://localhost:8090 \
 	MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token \
@@ -313,6 +314,7 @@ dev-keybox: ## Start moto-keybox-server with dev config
 dev-garage-image: build-garage push-garage ## Build and push garage image to registry
 
 dev-club: ## Start moto-club with dev config
+	MOTO_CLUB_BIND_ADDR=0.0.0.0:18080 \
 	MOTO_CLUB_DATABASE_URL=postgres://moto:moto@localhost:5432/moto_club \
 	MOTO_CLUB_KEYBOX_URL=http://localhost:8090 \
 	MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE=.dev/keybox/service-token \
