@@ -225,7 +225,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## makefile.md v0.14
+## makefile.md v0.15
 
 **Status:** In Progress
 
@@ -251,9 +251,10 @@ HOW TO USE THIS FILE:
 - `help` as default target: `.DEFAULT_GOAL := help`; `make` with no arguments prints all available targets grouped by category (v0.12: inline `##` comments on targets, `##@` section headers, awk-based help parser)
 - `test-all` runs every test category: unit + integration + ignored (K8s); each category runs exactly once (v0.13: single `cargo test --features integration` pass for unit+integration, separate `cargo test -- --ignored` for K8s tests; no duplicate unit test runs)
 - `dev-cluster-down` target: deletes k3d cluster and local registry via `k3d cluster delete moto` (v0.14)
+- `make install` includes `cargo install --path crates/moto-cli` to install the `moto` binary to `~/.cargo/bin/` (v0.15)
 
 **Remaining:**
-(none - makefile.md v0.14 implementation complete)
+(none - makefile.md v0.15 implementation complete)
 
 ---
 
