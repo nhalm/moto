@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.13 |
+| Version | 0.14 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-26 |
 
@@ -152,6 +152,7 @@ See [testing.md](testing.md) for test infrastructure specification.
 
 ```makefile
 dev-cluster:         # Create k3d cluster via moto CLI (idempotent)
+dev-cluster-down:    # Delete the k3d cluster and local registry
 dev-up:              # Start full local dev stack (postgres + keybox + club)
 dev-down:            # Stop all services and database
 dev-clean:           # dev-down + remove pgdata volume + remove .dev/
@@ -200,12 +201,15 @@ All targets should be declared `.PHONY` since they don't produce files:
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all test-ci
-.PHONY: dev-cluster dev-up dev-down dev-clean dev-db-up dev-db-down dev-db-migrate
+.PHONY: dev-cluster dev-cluster-down dev-up dev-down dev-clean dev-db-up dev-db-down dev-db-migrate
 .PHONY: dev-keybox-init dev-keybox dev-club dev-garage-image
 .PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy undeploy-system
 ```
 
 ## Changelog
+
+### v0.14 (2026-02-26)
+- Add `dev-cluster-down` target to delete the k3d cluster and local registry
 
 ### v0.13 (2026-02-26)
 - `test-all` runs every test category: unit, integration, and `#[ignore]` tests (K8s)
