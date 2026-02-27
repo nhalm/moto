@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.14 |
+| Version | 0.15 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-26 |
+| Last Updated | 2026-02-27 |
 
 ## Overview
 
@@ -69,10 +69,10 @@ The output should list every target with its comment, grouped by section headers
 # Set up local development environment (run once)
 install:
 	git config core.hooksPath .githooks
-	# Future: k3s setup, other dependencies
+	cargo install --path crates/moto-cli
 ```
 
-The `install` target is idempotent - safe to run multiple times.
+The `install` target is idempotent - safe to run multiple times. It configures git hooks and installs the `moto` binary to `~/.cargo/bin/`. Works on macOS and Linux — just needs Rust toolchain installed (provided by the Nix devShell).
 
 ### Development Targets
 
@@ -190,6 +190,9 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 - Keep names short but clear
 
 ## Changelog
+
+### v0.15 (2026-02-27)
+- `make install` now also runs `cargo install --path crates/moto-cli` to install the `moto` binary to `~/.cargo/bin/`
 
 ### v0.14 (2026-02-26)
 - Add `dev-cluster-down` target to delete the k3d cluster and local registry
