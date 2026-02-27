@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.9 |
+| Version | 0.10 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-24 |
+| Last Updated | 2026-02-26 |
 
 ## Overview
 
@@ -88,12 +88,12 @@ The `.dev/` directory is gitignored. Keys are generated once and reused across d
 
 ### Port Assignments
 
-Both servers default to port 8080, so local dev must use different ports:
+Local dev uses distinct ports per service to avoid collisions. Port 18080 matches the k3d deploy path (see [service-deploy.md](service-deploy.md)), so the CLI default works for both modes.
 
 | Service | API Port | Health Port | Metrics Port |
 |---------|----------|-------------|--------------|
 | moto-keybox | 8090 | 8091 | — |
-| moto-club | 8080 | 8081 | 9090 |
+| moto-club | 18080 | 8081 | 9090 |
 
 ### Environment Variables
 
@@ -113,6 +113,7 @@ Both servers default to port 8080, so local dev must use different ports:
 
 | Variable | Dev Value |
 |----------|-----------|
+| `MOTO_CLUB_BIND_ADDR` | `0.0.0.0:18080` |
 | `MOTO_CLUB_DATABASE_URL` | `postgres://moto:moto@localhost:5432/moto_club` |
 | `MOTO_CLUB_KEYBOX_URL` | `http://localhost:8090` |
 | `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE` | `.dev/keybox/service-token` |
@@ -160,7 +161,7 @@ Orchestration steps (each idempotent, with progress output):
 [5/9] Generating keybox keys...     found (.dev/keybox/) / generated
 [6/9] Running migrations...         up to date
 [7/9] Starting keybox...            healthy (localhost:8090)
-[8/9] Starting moto-club...         healthy (localhost:8080)
+[8/9] Starting moto-club...         healthy (localhost:18080)
 [9/9] Opening garage...             bold-mongoose
 ```
 
@@ -176,7 +177,7 @@ Orchestration steps (each idempotent, with progress output):
 | 6. Migrations | Run `cargo sqlx migrate run --source crates/moto-club-db/migrations` against the club database. Keybox migrations run automatically on keybox startup (step 7). | Abort |
 | 7. Keybox | Spawn `moto-keybox-server` as subprocess with dev env vars. Wait for `GET http://localhost:8091/health/ready` to return 200. Timeout: 30 seconds with exponential backoff. | Abort (kill keybox subprocess) |
 | 8. Club | Spawn `moto-club` as subprocess with dev env vars. Wait for `GET http://localhost:8081/health/ready` to return 200. Timeout: 30 seconds with exponential backoff. | Abort (kill both subprocesses) |
-| 9. Garage | `POST http://localhost:8080/api/v1/garages` with auto-generated name and default TTL. Skipped with `--no-garage`. | Print warning, continue (services are still running) |
+| 9. Garage | `POST http://localhost:18080/api/v1/garages` with auto-generated name and default TTL. Skipped with `--no-garage`. | Print warning, continue (services are still running) |
 
 **Failure behavior:** Steps 1-8 abort on failure. Step 9 is best-effort — if garage creation fails, services keep running and the user can open a garage manually. On abort, any already-started subprocesses are killed and postgres is left running (fast restart).
 
@@ -186,7 +187,7 @@ Orchestration steps (each idempotent, with progress output):
 
 **Subprocess output:** Log output from keybox and club is suppressed by default. With `-v`, subprocess stderr is forwarded to the terminal. With `-vv`, both stdout and stderr are forwarded.
 
-**DevConfig:** All env vars from the tables above use hardcoded dev defaults. Each is overridable via the same environment variable name (e.g., set `MOTO_KEYBOX_BIND_ADDR=0.0.0.0:9090` to override the default `0.0.0.0:8090`). Total: 13 env vars (7 keybox + 6 club).
+**DevConfig:** All env vars from the tables above use hardcoded dev defaults. Each is overridable via the same environment variable name (e.g., set `MOTO_KEYBOX_BIND_ADDR=0.0.0.0:9090` to override the default `0.0.0.0:8090`). Total: 14 env vars (7 keybox + 7 club).
 
 **Idempotency:** Running `moto dev up` while services are already running restarts the services (kills existing subprocesses, starts new ones). Cluster, postgres, keys, and migrations are all idempotent checks that skip if already done.
 
@@ -202,7 +203,7 @@ moto dev down [--clean]
 | `--clean` | Also remove `.dev/` directory and pgdata docker volume |
 
 Stops services by:
-1. Finding processes listening on ports 8080 (club) and 8090 (keybox) and sending SIGTERM
+1. Finding processes listening on ports 18080 (club) and 8090 (keybox) and sending SIGTERM
 2. Running `docker compose down` to stop postgres (or `docker compose down -v` with `--clean`)
 3. With `--clean`: removing `.dev/` directory
 
@@ -221,7 +222,7 @@ Cluster:   running (k3d-moto)
 Registry:  healthy (localhost:5050)
 Postgres:  healthy (localhost:5432)
 Keybox:    healthy (localhost:8090)
-Club:      healthy (localhost:8080)
+Club:      healthy (localhost:18080)
 Image:     moto-garage:latest (in registry)
 Garages:   1 running
 ```
@@ -236,7 +237,7 @@ Garages:   1 running
 | Keybox | `GET http://localhost:8091/health/ready` — returns 200 |
 | Club | `GET http://localhost:8081/health/ready` — returns 200 |
 | Image | `GET http://localhost:5050/v2/moto-garage/tags/list` — contains `latest` tag |
-| Garages | `GET http://localhost:8080/api/v1/garages` — count non-terminated garages |
+| Garages | `GET http://localhost:18080/api/v1/garages` — count non-terminated garages |
 
 ### Manual Startup Sequence (Advanced)
 
@@ -315,7 +316,7 @@ moto/
 | Problem | Solution |
 |---------|----------|
 | Port 5432 in use | Stop local Postgres or change port in docker-compose.yml |
-| Port 8080/8090 in use | Check for other services on those ports |
+| Port 18080/8090 in use | Check for other services on those ports |
 | `moto-club` can't reach K8s | Run `make dev-cluster` |
 | Garage pod `ImagePullBackOff` | Run `make dev-garage-image` |
 | Keybox key errors | Delete `.dev/keybox/` and run `make dev-keybox-init` |
@@ -337,6 +338,10 @@ moto/
 - [service-deploy.md](service-deploy.md) — K8s deployment (alternative)
 
 ## Changelog
+
+### v0.10 (2026-02-26)
+- Change moto-club API port from 8080 to 18080 — matches k3d deploy path so CLI default works for both modes
+- Add `MOTO_CLUB_BIND_ADDR` to moto-club env vars (overrides server default of 8080)
 
 ### v0.9 (2026-02-24)
 - Docs: Fix `dev-down` description in Makefile Targets table (stops postgres only, not all services)
