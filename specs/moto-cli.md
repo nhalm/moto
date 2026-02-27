@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.8 |
+| Version | 0.9 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-27 |
 
@@ -76,6 +76,8 @@ $XDG_CONFIG_HOME/moto/config.toml
 ### Format
 
 ```toml
+user = "nick"   # default owner for garage commands
+
 [output]
 color = "auto"  # auto, always, never
 
@@ -94,9 +96,19 @@ ttl = "4h"      # default TTL
 
 | Variable | Description |
 |----------|-------------|
+| `MOTO_USER` | Default owner for garage commands (overrides config file `user`) |
 | `MOTOCONFIG` | Override kubeconfig (falls back to `KUBECONFIG`) |
 | `MOTO_NO_COLOR` | Disable colored output |
 | `MOTO_JSON` | Force JSON output |
+
+### User Identity
+
+The owner for garage commands is resolved in precedence order:
+
+1. `--owner` flag (on `garage open`)
+2. `MOTO_USER` environment variable
+3. `user` field in config file
+4. Error: prompt user to set one of the above
 
 ---
 
@@ -651,6 +663,11 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.9 (2026-02-27)
+- Add `user` field to config file (`~/.config/moto/config.toml`): default owner for garage commands
+- User identity precedence: `--owner` flag > `MOTO_USER` env var > config file `user` > error
+- Add `MOTO_USER` to environment variables table
 
 ### v0.8 (2026-02-27)
 - Add `--kubectl` flag to `garage enter`: connects via `kubectl exec -it -n {namespace} {pod_name} -- tmux attach-session -t garage` instead of WireGuard tunnel
