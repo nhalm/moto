@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.9 |
+| Version | 0.10 |
 | Status | Ready to Rip |
 | Last Updated | 2026-02-27 |
 
@@ -69,9 +69,10 @@ moto
 ### Location
 
 ```
-$XDG_CONFIG_HOME/moto/config.toml
-# Falls back to: ~/.config/moto/config.toml
+~/.config/moto/config.toml
 ```
+
+The path MUST be `~/.config/moto/config.toml` on all platforms (Linux, macOS). Do not use `dirs::config_dir()` which returns `~/Library/Application Support/` on macOS. Use `$HOME/.config/moto/config.toml` directly, respecting `$XDG_CONFIG_HOME` if set.
 
 ### Format
 
@@ -663,6 +664,9 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.10 (2026-02-27)
+- Fix: Config path must be `~/.config/moto/config.toml` on all platforms; do not use `dirs::config_dir()` which returns `~/Library/Application Support/` on macOS; use `$HOME/.config/moto/` directly, respecting `$XDG_CONFIG_HOME` if set
 
 ### v0.9 (2026-02-27)
 - Add `user` field to config file (`~/.config/moto/config.toml`): default owner for garage commands
