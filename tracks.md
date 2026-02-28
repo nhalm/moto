@@ -109,7 +109,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## container-system.md v1.2
+## container-system.md v1.3
 
 **Status:** In Progress
 
@@ -119,6 +119,8 @@ HOW TO USE THIS FILE:
 - Export `moto-keybox-image` from flake.nix (default.nix and flake.nix updated)
 - Fix `infra/pkgs/moto-club.nix` cargoHash placeholder (replaced with real hash; also fixed moto-keybox.nix; committed Cargo.lock to git for Nix flake source access)
 - Switch engine builds to crane (v1.2: add crane flake input; craneLib, commonArgs, cargoArtifacts in flake.nix; moto-club.nix and moto-keybox.nix use craneLib.buildPackage; removed cargoHash from engine packages; deps built once via buildDepsOnly and shared)
+- Bump Rust toolchain from 1.85 to 1.88 (v1.3: `home` crate v0.5.12 requires Rust 1.88; flake.nix rustToolchain updated to `pkgs.rust-bin.stable."1.88.0".minimal`)
+- Add `stdenv.cc` and `lld` to `commonArgs.nativeBuildInputs` (v1.3: crane needs a C compiler/linker; `.cargo/config.toml` specifies `-fuse-ld=lld` for Linux targets)
 
 **Remaining:**
 - CI workflow: .github/workflows/containers.yml (future)
