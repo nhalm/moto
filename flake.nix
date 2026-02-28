@@ -18,7 +18,7 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
 
-        rustToolchain = pkgs.rust-bin.stable."1.85.0".minimal.override {
+        rustToolchain = pkgs.rust-bin.stable."1.88.0".minimal.override {
           extensions = [ "rust-src" "rust-analyzer" "rustfmt" "clippy" ];
         };
 
@@ -39,7 +39,7 @@
         commonArgs = {
           inherit src;
           strictDeps = true;
-          nativeBuildInputs = with pkgs; [ pkg-config ];
+          nativeBuildInputs = with pkgs; [ pkg-config stdenv.cc lld ];
           buildInputs = with pkgs; [ openssl ];
           OPENSSL_NO_VENDOR = "1";
         };

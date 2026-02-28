@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.2 |
+| Version | 1.3 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-27 |
+| Last Updated | 2026-02-28 |
 
 ## Overview
 
@@ -179,7 +179,9 @@ Engine binaries (moto-club, moto-keybox) MUST be built with crane. Crane reads `
         pkgs = import nixpkgs { inherit system overlays; };
 
         # Pin Rust version
-        rustToolchain = pkgs.rust-bin.stable."1.83.0".default;
+        rustToolchain = pkgs.rust-bin.stable."1.88.0".minimal.override {
+          extensions = [ "rust-src" "rust-analyzer" "rustfmt" "clippy" ];
+        };
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
         # Common source filtering
@@ -189,8 +191,8 @@ Engine binaries (moto-club, moto-keybox) MUST be built with crane. Crane reads `
         commonArgs = {
           inherit src;
           strictDeps = true;
+          nativeBuildInputs = with pkgs; [ pkg-config stdenv.cc lld ];
           buildInputs = with pkgs; [ openssl postgresql.lib ];
-          nativeBuildInputs = with pkgs; [ pkg-config ];
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -673,7 +675,7 @@ src = craneLib.cleanCargoSource ./.;
 commonArgs = {
   inherit src;
   strictDeps = true;
-  nativeBuildInputs = [ pkgs.pkg-config ];
+  nativeBuildInputs = with pkgs; [ pkg-config stdenv.cc lld ];
   buildInputs = [ pkgs.openssl ];
   OPENSSL_NO_VENDOR = "1";
 };
@@ -1051,6 +1053,10 @@ nix path-info --json .#moto-club-image | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v1.3 (2026-02-28)
+- Bump Rust toolchain from 1.85 to 1.88 (`home` crate v0.5.12 requires Rust 1.88)
+- Add `stdenv.cc` and `lld` to `commonArgs.nativeBuildInputs` (crane needs a C compiler/linker; `.cargo/config.toml` specifies `-fuse-ld=lld` for Linux targets)
 
 ### v1.2 (2026-02-27)
 - Switch engine builds from `rustPlatform.buildRustPackage` (manual `cargoHash`) to crane (`craneLib.buildPackage`)
