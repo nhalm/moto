@@ -60,10 +60,10 @@ assert_status() {
 
     if [ "$status" = "$expected" ]; then
         echo "OK ($status)"
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
     else
         echo "FAIL (expected $expected, got $status)"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
     fi
 }
 
@@ -141,10 +141,10 @@ ROTATE_VERSION=$(echo "$ROTATE_BODY" | jq -r '.version' 2>/dev/null)
 
 if [ "$ROTATE_STATUS" = "200" ] && [ "$ROTATE_VERSION" -ge 2 ] 2>/dev/null; then
     echo "OK ($ROTATE_STATUS, version=$ROTATE_VERSION)"
-    ((PASSED++))
+    PASSED=$((PASSED + 1))
 else
     echo "FAIL (status=$ROTATE_STATUS, version=$ROTATE_VERSION)"
-    ((FAILED++))
+    FAILED=$((FAILED + 1))
 fi
 
 # POST /admin/rotate-dek/ with SVID token returns 403 FORBIDDEN
@@ -164,10 +164,10 @@ SECRET_VALUE=$(curl -s -X GET "$KEYBOX_URL/secrets/global/$TEST_SECRET" \
 
 if [ "$SECRET_VALUE" = "$ENCODED_VALUE" ]; then
     echo "OK"
-    ((PASSED++))
+    PASSED=$((PASSED + 1))
 else
     echo "FAIL (expected $ENCODED_VALUE, got $SECRET_VALUE)"
-    ((FAILED++))
+    FAILED=$((FAILED + 1))
 fi
 
 echo ""
