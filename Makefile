@@ -6,7 +6,7 @@
 .PHONY: build-bike test-bike
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
-.PHONY: test-db-up test-db-down test-db-migrate test-integration test-all
+.PHONY: test-db-up test-db-down test-db-migrate test-integration test-all smoke-keybox
 .PHONY: dev dev-cluster dev-cluster-down dev-up dev-down dev-clean
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
 .PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy
@@ -236,6 +236,15 @@ test-all: ## Every test: unit + integration + ignored (K8s) — no test left beh
 test-ci: ## CI tests (assumes database running)
 	cargo test --lib
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration
+
+smoke-keybox: ## Smoke test keybox in k3d (port-forward, test, cleanup)
+	@kubectl -n moto-system port-forward svc/moto-keybox 18090:8080 >/dev/null 2>&1 & \
+	PF_PID=$$!; \
+	sleep 2; \
+	KEYBOX_URL=http://localhost:18090 ./infra/smoke-test-keybox.sh; \
+	status=$$?; \
+	kill $$PF_PID 2>/dev/null || true; \
+	exit $$status
 
 ##@ Local Dev
 

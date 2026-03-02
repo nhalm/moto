@@ -400,7 +400,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## testing.md v0.5
+## testing.md v0.6
 
 **Status:** In Progress
 
@@ -420,6 +420,7 @@ HOW TO USE THIS FILE:
 - moto-keybox-db integration tests: audit_repo_test.rs (12 tests, all 3 public functions)
 - moto-keybox-db: add not-found error path test for `update_secret_version` (v0.5: verifies `fetch_one` returns error on nonexistent ID)
 - moto-keybox-db: add not-found error path test for `delete_secret` (v0.5: silently succeeds on nonexistent ID, behavior verified)
+- Keybox smoke tests (v0.6: infra/smoke-test-keybox.sh with auth matrix enforcement and DEK rotation tests against live k3d cluster; `smoke-keybox` Makefile target with port-forward setup/teardown; service token from .dev/k8s-secrets/service-token; SVID token via POST /auth/token; 10 test assertions covering all spec scenarios; cleanup deletes test secrets)
 
 **Remaining:**
 - CI workflow: .github/workflows/test.yml (future)
