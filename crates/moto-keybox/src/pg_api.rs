@@ -38,6 +38,8 @@ pub struct PgAppState {
     pub svid_validator: Arc<SvidValidator>,
     /// Service token for moto-club authentication.
     service_token: Option<String>,
+    /// Admin service name for creating synthetic claims on service token auth.
+    admin_service: String,
 }
 
 impl PgAppState {
@@ -57,6 +59,7 @@ impl PgAppState {
             svid_issuer: Arc::new(svid_issuer),
             svid_validator: Arc::new(svid_validator),
             service_token: None,
+            admin_service: admin_service.to_string(),
         }
     }
 
@@ -71,6 +74,17 @@ impl PgAppState {
     #[must_use]
     pub fn pool(&self) -> &DbPool {
         self.repository.pool()
+    }
+
+    /// Creates synthetic admin claims for service token callers.
+    ///
+    /// Used when a service token is validated — bypasses ABAC since the
+    /// admin service has full access to all secrets.
+    fn service_token_claims(&self) -> SvidClaims {
+        SvidClaims::new(
+            &SpiffeId::service(&self.admin_service),
+            crate::svid::DEFAULT_SVID_TTL_SECS,
+        )
     }
 }
 
@@ -383,12 +397,19 @@ async fn issue_garage_svid(
 }
 
 /// Get a secret value.
+///
+/// Accepts both service token (skip ABAC) and SVID (ABAC checked).
 async fn get_secret(
     State(state): State<PgAppState>,
     headers: HeaderMap,
     Path((scope_str, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let claims = extract_svid_enforcing_pod_uid(&headers, &state.svid_validator)?;
+    // Try service token first (skip ABAC), fall back to SVID + ABAC
+    let claims = if validate_service_token(&headers, state.service_token.as_ref()).is_ok() {
+        state.service_token_claims()
+    } else {
+        extract_svid_enforcing_pod_uid(&headers, &state.svid_validator)?
+    };
     let scope = parse_scope(&scope_str)?;
 
     let value = match scope {
@@ -452,13 +473,25 @@ async fn get_secret(
 }
 
 /// Create or update a secret.
+///
+/// Service token required. SVID tokens are denied with 403 FORBIDDEN.
+#[allow(clippy::too_many_lines)]
 async fn set_secret(
     State(state): State<PgAppState>,
     headers: HeaderMap,
     Path((scope_str, name)): Path<(String, String)>,
     Json(req): Json<SetSecretRequest>,
 ) -> impl IntoResponse {
-    let claims = extract_svid_enforcing_pod_uid(&headers, &state.svid_validator)?;
+    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
+        (
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::FORBIDDEN,
+                "Operation requires service token",
+            )),
+        )
+    })?;
+    let claims = state.service_token_claims();
     let scope = parse_scope(&scope_str)?;
 
     let value = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &req.value)
@@ -563,12 +596,23 @@ async fn set_secret(
 }
 
 /// Delete a secret.
+///
+/// Service token required. SVID tokens are denied with 403 FORBIDDEN.
 async fn delete_secret(
     State(state): State<PgAppState>,
     headers: HeaderMap,
     Path((scope_str, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let claims = extract_svid_enforcing_pod_uid(&headers, &state.svid_validator)?;
+    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
+        (
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::FORBIDDEN,
+                "Operation requires service token",
+            )),
+        )
+    })?;
+    let claims = state.service_token_claims();
     let scope = parse_scope(&scope_str)?;
 
     match scope {
@@ -610,12 +654,19 @@ async fn delete_secret(
 }
 
 /// List secrets in a scope.
+///
+/// Accepts both service token (return all in scope) and SVID (ABAC filtered).
 async fn list_secrets(
     State(state): State<PgAppState>,
     headers: HeaderMap,
     Path(scope_str): Path<String>,
 ) -> impl IntoResponse {
-    let claims = extract_svid(&headers, &state.svid_validator)?;
+    // Try service token first (return all), fall back to SVID + ABAC
+    let claims = if validate_service_token(&headers, state.service_token.as_ref()).is_ok() {
+        state.service_token_claims()
+    } else {
+        extract_svid(&headers, &state.svid_validator)?
+    };
     let scope = parse_scope(&scope_str)?;
 
     let secrets = state.repository.list(&claims, scope).await;
@@ -631,12 +682,18 @@ async fn list_secrets(
 }
 
 /// List secrets for a specific service.
+///
+/// Accepts both service token (return all) and SVID (ABAC filtered).
 async fn list_service_secrets(
     State(state): State<PgAppState>,
     headers: HeaderMap,
     Path(service): Path<String>,
 ) -> impl IntoResponse {
-    let claims = extract_svid(&headers, &state.svid_validator)?;
+    let claims = if validate_service_token(&headers, state.service_token.as_ref()).is_ok() {
+        state.service_token_claims()
+    } else {
+        extract_svid(&headers, &state.svid_validator)?
+    };
 
     let secrets = state.repository.list_service(&claims, &service).await;
 
@@ -651,12 +708,18 @@ async fn list_service_secrets(
 }
 
 /// List secrets for a specific instance.
+///
+/// Accepts both service token (return all) and SVID (ABAC filtered).
 async fn list_instance_secrets(
     State(state): State<PgAppState>,
     headers: HeaderMap,
     Path(instance_id): Path<String>,
 ) -> impl IntoResponse {
-    let claims = extract_svid(&headers, &state.svid_validator)?;
+    let claims = if validate_service_token(&headers, state.service_token.as_ref()).is_ok() {
+        state.service_token_claims()
+    } else {
+        extract_svid(&headers, &state.svid_validator)?
+    };
 
     let secrets = state.repository.list_instance(&claims, &instance_id).await;
 
@@ -671,22 +734,22 @@ async fn list_instance_secrets(
 }
 
 /// Query audit logs from `PostgreSQL`.
+///
+/// Service token required. SVID tokens are denied with 403 FORBIDDEN.
 async fn get_audit_logs(
     State(state): State<PgAppState>,
     headers: HeaderMap,
     Query(query): Query<AuditLogsQuery>,
 ) -> impl IntoResponse {
-    let claims = extract_svid(&headers, &state.svid_validator)?;
-
-    if claims.principal_type != PrincipalType::Service {
-        return Err((
+    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
+        (
             StatusCode::FORBIDDEN,
             Json(ApiError::new(
-                error_codes::ACCESS_DENIED,
-                "Only admin services can access audit logs",
+                error_codes::FORBIDDEN,
+                "Operation requires service token",
             )),
-        ));
-    }
+        )
+    })?;
 
     let db_query = AuditLogQuery {
         event_type: query.event_type.and_then(|s| s.parse().ok()),

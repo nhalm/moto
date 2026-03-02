@@ -306,7 +306,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## keybox.md v0.9
+## keybox.md v0.10
 
 **Status:** In Progress
 
@@ -335,10 +335,10 @@ HOW TO USE THIS FILE:
 - Rename moto-keybox-server binary from moto-keybox to moto-keybox-server (v0.5: fixes cargo doc collision with moto-keybox library crate)
 - v0.6 integration tests: no ignored tests exist in moto-keybox or moto-keybox-db to convert (all existing tests are unit tests that don't require PostgreSQL)
 - Fix: Secret retrieval handlers enforce pod UID binding (v0.8: get_secret, set_secret, delete_secret now call validate_enforcing_pod_uid() instead of validate(); SvidValidator.validate_enforcing_pod_uid validates pod_uid claim is non-empty when present; both api.rs and pg_api.rs updated with extract_svid_enforcing_pod_uid helper)
+- Enforce endpoint authorization matrix (v0.10: set_secret and delete_secret require service token only, deny SVID with 403 FORBIDDEN; get_secret and list_secrets accept both service token (skip ABAC) and SVID (ABAC checked); get_audit_logs requires service token only; both api.rs and pg_api.rs updated; AppState/PgAppState store admin_service for synthetic claims; FORBIDDEN error code used for wrong token type)
 
 **Remaining:**
-- Endpoint authorization matrix enforcement (future - spec v0.3: SVID tokens should be denied for admin endpoints)
-- POST /admin/rotate-dek/{name} endpoint (future - Phase 2)
+- POST /admin/rotate-dek/{name} endpoint (v0.10: rotates DEK for a secret, re-encrypts value, creates new version; service token only; new dek_rotated audit event type)
 - Add request logging/metrics middleware (future - Phase 2)
 - K8s ServiceAccount JWT validation via TokenReview API (future - MVP accepts principal info directly)
 
