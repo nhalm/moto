@@ -2,11 +2,16 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.9 |
+| Version | 0.10 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-24 |
+| Last Updated | 2026-03-02 |
 
 ## Changelog
+
+### v0.10 (2026-03-02)
+- Enforce endpoint authorization matrix: `set_secret` and `delete_secret` must require service token (deny SVID with 403). `get_secret` and `list_secrets` must accept both service token and SVID. `get_audit_logs` must accept service token directly (not just SVID with Service principal type).
+- Implement `POST /admin/rotate-dek/{name}`: rotates DEK for a secret, re-encrypts value, creates new version. Service token only. New `dek_rotated` audit event type.
+- Move DEK rotation out of Future Work (Phase 2) — now implemented.
 
 ### v0.9 (2026-02-25)
 - Add missing env vars to Configuration section: `MOTO_KEYBOX_SERVICE_TOKEN_FILE`, `MOTO_KEYBOX_BIND_ADDR`, `MOTO_KEYBOX_HEALTH_BIND_ADDR`
@@ -366,11 +371,62 @@ Keybox enforces logical isolation based on token type:
 | `GET /audit/logs` | **Denied** | Allowed |
 | `POST /admin/*` | **Denied** | Allowed |
 
-**Enforcement:** Keybox checks the `Authorization` header:
-- SVID JWT → workload access only
-- Service token → full access
+**Enforcement rules (both `api.rs` and `pg_api.rs`):**
 
-Requests with SVID tokens to admin endpoints return `403 Forbidden`.
+| Handler | Auth Logic |
+|---------|-----------|
+| `set_secret` | `validate_service_token()` only. Deny with `403 FORBIDDEN "Operation requires service token"` if not a service token. |
+| `delete_secret` | Same as `set_secret`. |
+| `get_secret` | Try `validate_service_token()` first (skip ABAC if OK). Otherwise `extract_svid_enforcing_pod_uid()` + ABAC. |
+| `list_secrets` | Try `validate_service_token()` first (return all in scope). Otherwise `extract_svid()` + ABAC (own scope). |
+| `get_audit_logs` | `validate_service_token()` only. Deny with `403 FORBIDDEN`. |
+| `rotate_dek` | `validate_service_token()` only. Deny with `403 FORBIDDEN`. |
+| `issue_garage_svid` | `validate_service_token()` only (already implemented). |
+
+Error code for auth failures: `FORBIDDEN` (new code, distinct from `ACCESS_DENIED` used by ABAC).
+
+### Admin Endpoints
+
+#### POST /admin/rotate-dek/{name}
+
+Rotates the DEK for a secret. The secret value does not change — it is decrypted with the old DEK and re-encrypted with a new DEK.
+
+**Auth:** Service token required.
+
+**Path:** `{name}` is the secret name within the scope. The scope is provided as a query parameter: `?scope=global` or `?scope=service/club` or `?scope=instance/{id}`.
+
+**Request body:** None.
+
+**Response (200):**
+```json
+{
+  "name": "api-key",
+  "scope": "global",
+  "version": 3,
+  "rotated_at": "2026-03-02T12:00:00Z"
+}
+```
+
+**Errors:**
+- `403 FORBIDDEN` — not a service token
+- `404 SECRET_NOT_FOUND` — secret doesn't exist
+- `500 INTERNAL_ERROR` — encryption or DB failure
+
+**Steps:**
+1. Validate service token
+2. Look up secret by scope + name
+3. Fetch current version with encrypted value and DEK
+4. Decrypt: unwrap old DEK with master key, decrypt ciphertext
+5. Generate new DEK
+6. Re-encrypt value with new DEK
+7. Wrap new DEK with master key
+8. Store new encrypted DEK in `encrypted_deks`
+9. Create new `secret_versions` row (incremented version, new ciphertext, new dek_id)
+10. Update secret's `current_version` and `updated_at`
+11. Log `dek_rotated` audit event
+12. Return result
+
+**Audit:** New `dek_rotated` event type (add to `AuditEventType` enum in `moto-keybox/src/types.rs` and `moto-keybox-db/src/models.rs`).
 
 ### CLI Commands
 
@@ -539,6 +595,6 @@ Per moto-bike.md Engine Contract, keybox exposes health endpoints on port 8081:
 
 The following items are deferred to Phase 2:
 
-- **Key rotation mechanism**: `POST /admin/rotate-dek/{name}` endpoint, master key versioning
+- **Master key versioning**: Support multiple KEK versions for gradual master key rotation
 - **Request logging/metrics**: HTTP request metrics middleware (method, path, status, duration)
 - **Rate limiting**: See moto-throttle.md spec
