@@ -19,8 +19,8 @@ use crate::abac::PolicyEngine;
 use crate::api::{
     ApiError, AuditEntryResponse, AuditLogsQuery, AuditLogsResponse, GARAGE_SVID_TTL_SECS,
     GetSecretResponse, IssueGarageSvidRequest, IssueGarageSvidResponse, ListSecretsResponse,
-    MAX_SECRET_SIZE_BYTES, SecretMetadataResponse, SecretResponse, SetSecretRequest, TokenRequest,
-    TokenResponse, error_codes,
+    MAX_SECRET_SIZE_BYTES, RotateDekQuery, RotateDekResponse, SecretMetadataResponse,
+    SecretResponse, SetSecretRequest, TokenRequest, TokenResponse, error_codes, parse_scope_query,
 };
 use crate::envelope::MasterKey;
 use crate::pg_repository::PgSecretRepository;
@@ -789,6 +789,67 @@ async fn get_audit_logs(
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
+/// Rotate a secret's DEK.
+///
+/// Service token required. SVID tokens are denied with 403 FORBIDDEN.
+async fn rotate_dek(
+    State(state): State<PgAppState>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    Query(query): Query<RotateDekQuery>,
+) -> impl IntoResponse {
+    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
+        (
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::FORBIDDEN,
+                "Operation requires service token",
+            )),
+        )
+    })?;
+    let claims = state.service_token_claims();
+
+    let scope_str = query.scope.as_deref().unwrap_or("global");
+    let (scope, service, instance_id) = parse_scope_query(scope_str)?;
+
+    let metadata = state
+        .repository
+        .rotate_dek(
+            &claims,
+            scope,
+            service.as_deref(),
+            instance_id.as_deref(),
+            &name,
+        )
+        .await
+        .map_err(|e| {
+            if let crate::Error::SecretNotFound { .. } = e {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiError::new(
+                        error_codes::SECRET_NOT_FOUND,
+                        format!("Secret not found: {scope_str}/{name}"),
+                    )),
+                )
+            } else {
+                tracing::error!("DEK rotation failed: {e}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new(error_codes::INTERNAL_ERROR, "Internal error")),
+                )
+            }
+        })?;
+
+    let response = RotateDekResponse {
+        name: metadata.name,
+        scope: metadata.scope,
+        version: metadata.version,
+        rotated_at: metadata.updated_at.to_rfc3339(),
+    };
+
+    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
+}
+
 // =============================================================================
 // Type conversions
 // =============================================================================
@@ -818,6 +879,7 @@ const fn from_db_audit_event_type(et: moto_keybox_db::AuditEventType) -> AuditEv
         moto_keybox_db::AuditEventType::SvidIssued => AuditEventType::SvidIssued,
         moto_keybox_db::AuditEventType::AuthFailed => AuditEventType::AuthFailed,
         moto_keybox_db::AuditEventType::AccessDenied => AuditEventType::AccessDenied,
+        moto_keybox_db::AuditEventType::DekRotated => AuditEventType::DekRotated,
     }
 }
 
@@ -841,5 +903,6 @@ pub fn pg_router(state: PgAppState) -> Router {
             get(list_instance_secrets),
         )
         .route("/audit/logs", get(get_audit_logs))
+        .route("/admin/rotate-dek/{name}", post(rotate_dek))
         .with_state(state)
 }

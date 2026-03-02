@@ -621,6 +621,107 @@ impl PgSecretRepository {
         results
     }
 
+    /// Rotates the DEK for a secret.
+    ///
+    /// The secret value does not change — it is decrypted with the old DEK
+    /// and re-encrypted with a new DEK. Creates a new version.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The secret does not exist
+    /// - Decryption or re-encryption fails
+    /// - Database operation fails
+    pub async fn rotate_dek(
+        &self,
+        claims: &SvidClaims,
+        scope: Scope,
+        service: Option<&str>,
+        instance_id: Option<&str>,
+        name: &str,
+    ) -> Result<SecretMetadata> {
+        // Step 2-3: Look up secret and fetch current version with encrypted value and DEK
+        let secret_with_value = secret_repo::get_secret_with_value(
+            &self.pool,
+            to_db_scope(scope),
+            service,
+            instance_id,
+            name,
+        )
+        .await
+        .map_err(|e| db_error(&e))?
+        .ok_or_else(|| Error::SecretNotFound {
+            scope: scope.to_string(),
+            name: name.to_string(),
+        })?;
+
+        // Step 4: Decrypt - unwrap old DEK with master key, decrypt ciphertext
+        let old_encrypted_dek = EncryptedDek {
+            encrypted_key: secret_with_value.encrypted_dek_key,
+            nonce: secret_with_value.dek_nonce,
+        };
+        let old_dek = self.master_key.unwrap_dek(&old_encrypted_dek)?;
+
+        let old_encrypted_value = EncryptedSecret {
+            ciphertext: secret_with_value.ciphertext,
+            nonce: secret_with_value.value_nonce,
+        };
+        let plaintext = old_dek.decrypt(&old_encrypted_value)?;
+
+        // Step 5-7: Generate new DEK, re-encrypt value, wrap new DEK
+        let new_dek = DataEncryptionKey::generate();
+        let new_encrypted_value = new_dek.encrypt(&plaintext)?;
+        let new_encrypted_dek = self.master_key.wrap_dek(&new_dek)?;
+
+        // Step 8: Store new encrypted DEK
+        let db_dek = secret_repo::create_encrypted_dek(
+            &self.pool,
+            &new_encrypted_dek.encrypted_key,
+            &new_encrypted_dek.nonce,
+        )
+        .await
+        .map_err(|e| db_error(&e))?;
+
+        // Step 9: Create new secret_versions row
+        let new_version = secret_with_value.secret.current_version + 1;
+        secret_repo::create_secret_version(
+            &self.pool,
+            secret_with_value.secret.id,
+            new_version,
+            &new_encrypted_value.ciphertext,
+            &new_encrypted_value.nonce,
+            db_dek.id,
+        )
+        .await
+        .map_err(|e| db_error(&e))?;
+
+        // Step 10: Update secret's current_version and updated_at
+        let updated = secret_repo::update_secret_version(
+            &self.pool,
+            secret_with_value.secret.id,
+            new_version,
+        )
+        .await
+        .map_err(|e| db_error(&e))?;
+
+        let result = SecretMetadata {
+            id: updated.id,
+            scope,
+            service: updated.service,
+            instance_id: updated.instance_id,
+            name: updated.name,
+            version: new_version as u32,
+            created_at: updated.created_at,
+            updated_at: updated.updated_at,
+        };
+
+        // Step 11: Log dek_rotated audit event
+        self.audit(claims, AuditEventType::DekRotated, Some(&result))
+            .await;
+
+        Ok(result)
+    }
+
     /// Records an audit event.
     async fn audit(
         &self,
@@ -717,6 +818,7 @@ const fn to_db_audit_event_type(et: AuditEventType) -> DbAuditEventType {
         AuditEventType::SvidIssued => DbAuditEventType::SvidIssued,
         AuditEventType::AuthFailed => DbAuditEventType::AuthFailed,
         AuditEventType::AccessDenied => DbAuditEventType::AccessDenied,
+        AuditEventType::DekRotated => DbAuditEventType::DekRotated,
     }
 }
 

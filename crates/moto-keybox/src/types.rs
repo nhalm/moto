@@ -279,6 +279,8 @@ pub enum AuditEventType {
     AuthFailed,
     /// Access was denied.
     AccessDenied,
+    /// A secret's DEK was rotated.
+    DekRotated,
 }
 
 impl fmt::Display for AuditEventType {
@@ -291,6 +293,7 @@ impl fmt::Display for AuditEventType {
             Self::SvidIssued => write!(f, "svid_issued"),
             Self::AuthFailed => write!(f, "auth_failed"),
             Self::AccessDenied => write!(f, "access_denied"),
+            Self::DekRotated => write!(f, "dek_rotated"),
         }
     }
 }
@@ -506,6 +509,7 @@ mod tests {
         assert_eq!(AuditEventType::SvidIssued.to_string(), "svid_issued");
         assert_eq!(AuditEventType::AuthFailed.to_string(), "auth_failed");
         assert_eq!(AuditEventType::AccessDenied.to_string(), "access_denied");
+        assert_eq!(AuditEventType::DekRotated.to_string(), "dek_rotated");
     }
 
     #[test]

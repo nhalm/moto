@@ -350,6 +350,26 @@ impl From<&AuditEntry> for AuditEntryResponse {
     }
 }
 
+/// Response after rotating a secret's DEK.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotateDekResponse {
+    /// Secret name.
+    pub name: String,
+    /// Secret scope.
+    pub scope: Scope,
+    /// New version number after rotation.
+    pub version: u32,
+    /// When the rotation occurred (RFC 3339).
+    pub rotated_at: String,
+}
+
+/// Query parameters for the rotate-dek endpoint.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct RotateDekQuery {
+    /// Scope in format: "global", "service/name", or "instance/id".
+    pub scope: Option<String>,
+}
+
 /// Query parameters for audit log endpoint.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct AuditLogsQuery {
@@ -1094,6 +1114,7 @@ async fn get_audit_logs(
                     "svid_issued" => e.event_type == AuditEventType::SvidIssued,
                     "auth_failed" => e.event_type == AuditEventType::AuthFailed,
                     "access_denied" => e.event_type == AuditEventType::AccessDenied,
+                    "dek_rotated" => e.event_type == AuditEventType::DekRotated,
                     _ => true,
                 };
                 if !matches {
@@ -1137,6 +1158,120 @@ async fn get_audit_logs(
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
+/// Rotate a secret's DEK.
+///
+/// Service token required. SVID tokens are denied with 403 FORBIDDEN.
+async fn rotate_dek(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    Query(query): Query<RotateDekQuery>,
+) -> impl IntoResponse {
+    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
+        (
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::FORBIDDEN,
+                "Operation requires service token",
+            )),
+        )
+    })?;
+    let claims = state.service_token_claims();
+
+    let scope_str = query.scope.as_deref().unwrap_or("global");
+    let (scope, service, instance_id) = parse_scope_query(scope_str)?;
+
+    let metadata = state
+        .repository
+        .write()
+        .await
+        .rotate_dek(
+            &claims,
+            scope,
+            service.as_deref(),
+            instance_id.as_deref(),
+            &name,
+        )
+        .map_err(|e| {
+            if let Error::SecretNotFound { .. } = e {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiError::new(
+                        error_codes::SECRET_NOT_FOUND,
+                        format!("Secret not found: {scope_str}/{name}"),
+                    )),
+                )
+            } else {
+                tracing::error!("DEK rotation failed: {e}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new(error_codes::INTERNAL_ERROR, "Internal error")),
+                )
+            }
+        })?;
+
+    let response = RotateDekResponse {
+        name: metadata.name,
+        scope: metadata.scope,
+        version: metadata.version,
+        rotated_at: metadata.updated_at.to_rfc3339(),
+    };
+
+    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
+}
+
+/// Parse scope query parameter.
+///
+/// Accepts: "global", "service/name", "instance/id".
+///
+/// # Errors
+///
+/// Returns a `(StatusCode, Json<ApiError>)` tuple if the scope string is invalid.
+#[allow(clippy::type_complexity)]
+pub fn parse_scope_query(
+    scope_str: &str,
+) -> Result<(Scope, Option<String>, Option<String>), (StatusCode, Json<ApiError>)> {
+    if scope_str == "global" {
+        return Ok((Scope::Global, None, None));
+    }
+
+    if let Some(service) = scope_str.strip_prefix("service/") {
+        if service.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new(
+                    error_codes::INVALID_SCOPE,
+                    "Service name required in scope parameter (e.g., scope=service/club)",
+                )),
+            ));
+        }
+        return Ok((Scope::Service, Some(service.to_string()), None));
+    }
+
+    if let Some(instance_id) = scope_str.strip_prefix("instance/") {
+        if instance_id.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new(
+                    error_codes::INVALID_SCOPE,
+                    "Instance ID required in scope parameter (e.g., scope=instance/abc123)",
+                )),
+            ));
+        }
+        return Ok((Scope::Instance, None, Some(instance_id.to_string())));
+    }
+
+    Err((
+        StatusCode::BAD_REQUEST,
+        Json(ApiError::new(
+            error_codes::INVALID_SCOPE,
+            format!(
+                "Invalid scope: {scope_str}. Must be 'global', 'service/{{name}}', or 'instance/{{id}}'"
+            ),
+        )),
+    ))
+}
+
 // =============================================================================
 // Router
 // =============================================================================
@@ -1153,6 +1288,7 @@ async fn get_audit_logs(
 /// - `GET /secrets/service/{service}` - List service secrets
 /// - `GET /secrets/instance/{instance_id}` - List instance secrets
 /// - `GET /audit/logs` - Query audit logs (admin services only)
+/// - `POST /admin/rotate-dek/{name}` - Rotate a secret's DEK (admin only)
 pub fn router(state: AppState) -> Router {
     Router::new()
         // Auth endpoints
@@ -1172,6 +1308,8 @@ pub fn router(state: AppState) -> Router {
         )
         // Audit endpoint
         .route("/audit/logs", get(get_audit_logs))
+        // Admin endpoints
+        .route("/admin/rotate-dek/{name}", post(rotate_dek))
         .with_state(state)
 }
 

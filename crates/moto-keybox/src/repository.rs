@@ -562,6 +562,60 @@ impl SecretRepository {
         results
     }
 
+    /// Rotates the DEK for a secret.
+    ///
+    /// The secret value does not change — it is decrypted with the old DEK
+    /// and re-encrypted with a new DEK.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The secret does not exist
+    /// - Decryption or re-encryption fails
+    pub fn rotate_dek(
+        &mut self,
+        claims: &SvidClaims,
+        scope: Scope,
+        service: Option<&str>,
+        instance_id: Option<&str>,
+        name: &str,
+    ) -> Result<SecretMetadata> {
+        let key = SecretKey::new(
+            scope,
+            service.map(String::from),
+            instance_id.map(String::from),
+            name.to_string(),
+        );
+
+        let stored = self
+            .secrets
+            .get_mut(&key)
+            .ok_or_else(|| Error::SecretNotFound {
+                scope: scope.to_string(),
+                name: name.to_string(),
+            })?;
+
+        // Decrypt with old DEK
+        let old_dek = self.master_key.unwrap_dek(&stored.encrypted_dek)?;
+        let plaintext = old_dek.decrypt(&stored.encrypted_value)?;
+
+        // Generate new DEK and re-encrypt
+        let new_dek = DataEncryptionKey::generate();
+        stored.encrypted_value = new_dek.encrypt(&plaintext)?;
+        stored.encrypted_dek = self.master_key.wrap_dek(&new_dek)?;
+
+        // Update version
+        stored.metadata.version += 1;
+        stored.metadata.updated_at = Utc::now();
+
+        let metadata = stored.metadata.clone();
+
+        // Audit
+        self.audit(claims, AuditEventType::DekRotated, Some(&metadata));
+
+        Ok(metadata)
+    }
+
     /// Returns the audit log entries.
     #[must_use]
     pub fn audit_log(&self) -> &[AuditEntry] {
