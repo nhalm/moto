@@ -2,17 +2,19 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.10 |
+| Version | 0.11 |
 | Status | Ready to Rip |
 | Last Updated | 2026-03-02 |
 
 ## Changelog
 
+### v0.11 (2026-03-02)
+- Add test requirements for auth matrix enforcement and DEK rotation.
+
 ### v0.10 (2026-03-02)
 - Enforce endpoint authorization matrix: `set_secret` and `delete_secret` must require service token (deny SVID with 403). `get_secret` and `list_secrets` must accept both service token and SVID. `get_audit_logs` must accept service token directly (not just SVID with Service principal type).
 - Implement `POST /admin/rotate-dek/{name}`: rotates DEK for a secret, re-encrypts value, creates new version. Service token only. New `dek_rotated` audit event type.
 - Move DEK rotation out of Future Work (Phase 2) — now implemented.
-- Add test requirements for auth matrix enforcement and DEK rotation.
 
 ### v0.9 (2026-02-25)
 - Add missing env vars to Configuration section: `MOTO_KEYBOX_SERVICE_TOKEN_FILE`, `MOTO_KEYBOX_BIND_ADDR`, `MOTO_KEYBOX_HEALTH_BIND_ADDR`
