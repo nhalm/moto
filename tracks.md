@@ -306,7 +306,7 @@ HOW TO USE THIS FILE:
 
 ---
 
-## keybox.md v0.10
+## keybox.md v0.11
 
 **Status:** In Progress
 
@@ -337,8 +337,10 @@ HOW TO USE THIS FILE:
 - Fix: Secret retrieval handlers enforce pod UID binding (v0.8: get_secret, set_secret, delete_secret now call validate_enforcing_pod_uid() instead of validate(); SvidValidator.validate_enforcing_pod_uid validates pod_uid claim is non-empty when present; both api.rs and pg_api.rs updated with extract_svid_enforcing_pod_uid helper)
 - Enforce endpoint authorization matrix (v0.10: set_secret and delete_secret require service token only, deny SVID with 403 FORBIDDEN; get_secret and list_secrets accept both service token (skip ABAC) and SVID (ABAC checked); get_audit_logs requires service token only; both api.rs and pg_api.rs updated; AppState/PgAppState store admin_service for synthetic claims; FORBIDDEN error code used for wrong token type)
 - POST /admin/rotate-dek/{name} endpoint (v0.10: rotates DEK for a secret, re-encrypts value with new DEK, creates new version; service token only; ?scope= query param for scope/service/instance; DekRotated audit event type added to both moto-keybox types.rs and moto-keybox-db models.rs; rotate_dek method on both SecretRepository and PgSecretRepository; handler in both api.rs and pg_api.rs; route registered in both routers; 404 SECRET_NOT_FOUND if secret doesn't exist)
+- Auth matrix enforcement tests (v0.11: 8 handler-level tests in api_test.rs using in-memory router with tower::ServiceExt::oneshot; tests set_secret/delete_secret/get_audit_logs deny SVID with 403 FORBIDDEN; tests get_secret/list_secrets/get_audit_logs succeed with service token; tests get_secret/list_secrets succeed with valid SVID)
 
 **Remaining:**
+- DEK rotation tests (v0.11: rotate_dek with SVID returns 403; rotate_dek with service token succeeds; rotate_dek for non-existent secret returns 404; secret value readable after rotation; version incremented; dek_rotated audit event logged)
 - Add request logging/metrics middleware (future - Phase 2)
 - K8s ServiceAccount JWT validation via TokenReview API (future - MVP accepts principal info directly)
 

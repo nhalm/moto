@@ -44,6 +44,8 @@
 
 pub mod abac;
 pub mod api;
+#[cfg(test)]
+mod api_test;
 pub mod envelope;
 mod error;
 pub mod health;
