@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
+| Version | 0.6 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-19 |
+| Last Updated | 2026-03-02 |
 
 ## Overview
 
@@ -35,7 +35,44 @@ Shared utilities for integration tests: database pool, unique identifier generat
 - `test-all` - Unit tests + integration tests
 - `test-ci` - For CI (database already running)
 
+## Smoke Tests
+
+Smoke tests verify services work as deployed. They run against a live k3d cluster (`make deploy` must have succeeded).
+
+**Convention:**
+- Scripts live in `infra/smoke-test-{service}.sh`
+- Each script assumes the service is reachable (via port-forward or cluster networking)
+- Scripts exit 0 on success, 1 on failure
+- Container image smoke tests (checking tools/config exist inside an image) remain as-is — they don't require k3d
+
+**Makefile targets:**
+- `smoke-keybox` — port-forwards keybox, runs `infra/smoke-test-keybox.sh`, cleans up
+
+### Keybox Smoke Tests (`infra/smoke-test-keybox.sh`)
+
+Requires: k3d cluster running with keybox deployed. Service token read from `.dev/k8s-secrets/service-token`.
+
+**Auth matrix enforcement:**
+- `POST /secrets/` with service token succeeds (200)
+- `POST /secrets/` with SVID token returns 403 `FORBIDDEN`
+- `DELETE /secrets/` with SVID token returns 403 `FORBIDDEN`
+- `GET /secrets/` with service token succeeds (200)
+- `GET /audit/logs` with service token succeeds (200)
+- `GET /audit/logs` with SVID token returns 403 `FORBIDDEN`
+
+**DEK rotation:**
+- `POST /admin/rotate-dek/` with service token succeeds (200, version increments)
+- `POST /admin/rotate-dek/` with SVID token returns 403 `FORBIDDEN`
+- `POST /admin/rotate-dek/` for non-existent secret returns 404 `SECRET_NOT_FOUND`
+- Secret value unchanged after rotation
+
+**Cleanup:** Delete any secrets created during the test run.
+
 ## Changelog
+
+### v0.6 (2026-03-02)
+- Add smoke test section: convention for service-level smoke tests against k3d deployments.
+- Define keybox smoke tests: auth matrix enforcement and DEK rotation against live cluster.
 
 ### v0.5 (2026-02-19)
 - All repository functions should have not-found / error path tests (e.g., `update_secret_version` and `delete_secret` in secret_repo are missing not-found coverage)
