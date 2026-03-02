@@ -12,6 +12,7 @@
 - Enforce endpoint authorization matrix: `set_secret` and `delete_secret` must require service token (deny SVID with 403). `get_secret` and `list_secrets` must accept both service token and SVID. `get_audit_logs` must accept service token directly (not just SVID with Service principal type).
 - Implement `POST /admin/rotate-dek/{name}`: rotates DEK for a secret, re-encrypts value, creates new version. Service token only. New `dek_rotated` audit event type.
 - Move DEK rotation out of Future Work (Phase 2) — now implemented.
+- Add test requirements for auth matrix enforcement and DEK rotation.
 
 ### v0.9 (2026-02-25)
 - Add missing env vars to Configuration section: `MOTO_KEYBOX_SERVICE_TOKEN_FILE`, `MOTO_KEYBOX_BIND_ADDR`, `MOTO_KEYBOX_HEALTH_BIND_ADDR`
@@ -590,6 +591,30 @@ Per moto-bike.md Engine Contract, keybox exposes health endpoints on port 8081:
 - Master key successfully loaded
 - SVID signing key successfully loaded
 - Database connection established (when using PostgreSQL backend)
+
+### Test Requirements
+
+Per [testing.md](testing.md): handler tests use mocks (unit), database tests hit real PostgreSQL (integration).
+
+**Auth matrix enforcement:**
+
+- `set_secret` with SVID token returns 403 `FORBIDDEN`
+- `delete_secret` with SVID token returns 403 `FORBIDDEN`
+- `get_secret` succeeds with service token (skips ABAC)
+- `get_secret` succeeds with valid SVID (ABAC checked)
+- `list_secrets` succeeds with service token (all in scope)
+- `list_secrets` succeeds with valid SVID (own scope only)
+- `get_audit_logs` with SVID token returns 403 `FORBIDDEN`
+- `get_audit_logs` succeeds with service token
+
+**DEK rotation:**
+
+- `rotate_dek` with SVID token returns 403 `FORBIDDEN`
+- `rotate_dek` with service token succeeds (200, returns new version)
+- `rotate_dek` for non-existent secret returns 404 `SECRET_NOT_FOUND`
+- Secret value is still readable after DEK rotation (plaintext unchanged)
+- DEK rotation increments the secret version
+- `dek_rotated` audit event is logged after rotation
 
 ### Future Work (Phase 2)
 
