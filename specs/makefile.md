@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.15 |
+| Version | 0.16 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-27 |
+| Last Updated | 2026-03-04 |
 
 ## Overview
 
@@ -79,7 +79,7 @@ The `install` target is idempotent - safe to run multiple times. It configures g
 
 ```makefile
 build:          # Build all crates
-test:           # Run all tests
+test:           # Run unit tests (fast, no dependencies)
 check:          # Check compilation (no build)
 fmt:            # Format code
 lint:           # Run clippy
@@ -95,7 +95,11 @@ ci:             # Full CI check (fmt + check + lint + test)
 build-garage:               # Build garage container (Docker-wrapped Nix, works on Mac and Linux)
 test-garage:                # Run smoke tests on container
 shell-garage:               # Interactive shell in container
-push-garage:                # Push garage image to local registry (localhost:5000)
+push-garage:                # Push garage image to local registry
+
+# Bike (base image)
+build-bike:                 # Build moto-bike base container image
+test-bike:                  # Run smoke tests on bike container
 
 # Service images (bike base + binary)
 build-club:                 # Build moto-club container image
@@ -191,6 +195,11 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 - Keep names short but clear
 
 ## Changelog
+
+### v0.16 (2026-03-04)
+- Fix `test` target description: "Run unit tests" (was misleadingly "Run all tests"; `test-all` is the comprehensive target)
+- Add `build-bike` and `test-bike` to Container Targets section (were in changelog v0.6 but missing from targets table)
+- Remove stale `localhost:5000` from `push-garage` comment (registry port is determined by `REGISTRY` variable, default `localhost:5050` per local-cluster.md v0.3)
 
 ### v0.15 (2026-02-27)
 - `make install` now builds and copies the `moto` binary to `~/.local/bin/` (standard user binary path on macOS and Linux)

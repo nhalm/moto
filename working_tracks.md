@@ -10,4 +10,14 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-(none — all current spec work items are complete)
+## makefile v0.16
+
+(spec-only update — no code changes needed, targets already exist)
+
+## moto-club v2.4
+
+(spec-only update — code already matches updated spec)
+
+## keybox v0.12
+
+(spec-only update — code already matches updated spec)

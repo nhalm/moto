@@ -2,11 +2,19 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.11 |
+| Version | 0.12 |
 | Status | Ready to Rip |
-| Last Updated | 2026-03-02 |
+| Last Updated | 2026-03-04 |
 
 ## Changelog
+
+### v0.12 (2026-03-04)
+- Document K8s TokenReview as MVP-deferred: `POST /auth/token` currently accepts principal identity directly without K8s SA JWT validation. K8s TokenReview integration is a future item.
+- Document garage ABAC policies: garages have broad read access to global and service-scoped secrets (intentional for developer environments). Bikes remain restricted to their own service's secrets.
+- Change `MOTO_KEYBOX_DATABASE_URL` from Required to Optional: omitting it runs in-memory mode (testing only, secrets lost on restart).
+- Document extra list endpoints: `GET /secrets/service/{service}` and `GET /secrets/instance/{id}`.
+- Document `MOTO_KEYBOX_SERVICE_TOKEN` env var (direct token value, alternative to `_FILE` variant).
+- Document `MOTO_KEYBOX_ADMIN_SERVICE` env var (default: `moto-club`, controls which service gets admin ABAC bypass).
 
 ### v0.11 (2026-03-02)
 - Add test requirements for auth matrix enforcement and DEK rotation.
@@ -133,18 +141,17 @@ Resolution priority: Instance → Service → Global
 1. Bike pod starts with K8s ServiceAccount JWT
 
 2. Pod → POST /auth/token
-   Headers: Authorization: Bearer <K8s SA JWT>
+   Body: { "principal_type": "bike", "principal_id": "bike-id", "pod_uid": "..." }
 
    Keybox:
-   - Validates JWT via K8s TokenReview API
-   - Fetches pod metadata via K8s API
-   - Verifies pod labels (bike-id, etc.)
    - Signs SVID JWT with Ed25519 key
 
    ← Returns: Signed SVID (15 min TTL)
 
 3. Pod caches SVID, refreshes at 14 min (before expiry)
 ```
+
+**Note (MVP):** The current implementation accepts principal identity directly in the request body without K8s ServiceAccount JWT validation. K8s TokenReview API integration (validating the JWT, fetching pod metadata, verifying pod labels) is deferred to a future version. For now, any caller can obtain an SVID by providing principal info.
 
 **Garages (no K8s ServiceAccount - SVID pushed by moto-club):**
 
@@ -252,24 +259,50 @@ Attribute-Based Access Control evaluates:
 
 **Example policies:**
 ```
+# Garage can read its own instance secrets
+principal.type == "garage" AND
+principal.id == resource.instance_id AND
+resource.scope == "instance"
+
+# Garage can read any global secret (for development)
+principal.type == "garage" AND
+resource.scope == "global" AND
+action == "read"
+
+# Garage can read any service secret (for development)
+principal.type == "garage" AND
+resource.scope == "service" AND
+action == "read"
+
 # Bike can access its own instance secrets
 principal.type == "bike" AND
 principal.id == resource.instance_id AND
 resource.scope == "instance"
 
-# Bike can access its service's secrets
+# Bike can read any global secret
+principal.type == "bike" AND
+resource.scope == "global" AND
+action == "read"
+
+# Bike can access its service's secrets (service field must match)
 principal.type == "bike" AND
 principal.service == resource.service AND
 resource.scope == "service"
 
-# AI proxy can access global AI keys
+# Service can access global secrets by name prefix
 principal.type == "service" AND
-principal.id == "ai-proxy" AND
 resource.scope == "global" AND
-resource.name STARTS_WITH "ai/"
+resource.name STARTS_WITH principal.id + "/"
+
+# Service can access its own service secrets
+principal.type == "service" AND
+principal.id == resource.service AND
+resource.scope == "service"
 ```
 
-**Policy storage:** Policies are hardcoded in Rust for MVP (garage accesses garage secrets, bike accesses bike secrets, etc.). Future: load from config file for flexibility.
+**Policy storage:** Policies are hardcoded in Rust for MVP. Future: load from config file for flexibility.
+
+**Design note:** Garages have broad read access (any global or service secret) because they are developer environments. Bikes are more restricted — they can only read their own service's secrets (enforced via the `service` claim in the SVID). No principal can write to scopes they don't own.
 
 ### Secret Types
 
@@ -351,6 +384,8 @@ GET  /secrets/{scope}/{name}     - Retrieve secret
 POST /secrets/{scope}/{name}     - Create/update secret
 DELETE /secrets/{scope}/{name}   - Delete secret
 GET  /secrets/{scope}            - List secrets in scope (names only, no values)
+GET  /secrets/service/{service}  - List secrets for a specific service
+GET  /secrets/instance/{id}      - List secrets for a specific instance
 ```
 
 **Admin:**
@@ -474,14 +509,18 @@ moto keybox issue-dev-svid --garage-id=test-garage --output=./dev-svid.jwt
 # Required
 MOTO_KEYBOX_MASTER_KEY_FILE="/run/secrets/keybox-master-key"
 MOTO_KEYBOX_SVID_SIGNING_KEY_FILE="/run/secrets/svid-signing-key"
-MOTO_KEYBOX_DATABASE_URL="postgres://keybox:password@localhost:5432/keybox"
 
 # Optional
+MOTO_KEYBOX_DATABASE_URL="postgres://keybox:password@localhost:5432/keybox"  # Omit for in-memory mode (testing only)
 MOTO_KEYBOX_SVID_TTL_SECONDS="900"              # Default 15 min
-MOTO_KEYBOX_SERVICE_TOKEN_FILE="/run/secrets/service-token"  # Alternative to MOTO_KEYBOX_SERVICE_TOKEN env var
+MOTO_KEYBOX_SERVICE_TOKEN="/run/secrets/service-token"  # Direct token value
+MOTO_KEYBOX_SERVICE_TOKEN_FILE="/run/secrets/service-token"  # Read token from file (preferred)
 MOTO_KEYBOX_BIND_ADDR="0.0.0.0:8080"            # Default 0.0.0.0:8080
 MOTO_KEYBOX_HEALTH_BIND_ADDR="0.0.0.0:8081"     # Default 0.0.0.0:8081
+MOTO_KEYBOX_ADMIN_SERVICE="moto-club"           # Default: moto-club. Service name that gets admin ABAC bypass.
 ```
+
+**Note:** When `MOTO_KEYBOX_DATABASE_URL` is omitted, the server runs with in-memory storage. This is for testing only — secrets are lost on restart. Production deployments must set this variable.
 
 ### Database Schema (PostgreSQL)
 

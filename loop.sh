@@ -2,6 +2,25 @@
 
 cd "$(dirname "$0")"
 
+# Seed working_tracks.md from specs before starting the loop
+echo "=== Seeding working_tracks.md from specs ==="
+SEED_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+SEED_OUTPUT="/tmp/${PWD##*/}-seed-${SEED_TIMESTAMP}.txt"
+
+cat seed-prompt.md | claude -p \
+    --dangerously-skip-permissions \
+    --output-format=stream-json \
+    --verbose \
+    | tee "$SEED_OUTPUT" \
+    | npx repomirror visualize
+
+if ! grep -q 'SEED_COMPLETE: true' "$SEED_OUTPUT"; then
+    echo "=== Seeding failed — check $SEED_OUTPUT ==="
+    exit 1
+fi
+
+echo "=== Seeding complete ==="
+
 TASK_NUM=0
 
 while true; do
@@ -36,6 +55,10 @@ while true; do
         echo "Check $OUTPUT_FILE for details"
         exit 1
     fi
+
+    # Kill any dev servers the agent may have left running
+    lsof -ti :8080 :8090 :18080 2>/dev/null | xargs kill 2>/dev/null || true
+
     echo "=== Task ${TASK_NUM} complete, sleeping 2s ==="
     sleep 2
 done

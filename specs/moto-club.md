@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 2.3 |
+| Version | 2.4 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-24 |
+| Last Updated | 2026-03-04 |
 
 ## Overview
 
@@ -280,7 +280,7 @@ Response 201 Created:
   "created_at": "2026-01-28T16:00:00Z",
   "updated_at": "2026-01-28T16:00:00Z",
   "namespace": "moto-garage-uuid-of-garage",
-  "pod_name": "garage"
+  "pod_name": "dev-container"
 }
 ```
 
@@ -355,7 +355,7 @@ Response 200:
   "created_at": "2026-01-28T16:00:00Z",
   "updated_at": "2026-01-28T16:05:00Z",
   "namespace": "moto-garage-uuid-of-garage",
-  "pod_name": "garage",
+  "pod_name": "dev-container",
   "terminated_at": null,
   "termination_reason": null
 }
@@ -702,6 +702,7 @@ Authorization: Bearer <user-token> OR <k8s-service-account-token>
 
 Response 200:
 {
+  "version": 1,
   "regions": {
     "1": {
       "name": "primary",
@@ -1109,9 +1110,9 @@ Response 200 (healthy):
 {
   "status": "healthy",
   "checks": {
-    "database": "ok",
-    "k8s": "ok",
-    "keybox": "ok"
+    "database": { "status": "ok" },
+    "k8s": { "status": "ok" },
+    "keybox": { "status": "ok" }
   }
 }
 
@@ -1119,29 +1120,29 @@ Response 200 (degraded):
 {
   "status": "degraded",
   "checks": {
-    "database": "ok",
-    "k8s": "ok",
-    "keybox": "error: connection refused"
+    "database": { "status": "ok" },
+    "k8s": { "status": "ok" },
+    "keybox": { "status": "error", "error": "connection refused" }
   }
 }
 ```
 
-**Behavior:** Health check always returns 200 and reports status. Individual check failures don't cause hard failure - moto-club continues serving what it can.
+**Behavior:** Health check always returns 200 and reports status. Individual check failures don't cause hard failure - moto-club continues serving what it can. Check values are objects with a `status` field ("ok" or "error") and an optional `error` field with details.
 
 **Health port (8081):** K8s probe endpoints for orchestration and monitoring.
 
 | Endpoint | Returns 200 when |
 |----------|------------------|
 | `GET /health/live` | Process is alive (not deadlocked) |
-| `GET /health/ready` | Ready for traffic (database connected, keybox reachable) |
+| `GET /health/ready` | Database connected (core dependency) |
 | `GET /health/startup` | Initial startup complete |
 
 **Readiness criteria for `/health/ready`:**
-- Database connection pool is established
-- K8s API is reachable
-- Keybox `/health/ready` returns 200 (if keybox URL configured)
+- Database connection pool is established (required — returns 503 if down)
+- K8s API is reachable (checked — degrades to 200 with `"status": "degraded"` if unreachable)
+- Keybox `/health/ready` returns 200 (checked — degrades similarly)
 
-These endpoints return plain 200 (healthy) or 503 (not ready). They are used by K8s probes and by `moto dev status` to check service health.
+Returns 200 (healthy or degraded) when database is up. Returns 503 only when database is down. K8s and keybox failures degrade but don't block readiness, since moto-club can still serve read requests without them.
 
 ### Logging
 
@@ -1240,6 +1241,12 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v2.4 (2026-03-04)
+- Fix `pod_name` in API response examples: `"dev-container"` (was `"garage"` — code has always used `dev-container`)
+- Fix `/health` response format: check values are objects (`{"status":"ok"}`) not plain strings (`"ok"`) — matches actual serialization
+- Clarify `/health/ready` behavior: returns 200 with `"degraded"` when DB is up but K8s/keybox are down; 503 only when database is unreachable. K8s and keybox are checked but don't block readiness.
+- Document `version` field in GET /api/v1/wg/derp-map response (integer, incremented on config changes)
 
 ### v2.3 (2026-02-25)
 - moto-club-db must embed migrations and auto-run on startup before serving requests — same pattern as moto-keybox-db (`sqlx::migrate!()` + `run_migrations()`). This keeps the bike image small (no sqlx-cli binary needed). Required for K8s deployment per [service-deploy.md](service-deploy.md).
