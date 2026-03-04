@@ -23,6 +23,7 @@ axum.workspace = true
 tokio.workspace = true
 subtle.workspace = true
 moto-keybox-db = { path = "../moto-keybox-db" }
+sqlx.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

@@ -2,14 +2,15 @@
 //!
 //! Provides Kubernetes-style health check functionality per the Engine Contract (moto-bike.md):
 //! - `/health/live` - Process is alive (not deadlocked), always 200 if reachable
-//! - `/health/ready` - Ready for traffic (master key loaded, SVID signing key loaded)
+//! - `/health/ready` - Ready for traffic (master key loaded, DB connected)
 //! - `/health/startup` - Initial startup complete
 //!
 //! These endpoints are served on a separate port (8081) from the main API (8080).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get};
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
+use moto_keybox_db::DbPool;
 use serde::Serialize;
 
 /// Global startup flag - set to true once initial startup is complete.
@@ -24,6 +25,12 @@ pub fn mark_startup_complete() {
 #[must_use]
 pub fn is_startup_complete() -> bool {
     STARTUP_COMPLETE.load(Ordering::SeqCst)
+}
+
+/// Optional state for health endpoints, holding a DB pool when using `PostgreSQL`.
+#[derive(Clone)]
+pub struct HealthState {
+    pool: Option<DbPool>,
 }
 
 /// Liveness response body.
@@ -63,21 +70,33 @@ async fn live_handler() -> impl IntoResponse {
 /// - Master key successfully loaded
 /// - SVID signing key successfully loaded
 /// - Database connection established (when using `PostgreSQL` backend)
-///
-/// Since keys are loaded at startup and we can't proceed without them,
-/// readiness depends on startup completion.
-async fn ready_handler() -> impl IntoResponse {
-    // If startup is complete, we're ready (keys are loaded)
-    // If startup failed, the process would have exited
-    if is_startup_complete() {
-        let response = ReadyResponse { status: "ok" };
-        (StatusCode::OK, Json(response))
-    } else {
-        let response = ReadyResponse {
-            status: "not_ready",
-        };
-        (StatusCode::SERVICE_UNAVAILABLE, Json(response))
+async fn ready_handler(State(state): State<HealthState>) -> impl IntoResponse {
+    if !is_startup_complete() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ReadyResponse {
+                status: "not_ready",
+            }),
+        );
     }
+
+    // Check DB connectivity when using PostgreSQL backend
+    if let Some(ref pool) = state.pool {
+        if sqlx::query_scalar::<_, i32>("SELECT 1")
+            .fetch_one(pool)
+            .await
+            .is_err()
+        {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ReadyResponse {
+                    status: "not_ready",
+                }),
+            );
+        }
+    }
+
+    (StatusCode::OK, Json(ReadyResponse { status: "ok" }))
 }
 
 /// Startup probe handler.
@@ -100,13 +119,18 @@ async fn startup_handler() -> impl IntoResponse {
 ///
 /// Per the Engine Contract (moto-bike.md), health endpoints are served on a separate port:
 /// - `GET /health/live` - Liveness probe (process is alive)
-/// - `GET /health/ready` - Readiness probe (keys loaded, ready for traffic)
+/// - `GET /health/ready` - Readiness probe (keys loaded, DB connected, ready for traffic)
 /// - `GET /health/startup` - Startup probe (initial startup complete)
-pub fn health_router() -> Router {
+///
+/// Pass a `DbPool` to enable runtime database connectivity checks in the readiness probe.
+/// When `None`, readiness only checks startup completion (in-memory mode).
+pub fn health_router(pool: Option<DbPool>) -> Router {
+    let state = HealthState { pool };
     Router::new()
         .route("/health/live", get(live_handler))
         .route("/health/ready", get(ready_handler))
         .route("/health/startup", get(startup_handler))
+        .with_state(state)
 }
 
 #[cfg(test)]

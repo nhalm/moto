@@ -201,11 +201,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let svid_validator = SvidValidator::new(svid_issuer.verifying_key());
     info!("SVID signing key loaded");
 
-    // Create the API router based on storage mode
-    let app = if let Some(database_url) = config.database_url {
-        // PostgreSQL mode
+    // Connect to database if configured (pool is shared between API and health check)
+    let pool = if let Some(ref database_url) = config.database_url {
         info!("connecting to PostgreSQL database");
-        let pool = moto_keybox_db::connect(&database_url)
+        let pool = moto_keybox_db::connect(database_url)
             .await
             .map_err(|e| format!("failed to connect to database: {e}"))?;
 
@@ -215,8 +214,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|e| format!("failed to run migrations: {e}"))?;
         info!("database migrations complete");
 
+        Some(pool)
+    } else {
+        None
+    };
+
+    // Create the API router based on storage mode
+    let app = if let Some(ref pool) = pool {
         let mut state = PgAppState::new(
-            pool,
+            pool.clone(),
             master_key,
             svid_issuer,
             svid_validator,
@@ -258,7 +264,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Start health server in background (port 8081)
-    let health_app = health_router();
+    // Pass DB pool so readiness probe can check connectivity at runtime
+    let health_app = health_router(pool);
     let health_listener = TcpListener::bind(config.health_bind_addr).await?;
     info!(addr = %config.health_bind_addr, "health server listening");
 
