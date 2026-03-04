@@ -486,8 +486,13 @@ WHAT DOES NOT GO HERE:
 - Fix `state.k8s_client` always `None`: clone `K8sClient` before passing to `GarageK8s`, then chain `.with_k8s_client(k8s_client)` on `AppState` builder in `main.rs`
 - Fix `set_session` not incrementing `peer_version`: add `wg_garage_repo::increment_peer_version` call after session creation in `postgres_stores.rs`
 - Fix `peer_broadcaster` never called on session create/close: `create_session` and `close_session` never call `broadcast_add()` or `broadcast_remove()`, so garages connected via `WS /internal/wg/garages/{id}/peers` receive no events when sessions change
+- Fix `close_session` spuriously incrementing `peer_version` when re-closing an already-closed session: `remove_session` now fetches raw DB session, checks `closed_at`, and only calls `close()` + `increment_peer_version` when the session is actually open
 
 ---
+
+## makefile.md v0.19
+
+- (spec-only) Fix `dev-down` description to "Stop postgres only"
 
 ## makefile.md v0.18
 
