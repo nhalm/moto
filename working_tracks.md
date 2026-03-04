@@ -31,7 +31,4 @@ Read it in full at the start of each iteration.
 
 (spec-only update — namespace format documented as short_id)
 
-## moto-club bug-fix
-
-- GET `/api/v1/wg/garages/{id}` returns dummy `peer_version` and `registered_at`. Handler hardcodes `peer_version: 0` and `registered_at: Utc::now()`. PostgreSQL values are never queried.
 
