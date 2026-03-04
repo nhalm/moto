@@ -34,16 +34,16 @@ same convention as tracks.md.
 
 ## testing.md
 
-- `moto-club-wg`: stale `// Run with: cargo test --features integration` comments in `sessions.rs:459` and `peers.rs:345` reference a feature flag that no longer exists (removed from `Cargo.toml`). Delete the misleading comments.
+(none)
 
 ## moto-club.md
 
-- **`state.k8s_client` is always `None` — K8s SA token validation permanently bypassed.** `main.rs:266-270` creates `K8sClient` and consumes it into `GarageK8s`, but `AppState` (built at `main.rs:320-328`) never calls `.with_k8s_client()`. Result: `validate_garage_token` in `wg.rs:363-367` short-circuits to `Ok(())` for all requests, and `/health/ready` in `health.rs:214-223` reports K8s as `"ok"` without checking. Fix: clone the client via `garage_k8s.client()` (accessor at `lib.rs:93`) and pass to `.with_k8s_client()`.
+- **`peer_broadcaster` never called on session create/close.** The `PeerBroadcaster` is wired into `AppState` and the WebSocket handler at `wg.rs:1166` uses it for subscriptions, but `create_session` and `close_session` never call `broadcast_add()` or `broadcast_remove()`. Garages connected via `WS /internal/wg/garages/{id}/peers` receive no events when sessions change.
+- **`close_session` spuriously increments `peer_version` when re-closing an already-closed session.** `postgres_stores.rs:remove_session` calls `get_session` which finds the session even if `closed_at IS NOT NULL`, then re-executes `wg_session_repo::close()` (idempotent via `COALESCE`) and `increment_peer_version`. Spec says "Idempotent: closing already-closed session returns 204" — the 204 is correct but the version bump is a semantic bug (version changes with no actual peer change).
 
 ## keybox.md
 
-- **`POST /auth/token` ignores `MOTO_KEYBOX_SVID_TTL_SECONDS`.** `api.rs:641` and `pg_api.rs:325` construct `SvidClaims::new(&spiffe_id, DEFAULT_SVID_TTL_SECS)` with hardcoded 900s instead of using the issuer's configured TTL. Setting the env var has no effect on issued SVIDs.
-- **ABAC service global-secret prefix check too broad.** `abac.rs:149-152` has `|| secret.name.starts_with(&claims.principal_id)` without trailing slash. A service named `ai` gets access to secrets prefixed `ai-proxy/`. Fix: remove the second `||` branch or require the trailing slash.
+(none)
 
 ## dev-container.md
 

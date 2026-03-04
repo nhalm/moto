@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.18 |
+| Version | 0.19 |
 | Status | Ready to Rip |
 | Last Updated | 2026-03-04 |
 
@@ -161,7 +161,7 @@ See [testing.md](testing.md) for test infrastructure specification.
 dev-cluster:         # Create k3d cluster via moto CLI (idempotent)
 dev-cluster-down:    # Delete the k3d cluster and local registry
 dev-up:              # Start full local dev stack (postgres + keybox + club)
-dev-down:            # Stop all services and database
+dev-down:            # Stop postgres only
 dev-clean:           # dev-down + remove pgdata volume + remove .dev/
 dev-db-up:           # Start dev postgres (docker-compose.yml, port 5432)
 dev-db-down:         # Stop dev postgres
@@ -198,6 +198,9 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 - Keep names short but clear
 
 ## Changelog
+
+### v0.19 (2026-03-04)
+- Fix `dev-down` description: "Stop postgres only" (was "Stop all services and database" — matched Makefile fix from local-dev.md v0.9 but spec was never updated)
 
 ### v0.18 (2026-03-04)
 - Fix `push-garage` comment: add "clean up local copy" (was present in Makefile and in push-club/push-keybox but missing from spec)

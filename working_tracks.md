@@ -10,4 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
+## makefile.md v0.19
+- (spec-only) Fix `dev-down` description to "Stop postgres only"
 
