@@ -253,8 +253,12 @@ pub mod error_codes {
     pub const INVALID_STATUS: &str = "INVALID_STATUS";
     /// `WireGuard` device not found.
     pub const DEVICE_NOT_FOUND: &str = "DEVICE_NOT_FOUND";
+    /// Device (public key) belongs to different user.
+    pub const DEVICE_NOT_OWNED: &str = "DEVICE_NOT_OWNED";
     /// `WireGuard` session not found.
     pub const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
+    /// Session belongs to different user.
+    pub const SESSION_NOT_OWNED: &str = "SESSION_NOT_OWNED";
     /// Internal server error.
     pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
     /// Kubernetes API error.
