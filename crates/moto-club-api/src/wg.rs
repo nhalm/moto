@@ -957,16 +957,14 @@ async fn get_garage_wg_registration(
         "Retrieved garage WireGuard registration"
     );
 
-    // For in-memory store, we use defaults for peer_version and registered_at.
-    // The PostgreSQL store will provide real values.
     let response = GarageWgRegistrationResponse {
         garage_id: garage.garage_id,
         public_key: garage.public_key,
         assigned_ip: garage.overlay_ip,
         endpoints: garage.endpoints,
-        peer_version: 0, // Default for in-memory; PostgreSQL will provide actual value
+        peer_version: garage.peer_version,
         derp_map,
-        registered_at: Utc::now(), // Default for in-memory; PostgreSQL will provide actual value
+        registered_at: garage.registered_at,
     };
 
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))

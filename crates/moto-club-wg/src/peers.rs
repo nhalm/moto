@@ -122,6 +122,12 @@ pub struct RegisteredGarage {
 
     /// Direct UDP endpoints for P2P connections.
     pub endpoints: Vec<SocketAddr>,
+
+    /// Peer version, incremented on session create/close.
+    pub peer_version: i32,
+
+    /// When the garage registered.
+    pub registered_at: DateTime<Utc>,
 }
 
 /// Storage backend for peer registry.
@@ -254,6 +260,8 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
             public_key: req.public_key,
             overlay_ip,
             endpoints: req.endpoints,
+            peer_version: 0,
+            registered_at: Utc::now(),
         };
 
         self.store.set_garage(garage.clone())?;

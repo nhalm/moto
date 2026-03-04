@@ -204,6 +204,8 @@ impl PeerStore for PostgresPeerStore {
                     public_key,
                     overlay_ip,
                     endpoints,
+                    peer_version: wg_garage.peer_version,
+                    registered_at: wg_garage.registered_at,
                 }))
             }
             Err(moto_club_db::DbError::NotFound { .. }) => Ok(None),
