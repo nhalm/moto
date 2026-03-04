@@ -233,37 +233,3 @@ mod tests {
         assert_ne!(ip1, ip3);
     }
 }
-
-// Integration tests that require PostgreSQL
-// Run with: cargo test --features integration
-#[cfg(all(test, feature = "integration"))]
-mod integration_tests {
-    use super::*;
-    use moto_wgtunnel_types::WgPrivateKey;
-
-    fn generate_public_key() -> WgPublicKey {
-        WgPrivateKey::generate().public_key()
-    }
-
-    // Note: These tests require PostgresIpamStore from moto-club-api.
-    // See moto-club-api/src/wg_test.rs for integration tests with PostgreSQL storage.
-    // The IpamStore trait is tested through PostgresIpamStore in that crate.
-
-    // The following tests document the expected behavior that integration tests should verify:
-    //
-    // 1. garage_allocation_is_deterministic:
-    //    - Same garage ID returns same IP
-    //    - Different garage IDs return different IPs
-    //    - All allocated IPs are in the garage subnet
-    //
-    // 2. client_allocation_is_sequential:
-    //    - Different public keys get different IPs
-    //    - All allocated IPs are in the client subnet
-    //
-    // 3. client_allocation_is_persistent:
-    //    - Same public key always returns the same IP
-    //
-    // 4. get_client_ip_without_allocation:
-    //    - Returns None for unallocated public keys
-    //    - Returns Some(ip) after allocation
-}
