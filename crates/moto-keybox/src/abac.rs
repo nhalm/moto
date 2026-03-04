@@ -146,9 +146,7 @@ impl PolicyEngine {
                 // Services can access global secrets if the name prefix matches
                 // e.g., "ai-proxy" can access "ai/*"
                 let allowed_prefix = format!("{}/", claims.principal_id);
-                if secret.name.starts_with(&allowed_prefix)
-                    || secret.name.starts_with(&claims.principal_id)
-                {
+                if secret.name.starts_with(&allowed_prefix) {
                     return Ok(());
                 }
                 Err(Error::AccessDenied {
@@ -517,6 +515,21 @@ mod tests {
         let secret = SecretMetadata::global("ai-proxy/anthropic");
 
         engine.can_read(&claims, &secret).unwrap();
+    }
+
+    #[test]
+    fn service_prefix_check_requires_trailing_slash() {
+        let engine = PolicyEngine::new();
+        // "ai" must NOT access "ai-proxy/..." secrets — prefix must end with "/"
+        let claims = service_claims("ai");
+        let secret = SecretMetadata::global("ai-proxy/anthropic");
+
+        let err = engine.can_read(&claims, &secret).unwrap_err();
+        assert!(matches!(err, Error::AccessDenied { .. }));
+
+        // But "ai" CAN access "ai/..." secrets
+        let own_secret = SecretMetadata::global("ai/anthropic");
+        engine.can_read(&claims, &own_secret).unwrap();
     }
 
     #[test]
