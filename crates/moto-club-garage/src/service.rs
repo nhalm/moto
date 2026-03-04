@@ -22,7 +22,7 @@ use moto_club_types::GarageId;
 
 use crate::keybox::{KeyboxClient, KeyboxError};
 use crate::lifecycle::{GarageLifecycle, LifecycleError};
-use crate::{DEFAULT_IMAGE, DEFAULT_TTL_SECONDS, MAX_TTL_SECONDS, MIN_TTL_SECONDS};
+use crate::{DEFAULT_TTL_SECONDS, MAX_TTL_SECONDS, MIN_TTL_SECONDS};
 
 /// Errors from garage service operations.
 #[derive(Debug, Error)]
@@ -210,7 +210,7 @@ impl GarageService {
         let image = input
             .image
             .clone()
-            .unwrap_or_else(|| DEFAULT_IMAGE.to_string());
+            .unwrap_or_else(|| self.k8s.dev_container_image().to_string());
         let db_input = garage_repo::CreateGarage {
             id,
             name: name.clone(),

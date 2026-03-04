@@ -75,7 +75,7 @@ impl GarageK8s {
     pub fn new(client: K8sClient) -> Self {
         Self {
             client,
-            dev_container_image: "ghcr.io/moto-dev/moto-garage:latest".to_string(),
+            dev_container_image: "ghcr.io/nhalm/moto-dev:latest".to_string(),
         }
     }
 

@@ -214,6 +214,7 @@ fn generate_garage_name() -> String {
 ///
 /// When `GarageService` is not configured (testing/local dev without K8s),
 /// only the database record is created.
+#[allow(clippy::too_many_lines)]
 async fn create_garage(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -286,10 +287,13 @@ async fn create_garage(
     let namespace = format!("moto-garage-{}", garage_id.short());
     let pod_name = "dev-container".to_string();
     let branch = req.branch.unwrap_or_else(|| "main".to_string());
-    // Default image can be overridden via request
-    let image = req
-        .image
-        .unwrap_or_else(|| "ghcr.io/nhalm/moto-dev:latest".to_string());
+    // Default image can be overridden via request; falls back to env var or hardcoded default
+    let image = req.image.unwrap_or_else(|| {
+        state.garage_k8s.as_ref().map_or_else(
+            || moto_club_garage::DEFAULT_IMAGE.to_string(),
+            |k8s| k8s.dev_container_image().to_string(),
+        )
+    });
 
     // Create in database
     let input = garage_repo::CreateGarage {

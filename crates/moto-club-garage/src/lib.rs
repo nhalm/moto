@@ -66,5 +66,8 @@ pub static MIN_TTL_SECONDS: LazyLock<i32> = LazyLock::new(|| {
         .unwrap_or(300)
 });
 
-/// Default dev container image.
-pub const DEFAULT_IMAGE: &str = "ghcr.io/nhalm/moto-dev:latest";
+/// Default dev container image, configurable via `MOTO_CLUB_DEV_CONTAINER_IMAGE`.
+pub static DEFAULT_IMAGE: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("MOTO_CLUB_DEV_CONTAINER_IMAGE")
+        .unwrap_or_else(|_| "ghcr.io/nhalm/moto-dev:latest".to_string())
+});
