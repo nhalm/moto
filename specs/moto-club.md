@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 2.4 |
+| Version | 2.5 |
 | Status | Ready to Rip |
 | Last Updated | 2026-03-04 |
 
@@ -279,7 +279,7 @@ Response 201 Created:
   "expires_at": "2026-01-28T20:00:00Z",
   "created_at": "2026-01-28T16:00:00Z",
   "updated_at": "2026-01-28T16:00:00Z",
-  "namespace": "moto-garage-uuid-of-garage",
+  "namespace": "moto-garage-01963e4a",
   "pod_name": "dev-container"
 }
 ```
@@ -354,7 +354,7 @@ Response 200:
   "expires_at": "2026-01-28T20:00:00Z",
   "created_at": "2026-01-28T16:00:00Z",
   "updated_at": "2026-01-28T16:05:00Z",
-  "namespace": "moto-garage-uuid-of-garage",
+  "namespace": "moto-garage-01963e4a",
   "pod_name": "dev-container",
   "terminated_at": null,
   "termination_reason": null
@@ -607,7 +607,7 @@ Response 200:
 - Active sessions remain valid (clients will reconnect with new garage pubkey on next session create)
 
 **Security note:** Re-registration with different pubkey is allowed because:
-1. K8s namespace validation ensures only pods in `moto-garage-{id}` namespace can register
+1. K8s namespace validation ensures only pods in `moto-garage-{short_id}` namespace can register
 2. Garage pods generate ephemeral keypairs on startup (no persistent key)
 3. If pod can run in the namespace, it's authorized (namespace = trust boundary)
 
@@ -788,7 +788,7 @@ struct Garage {
     expires_at: DateTime<Utc>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
-    namespace: String,          // K8s namespace: moto-garage-{id}
+    namespace: String,          // K8s namespace: moto-garage-{short_id}
     pod_name: String,           // K8s pod name
     terminated_at: Option<DateTime<Utc>>,
     termination_reason: Option<String>,  // user_closed, ttl_expired, pod_lost, namespace_missing, error
@@ -808,7 +808,7 @@ enum GarageStatus {
 1. Validate request
 2. Generate ID (UUID), name (if not provided)
 3. Insert into database (Pending, owner from config)
-4. Create K8s namespace: moto-garage-{id}
+4. Create K8s namespace: moto-garage-{short_id}
 5. Apply labels: moto.dev/type=garage, moto.dev/garage-id={id}, moto.dev/owner={owner}
 6. Apply NetworkPolicy, ResourceQuota, LimitRange
 7. Generate WireGuard keypair:
@@ -920,7 +920,7 @@ moto-club coordinates WireGuard connections but never sees traffic.
 
 When a garage pod calls `POST /api/v1/wg/garages`, moto-club validates:
 
-1. **Namespace isolation:** Pod must be running in `moto-garage-{id}` namespace
+1. **Namespace isolation:** Pod must be running in `moto-garage-{short_id}` namespace
 2. **K8s ServiceAccount token:** Validate the token via K8s TokenReview API, verify pod metadata matches claimed garage_id
 
 This prevents rogue pods from registering as arbitrary garages.
@@ -1202,7 +1202,7 @@ Uses `kube-rs` for K8s API interaction.
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: moto-garage-{id}
+  name: moto-garage-{short_id}
   labels:
     moto.dev/type: garage
     moto.dev/garage-id: {id}
@@ -1241,6 +1241,9 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v2.5 (2026-03-04)
+- Fix namespace format in spec: `moto-garage-{short_id}` (first 8 chars of UUID, e.g., `moto-garage-01963e4a`). Code has always used the short form; spec examples previously showed full UUID.
 
 ### v2.4 (2026-03-04)
 - Fix `pod_name` in API response examples: `"dev-container"` (was `"garage"` — code has always used `dev-container`)

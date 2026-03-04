@@ -34,20 +34,20 @@ same convention as tracks.md.
 
 ## testing.md
 
-- `integration` feature flag declared but gates nothing in `moto-club-api` and `moto-keybox`. Both crates have `integration = []` in Cargo.toml but zero `#[cfg(feature = "integration")]` guards in source. Either add gated integration tests or remove the dead feature flag.
+- `moto-club-wg`: `integration` feature flag declared (`Cargo.toml` line 12) with a stub `mod integration_tests` in `ipam.rs:239-280` that contains zero actual test functions (only comments). Either add real tests or remove the dead feature flag and empty module.
 
 ## moto-club.md
 
-- **Namespace naming mismatch breaks token validation.** `service.rs:206` and `namespace.rs:38` use `garage_id.short()` (8-char prefix) for namespace names (e.g., `moto-garage-01963e4a`), but `wg.rs:381` token validation uses full UUID (e.g., `moto-garage-01963e4a-...`). These will never match. Either use full UUID everywhere or use short ID everywhere.
-- **POST /api/v1/wg/devices always returns 201.** `wg.rs:469` unconditionally returns `StatusCode::CREATED`. Spec says re-registration of existing device should return 200.
-- **DeviceResponse missing `created_at` field.** `wg.rs:52-61` struct has only `public_key`, `overlay_ip`, `device_name`. Spec requires `created_at`.
-- **`DEVICE_NOT_OWNED` and `SESSION_NOT_OWNED` error codes not defined.** `lib.rs:239-268` error_codes module is missing both. Spec requires them for ownership checks (403).
-- **Session creation missing ownership/expiry/termination checks.** `wg.rs:527-615` `create_session` extracts owner (`let _owner = ...`) but never checks garage ownership, expiry, or termination status. Spec requires `GARAGE_NOT_OWNED`, `GARAGE_EXPIRED`, `GARAGE_TERMINATED` error responses.
-- **TTL env vars not read from environment.** `moto-club-garage/src/lib.rs:43-50` hardcodes `DEFAULT_TTL_SECONDS`, `MAX_TTL_SECONDS`, `MIN_TTL_SECONDS` as constants. Spec says these should be configurable via `MOTO_CLUB_MIN_TTL_SECONDS`, `MOTO_CLUB_DEFAULT_TTL_SECONDS`, `MOTO_CLUB_MAX_TTL_SECONDS` env vars.
+- **`close_session` does not check session ownership.** `wg.rs:789` extracts owner with `let _owner = ...` but never compares it to the session's owner. `SESSION_NOT_OWNED` error code is defined but never returned. Spec requires 403 for sessions belonging to a different user.
+- **`get_device` does not check device ownership.** `wg.rs:560` extracts owner with `let _owner = ...` but never compares it to the device's owner. `DEVICE_NOT_OWNED` error code is defined but never returned. Spec requires 403 for devices belonging to a different user.
+- **Fallback `create_garage` writes full UUID namespace.** `garages.rs:282` uses `format!("moto-garage-{id}")` with full UUID, but `service.rs:206` and `namespace.rs:38` use `garage_id.short()` (8-char prefix). Garages created via the fallback path get mismatched namespace names.
+- **Fallback TTL validation ignores `MIN_TTL_SECONDS`.** `garages.rs:253` checks `ttl_seconds <= 0` instead of `< *MIN_TTL_SECONDS`. Accepts values 1-299 that should be rejected (minimum is 300s). The `GarageService`-backed path validates correctly.
+- **`MOTO_CLUB_DEV_CONTAINER_IMAGE` env var not fully wired.** `main.rs` reads the env var and passes it to `GarageK8s`, but the fallback path in `garages.rs:288` and `DEFAULT_IMAGE` constant in `lib.rs:70` still hardcode `"ghcr.io/nhalm/moto-dev:latest"`.
+- **GET `/api/v1/wg/garages/{id}` returns dummy `peer_version` and `registered_at`.** `wg.rs:927-929` hardcodes `peer_version: 0` and `registered_at: Utc::now()` with comments acknowledging the gap. PostgreSQL values are never queried in this handler.
 
 ## keybox.md
 
-- **`/health/ready` does not check DB connection at runtime.** `health.rs:69-81` `ready_handler` only checks `is_startup_complete()` (a static `AtomicBool`). It does not ping the database pool. Spec requires readiness to reflect database connectivity. The handler doesn't even receive `State`, so it structurally cannot access the DB pool — needs to be wired up.
+(none)
 
 ## dev-container.md
 
@@ -83,7 +83,7 @@ same convention as tracks.md.
 
 ## local-dev.md
 
-- **chmod 600 only applied to `service-token`, not `master.key`/`signing.key`.** Both the Makefile `dev-keybox-init` target and `moto dev up` (`dev.rs` `ensure_keybox_keys()`) only `chmod 600` the service-token file. The `master.key` and `signing.key` files get whatever permissions `moto-keybox init` assigns. Spec says all three key files should be 600.
+(none)
 
 ## service-deploy.md
 

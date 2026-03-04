@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.16 |
+| Version | 0.17 |
 | Status | Ready to Rip |
 | Last Updated | 2026-03-04 |
 
@@ -86,6 +86,7 @@ lint:           # Run clippy
 clean:          # Clean build artifacts
 fix:            # Auto-fix lint issues
 ci:             # Full CI check (fmt + check + lint + test)
+run:            # Run the CLI
 ```
 
 ### Container Targets
@@ -141,6 +142,7 @@ test-db-migrate:     # Run migrations for moto-club-db AND moto-keybox-db agains
 test-integration:    # Fresh database cycle: test-db-up + test-db-migrate + integration tests + test-db-down
 test-all:            # Every test: unit + integration + ignored (K8s) — no test left behind
 test-ci:             # For CI: assumes database already running, runs unit + integration tests
+smoke-keybox:        # Smoke test keybox in k3d (port-forward, test, cleanup)
 ```
 
 `test-all` runs every test in the project:
@@ -168,6 +170,7 @@ dev-keybox-init:     # Generate keybox keys in .dev/keybox/
 dev-keybox:          # Start moto-keybox-server with dev config
 dev-club:            # Start moto-club with dev config
 dev-garage-image:    # Build and push garage image to local registry
+dev:                 # Start full dev stack via moto CLI (alias for moto dev up)
 ```
 
 See [local-dev.md](local-dev.md) for full local development specification.
@@ -195,6 +198,11 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 - Keep names short but clear
 
 ## Changelog
+
+### v0.17 (2026-03-04)
+- Add `run` to Development Targets (was in Makefile and .PHONY but missing from spec)
+- Add `dev` to Local Dev Targets (alias for `moto dev up`)
+- Add `smoke-keybox` to Testing Targets (port-forward + smoke test against k3d keybox)
 
 ### v0.16 (2026-03-04)
 - Fix `test` target description: "Run unit tests" (was misleadingly "Run all tests"; `test-all` is the comprehensive target)
