@@ -282,7 +282,8 @@ async fn create_garage(
 
     // Generate ID
     let id = Uuid::now_v7();
-    let namespace = format!("moto-garage-{id}");
+    let garage_id = GarageId::from_uuid(id);
+    let namespace = format!("moto-garage-{}", garage_id.short());
     let pod_name = "dev-container".to_string();
     let branch = req.branch.unwrap_or_else(|| "main".to_string());
     // Default image can be overridden via request
