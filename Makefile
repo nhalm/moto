@@ -29,7 +29,7 @@ build: ## Build all crates
 # Test database URL (override with environment variable if needed)
 TEST_DATABASE_URL ?= postgres://moto_test:moto_test@localhost:5433/moto_test
 
-test: ## Run unit tests only (fast, no dependencies)
+test: ## Run unit tests (fast, no dependencies)
 	cargo test --lib
 
 check: ## Check compilation without building
