@@ -235,6 +235,10 @@ WHAT DOES NOT GO HERE:
 - `dev-cluster-down` target: deletes k3d cluster and local registry via `k3d cluster delete moto` (v0.14)
 - `make install` builds release binary and copies to `~/.local/bin/moto` (v0.15: `cargo build --release --bin moto` + `cp target/release/moto ~/.local/bin/moto`)
 
+## makefile v0.16
+
+- Fix `test` target description: "Run unit tests" (was misleadingly "Run all tests")
+
 ---
 
 ## moto-bike v0.3
