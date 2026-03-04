@@ -23,7 +23,6 @@ Read it in full at the start of each iteration.
 - Namespace naming mismatch breaks token validation: `service.rs:206` and `namespace.rs:38` use `garage_id.short()` (8-char prefix) but `wg.rs:381` token validation uses full UUID — these will never match
 - GARAGE_NOT_REGISTERED swallowed as INTERNAL_ERROR: `wg.rs:600-609` maps all `session_manager.create_session()` errors to `INTERNAL_ERROR` — `GarageNotRegistered` should surface as a distinct error code
 - Session creation missing ownership/expiry/termination checks: `wg.rs:527-615` extracts owner but never checks garage ownership, expiry, or termination status — spec requires `GARAGE_NOT_OWNED`, `GARAGE_EXPIRED`, `GARAGE_TERMINATED` error responses
-- TTL env vars not read from environment: `moto-club-garage/src/lib.rs:43-50` hardcodes TTL constants — spec says these should be configurable via `MOTO_CLUB_MIN_TTL_SECONDS`, `MOTO_CLUB_DEFAULT_TTL_SECONDS`, `MOTO_CLUB_MAX_TTL_SECONDS` env vars
 
 ## keybox v0.12
 
