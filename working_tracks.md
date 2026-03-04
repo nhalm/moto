@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## moto-club bug-fix
-
-- `register_garage` returns FK error instead of `GARAGE_NOT_FOUND` 404 — must verify garage exists in `garages` table before upserting into `wg_garages`
-
 ## keybox bug-fix
 
 - `POST /auth/token` cannot set `service` claim for bikes — `TokenRequest` needs a `service` field so bikes can obtain SVIDs with service claims for ABAC
