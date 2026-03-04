@@ -2,23 +2,22 @@
 
 <!--
 This file is a DONE LOG — it records what has been implemented, not what remains.
+Remaining work lives in working_tracks.md.
 
 HOW TO USE THIS FILE:
 
 1. Section header = "## spec-name vX.Y" — must match the spec version you're working on
-2. When you complete a work item from a spec's changelog, add it to the Implemented list under the matching section
+2. When you complete a work item, move it from working_tracks.md to the Implemented list under the matching section
 3. If no section exists for the current spec version, create one at the TOP (below these instructions)
-4. Before picking a work item from a spec, check this file — if it's already listed here, it's done
-5. After implementing, search ALL sections for "(blocked: ...)" annotations that reference the work you just completed. Remove resolved blockers.
-6. Items use "(blocked: ...)" annotations — same convention as spec work items
+4. Never read this file in full — it exceeds context limits. Use Grep to find your section, then Read with offset/limit.
 
 WHAT GOES HERE:
-- Work items from spec changelogs, recorded after completion
+- Work items moved from working_tracks.md after completion
 - Bug-fix.md items, recorded after completion
 
 WHAT DOES NOT GO HERE:
-- "Remaining" lists — the spec's Work Items section is the source of truth for what needs doing
-- Discovery or TODO items — those belong in spec work items or bug-fix.md
+- Remaining work — that lives in working_tracks.md
+- Discovery or TODO items — those belong in working_tracks.md or bug-fix.md
 -->
 
 ---

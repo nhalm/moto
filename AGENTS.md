@@ -10,16 +10,20 @@
 - **Spec index:** `specs/README.md` lists all specifications organized by phase. Only specs with status "Ready to Rip" should be implemented.
 - **Changelogs are immutable.** When creating new changelog entries, old entries never change.
 
+## working_tracks.md (Remaining Work)
+
+working_tracks.md contains all remaining work items. **Read it in full** at the start of each iteration — it is kept small. Pick an unblocked item, implement it, then move it to tracks.md.
+
 ## tracks.md (Done Log)
 
-tracks.md records what's been implemented. It does NOT contain "Remaining" lists — the spec's Work Items are the source of truth for what needs doing.
+tracks.md is the archive of completed work. It does NOT contain remaining items — those live in working_tracks.md.
 
 **Never read tracks.md in full — it exceeds context limits.** Use targeted reads:
 
 1. **Find your section:** `Grep` for `## <your-spec>` to get the line number
 2. **Read your section:** `Read` with `offset` and `limit` (typically 30-50 lines) starting from that line number
 3. **Write updates:** Use `Edit` to modify only your section — never rewrite the file
-4. **After completing a work item:** Add it to the Implemented list under the matching spec version section
+4. **After completing a work item:** Move it from working_tracks.md to tracks.md under the matching spec version section
 
 ## Build & Test
 
