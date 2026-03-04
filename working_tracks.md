@@ -10,11 +10,37 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
+## makefile v0.16
+
+- Fix `test` target description: "Run unit tests" (was misleadingly "Run all tests")
+- Add `build-bike` and `test-bike` to Container Targets spec section (spec-only — already in Makefile per v0.6)
+- Remove stale `localhost:5000` from `push-garage` comment (registry port is determined by REGISTRY variable)
+
 ## makefile v0.17
 
 (spec-only update — no code changes needed, targets already exist)
 
+## keybox v0.12
+
+(spec-only update — documents K8s TokenReview as MVP-deferred, garage ABAC policies, DATABASE_URL as optional, extra list endpoints, SERVICE_TOKEN env var, ADMIN_SERVICE env var)
+
+## moto-club v2.4
+
+(spec-only update — fixes pod_name in examples, /health response format, /health/ready behavior, documents version field in derp-map response)
+
 ## moto-club v2.5
 
 (spec-only update — namespace format documented as short_id)
+
+## testing bug-fix
+
+- `moto-club-wg`: `integration` feature flag declared (Cargo.toml) with a stub `mod integration_tests` in `ipam.rs` that contains zero actual test functions. Either add real tests or remove the dead feature flag and empty module.
+
+## moto-club bug-fix
+
+- `get_device` does not check device ownership. `wg.rs` extracts owner with `let _owner = ...` but never compares it to the device's owner. `DEVICE_NOT_OWNED` error code is defined but never returned. Spec requires 403 for devices belonging to a different user.
+- Fallback `create_garage` writes full UUID namespace. `garages.rs` uses `format!("moto-garage-{id}")` with full UUID, but `service.rs` and `namespace.rs` use `garage_id.short()` (8-char prefix). Garages created via the fallback path get mismatched namespace names.
+- Fallback TTL validation ignores `MIN_TTL_SECONDS`. `garages.rs` checks `ttl_seconds <= 0` instead of `< *MIN_TTL_SECONDS`. Accepts values 1-299 that should be rejected (minimum is 300s). The `GarageService`-backed path validates correctly.
+- `MOTO_CLUB_DEV_CONTAINER_IMAGE` env var not fully wired. `main.rs` reads the env var and passes it to `GarageK8s`, but the fallback path in `garages.rs` and `DEFAULT_IMAGE` constant in `lib.rs` still hardcode `"ghcr.io/nhalm/moto-dev:latest"`.
+- GET `/api/v1/wg/garages/{id}` returns dummy `peer_version` and `registered_at`. Handler hardcodes `peer_version: 0` and `registered_at: Utc::now()`. PostgreSQL values are never queried.
 

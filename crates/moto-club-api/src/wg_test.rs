@@ -664,6 +664,80 @@ mod handler_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn close_session_not_owned() {
+        let state = create_test_state().await;
+        let peer_registry = state.peer_registry.clone();
+        let owner = test_owner();
+        let other_owner = test_owner();
+
+        // Register a device owned by `owner`
+        let device_key = test_public_key();
+        peer_registry
+            .register_device(moto_club_wg::DeviceRegistration {
+                public_key: device_key.clone(),
+                owner: owner.clone(),
+                device_name: Some("test-device".to_string()),
+            })
+            .await
+            .unwrap();
+
+        // Create garage DB record owned by the same user, then register WG
+        let garage_id = create_test_garage_for_owner(&state.db_pool, &owner).await;
+        let garage_key = test_public_key();
+        peer_registry
+            .register_garage(moto_club_wg::GarageRegistration {
+                garage_id: garage_id.to_string(),
+                public_key: garage_key,
+                endpoints: vec!["10.0.0.1:51820".parse().unwrap()],
+            })
+            .await
+            .unwrap();
+
+        // Create a session as `owner`
+        let body = serde_json::json!({
+            "garage_id": garage_id.to_string(),
+            "device_pubkey": device_key.to_base64(),
+            "ttl_seconds": 3600
+        });
+
+        let app = router().with_state(state.clone());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/wg/sessions")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
+                    .body(Body::from(serde_json::to_string(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let session: SessionResponse = serde_json::from_slice(&body).unwrap();
+
+        // Try to close the session as `other_owner` — should get 403
+        let app = router().with_state(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/api/v1/wg/sessions/{}", session.session_id))
+                    .header(header::AUTHORIZATION, format!("Bearer {other_owner}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn register_garage_success() {
         let state = create_test_state().await;
         let app = router().with_state(state.clone());

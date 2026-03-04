@@ -90,6 +90,7 @@ WHAT DOES NOT GO HERE:
 - Namespace naming mismatch breaks token validation: `wg.rs:384` used full UUID in `format!("moto-garage-{garage_id}")` but `service.rs` and `namespace.rs` use `garage_id.short()` (8-char prefix) — fixed to use `&garage_id[..8]` for consistent namespace matching
 - GARAGE_NOT_REGISTERED swallowed as INTERNAL_ERROR: added `GARAGE_NOT_REGISTERED` error code to `error_codes` module; updated `create_session` in `wg.rs` to match on `SessionError::GarageNotRegistered` and return 400 with `GARAGE_NOT_REGISTERED` instead of mapping all errors to `INTERNAL_ERROR`
 - Session creation missing ownership/expiry/termination checks: added `validate_garage_for_session` helper that looks up garage from DB and checks ownership (`GARAGE_NOT_OWNED` 403), termination (`GARAGE_TERMINATED` 410), and expiry (`GARAGE_EXPIRED` 410); also added `DEVICE_NOT_OWNED` check; updated integration tests to use owner-aware garage creation
+- `close_session` missing ownership check: handler now calls `wg_session_repo::verify_ownership` before closing, returns 403 `SESSION_NOT_OWNED` for sessions belonging to a different user (ownership determined via device FK); added `close_session_not_owned` integration test
 
 ---
 

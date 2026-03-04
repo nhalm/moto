@@ -786,7 +786,39 @@ async fn close_session(
     headers: HeaderMap,
     Path(session_id): Path<String>,
 ) -> impl IntoResponse {
-    let _owner = extract_owner(&headers)?;
+    let owner = extract_owner(&headers)?;
+
+    // Parse session UUID (strip "sess_" prefix if present)
+    let uuid_str = session_id.strip_prefix("sess_").unwrap_or(&session_id);
+    let session_uuid = Uuid::parse_str(uuid_str).map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiError::new(
+                error_codes::SESSION_NOT_FOUND,
+                format!("Session '{session_id}' not found"),
+            )),
+        )
+    })?;
+
+    // Verify session ownership before closing
+    moto_club_db::wg_session_repo::verify_ownership(&state.db_pool, session_uuid, &owner)
+        .await
+        .map_err(|e| match e {
+            moto_club_db::DbError::NotOwned { .. } => (
+                StatusCode::FORBIDDEN,
+                Json(ApiError::new(
+                    error_codes::SESSION_NOT_OWNED,
+                    format!("Session '{session_id}' belongs to a different user"),
+                )),
+            ),
+            _ => (
+                StatusCode::NOT_FOUND,
+                Json(ApiError::new(
+                    error_codes::SESSION_NOT_FOUND,
+                    format!("Session '{session_id}' not found"),
+                )),
+            ),
+        })?;
 
     // Close the session
     state
