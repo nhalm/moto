@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{ApiError, AppState, error_codes};
+use moto_club_db::{GarageStatus, garage_repo};
 use moto_k8s::TokenReviewOps;
 
 // ============================================================================
@@ -428,6 +429,74 @@ async fn validate_garage_token(
     Ok(())
 }
 
+/// Validate garage ownership, expiry, and termination status.
+///
+/// Looks up the garage by ID from the database and verifies:
+/// - Garage exists (404 `GARAGE_NOT_FOUND`)
+/// - Caller owns the garage (403 `GARAGE_NOT_OWNED`)
+/// - Garage is not terminated (410 `GARAGE_TERMINATED`)
+/// - Garage TTL has not expired (410 `GARAGE_EXPIRED`)
+async fn validate_garage_for_session(
+    state: &AppState,
+    garage_id: Uuid,
+    owner: &str,
+) -> Result<(), (StatusCode, Json<ApiError>)> {
+    let db_garage = garage_repo::get_by_id(&state.db_pool, garage_id)
+        .await
+        .map_err(|e| {
+            if let moto_club_db::DbError::NotFound { .. } = e {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiError::new(
+                        error_codes::GARAGE_NOT_FOUND,
+                        format!("Garage '{garage_id}' not found"),
+                    )),
+                )
+            } else {
+                tracing::error!(error = %e, garage_id = %garage_id, "Failed to get garage");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new(
+                        error_codes::INTERNAL_ERROR,
+                        format!("Failed to get garage: {e}"),
+                    )),
+                )
+            }
+        })?;
+
+    if db_garage.owner != owner {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::GARAGE_NOT_OWNED,
+                format!("Garage '{garage_id}' exists but is owned by another user"),
+            )),
+        ));
+    }
+
+    if db_garage.status == GarageStatus::Terminated {
+        return Err((
+            StatusCode::GONE,
+            Json(ApiError::new(
+                error_codes::GARAGE_TERMINATED,
+                format!("Garage '{garage_id}' has been terminated"),
+            )),
+        ));
+    }
+
+    if db_garage.expires_at < Utc::now() {
+        return Err((
+            StatusCode::GONE,
+            Json(ApiError::new(
+                error_codes::GARAGE_EXPIRED,
+                format!("Garage '{garage_id}' has expired"),
+            )),
+        ));
+    }
+
+    Ok(())
+}
+
 // ============================================================================
 // Handlers
 // ============================================================================
@@ -538,7 +607,10 @@ async fn create_session(
     headers: HeaderMap,
     Json(req): Json<CreateSessionRequest>,
 ) -> impl IntoResponse {
-    let _owner = extract_owner(&headers)?;
+    let owner = extract_owner(&headers)?;
+
+    // Validate garage ownership, expiry, and termination status
+    validate_garage_for_session(&state, req.garage_id, &owner).await?;
 
     // Look up the device by public key (public key IS the device identity)
     let device = state
@@ -564,7 +636,21 @@ async fn create_session(
             )
         })?;
 
-    // Look up the garage by ID
+    // Check device ownership
+    if device.owner != owner {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::DEVICE_NOT_OWNED,
+                format!(
+                    "Device '{}' belongs to a different user",
+                    req.device_pubkey.to_base64()
+                ),
+            )),
+        ));
+    }
+
+    // Look up the garage WireGuard registration
     let garage_id_str = req.garage_id.to_string();
     let garage = state
         .peer_registry
@@ -581,11 +667,11 @@ async fn create_session(
         })?
         .ok_or_else(|| {
             (
-                StatusCode::NOT_FOUND,
+                StatusCode::BAD_REQUEST,
                 Json(ApiError::new(
-                    error_codes::GARAGE_NOT_FOUND,
+                    error_codes::GARAGE_NOT_REGISTERED,
                     format!(
-                        "Garage '{}' not found or not registered for WireGuard",
+                        "Garage '{}' hasn't registered its WireGuard endpoint yet",
                         req.garage_id
                     ),
                 )),

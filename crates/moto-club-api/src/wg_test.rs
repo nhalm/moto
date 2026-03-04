@@ -269,13 +269,18 @@ mod handler_tests {
 
     // Helper to create a garage record in the DB (satisfies wg_garages FK)
     async fn create_test_garage(pool: &moto_club_db::DbPool) -> uuid::Uuid {
+        create_test_garage_for_owner(pool, "test-owner").await
+    }
+
+    // Helper to create a garage record owned by a specific user
+    async fn create_test_garage_for_owner(pool: &moto_club_db::DbPool, owner: &str) -> uuid::Uuid {
         let id = uuid::Uuid::now_v7();
         moto_club_db::garage_repo::create(
             pool,
             moto_club_db::garage_repo::CreateGarage {
                 id,
                 name: format!("test-{id}"),
-                owner: "test-owner".to_string(),
+                owner: owner.to_string(),
                 branch: "main".to_string(),
                 image: "moto-registry:5000/moto-garage:latest".to_string(),
                 ttl_seconds: 3600,
@@ -594,8 +599,8 @@ mod handler_tests {
             .await
             .unwrap();
 
-        // Create garage DB record (satisfies FK), then register WG
-        let garage_id = create_test_garage(&state.db_pool).await;
+        // Create garage DB record owned by the same user, then register WG
+        let garage_id = create_test_garage_for_owner(&state.db_pool, &owner).await;
         let garage_key = test_public_key();
         peer_registry
             .register_garage(moto_club_wg::GarageRegistration {
@@ -786,8 +791,8 @@ mod handler_tests {
             .await
             .unwrap();
 
-        // Create garage DB record (satisfies wg_garages FK)
-        let garage_id = create_test_garage(&state.db_pool).await;
+        // Create garage DB record owned by same user (satisfies wg_garages FK + ownership check)
+        let garage_id = create_test_garage_for_owner(&state.db_pool, &owner).await;
         let garage_key = test_public_key();
         peer_registry
             .register_garage(moto_club_wg::GarageRegistration {
