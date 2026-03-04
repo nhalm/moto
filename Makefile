@@ -334,7 +334,7 @@ dev-club: ## Start moto-club with dev config
 	RUST_LOG=moto_club=debug \
 	cargo run --bin moto-club
 
-dev-down: ## Stop all dev services and database
+dev-down: ## Stop postgres only
 	@echo "Stopping dev services..."
 	docker compose down
 	@echo "Dev services stopped."

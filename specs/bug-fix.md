@@ -30,7 +30,7 @@ same convention as tracks.md.
 
 ## makefile.md
 
-- **`dev-down` Makefile help text says "Stop all dev services and database" but spec says "Stop postgres only".** The v0.9 local-dev.md changelog claims this was fixed, but the Makefile `##` comment was never updated. Fix: change the `##` comment to match the spec.
+(none)
 
 ## testing.md
 

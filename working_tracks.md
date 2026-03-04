@@ -22,3 +22,15 @@ Read it in full at the start of each iteration.
 ## keybox.md v0.13
 - (spec-only) Fix `MOTO_KEYBOX_SERVICE_TOKEN` example value
 
+## testing.md bug-fix
+- Delete stale `// Run with: cargo test --features integration` comments in `moto-club-wg` sessions.rs:459 and peers.rs:345 (feature flag no longer exists)
+
+## moto-club.md bug-fix
+- Fix `state.k8s_client` always `None`: `AppState` never calls `.with_k8s_client()`, bypassing K8s SA token validation and /health/ready K8s check
+- Fix `set_session` not incrementing `peer_version`: `postgres_stores.rs:321-349` creates session but never calls `wg_garage_repo::increment_peer_version`
+
+## keybox.md bug-fix
+- Fix `POST /auth/issue-garage-svid` returning 401 instead of 403 for invalid service token: add `.map_err()` wrapper like other service-token-gated endpoints
+- Fix `POST /auth/token` ignoring `MOTO_KEYBOX_SVID_TTL_SECONDS`: uses hardcoded 900s instead of configured TTL
+- Fix ABAC service global-secret prefix check too broad: `abac.rs:149-152` missing trailing slash allows `ai` to access `ai-proxy/` secrets
+

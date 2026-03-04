@@ -449,3 +449,9 @@ WHAT DOES NOT GO HERE:
 - .githooks/pre-commit: cargo clippy --all-targets -- -D warnings (when Rust files changed, v0.2 changelog)
 - .githooks/pre-commit: nix flake check --no-build (when Nix files changed)
 - make install: sets git core.hooksPath to .githooks
+
+---
+
+## makefile.md bug-fix
+
+- Fix `dev-down` Makefile help text: says "Stop all dev services and database" but spec says "Stop postgres only"
