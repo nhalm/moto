@@ -94,6 +94,7 @@ WHAT DOES NOT GO HERE:
 - `get_device` missing ownership check: handler extracted owner with `let _owner = ...` but never compared it to the device's owner. Fixed to return 403 `DEVICE_NOT_OWNED` when device belongs to a different user.
 - Fallback TTL validation ignores `MIN_TTL_SECONDS`: `garages.rs` fallback path checked `ttl_seconds <= 0` instead of `< *MIN_TTL_SECONDS`, accepting values 1-299 that should be rejected (minimum is 300s). Fixed to use `MIN_TTL_SECONDS` consistent with the `GarageService` path.
 - Fallback `create_garage` writes full UUID namespace: `garages.rs` used `format!("moto-garage-{id}")` with full UUID, but `service.rs` and `namespace.rs` use `garage_id.short()` (8-char prefix). Fixed to use `GarageId::from_uuid(id).short()` for consistent namespace naming.
+- `MOTO_CLUB_DEV_CONTAINER_IMAGE` env var not fully wired: `main.rs` reads the env var and passes it to `GarageK8s`, but `DEFAULT_IMAGE` in `moto-club-garage/src/lib.rs` and the fallback path in `garages.rs` hardcoded `"ghcr.io/nhalm/moto-dev:latest"`. Fixed: `DEFAULT_IMAGE` now reads from env var via `LazyLock`, `service.rs` uses `GarageK8s.dev_container_image()`, API fallback queries `GarageK8s` or falls back to `DEFAULT_IMAGE`. Also fixed `GarageK8s::new()` default to match spec.
 
 ---
 
