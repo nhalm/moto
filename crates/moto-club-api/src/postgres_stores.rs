@@ -358,31 +358,49 @@ impl SessionStore for PostgresSessionStore {
     fn remove_session(&self, session_id: &str) -> moto_club_wg::sessions::Result<Option<Session>> {
         let pool = self.pool.clone();
 
-        // Get the session first
-        let session = self.get_session(session_id)?;
+        // Parse session UUID
+        let uuid_str = session_id.strip_prefix("sess_").unwrap_or(session_id);
+        let session_uuid = Uuid::parse_str(uuid_str)
+            .map_err(|_| SessionError::NotFound(session_id.to_string()))?;
 
-        if let Some(ref s) = session {
-            // Parse session ID
-            let uuid_str = session_id.strip_prefix("sess_").unwrap_or(session_id);
-            if let Ok(session_uuid) = Uuid::parse_str(uuid_str) {
-                // Soft-delete by closing the session
-                let _ = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current()
-                        .block_on(async { wg_session_repo::close(&pool, session_uuid).await })
-                });
+        // Get the raw DB session to check closed_at
+        let db_session = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(async { wg_session_repo::get_by_id(&pool, session_uuid).await })
+        });
 
-                // Increment peer_version for the garage
-                if let Ok(garage_uuid) = s.garage_id.parse::<Uuid>() {
-                    let _ = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(async {
-                            wg_garage_repo::increment_peer_version(&pool, garage_uuid).await
-                        })
-                    });
-                }
-            }
+        let db_session = match db_session {
+            Ok(s) => s,
+            Err(moto_club_db::DbError::NotFound { .. }) => return Ok(None),
+            Err(e) => return Err(SessionError::Storage(e.to_string())),
+        };
+
+        // Only close and increment peer_version if not already closed
+        if db_session.closed_at.is_none() {
+            let _ = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current()
+                    .block_on(async { wg_session_repo::close(&pool, session_uuid).await })
+            });
+
+            let _ = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    wg_garage_repo::increment_peer_version(&pool, db_session.garage_id).await
+                })
+            });
         }
 
-        Ok(session)
+        // Convert to domain Session
+        let public_key = WgPublicKey::from_base64(&db_session.device_pubkey)
+            .map_err(|e| SessionError::Storage(format!("invalid public key: {e}")))?;
+
+        Ok(Some(Session {
+            session_id: format!("sess_{}", db_session.id.simple()),
+            garage_id: db_session.garage_id.to_string(),
+            garage_name: db_session.garage_id.to_string(),
+            device_pubkey: public_key,
+            created_at: db_session.created_at,
+            expires_at: db_session.expires_at,
+        }))
     }
 
     fn list_sessions_by_device(
