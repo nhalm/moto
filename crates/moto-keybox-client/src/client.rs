@@ -133,6 +133,8 @@ struct PrincipalInfo {
     principal_id: String,
     /// Pod UID (for binding).
     pod_uid: Option<String>,
+    /// Service name for bikes (required for service-scoped secret access via ABAC).
+    service: Option<String>,
 }
 
 impl KeyboxClient {
@@ -196,6 +198,7 @@ impl KeyboxClient {
                 principal_type: PrincipalType::Garage,
                 principal_id: garage_id.into(),
                 pod_uid,
+                service: None,
             }),
         })
     }
@@ -209,6 +212,7 @@ impl KeyboxClient {
         config: KeyboxConfig,
         bike_id: impl Into<String>,
         pod_uid: Option<String>,
+        service: Option<String>,
     ) -> Result<Self> {
         let client = Client::builder()
             .timeout(config.timeout)
@@ -223,6 +227,7 @@ impl KeyboxClient {
                 principal_type: PrincipalType::Bike,
                 principal_id: bike_id.into(),
                 pod_uid,
+                service,
             }),
         })
     }
@@ -250,6 +255,7 @@ impl KeyboxClient {
                 principal_type: PrincipalType::Service,
                 principal_id: service_name.into(),
                 pod_uid,
+                service: None,
             }),
         })
     }
@@ -393,6 +399,7 @@ impl KeyboxClient {
             principal_type: principal.principal_type,
             principal_id: principal.principal_id.clone(),
             pod_uid: principal.pod_uid.clone(),
+            service: principal.service.clone(),
         };
 
         let response = self
@@ -574,7 +581,12 @@ mod tests {
     #[tokio::test]
     async fn client_for_bike() {
         let config = KeyboxConfig::new("http://localhost:8080");
-        let client = KeyboxClient::for_bike(config, "test-bike", Some("pod-123".to_string()));
+        let client = KeyboxClient::for_bike(
+            config,
+            "test-bike",
+            Some("pod-123".to_string()),
+            Some("my-service".to_string()),
+        );
         assert!(client.is_ok());
     }
 

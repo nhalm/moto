@@ -328,6 +328,10 @@ async fn issue_token(
         claims = claims.with_pod_uid(pod_uid);
     }
 
+    if let Some(service) = req.service {
+        claims = claims.with_service(service);
+    }
+
     match state.svid_issuer.issue_with_claims(&claims) {
         Ok(token) => {
             let audit_entry = AuditEntry::svid_issued(&spiffe_id);

@@ -192,6 +192,9 @@ pub struct TokenRequest {
     pub principal_id: String,
     /// Optional pod UID for binding.
     pub pod_uid: Option<String>,
+    /// Optional service name for bikes (required for service-scoped secret access via ABAC).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
 }
 
 /// Response containing an issued SVID.
@@ -642,6 +645,10 @@ async fn issue_token(
 
     if let Some(pod_uid) = req.pod_uid {
         claims = claims.with_pod_uid(pod_uid);
+    }
+
+    if let Some(service) = req.service {
+        claims = claims.with_service(service);
     }
 
     match state.svid_issuer.issue_with_claims(&claims) {
