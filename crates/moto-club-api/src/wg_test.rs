@@ -358,6 +358,55 @@ mod handler_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn register_device_reregistration_returns_200() {
+        let state = create_test_state().await;
+        let peer_registry = state.peer_registry.clone();
+        let app = router().with_state(state);
+        let owner = test_owner();
+
+        let key = test_public_key();
+
+        // Register device directly via peer_registry first
+        peer_registry
+            .register_device(moto_club_wg::DeviceRegistration {
+                public_key: key.clone(),
+                owner: owner.clone(),
+                device_name: Some("test-laptop".to_string()),
+            })
+            .await
+            .unwrap();
+
+        // Re-register same device via HTTP — should return 200, not 201
+        let body = serde_json::json!({
+            "public_key": key.to_base64(),
+            "device_name": "test-laptop"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/wg/devices")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, format!("Bearer {owner}"))
+                    .body(Body::from(serde_json::to_string(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let device: DeviceResponse = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(device.device_name, Some("test-laptop".to_string()));
+        assert!(device.overlay_ip.is_client());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn register_device_requires_auth() {
         let state = create_test_state().await;
         let app = router().with_state(state);

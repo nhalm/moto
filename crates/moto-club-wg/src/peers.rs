@@ -194,7 +194,10 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
     /// # Errors
     ///
     /// Returns error if storage or IPAM operations fail.
-    pub async fn register_device(&self, req: DeviceRegistration) -> Result<RegisteredDevice> {
+    pub async fn register_device(
+        &self,
+        req: DeviceRegistration,
+    ) -> Result<(RegisteredDevice, bool)> {
         // Check if device is already registered (by public key)
         if let Some(mut existing) = self.store.get_device(&req.public_key)? {
             // Update device name if it changed (idempotent)
@@ -202,7 +205,7 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
                 existing.device_name = req.device_name;
                 self.store.set_device(existing.clone())?;
             }
-            return Ok(existing);
+            return Ok((existing, false));
         }
 
         // Allocate IP for new device (keyed by public key)
@@ -216,7 +219,7 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
         };
 
         self.store.set_device(device.clone())?;
-        Ok(device)
+        Ok((device, true))
     }
 
     /// Get a registered device by public key.

@@ -449,7 +449,7 @@ async fn register_device(
     };
 
     // Register the device with the peer registry
-    let device = state
+    let (device, created) = state
         .peer_registry
         .register_device(registration)
         .await
@@ -465,8 +465,13 @@ async fn register_device(
         })?;
 
     let response = DeviceResponse::from(device);
+    let status = if created {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
+    };
 
-    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::CREATED, Json(response)))
+    Ok::<_, (StatusCode, Json<ApiError>)>((status, Json(response)))
 }
 
 /// Get device info.
