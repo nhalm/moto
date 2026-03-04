@@ -10,12 +10,4 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## moto-club v2.4
-
-(spec-only update — fixes pod_name in examples, /health response format, /health/ready behavior, documents version field in derp-map response)
-
-## moto-club v2.5
-
-(spec-only update — namespace format documented as short_id)
-
 

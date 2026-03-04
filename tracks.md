@@ -81,6 +81,14 @@ WHAT DOES NOT GO HERE:
 - Embed migrations and auto-run on startup (v2.3: moto-club-db adds MIGRATIONS static with sqlx::migrate!(), run_migrations() function, Migration error variant; moto-club main.rs calls run_migrations() after connect() before serving requests; same pattern as moto-keybox-db)
 - ClusterRole for K8s operations (v2.3: defined in infra/k8s/moto-system/club.yaml via service-deploy.md; ClusterRole with 11 resource types including namespaces with patch, ClusterRoleBinding to moto-club ServiceAccount)
 
+## moto-club v2.4
+
+(spec-only update — fixes pod_name in examples, /health response format, /health/ready behavior, documents version field in derp-map response)
+
+## moto-club v2.5
+
+(spec-only update — namespace format documented as short_id)
+
 ## moto-club bug-fix
 
 - POST /api/v1/wg/devices always returns 201: fixed to return 200 for idempotent re-registration of existing device, 201 only for new registrations (PeerRegistry::register_device now returns (RegisteredDevice, bool) tuple; added register_device_reregistration_returns_200 test)
