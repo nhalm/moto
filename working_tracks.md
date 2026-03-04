@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## keybox v0.12
-
-(spec-only update — documents K8s TokenReview as MVP-deferred, garage ABAC policies, DATABASE_URL as optional, extra list endpoints, SERVICE_TOKEN env var, ADMIN_SERVICE env var)
-
 ## moto-club v2.4
 
 (spec-only update — fixes pod_name in examples, /health response format, /health/ready behavior, documents version field in derp-map response)
