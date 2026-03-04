@@ -328,6 +328,7 @@ WHAT DOES NOT GO HERE:
 ## keybox bug-fix
 
 - `/health/ready` checks DB connection at runtime: `health_router()` now accepts `Option<DbPool>`, `ready_handler` runs `SELECT 1` against the pool when using PostgreSQL backend; `main.rs` restructured to create pool before health router so it can be shared; returns 503 `not_ready` if DB is unreachable
+- Fix ABAC service global-secret prefix check too broad: removed bare `starts_with(principal_id)` fallback in `evaluate_global`; now only checks `starts_with(principal_id + "/")` so service `ai` cannot access `ai-proxy/` secrets
 
 ---
 
