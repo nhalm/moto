@@ -476,3 +476,11 @@ WHAT DOES NOT GO HERE:
 
 - Fix `state.k8s_client` always `None`: clone `K8sClient` before passing to `GarageK8s`, then chain `.with_k8s_client(k8s_client)` on `AppState` builder in `main.rs`
 - Fix `set_session` not incrementing `peer_version`: add `wg_garage_repo::increment_peer_version` call after session creation in `postgres_stores.rs`
+
+---
+
+## makefile.md v0.18
+
+- (spec-only) Fix `push-garage` comment to include "clean up local copy"
+- (spec-only) Document `registry-start` vs `REGISTRY` port mismatch with override guidance
+- (spec-only) Document `deploy-system` port-forward side effect
