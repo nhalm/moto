@@ -610,6 +610,7 @@ async fn get_device(
 /// Create a tunnel session.
 ///
 /// POST /api/v1/wg/sessions
+#[allow(clippy::too_many_lines)]
 async fn create_session(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -691,7 +692,7 @@ async fn create_session(
 
     // Create the session
     let wg_request = WgCreateSessionRequest {
-        garage_id: garage_id_str,
+        garage_id: garage_id_str.clone(),
         device_pubkey: req.device_pubkey,
         ttl_seconds: req.ttl_seconds,
     };
@@ -722,6 +723,13 @@ async fn create_session(
                 )
             }
         })?;
+
+    // Notify garages listening on the peer WebSocket
+    state.peer_broadcaster.broadcast_add(
+        &garage_id_str,
+        device.public_key.clone(),
+        device.overlay_ip,
+    );
 
     Ok::<_, (StatusCode, Json<ApiError>)>((
         StatusCode::CREATED,
@@ -829,7 +837,7 @@ async fn close_session(
         })?;
 
     // Close the session
-    state
+    let closed_session = state
         .session_manager
         .close_session(&session_id)
         .map_err(|e| {
@@ -842,6 +850,11 @@ async fn close_session(
                 )),
             )
         })?;
+
+    // Notify garages listening on the peer WebSocket
+    state
+        .peer_broadcaster
+        .broadcast_remove(&closed_session.garage_id, closed_session.device_pubkey);
 
     Ok::<_, (StatusCode, Json<ApiError>)>(StatusCode::NO_CONTENT)
 }
