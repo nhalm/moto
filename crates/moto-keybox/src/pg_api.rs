@@ -358,7 +358,15 @@ async fn issue_garage_svid(
     headers: HeaderMap,
     Json(req): Json<IssueGarageSvidRequest>,
 ) -> impl IntoResponse {
-    validate_service_token(&headers, state.service_token.as_ref())?;
+    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
+        (
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::FORBIDDEN,
+                "Operation requires service token",
+            )),
+        )
+    })?;
 
     let spiffe_id = SpiffeId::garage(&req.garage_id);
     let claims = SvidClaims::new(&spiffe_id, GARAGE_SVID_TTL_SECS);

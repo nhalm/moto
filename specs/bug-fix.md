@@ -43,7 +43,6 @@ same convention as tracks.md.
 
 ## keybox.md
 
-- **`POST /auth/issue-garage-svid` returns 401 instead of 403 for invalid service token.** `api.rs:685` and `pg_api.rs:361` propagate `validate_service_token` errors with bare `?`, yielding 401. All other service-token-gated endpoints (set_secret, delete_secret, get_audit_logs, rotate_dek) use `.map_err()` to return 403. Fix: add the same `.map_err()` wrapper.
 - **`POST /auth/token` ignores `MOTO_KEYBOX_SVID_TTL_SECONDS`.** `api.rs:641` and `pg_api.rs:325` construct `SvidClaims::new(&spiffe_id, DEFAULT_SVID_TTL_SECS)` with hardcoded 900s instead of using the issuer's configured TTL. Setting the env var has no effect on issued SVIDs.
 - **ABAC service global-secret prefix check too broad.** `abac.rs:149-152` has `|| secret.name.starts_with(&claims.principal_id)` without trailing slash. A service named `ai` gets access to secrets prefixed `ai-proxy/`. Fix: remove the second `||` branch or require the trailing slash.
 

@@ -27,5 +27,4 @@ Read it in full at the start of each iteration.
 - Fix `set_session` not incrementing `peer_version`: `postgres_stores.rs:321-349` creates session but never calls `wg_garage_repo::increment_peer_version`
 
 ## keybox.md bug-fix
-- Fix `POST /auth/issue-garage-svid` returning 401 instead of 403 for invalid service token: add `.map_err()` wrapper like other service-token-gated endpoints
 

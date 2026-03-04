@@ -463,3 +463,9 @@ WHAT DOES NOT GO HERE:
 ## testing.md bug-fix
 
 - Delete stale `// Run with: cargo test --features integration` comments in `moto-club-wg` sessions.rs:459 and peers.rs:345 (feature flag no longer exists)
+
+---
+
+## keybox.md bug-fix
+
+- Fix `POST /auth/issue-garage-svid` returning 401 instead of 403 for invalid service token: add `.map_err()` wrapper like other service-token-gated endpoints

@@ -682,7 +682,15 @@ async fn issue_garage_svid(
     Json(req): Json<IssueGarageSvidRequest>,
 ) -> impl IntoResponse {
     // Validate service token (only moto-club can call this endpoint)
-    validate_service_token(&headers, state.service_token.as_ref())?;
+    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
+        (
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::FORBIDDEN,
+                "Operation requires service token",
+            )),
+        )
+    })?;
 
     // Create SPIFFE ID for the garage
     let spiffe_id = SpiffeId::garage(&req.garage_id);
