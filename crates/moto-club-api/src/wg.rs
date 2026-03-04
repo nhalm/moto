@@ -58,6 +58,8 @@ pub struct DeviceResponse {
     /// Optional human-readable device name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device_name: Option<String>,
+    /// When the device was registered.
+    pub created_at: DateTime<Utc>,
 }
 
 impl From<RegisteredDevice> for DeviceResponse {
@@ -66,6 +68,7 @@ impl From<RegisteredDevice> for DeviceResponse {
             public_key: d.public_key,
             overlay_ip: d.overlay_ip,
             device_name: d.device_name,
+            created_at: d.created_at,
         }
     }
 }

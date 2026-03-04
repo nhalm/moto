@@ -107,6 +107,7 @@ fn device_response_serialize() {
         public_key: key,
         overlay_ip: OverlayIp::client(1),
         device_name: Some("test".to_string()),
+        created_at: chrono::Utc::now(),
     };
     let json = serde_json::to_string(&response).unwrap();
     assert!(json.contains("public_key"));

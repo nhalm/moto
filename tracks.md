@@ -84,6 +84,7 @@ WHAT DOES NOT GO HERE:
 ## moto-club bug-fix
 
 - POST /api/v1/wg/devices always returns 201: fixed to return 200 for idempotent re-registration of existing device, 201 only for new registrations (PeerRegistry::register_device now returns (RegisteredDevice, bool) tuple; added register_device_reregistration_returns_200 test)
+- DeviceResponse missing `created_at` field: added `created_at: DateTime<Utc>` to `RegisteredDevice` (moto-club-wg/peers.rs), `DeviceResponse` (moto-club-api/wg.rs), postgres store mapping, and CLI client's `DeviceResponse` (moto-cli-wgtunnel/client.rs)
 
 ---
 

@@ -142,6 +142,7 @@ impl PeerStore for PostgresPeerStore {
                     owner: device.owner,
                     overlay_ip,
                     device_name: device.device_name,
+                    created_at: device.created_at,
                 }))
             }
             Err(moto_club_db::DbError::NotFound { .. }) => Ok(None),

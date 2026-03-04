@@ -25,6 +25,7 @@
 //! The [`PeerStore`] trait defines the storage interface. For production,
 //! use `PostgresPeerStore` from `moto-club-api`.
 
+use chrono::{DateTime, Utc};
 use moto_wgtunnel_types::{OverlayIp, WgPublicKey};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -88,6 +89,9 @@ pub struct RegisteredDevice {
     /// Optional human-readable device name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device_name: Option<String>,
+
+    /// When the device was registered.
+    pub created_at: DateTime<Utc>,
 }
 
 /// Request to register a garage.
@@ -216,6 +220,7 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
             owner: req.owner,
             overlay_ip,
             device_name: req.device_name,
+            created_at: Utc::now(),
         };
 
         self.store.set_device(device.clone())?;

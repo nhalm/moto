@@ -586,6 +586,8 @@ pub struct DeviceResponse {
     pub overlay_ip: OverlayIp,
     /// Optional human-readable device name.
     pub device_name: Option<String>,
+    /// When the device was registered.
+    pub created_at: String,
 }
 
 /// Request to create a tunnel session.
@@ -776,10 +778,12 @@ mod tests {
         let json = r#"{
             "public_key": "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=",
             "assigned_ip": "fd00:6d6f:746f:2::1",
-            "device_name": "my-laptop"
+            "device_name": "my-laptop",
+            "created_at": "2026-01-21T10:00:00Z"
         }"#;
         let response: DeviceResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.device_name, Some("my-laptop".to_string()));
+        assert_eq!(response.created_at, "2026-01-21T10:00:00Z");
         // Verify the overlay IP was parsed correctly
         assert!(response.overlay_ip.is_client());
     }
