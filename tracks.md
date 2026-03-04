@@ -240,6 +240,8 @@ WHAT DOES NOT GO HERE:
 ## makefile v0.16
 
 - Fix `test` target description: "Run unit tests" (was misleadingly "Run all tests")
+- Add `build-bike` and `test-bike` to Container Targets spec section (spec-only — already in Makefile per v0.6)
+- Remove stale `localhost:5000` from `push-garage` comment (registry port is determined by REGISTRY variable)
 
 ---
 
