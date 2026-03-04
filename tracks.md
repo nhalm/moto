@@ -455,3 +455,9 @@ WHAT DOES NOT GO HERE:
 ## makefile.md bug-fix
 
 - Fix `dev-down` Makefile help text: says "Stop all dev services and database" but spec says "Stop postgres only"
+
+---
+
+## testing.md bug-fix
+
+- Delete stale `// Run with: cargo test --features integration` comments in `moto-club-wg` sessions.rs:459 and peers.rs:345 (feature flag no longer exists)

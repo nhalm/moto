@@ -342,7 +342,6 @@ mod tests {
 }
 
 // Integration tests that require PostgreSQL
-// Run with: cargo test --features integration
 // Note: These tests require PostgresIpamStore and PostgresPeerStore from moto-club-api.
 // See moto-club-api/src/wg_test.rs for integration tests with PostgreSQL storage.
 //
