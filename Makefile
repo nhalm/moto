@@ -308,7 +308,7 @@ dev-keybox-init: ## Generate keybox keys in .dev/keybox/
 		mkdir -p .dev/keybox && \
 		cargo run --bin moto-keybox -- init --output-dir .dev/keybox --force && \
 		openssl rand -hex 32 > .dev/keybox/service-token && \
-		chmod 600 .dev/keybox/service-token && \
+		chmod 600 .dev/keybox/master.key .dev/keybox/signing.key .dev/keybox/service-token && \
 		echo "Keybox keys generated in .dev/keybox/"; \
 	fi
 

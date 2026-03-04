@@ -382,8 +382,15 @@ fn ensure_keybox_keys() -> Result<String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&token_path, std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| CliError::general(format!("Failed to set permissions: {e}")))?;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        for path in [&master, &signing, &token_path] {
+            std::fs::set_permissions(path, perms.clone()).map_err(|e| {
+                CliError::general(format!(
+                    "Failed to set permissions on {}: {e}",
+                    path.display()
+                ))
+            })?;
+        }
     }
 
     Ok("generated".to_string())

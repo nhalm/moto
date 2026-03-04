@@ -371,6 +371,10 @@ WHAT DOES NOT GO HERE:
 - `moto dev up` command: 9-step orchestration (prerequisites, cluster, image, postgres, keys, migrations, keybox, club, garage) with subprocess management via tokio::process, health checks with exponential backoff, Ctrl-C handling, --no-garage/--rebuild-image/--skip-image flags, DevConfig env var methods, JSON output, idempotent restart (v0.7/v0.8)
 - Add MOTO_CLUB_BIND_ADDR=0.0.0.0:18080 to dev-club and dev-up Makefile targets (v0.10: moto-club API port changed from 8080 to 18080 to match k3d deploy path; CLI default works for both local dev and k3d deploy modes)
 
+## local-dev bug-fix
+
+- Fix chmod 600 to apply to all three key files (master.key, signing.key, service-token) in both Makefile dev-keybox-init target and moto dev up ensure_keybox_keys() — previously only service-token was chmod'd
+
 ---
 
 ## service-deploy v0.5
