@@ -295,6 +295,10 @@ WHAT DOES NOT GO HERE:
 - Auth matrix enforcement tests (v0.11: 8 handler-level tests in api_test.rs using in-memory router with tower::ServiceExt::oneshot; tests set_secret/delete_secret/get_audit_logs deny SVID with 403 FORBIDDEN; tests get_secret/list_secrets/get_audit_logs succeed with service token; tests get_secret/list_secrets succeed with valid SVID)
 - DEK rotation tests (v0.11: 6 handler-level tests in api_test.rs; rotate_dek with SVID returns 403 FORBIDDEN; rotate_dek with service token succeeds and returns new version; rotate_dek for non-existent secret returns 404 SECRET_NOT_FOUND; secret value readable after rotation with plaintext unchanged; version incremented across multiple rotations; dek_rotated audit event logged)
 
+## keybox bug-fix
+
+- `/health/ready` checks DB connection at runtime: `health_router()` now accepts `Option<DbPool>`, `ready_handler` runs `SELECT 1` against the pool when using PostgreSQL backend; `main.rs` restructured to create pool before health router so it can be shared; returns 503 `not_ready` if DB is unreachable
+
 ---
 
 ## garage-isolation v0.4

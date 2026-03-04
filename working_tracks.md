@@ -27,8 +27,3 @@ Read it in full at the start of each iteration.
 
 (spec-only update — code already matches updated spec)
 
-## keybox bug-fix
-
-- `/health/ready` does not check DB connection at runtime: `health.rs:69-81` only checks `is_startup_complete()` — spec requires readiness to reflect database connectivity; handler doesn't receive `State` so it structurally cannot access the DB pool
-
-
