@@ -82,6 +82,9 @@ pub struct CreateSessionRequest {
     /// Optional session TTL in seconds. Defaults to garage TTL or 4 hours.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ttl_seconds: Option<u32>,
+
+    /// Garage expiration time — session TTL is capped to not exceed this.
+    pub garage_expires_at: DateTime<Utc>,
 }
 
 /// Response for session creation.
@@ -259,7 +262,8 @@ impl<S: SessionStore> SessionManager<S> {
         let now = Utc::now();
         let ttl_secs = request.ttl_seconds.unwrap_or(DEFAULT_SESSION_TTL_SECS);
         let ttl = Duration::seconds(i64::from(ttl_secs));
-        let expires_at = now + ttl;
+        // Cap session expiry to garage's remaining lifetime
+        let expires_at = (now + ttl).min(request.garage_expires_at);
 
         // Generate session ID
         let session_id = generate_session_id();
@@ -412,6 +416,7 @@ mod tests {
             garage_id: "test-garage".to_string(),
             device_pubkey: generate_public_key(),
             ttl_seconds: Some(3600),
+            garage_expires_at: Utc::now() + Duration::hours(4),
         };
 
         let json = serde_json::to_string(&request).unwrap();
@@ -429,6 +434,7 @@ mod tests {
             garage_id: "test-garage".to_string(),
             device_pubkey: generate_public_key(),
             ttl_seconds: None,
+            garage_expires_at: Utc::now() + Duration::hours(4),
         };
 
         let json = serde_json::to_string(&request).unwrap();

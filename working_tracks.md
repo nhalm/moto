@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## moto-club bug-fix
 
-- Session TTL not capped to garage's remaining TTL — `sessions.rs` must compare requested TTL to garage's `expires_at` and cap accordingly
 - `register_garage` returns FK error instead of `GARAGE_NOT_FOUND` 404 — must verify garage exists in `garages` table before upserting into `wg_garages`
 
 ## keybox bug-fix

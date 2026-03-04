@@ -440,7 +440,7 @@ async fn validate_garage_for_session(
     state: &AppState,
     garage_id: Uuid,
     owner: &str,
-) -> Result<(), (StatusCode, Json<ApiError>)> {
+) -> Result<DateTime<Utc>, (StatusCode, Json<ApiError>)> {
     let db_garage = garage_repo::get_by_id(&state.db_pool, garage_id)
         .await
         .map_err(|e| {
@@ -494,7 +494,7 @@ async fn validate_garage_for_session(
         ));
     }
 
-    Ok(())
+    Ok(db_garage.expires_at)
 }
 
 // ============================================================================
@@ -619,7 +619,7 @@ async fn create_session(
     let owner = extract_owner(&headers)?;
 
     // Validate garage ownership, expiry, and termination status
-    validate_garage_for_session(&state, req.garage_id, &owner).await?;
+    let garage_expires_at = validate_garage_for_session(&state, req.garage_id, &owner).await?;
 
     // Look up the device by public key (public key IS the device identity)
     let device = state
@@ -695,6 +695,7 @@ async fn create_session(
         garage_id: garage_id_str.clone(),
         device_pubkey: req.device_pubkey,
         ttl_seconds: req.ttl_seconds,
+        garage_expires_at,
     };
 
     let response = state
