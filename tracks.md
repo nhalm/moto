@@ -350,6 +350,10 @@ WHAT DOES NOT GO HERE:
 - moto-keybox-db: add not-found error path test for `delete_secret` (v0.5: silently succeeds on nonexistent ID, behavior verified)
 - Keybox smoke tests (v0.6: infra/smoke-test-keybox.sh with auth matrix enforcement and DEK rotation tests against live k3d cluster; `smoke-keybox` Makefile target with port-forward setup/teardown; service token from .dev/k8s-secrets/service-token; SVID token via POST /auth/token; 10 test assertions covering all spec scenarios; cleanup deletes test secrets)
 
+## testing bug-fix
+
+- Remove dead `integration` feature flag from `moto-keybox/Cargo.toml`: per testing spec, API/handler crates use mocked tests not integration tests; `moto-club-api` already uses the flag (wg_test.rs:224) so it stays; `moto-keybox` had zero `#[cfg(feature = "integration")]` guards
+
 ---
 
 ## local-dev v0.10

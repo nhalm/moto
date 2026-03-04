@@ -7,9 +7,6 @@ authors.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
-[features]
-default = []
-integration = []
 
 [dependencies]
 thiserror.workspace = true

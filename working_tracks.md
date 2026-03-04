@@ -33,7 +33,4 @@ Read it in full at the start of each iteration.
 
 - `/health/ready` does not check DB connection at runtime: `health.rs:69-81` only checks `is_startup_complete()` — spec requires readiness to reflect database connectivity; handler doesn't receive `State` so it structurally cannot access the DB pool
 
-## testing bug-fix
-
-- `integration` feature flag declared but gates nothing in `moto-club-api` and `moto-keybox`: both crates have `integration = []` in Cargo.toml but zero `#[cfg(feature = "integration")]` guards in source — either add gated integration tests or remove the dead feature flag
 
