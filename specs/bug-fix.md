@@ -38,12 +38,13 @@ same convention as tracks.md.
 
 ## moto-club.md
 
-- **`peer_broadcaster` never called on session create/close.** The `PeerBroadcaster` is wired into `AppState` and the WebSocket handler at `wg.rs:1166` uses it for subscriptions, but `create_session` and `close_session` never call `broadcast_add()` or `broadcast_remove()`. Garages connected via `WS /internal/wg/garages/{id}/peers` receive no events when sessions change.
-- **`close_session` spuriously increments `peer_version` when re-closing an already-closed session.** `postgres_stores.rs:remove_session` calls `get_session` which finds the session even if `closed_at IS NOT NULL`, then re-executes `wg_session_repo::close()` (idempotent via `COALESCE`) and `increment_peer_version`. Spec says "Idempotent: closing already-closed session returns 204" — the 204 is correct but the version bump is a semantic bug (version changes with no actual peer change).
+- **`delete_garage` does not close active sessions or broadcast peer removals.** `garages.rs:617-644` terminates the garage (DB status + K8s namespace delete) but never calls `session_manager.on_garage_terminated()` or `peer_broadcaster.broadcast_remove()`. Active WireGuard sessions remain open in `wg_sessions`, garages are not notified via WebSocket, and `peer_version` is not incremented at delete time.
+- **Session TTL not capped to garage's remaining TTL.** `sessions.rs:259-262` uses the requested TTL (or default) without comparing to the garage's `expires_at`. Spec requires: "If requested TTL exceeds garage remaining TTL, it's capped (session can't outlive garage)." The garage's expiry is not passed to `SessionManager::create_session`.
+- **`register_garage` returns FK error instead of `GARAGE_NOT_FOUND` 404.** `wg.rs:871-916` calls `peer_registry.register_garage()` without first verifying the garage exists in the `garages` table. If the UUID doesn't match, the `ON CONFLICT` upsert hits a FK constraint violation surfaced as a generic storage error, not the spec-mandated 404.
 
 ## keybox.md
 
-(none)
+- **`POST /auth/token` cannot set `service` claim for bikes.** `TokenRequest` (`api.rs:188`) has `principal_type`, `principal_id`, and `pod_uid` but no `service` field. Bikes calling `POST /auth/token` cannot obtain an SVID with a `service` claim, so they can never pass ABAC for service-scoped secrets. The `SvidClaims::with_service()` method exists but is unreachable through the token endpoint.
 
 ## dev-container.md
 
