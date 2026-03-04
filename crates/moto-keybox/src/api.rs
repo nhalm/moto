@@ -638,7 +638,7 @@ async fn issue_token(
         PrincipalType::Service => SpiffeId::service(&req.principal_id),
     };
 
-    let mut claims = SvidClaims::new(&spiffe_id, crate::svid::DEFAULT_SVID_TTL_SECS);
+    let mut claims = SvidClaims::new(&spiffe_id, state.svid_issuer.ttl_secs());
 
     if let Some(pod_uid) = req.pod_uid {
         claims = claims.with_pod_uid(pod_uid);

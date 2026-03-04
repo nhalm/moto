@@ -172,6 +172,12 @@ impl SvidIssuer {
         self
     }
 
+    /// Returns the configured TTL in seconds.
+    #[must_use]
+    pub const fn ttl_secs(&self) -> i64 {
+        self.ttl_secs
+    }
+
     /// Loads a signing key from base64-encoded bytes.
     ///
     /// # Errors
