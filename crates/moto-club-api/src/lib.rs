@@ -259,6 +259,8 @@ pub mod error_codes {
     pub const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
     /// Session belongs to different user.
     pub const SESSION_NOT_OWNED: &str = "SESSION_NOT_OWNED";
+    /// Garage hasn't registered its `WireGuard` endpoint yet.
+    pub const GARAGE_NOT_REGISTERED: &str = "GARAGE_NOT_REGISTERED";
     /// Internal server error.
     pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
     /// Kubernetes API error.

@@ -39,7 +39,6 @@ same convention as tracks.md.
 ## moto-club.md
 
 - **Namespace naming mismatch breaks token validation.** `service.rs:206` and `namespace.rs:38` use `garage_id.short()` (8-char prefix) for namespace names (e.g., `moto-garage-01963e4a`), but `wg.rs:381` token validation uses full UUID (e.g., `moto-garage-01963e4a-...`). These will never match. Either use full UUID everywhere or use short ID everywhere.
-- **GARAGE_NOT_REGISTERED swallowed as INTERNAL_ERROR.** `wg.rs:600-609` maps all `session_manager.create_session()` errors to `INTERNAL_ERROR`. The `GarageNotRegistered` variant from `moto-club-wg/sessions.rs` should surface as a distinct error code.
 - **POST /api/v1/wg/devices always returns 201.** `wg.rs:469` unconditionally returns `StatusCode::CREATED`. Spec says re-registration of existing device should return 200.
 - **DeviceResponse missing `created_at` field.** `wg.rs:52-61` struct has only `public_key`, `overlay_ip`, `device_name`. Spec requires `created_at`.
 - **`DEVICE_NOT_OWNED` and `SESSION_NOT_OWNED` error codes not defined.** `lib.rs:239-268` error_codes module is missing both. Spec requires them for ownership checks (403).

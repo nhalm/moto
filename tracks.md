@@ -88,6 +88,7 @@ WHAT DOES NOT GO HERE:
 - `DEVICE_NOT_OWNED` and `SESSION_NOT_OWNED` error codes not defined: added both constants to `error_codes` module in `moto-club-api/src/lib.rs` — spec requires them for ownership checks (403)
 - TTL env vars not read from environment: replaced hardcoded TTL constants in `moto-club-garage/src/lib.rs` with `LazyLock` statics reading `MOTO_CLUB_MIN_TTL_SECONDS`, `MOTO_CLUB_DEFAULT_TTL_SECONDS`, `MOTO_CLUB_MAX_TTL_SECONDS` env vars (with same defaults); removed duplicate constants in `moto-club-api/src/garages.rs` in favor of imports
 - Namespace naming mismatch breaks token validation: `wg.rs:384` used full UUID in `format!("moto-garage-{garage_id}")` but `service.rs` and `namespace.rs` use `garage_id.short()` (8-char prefix) — fixed to use `&garage_id[..8]` for consistent namespace matching
+- GARAGE_NOT_REGISTERED swallowed as INTERNAL_ERROR: added `GARAGE_NOT_REGISTERED` error code to `error_codes` module; updated `create_session` in `wg.rs` to match on `SessionError::GarageNotRegistered` and return 400 with `GARAGE_NOT_REGISTERED` instead of mapping all errors to `INTERNAL_ERROR`
 
 ---
 

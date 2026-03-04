@@ -607,14 +607,26 @@ async fn create_session(
         .create_session(wg_request, &device, &garage, &derp_map)
         .await
         .map_err(|e| {
-            tracing::error!(error = %e, "Failed to create session");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiError::new(
-                    error_codes::INTERNAL_ERROR,
-                    format!("Failed to create session: {e}"),
-                )),
-            )
+            use moto_club_wg::sessions::SessionError;
+            if let SessionError::GarageNotRegistered(msg) = &e {
+                tracing::warn!(error = %e, "Garage not registered for WireGuard");
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiError::new(
+                        error_codes::GARAGE_NOT_REGISTERED,
+                        msg.clone(),
+                    )),
+                )
+            } else {
+                tracing::error!(error = %e, "Failed to create session");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new(
+                        error_codes::INTERNAL_ERROR,
+                        format!("Failed to create session: {e}"),
+                    )),
+                )
+            }
         })?;
 
     Ok::<_, (StatusCode, Json<ApiError>)>((
