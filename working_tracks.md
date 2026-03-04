@@ -32,10 +32,6 @@ Read it in full at the start of each iteration.
 
 (spec-only update — namespace format documented as short_id)
 
-## testing bug-fix
-
-- `moto-club-wg`: `integration` feature flag declared (Cargo.toml) with a stub `mod integration_tests` in `ipam.rs` that contains zero actual test functions. Either add real tests or remove the dead feature flag and empty module.
-
 ## moto-club bug-fix
 
 - Fallback `create_garage` writes full UUID namespace. `garages.rs` uses `format!("moto-garage-{id}")` with full UUID, but `service.rs` and `namespace.rs` use `garage_id.short()` (8-char prefix). Garages created via the fallback path get mismatched namespace names.

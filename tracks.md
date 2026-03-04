@@ -364,6 +364,7 @@ WHAT DOES NOT GO HERE:
 ## testing bug-fix
 
 - Remove dead `integration` feature flag from `moto-keybox/Cargo.toml`: per testing spec, API/handler crates use mocked tests not integration tests; `moto-club-api` already uses the flag (wg_test.rs:224) so it stays; `moto-keybox` had zero `#[cfg(feature = "integration")]` guards
+- Remove dead `integration` feature flag and empty `mod integration_tests` stub from `moto-club-wg/ipam.rs`: zero actual test functions, real integration tests live in `moto-club-api/src/wg_test.rs`
 
 ---
 
