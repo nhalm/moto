@@ -24,7 +24,7 @@ use uuid::Uuid;
 use crate::{ApiError, AppState, error_codes};
 use moto_club_db::{DbError, Garage, GarageStatus, TerminationReason, garage_repo};
 use moto_club_garage::{
-    CreateGarageInput, DEFAULT_TTL_SECONDS, GarageServiceError, MAX_TTL_SECONDS,
+    CreateGarageInput, DEFAULT_TTL_SECONDS, GarageServiceError, MAX_TTL_SECONDS, MIN_TTL_SECONDS,
 };
 use moto_club_k8s::GarageNamespaceOps;
 use moto_club_types::GarageId;
@@ -250,12 +250,15 @@ async fn create_garage(
 
     // Validate TTL
     let ttl_seconds = req.ttl_seconds.unwrap_or(*DEFAULT_TTL_SECONDS);
-    if ttl_seconds <= 0 || ttl_seconds > *MAX_TTL_SECONDS {
+    if ttl_seconds < *MIN_TTL_SECONDS || ttl_seconds > *MAX_TTL_SECONDS {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiError::new(
                 error_codes::INVALID_TTL,
-                format!("TTL must be between 1 and {} seconds", *MAX_TTL_SECONDS),
+                format!(
+                    "TTL must be between {} and {} seconds",
+                    *MIN_TTL_SECONDS, *MAX_TTL_SECONDS
+                ),
             )),
         ));
     }

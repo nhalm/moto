@@ -39,7 +39,6 @@ Read it in full at the start of each iteration.
 ## moto-club bug-fix
 
 - Fallback `create_garage` writes full UUID namespace. `garages.rs` uses `format!("moto-garage-{id}")` with full UUID, but `service.rs` and `namespace.rs` use `garage_id.short()` (8-char prefix). Garages created via the fallback path get mismatched namespace names.
-- Fallback TTL validation ignores `MIN_TTL_SECONDS`. `garages.rs` checks `ttl_seconds <= 0` instead of `< *MIN_TTL_SECONDS`. Accepts values 1-299 that should be rejected (minimum is 300s). The `GarageService`-backed path validates correctly.
 - `MOTO_CLUB_DEV_CONTAINER_IMAGE` env var not fully wired. `main.rs` reads the env var and passes it to `GarageK8s`, but the fallback path in `garages.rs` and `DEFAULT_IMAGE` constant in `lib.rs` still hardcode `"ghcr.io/nhalm/moto-dev:latest"`.
 - GET `/api/v1/wg/garages/{id}` returns dummy `peer_version` and `registered_at`. Handler hardcodes `peer_version: 0` and `registered_at: Utc::now()`. PostgreSQL values are never queried.
 
