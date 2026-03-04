@@ -557,7 +557,7 @@ async fn get_device(
     headers: HeaderMap,
     Path(public_key_base64): Path<String>,
 ) -> impl IntoResponse {
-    let _owner = extract_owner(&headers)?;
+    let owner = extract_owner(&headers)?;
 
     // Parse the public key from base64
     let public_key = WgPublicKey::from_base64(&public_key_base64).map_err(|_| {
@@ -582,21 +582,29 @@ async fn get_device(
         )
     })?;
 
-    device.map_or_else(
-        || {
-            Err((
-                StatusCode::NOT_FOUND,
-                Json(ApiError::new(
-                    error_codes::DEVICE_NOT_FOUND,
-                    format!("Device with public key '{public_key_base64}' not found"),
-                )),
-            ))
-        },
-        |d| {
-            let response = DeviceResponse::from(d);
-            Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
-        },
-    )
+    let device = device.ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiError::new(
+                error_codes::DEVICE_NOT_FOUND,
+                format!("Device with public key '{public_key_base64}' not found"),
+            )),
+        )
+    })?;
+
+    // Check device ownership
+    if device.owner != owner {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::DEVICE_NOT_OWNED,
+                format!("Device '{public_key_base64}' belongs to a different user"),
+            )),
+        ));
+    }
+
+    let response = DeviceResponse::from(device);
+    Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
 
 /// Create a tunnel session.
