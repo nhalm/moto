@@ -39,7 +39,6 @@ same convention as tracks.md.
 ## moto-club.md
 
 - **`state.k8s_client` is always `None` — K8s SA token validation permanently bypassed.** `main.rs:266-270` creates `K8sClient` and consumes it into `GarageK8s`, but `AppState` (built at `main.rs:320-328`) never calls `.with_k8s_client()`. Result: `validate_garage_token` in `wg.rs:363-367` short-circuits to `Ok(())` for all requests, and `/health/ready` in `health.rs:214-223` reports K8s as `"ok"` without checking. Fix: clone the client via `garage_k8s.client()` (accessor at `lib.rs:93`) and pass to `.with_k8s_client()`.
-- **`set_session` does not increment `peer_version`.** `postgres_stores.rs:321-349` creates the session row but never calls `wg_garage_repo::increment_peer_version`. Only `remove_session` (line 371) increments. Spec requires increment on both create and close (lines 512, 685, 1055). Impact: garages won't see new peers until the session is closed.
 
 ## keybox.md
 

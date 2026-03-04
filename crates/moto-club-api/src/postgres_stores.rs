@@ -345,6 +345,13 @@ impl SessionStore for PostgresSessionStore {
         })
         .map_err(|e| SessionError::Storage(e.to_string()))?;
 
+        // Increment peer_version for the garage
+        let _ = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                wg_garage_repo::increment_peer_version(&pool, garage_uuid).await
+            })
+        });
+
         Ok(())
     }
 
