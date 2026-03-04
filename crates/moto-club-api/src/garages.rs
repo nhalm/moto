@@ -23,15 +23,11 @@ use uuid::Uuid;
 
 use crate::{ApiError, AppState, error_codes};
 use moto_club_db::{DbError, Garage, GarageStatus, TerminationReason, garage_repo};
-use moto_club_garage::{CreateGarageInput, GarageServiceError};
+use moto_club_garage::{
+    CreateGarageInput, DEFAULT_TTL_SECONDS, GarageServiceError, MAX_TTL_SECONDS,
+};
 use moto_club_k8s::GarageNamespaceOps;
 use moto_club_types::GarageId;
-
-/// Default TTL in seconds (4 hours).
-const DEFAULT_TTL_SECONDS: i32 = 14400;
-
-/// Maximum TTL in seconds (48 hours).
-const MAX_TTL_SECONDS: i32 = 172_800;
 
 /// Request to create a new garage.
 #[derive(Debug, Clone, Deserialize)]
@@ -253,13 +249,13 @@ async fn create_garage(
     );
 
     // Validate TTL
-    let ttl_seconds = req.ttl_seconds.unwrap_or(DEFAULT_TTL_SECONDS);
-    if ttl_seconds <= 0 || ttl_seconds > MAX_TTL_SECONDS {
+    let ttl_seconds = req.ttl_seconds.unwrap_or(*DEFAULT_TTL_SECONDS);
+    if ttl_seconds <= 0 || ttl_seconds > *MAX_TTL_SECONDS {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiError::new(
                 error_codes::INVALID_TTL,
-                format!("TTL must be between 1 and {MAX_TTL_SECONDS} seconds"),
+                format!("TTL must be between 1 and {} seconds", *MAX_TTL_SECONDS),
             )),
         ));
     }
@@ -716,13 +712,14 @@ async fn extend_garage_ttl(
 
     // Check if total TTL would exceed max
     let new_ttl = garage.ttl_seconds + req.seconds;
-    if new_ttl > MAX_TTL_SECONDS {
+    if new_ttl > *MAX_TTL_SECONDS {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiError::new(
                 error_codes::INVALID_TTL,
                 format!(
-                    "Total TTL would be {new_ttl}s, which exceeds maximum of {MAX_TTL_SECONDS}s"
+                    "Total TTL would be {new_ttl}s, which exceeds maximum of {}s",
+                    *MAX_TTL_SECONDS
                 ),
             )),
         ));

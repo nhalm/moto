@@ -40,14 +40,31 @@ pub use keybox::{IssueGarageSvidResponse, KeyboxClient, KeyboxError};
 pub use lifecycle::{GarageLifecycle, LifecycleError};
 pub use service::{CreateGarageInput, ExtendTtlInput, GarageService, GarageServiceError};
 
-/// Default TTL in seconds (4 hours).
-pub const DEFAULT_TTL_SECONDS: i32 = 14400;
+use std::sync::LazyLock;
 
-/// Maximum TTL in seconds (48 hours).
-pub const MAX_TTL_SECONDS: i32 = 172_800;
+/// Default TTL in seconds, configurable via `MOTO_CLUB_DEFAULT_TTL_SECONDS` (default: 14400 = 4h).
+pub static DEFAULT_TTL_SECONDS: LazyLock<i32> = LazyLock::new(|| {
+    std::env::var("MOTO_CLUB_DEFAULT_TTL_SECONDS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(14400)
+});
 
-/// Minimum TTL in seconds (5 minutes).
-pub const MIN_TTL_SECONDS: i32 = 300;
+/// Maximum TTL in seconds, configurable via `MOTO_CLUB_MAX_TTL_SECONDS` (default: 172800 = 48h).
+pub static MAX_TTL_SECONDS: LazyLock<i32> = LazyLock::new(|| {
+    std::env::var("MOTO_CLUB_MAX_TTL_SECONDS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(172_800)
+});
+
+/// Minimum TTL in seconds, configurable via `MOTO_CLUB_MIN_TTL_SECONDS` (default: 300 = 5min).
+pub static MIN_TTL_SECONDS: LazyLock<i32> = LazyLock::new(|| {
+    std::env::var("MOTO_CLUB_MIN_TTL_SECONDS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(300)
+});
 
 /// Default dev container image.
 pub const DEFAULT_IMAGE: &str = "ghcr.io/nhalm/moto-dev:latest";

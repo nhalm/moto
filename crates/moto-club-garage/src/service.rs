@@ -183,7 +183,7 @@ impl GarageService {
         input: CreateGarageInput,
     ) -> Result<Garage, GarageServiceError> {
         // Validate TTL
-        let ttl_seconds = input.ttl_seconds.unwrap_or(DEFAULT_TTL_SECONDS);
+        let ttl_seconds = input.ttl_seconds.unwrap_or(*DEFAULT_TTL_SECONDS);
         Self::validate_ttl(ttl_seconds)?;
 
         // Generate or use provided name
@@ -336,10 +336,11 @@ impl GarageService {
 
         // Check new TTL doesn't exceed max
         let new_total_ttl = garage.ttl_seconds + input.seconds;
-        if new_total_ttl > MAX_TTL_SECONDS {
+        if new_total_ttl > *MAX_TTL_SECONDS {
             return Err(GarageServiceError::InvalidTtl {
                 message: format!(
-                    "total TTL would be {new_total_ttl}s, maximum is {MAX_TTL_SECONDS}s"
+                    "total TTL would be {new_total_ttl}s, maximum is {}s",
+                    *MAX_TTL_SECONDS
                 ),
             });
         }
@@ -444,14 +445,14 @@ impl GarageService {
 
     /// Validates TTL is within acceptable range.
     fn validate_ttl(ttl_seconds: i32) -> Result<(), GarageServiceError> {
-        if ttl_seconds < MIN_TTL_SECONDS {
+        if ttl_seconds < *MIN_TTL_SECONDS {
             return Err(GarageServiceError::InvalidTtl {
-                message: format!("TTL must be at least {MIN_TTL_SECONDS}s"),
+                message: format!("TTL must be at least {}s", *MIN_TTL_SECONDS),
             });
         }
-        if ttl_seconds > MAX_TTL_SECONDS {
+        if ttl_seconds > *MAX_TTL_SECONDS {
             return Err(GarageServiceError::InvalidTtl {
-                message: format!("TTL must be at most {MAX_TTL_SECONDS}s"),
+                message: format!("TTL must be at most {}s", *MAX_TTL_SECONDS),
             });
         }
         Ok(())
@@ -495,7 +496,7 @@ impl GarageService {
         input: &CreateGarageInput,
         namespace: &str,
     ) -> Result<(), GarageServiceError> {
-        let ttl_seconds = input.ttl_seconds.unwrap_or(DEFAULT_TTL_SECONDS);
+        let ttl_seconds = input.ttl_seconds.unwrap_or(*DEFAULT_TTL_SECONDS);
         let expires_at = Utc::now() + chrono::Duration::seconds(i64::from(ttl_seconds));
 
         // Step 4-5: Create namespace (labels are applied by create_garage_namespace)
