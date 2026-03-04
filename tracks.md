@@ -24,7 +24,6 @@ WHAT DOES NOT GO HERE:
 
 ## moto-club v2.3
 
-**Implemented:**
 - moto-club-types crate: GarageId, GarageState, GarageInfo
 - moto-club-wg crate: lib.rs, ipam.rs, peers.rs, sessions.rs, derp.rs (in-memory)
 - moto-club-db crate: lib.rs, models.rs, garage_repo.rs (scaffolding)
@@ -86,7 +85,6 @@ WHAT DOES NOT GO HERE:
 
 ## moto-wgtunnel v0.9
 
-**Implemented:**
 - moto-wgtunnel-types crate: keys.rs, ip.rs, peer.rs, derp.rs
 - moto-wgtunnel-derp crate: protocol.rs, client.rs, map.rs
 - moto-wgtunnel-conn crate: stun.rs, endpoint.rs, path.rs, magic.rs
@@ -107,7 +105,6 @@ WHAT DOES NOT GO HERE:
 
 ## container-system v1.3
 
-**Implemented:**
 - (see tracks-history.md)
 - Create `infra/pkgs/moto-keybox.nix` (bike base + moto-keybox-server binary, using mkBike helper)
 - Export `moto-keybox-image` from flake.nix (default.nix and flake.nix updated)
@@ -120,7 +117,6 @@ WHAT DOES NOT GO HERE:
 
 ## moto-cli v0.11
 
-**Implemented:**
 - Global flags: --json/-j, --verbose/-v (counted), --quiet/-q, --context/-c, --help/-h, --version/-V
 - ColorMode: auto/always/never with MOTO_NO_COLOR env var support
 - Configuration: XDG config path, TOML parsing, precedence (CLI > env > config > defaults)
@@ -156,7 +152,6 @@ WHAT DOES NOT GO HERE:
 
 ## dev-container v0.17
 
-**Implemented:**
 - Nix dockerTools.buildLayeredImage with buildEnv wrapper
 - Modular structure: infra/pkgs/moto-garage.nix, infra/modules/{base,dev-tools,terminal,wireguard}.nix
 - Root flake at moto/flake.nix exports moto-garage package
@@ -186,7 +181,6 @@ WHAT DOES NOT GO HERE:
 
 ## local-cluster v0.3
 
-**Implemented:**
 - moto cluster init: k3d cluster creation with moto name
 - k3d create args: --api-port 6550, --port 80:80, --port 443:443, --registry-create moto-registry:0.0.0.0:5050, --disable=traefik
 - Idempotent: returns success if cluster already exists (unless --force)
@@ -204,7 +198,6 @@ WHAT DOES NOT GO HERE:
 
 ## makefile v0.15
 
-**Implemented:**
 - Setup targets: install (git hooks)
 - Development targets: build, test, check, fmt, lint, clean, run, fix, ci
 - Container targets: build-garage, test-garage, shell-garage, push-garage, scan-garage, clean-images, clean-nix-cache
@@ -232,7 +225,6 @@ WHAT DOES NOT GO HERE:
 
 ## moto-bike v0.3
 
-**Implemented:**
 - Bike base image (infra/pkgs/moto-bike.nix): CA certs, tzdata, non-root user (1000:1000), security context
 - mkBike helper function for building final images from bike base + engine binary
 - Flake exports moto-bike package and mkBike lib helper
@@ -246,7 +238,6 @@ WHAT DOES NOT GO HERE:
 
 ## garage-lifecycle v0.4
 
-**Implemented:**
 - moto garage extend CLI command: --ttl flag (default 2h), duration parsing, max TTL validation
 - moto-garage: GarageClient.extend() method updates namespace labels with new expires_at
 - moto-k8s: NamespaceOps.patch_namespace_labels() for updating namespace labels via merge patch
@@ -267,7 +258,6 @@ WHAT DOES NOT GO HERE:
 
 ## keybox v0.11
 
-**Implemented:**
 - moto-keybox library: SPIFFE ID types (garage/bike/service), SVID claims, SvidIssuer, SvidValidator
 - moto-keybox: Envelope encryption (MasterKey, DataEncryptionKey, EncryptedDek, EncryptedSecret)
 - moto-keybox: ABAC PolicyEngine with hardcoded policies per spec (MVP)
@@ -301,7 +291,6 @@ WHAT DOES NOT GO HERE:
 
 ## garage-isolation v0.4
 
-**Implemented:**
 - Pod security context: runAsUser/runAsGroup: 0, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, seccompProfile: RuntimeDefault, capabilities (drop ALL, add CHOWN/DAC_OVERRIDE/FOWNER/SETGID/SETUID/NET_BIND_SERVICE)
 - Pod spec: automountServiceAccountToken: false, host_network/host_pid/host_ipc: false
 - Pod resource limits: 3 CPU / 7Gi per spec (requests: 100m CPU / 256Mi)
@@ -317,7 +306,6 @@ WHAT DOES NOT GO HERE:
 
 ## supporting-services v0.3
 
-**Implemented:**
 - CLI flags: `--with-postgres` and `--with-redis` on `moto garage open` command
 - API: `with_postgres` and `with_redis` fields in `CreateGarageRequest` and `CreateGarageInput`
 - K8s: PostgreSQL Deployment, Service, and credentials Secret (moto-club-k8s/supporting_services.rs: GaragePostgresOps trait, build_postgres_deployment, build_postgres_service, build_postgres_credentials_secret)
@@ -331,7 +319,6 @@ WHAT DOES NOT GO HERE:
 
 ## project-structure v1.5
 
-**Implemented:**
 - (see tracks-history.md for prior work)
 - Deprecate moto-garage crate and local mode: moto-cli garage commands now use MotoClubClient HTTP client instead of moto_garage::GarageClient, removed moto-garage dependency from moto-cli, added list_garages/create_garage/close_garage/extend_garage methods to MotoClubClient
 - Remove moto-garage crate entirely (v1.4: deleted crates/moto-garage/ directory, removed moto-garage from Cargo.toml workspace dependencies)
@@ -340,7 +327,6 @@ WHAT DOES NOT GO HERE:
 
 ## testing v0.6
 
-**Implemented:**
 - docker-compose.test.yml: PostgreSQL 16-alpine on port 5433, healthcheck, test credentials (moto_test/moto_test/moto_test)
 - Makefile target: test-ci (assumes database already running, runs unit + integration tests)
 - Update test target to run unit tests only (cargo test --lib)
@@ -362,7 +348,6 @@ WHAT DOES NOT GO HERE:
 
 ## local-dev v0.10
 
-**Implemented:**
 - docker-compose.yml with dev Postgres on port 5432 (postgres:16-alpine, moto/moto creds, pgdata volume, healthcheck, init script mount)
 - scripts/init-dev-db.sql (creates moto_keybox database via docker-entrypoint-initdb.d)
 - .dev/ added to .gitignore
@@ -390,7 +375,6 @@ WHAT DOES NOT GO HERE:
 
 ## service-deploy v0.5
 
-**Implemented:**
 - moto-club-db embedded migrations and auto-run on startup (prerequisite for K8s deployment — see moto-club.md v2.3)
 - infra/k8s/moto-system/namespace.yaml (namespace with labels: app.kubernetes.io/part-of, app.kubernetes.io/managed-by, moto.dev/type=system)
 - infra/k8s/moto-system/postgres.yaml (StatefulSet + Service on 5432 + 1Gi PVC with local-path StorageClass + postgres-init ConfigMap with CREATE DATABASE moto_keybox)
@@ -409,7 +393,6 @@ WHAT DOES NOT GO HERE:
 
 ## pre-commit v0.2
 
-**Implemented:**
 - .githooks/pre-commit: blocks secrets (.pem, .key, .env files)
 - .githooks/pre-commit: cargo fmt --all --check (when Rust files changed)
 - .githooks/pre-commit: cargo clippy --all-targets -- -D warnings (when Rust files changed, v0.2 changelog)
