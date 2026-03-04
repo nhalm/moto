@@ -325,6 +325,10 @@ WHAT DOES NOT GO HERE:
 
 (spec-only update — documents K8s TokenReview as MVP-deferred, garage ABAC policies, DATABASE_URL as optional, extra list endpoints, SERVICE_TOKEN env var, ADMIN_SERVICE env var)
 
+## keybox v0.13
+
+- (spec-only) Fix `MOTO_KEYBOX_SERVICE_TOKEN` example value
+
 ## keybox bug-fix
 
 - `/health/ready` checks DB connection at runtime: `health_router()` now accepts `Option<DbPool>`, `ready_handler` runs `SELECT 1` against the pool when using PostgreSQL backend; `main.rs` restructured to create pool before health router so it can be shared; returns 503 `not_ready` if DB is unreachable
@@ -441,6 +445,11 @@ WHAT DOES NOT GO HERE:
 - Makefile target: `deploy` (v0.4: full deployment flow: deploy-images + deploy-secrets + deploy-system + deploy-status)
 - Auto port-forward on deploy, CLI uses port 18080 (v0.5: deploy-system starts background `kubectl port-forward` from localhost:18080 to svc/moto-club:8080; CLI defaults to http://localhost:18080 via MOTO_CLUB_URL; port 18080 avoids conflicts with 80/443/8080)
 - Drop `undeploy-system` target (v0.5: use `dev-cluster-down` instead; cluster deletion cleans up everything including port-forward)
+
+## service-deploy v0.6
+
+- (spec-only) Remove stale manual port-forward from Quick path
+- (spec-only) Fix binary name: `moto-keybox init` (was `moto-keybox-cli init`)
 
 ---
 
