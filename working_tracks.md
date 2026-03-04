@@ -18,10 +18,6 @@ Read it in full at the start of each iteration.
 
 (spec-only update — code already matches updated spec)
 
-## moto-club bug-fix
-
-- Session creation missing ownership/expiry/termination checks: `wg.rs:527-615` extracts owner but never checks garage ownership, expiry, or termination status — spec requires `GARAGE_NOT_OWNED`, `GARAGE_EXPIRED`, `GARAGE_TERMINATED` error responses
-
 ## keybox v0.12
 
 (spec-only update — code already matches updated spec)

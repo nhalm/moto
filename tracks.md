@@ -89,6 +89,7 @@ WHAT DOES NOT GO HERE:
 - TTL env vars not read from environment: replaced hardcoded TTL constants in `moto-club-garage/src/lib.rs` with `LazyLock` statics reading `MOTO_CLUB_MIN_TTL_SECONDS`, `MOTO_CLUB_DEFAULT_TTL_SECONDS`, `MOTO_CLUB_MAX_TTL_SECONDS` env vars (with same defaults); removed duplicate constants in `moto-club-api/src/garages.rs` in favor of imports
 - Namespace naming mismatch breaks token validation: `wg.rs:384` used full UUID in `format!("moto-garage-{garage_id}")` but `service.rs` and `namespace.rs` use `garage_id.short()` (8-char prefix) — fixed to use `&garage_id[..8]` for consistent namespace matching
 - GARAGE_NOT_REGISTERED swallowed as INTERNAL_ERROR: added `GARAGE_NOT_REGISTERED` error code to `error_codes` module; updated `create_session` in `wg.rs` to match on `SessionError::GarageNotRegistered` and return 400 with `GARAGE_NOT_REGISTERED` instead of mapping all errors to `INTERNAL_ERROR`
+- Session creation missing ownership/expiry/termination checks: added `validate_garage_for_session` helper that looks up garage from DB and checks ownership (`GARAGE_NOT_OWNED` 403), termination (`GARAGE_TERMINATED` 410), and expiry (`GARAGE_EXPIRED` 410); also added `DEVICE_NOT_OWNED` check; updated integration tests to use owner-aware garage creation
 
 ---
 
