@@ -380,8 +380,9 @@ async fn validate_garage_token(
         )
     })?;
 
-    // Expected namespace format: moto-garage-{garage_id}
-    let expected_namespace = format!("moto-garage-{garage_id}");
+    // Expected namespace format: moto-garage-{short_id} (first 8 chars of garage UUID)
+    let short_id = &garage_id[..8.min(garage_id.len())];
+    let expected_namespace = format!("moto-garage-{short_id}");
 
     // Check that the service account is in the correct namespace
     let actual_namespace = validated.service_account_namespace().ok_or_else(|| {
