@@ -469,3 +469,9 @@ WHAT DOES NOT GO HERE:
 ## keybox.md bug-fix
 
 - Fix `POST /auth/issue-garage-svid` returning 401 instead of 403 for invalid service token: add `.map_err()` wrapper like other service-token-gated endpoints
+
+---
+
+## moto-club.md bug-fix
+
+- Fix `state.k8s_client` always `None`: clone `K8sClient` before passing to `GarageK8s`, then chain `.with_k8s_client(k8s_client)` on `AppState` builder in `main.rs`

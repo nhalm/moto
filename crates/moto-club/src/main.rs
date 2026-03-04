@@ -264,10 +264,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Create K8s client
     info!("initializing kubernetes client");
     let k8s_client = K8sClient::new().await?;
-    let garage_k8s = match &config.dev_container_image {
-        Some(image) => GarageK8s::with_image(k8s_client, image),
-        None => GarageK8s::new(k8s_client),
-    };
+    let garage_k8s = config.dev_container_image.as_ref().map_or_else(
+        || GarageK8s::new(k8s_client.clone()),
+        |image| GarageK8s::with_image(k8s_client.clone(), image),
+    );
     info!(
         dev_container_image = garage_k8s.dev_container_image(),
         "kubernetes client initialized"
@@ -324,6 +324,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         derp_map,
         peer_broadcaster,
     )
+    .with_k8s_client(k8s_client)
     .with_garage_k8s(api_garage_k8s)
     .with_garage_service(garage_service);
 

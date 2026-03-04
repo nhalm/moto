@@ -23,8 +23,5 @@ Read it in full at the start of each iteration.
 - (spec-only) Fix `MOTO_KEYBOX_SERVICE_TOKEN` example value
 
 ## moto-club.md bug-fix
-- Fix `state.k8s_client` always `None`: `AppState` never calls `.with_k8s_client()`, bypassing K8s SA token validation and /health/ready K8s check
 - Fix `set_session` not incrementing `peer_version`: `postgres_stores.rs:321-349` creates session but never calls `wg_garage_repo::increment_peer_version`
-
-## keybox.md bug-fix
 
