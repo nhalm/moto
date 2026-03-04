@@ -1,23 +1,29 @@
 # Moto Implementation Tracking
 
 <!--
+This file is a DONE LOG — it records what has been implemented, not what remains.
+
 HOW TO USE THIS FILE:
 
-1. Section header = "## spec-name.md vX.Y" - must match current spec version
-2. If spec version > section version: check spec changelog, add new items to Remaining, update header
-3. If no section exists: compare spec to code, create section with Implemented and Remaining lists
-4. Pick ONE item from Remaining (skip blocked items)
-5. Implement it, verify with tests
-6. Move item from Remaining to Implemented
-7. SPEC IS SOURCE OF TRUTH - if code contradicts spec, that's a Remaining item to fix (see AGENTS.md)
-8. Check spec Changelog for changes that invalidate existing code
+1. Section header = "## spec-name vX.Y" — must match the spec version you're working on
+2. When you complete a work item from a spec's changelog, add it to the Implemented list under the matching section
+3. If no section exists for the current spec version, create one at the TOP (below these instructions)
+4. Before picking a work item from a spec, check this file — if it's already listed here, it's done
+5. After implementing, search ALL sections for "(blocked: ...)" annotations that reference the work you just completed. Remove resolved blockers.
+6. Items use "(blocked: ...)" annotations — same convention as spec work items
+
+WHAT GOES HERE:
+- Work items from spec changelogs, recorded after completion
+- Bug-fix.md items, recorded after completion
+
+WHAT DOES NOT GO HERE:
+- "Remaining" lists — the spec's Work Items section is the source of truth for what needs doing
+- Discovery or TODO items — those belong in spec work items or bug-fix.md
 -->
 
 ---
 
-## moto-club.md v2.3
-
-**Status:** In Progress
+## moto-club v2.3
 
 **Implemented:**
 - moto-club-types crate: GarageId, GarageState, GarageInfo
@@ -72,20 +78,14 @@ HOW TO USE THIS FILE:
 - Add MOTO_CLUB_KEYBOX_HEALTH_URL env var (v1.9: configures keybox health check endpoint separately from API URL; defaults to MOTO_CLUB_KEYBOX_URL with port replaced by 8081; AppState.keybox_health_url field replaces keybox_url; check_keybox uses URL directly instead of hardcoded port replacement)
 - Add MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE env var (v2.0: reads service token from file for keybox authentication; Config.keybox_service_token field; when both KEYBOX_URL and service token are configured, creates KeyboxClient and uses GarageService::with_keybox for SVID issuance)
 - Fix moto.dev/expires-at namespace label to use unix timestamp (v2.0: namespace.rs uses dt.timestamp() instead of dt.to_rfc3339(); labels.rs doc comment updated; colons and plus signs in RFC 3339 are invalid K8s label values)
-
 - Fix: GarageResponse includes updated_at field from database model (v2.2: added updated_at: DateTime<Utc> to GarageResponse struct and From<Garage> impl in garages.rs)
 - Fix: /health/ready on port 8081 includes K8s API reachability check (v2.2: ready_handler now checks database, K8s API, and keybox; K8s failure degrades but doesn't fail; uses existing check_k8s function with state.k8s_client)
 - Embed migrations and auto-run on startup (v2.3: moto-club-db adds MIGRATIONS static with sqlx::migrate!(), run_migrations() function, Migration error variant; moto-club main.rs calls run_migrations() after connect() before serving requests; same pattern as moto-keybox-db)
 - ClusterRole for K8s operations (v2.3: defined in infra/k8s/moto-system/club.yaml via service-deploy.md; ClusterRole with 11 resource types including namespaces with patch, ClusterRoleBinding to moto-club ServiceAccount)
 
-**Remaining:**
-(none - moto-club.md v2.3 implementation complete)
-
 ---
 
-## moto-wgtunnel.md v0.9
-
-**Status:** Complete
+## moto-wgtunnel v0.9
 
 **Implemented:**
 - moto-wgtunnel-types crate: keys.rs, ip.rs, peer.rs, derp.rs
@@ -104,14 +104,9 @@ HOW TO USE THIS FILE:
 - Remove SSH key management from moto-garage-wgtunnel (spec v0.8: ttyd+WireGuard tunnel is sole auth boundary)
 - Remove dead SSH code from moto-cli-wgtunnel/src/enter.rs (SshConfig, spawn_ssh, etc.)
 
-**Remaining:**
-(none - moto-wgtunnel.md v0.9 implementation complete)
-
 ---
 
-## container-system.md v1.3
-
-**Status:** In Progress
+## container-system v1.3
 
 **Implemented:**
 - (see tracks-history.md)
@@ -122,16 +117,9 @@ HOW TO USE THIS FILE:
 - Bump Rust toolchain from 1.85 to 1.88 (v1.3: `home` crate v0.5.12 requires Rust 1.88; flake.nix rustToolchain updated to `pkgs.rust-bin.stable."1.88.0".minimal`)
 - Add `stdenv.cc` and `lld` to `commonArgs.nativeBuildInputs` (v1.3: crane needs a C compiler/linker; `.cargo/config.toml` specifies `-fuse-ld=lld` for Linux targets)
 
-**Remaining:**
-- CI workflow: .github/workflows/containers.yml (future)
-- Image signing: cosign keyless signing in CI (future)
-- SBOM generation: trivy SBOM + cosign attestation (future)
-
 ---
 
-## moto-cli.md v0.11
-
-**Status:** In Progress
+## moto-cli v0.11
 
 **Implemented:**
 - Global flags: --json/-j, --verbose/-v (counted), --quiet/-q, --context/-c, --help/-h, --version/-V
@@ -165,14 +153,9 @@ HOW TO USE THIS FILE:
 - Fix: Config path uses `$HOME/.config/moto/config.toml` directly instead of `dirs::config_dir()` (v0.10: avoids macOS `~/Library/Application Support/` path; respects `$XDG_CONFIG_HOME` if set; removed `dirs` dependency from moto-cli)
 - Fix: `--kubectl` uses `tmux new-session -A -s garage` instead of `tmux attach-session -t garage` (v0.11: `-A` creates the session if it doesn't exist, matching ttyd behavior)
 
-**Remaining:**
-(none - moto-cli.md v0.11 implementation complete)
-
 ---
 
-## dev-container.md v0.17
-
-**Status:** In Progress
+## dev-container v0.17
 
 **Implemented:**
 - Nix dockerTools.buildLayeredImage with buildEnv wrapper
@@ -200,14 +183,9 @@ HOW TO USE THIS FILE:
 - Reduce image size: drop clang from container, update RUSTFLAGS to `-C link-arg=-fuse-ld=mold` (v0.16: ~1.4GB savings, use default cc linker with mold)
 - Remove /nix volume declaration from container image config (v0.16: Docker VOLUME for /nix shadows image's /nix/store contents)
 
-**Remaining:**
-(none - dev-container.md v0.17 implementation complete)
-
 ---
 
-## local-cluster.md v0.3
-
-**Status:** Complete
+## local-cluster v0.3
 
 **Implemented:**
 - moto cluster init: k3d cluster creation with moto name
@@ -223,14 +201,9 @@ HOW TO USE THIS FILE:
 - moto cluster init JSON output: status "created" or "exists" (v0.2 changelog: ClusterInitJson struct with name, status, api_endpoint, registry_endpoint; --json flag produces "created" for new clusters, "exists" for idempotent case)
 - Change registry port from 5000 to 5050 (v0.3: avoids macOS AirPlay Receiver conflict; --registry-create moto-registry:0.0.0.0:5050 format binds to all interfaces)
 
-**Remaining:**
-(none - local-cluster.md v0.3 implementation complete)
-
 ---
 
-## makefile.md v0.15
-
-**Status:** In Progress
+## makefile v0.15
 
 **Implemented:**
 - Setup targets: install (git hooks)
@@ -256,14 +229,9 @@ HOW TO USE THIS FILE:
 - `dev-cluster-down` target: deletes k3d cluster and local registry via `k3d cluster delete moto` (v0.14)
 - `make install` builds release binary and copies to `~/.local/bin/moto` (v0.15: `cargo build --release --bin moto` + `cp target/release/moto ~/.local/bin/moto`)
 
-**Remaining:**
-(none - makefile.md v0.15 implementation complete)
-
 ---
 
-## moto-bike.md v0.3
-
-**Status:** In Progress
+## moto-bike v0.3
 
 **Implemented:**
 - Bike base image (infra/pkgs/moto-bike.nix): CA certs, tzdata, non-root user (1000:1000), security context
@@ -275,14 +243,9 @@ HOW TO USE THIS FILE:
 - Engine Contract: Prometheus metrics endpoint on port 9090 (moto-club main.rs with metrics-exporter-prometheus, moto-club-api metrics.rs with http_requests_total and http_request_duration_seconds, process metrics via metrics-process)
 - Engine Contract: Graceful shutdown (SIGTERM handling, 30s grace period) - moto-club main.rs shutdown_signal() with tokio::signal
 
-**Remaining:**
-- K8s Deployment generation from bike.toml (future - needs CLI support)
-
 ---
 
-## garage-lifecycle.md v0.4
-
-**Status:** In Progress
+## garage-lifecycle v0.4
 
 **Implemented:**
 - moto garage extend CLI command: --ttl flag (default 2h), duration parsing, max TTL validation
@@ -301,14 +264,9 @@ HOW TO USE THIS FILE:
 - Fix garage open output format to match spec (v0.4: show ID, branch, expires_at, status) - moto-cli/src/commands/garage.rs, GarageOpenJson struct updated, format_short_id and format_expires_at helpers added
 - Fix garage list columns to match spec (v0.4: add ID, BRANCH columns) - moto-cli/src/commands/garage.rs, GarageJson struct updated, table header and rows now show ID, NAME, BRANCH, STATUS, TTL, AGE columns
 
-**Remaining:**
-- Repo cloning: credentials from keybox (future - MVP supports public repos)
-
 ---
 
-## keybox.md v0.11
-
-**Status:** In Progress
+## keybox v0.11
 
 **Implemented:**
 - moto-keybox library: SPIFFE ID types (garage/bike/service), SVID claims, SvidIssuer, SvidValidator
@@ -340,15 +298,9 @@ HOW TO USE THIS FILE:
 - Auth matrix enforcement tests (v0.11: 8 handler-level tests in api_test.rs using in-memory router with tower::ServiceExt::oneshot; tests set_secret/delete_secret/get_audit_logs deny SVID with 403 FORBIDDEN; tests get_secret/list_secrets/get_audit_logs succeed with service token; tests get_secret/list_secrets succeed with valid SVID)
 - DEK rotation tests (v0.11: 6 handler-level tests in api_test.rs; rotate_dek with SVID returns 403 FORBIDDEN; rotate_dek with service token succeeds and returns new version; rotate_dek for non-existent secret returns 404 SECRET_NOT_FOUND; secret value readable after rotation with plaintext unchanged; version incremented across multiple rotations; dek_rotated audit event logged)
 
-**Remaining:**
-- Add request logging/metrics middleware (future - Phase 2)
-- K8s ServiceAccount JWT validation via TokenReview API (future - MVP accepts principal info directly)
-
 ---
 
-## garage-isolation.md v0.4
-
-**Status:** In Progress
+## garage-isolation v0.4
 
 **Implemented:**
 - Pod security context: runAsUser/runAsGroup: 0, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, seccompProfile: RuntimeDefault, capabilities (drop ALL, add CHOWN/DAC_OVERRIDE/FOWNER/SETGID/SETUID/NET_BIND_SERVICE)
@@ -362,14 +314,9 @@ HOW TO USE THIS FILE:
 - LimitRange: garage-limits per spec (moto-k8s LimitRangeOps trait, moto-club-k8s GarageLimitRangeOps trait and build_garage_limits, integrated into GarageService.create_k8s_resources)
 - Fix: remove /nix emptyDir volume and mount (v0.4: mounting emptyDir over /nix shadows the image's pre-installed /nix/store contents, breaking all tool symlinks; image provides /nix/store read-only via readOnlyRootFilesystem)
 
-**Remaining:**
-(none - garage-isolation.md v0.4 implementation complete)
-
 ---
 
-## supporting-services.md v0.3
-
-**Status:** Complete
+## supporting-services v0.3
 
 **Implemented:**
 - CLI flags: `--with-postgres` and `--with-redis` on `moto garage open` command
@@ -381,28 +328,18 @@ HOW TO USE THIS FILE:
 - Ready check: Wait for supporting service Deployments to be available before marking garage Ready (reconciler checks postgres_available/redis_available before transitioning to Ready)
 - Fix: Call create_garage_postgres() and create_garage_redis() in garage creation flow (v0.3: service.rs now calls GaragePostgresOps.create_garage_postgres and GarageRedisOps.create_garage_redis when with_postgres/with_redis are true)
 
-**Remaining:**
-(none - supporting-services.md v0.3 implementation complete)
-
 ---
 
-## project-structure.md v1.5
-
-**Status:** Complete
+## project-structure v1.5
 
 **Implemented:**
 - (see tracks-history.md for prior work)
 - Deprecate moto-garage crate and local mode: moto-cli garage commands now use MotoClubClient HTTP client instead of moto_garage::GarageClient, removed moto-garage dependency from moto-cli, added list_garages/create_garage/close_garage/extend_garage methods to MotoClubClient
 - Remove moto-garage crate entirely (v1.4: deleted crates/moto-garage/ directory, removed moto-garage from Cargo.toml workspace dependencies)
 
-**Remaining:**
-(none - project-structure.md v1.5 implementation complete)
-
 ---
 
-## testing.md v0.6
-
-**Status:** In Progress
+## testing v0.6
 
 **Implemented:**
 - docker-compose.test.yml: PostgreSQL 16-alpine on port 5433, healthcheck, test credentials (moto_test/moto_test/moto_test)
@@ -422,14 +359,9 @@ HOW TO USE THIS FILE:
 - moto-keybox-db: add not-found error path test for `delete_secret` (v0.5: silently succeeds on nonexistent ID, behavior verified)
 - Keybox smoke tests (v0.6: infra/smoke-test-keybox.sh with auth matrix enforcement and DEK rotation tests against live k3d cluster; `smoke-keybox` Makefile target with port-forward setup/teardown; service token from .dev/k8s-secrets/service-token; SVID token via POST /auth/token; 10 test assertions covering all spec scenarios; cleanup deletes test secrets)
 
-**Remaining:**
-- CI workflow: .github/workflows/test.yml (future)
-
 ---
 
-## local-dev.md v0.10
-
-**Status:** In Progress
+## local-dev v0.10
 
 **Implemented:**
 - docker-compose.yml with dev Postgres on port 5432 (postgres:16-alpine, moto/moto creds, pgdata volume, healthcheck, init script mount)
@@ -455,14 +387,9 @@ HOW TO USE THIS FILE:
 - `moto dev up` command: 9-step orchestration (prerequisites, cluster, image, postgres, keys, migrations, keybox, club, garage) with subprocess management via tokio::process, health checks with exponential backoff, Ctrl-C handling, --no-garage/--rebuild-image/--skip-image flags, DevConfig env var methods, JSON output, idempotent restart (v0.7/v0.8)
 - Add MOTO_CLUB_BIND_ADDR=0.0.0.0:18080 to dev-club and dev-up Makefile targets (v0.10: moto-club API port changed from 8080 to 18080 to match k3d deploy path; CLI default works for both local dev and k3d deploy modes)
 
-**Remaining:**
-(none - local-dev.md v0.10 implementation complete)
-
 ---
 
-## service-deploy.md v0.5
-
-**Status:** In Progress
+## service-deploy v0.5
 
 **Implemented:**
 - moto-club-db embedded migrations and auto-run on startup (prerequisite for K8s deployment — see moto-club.md v2.3)
@@ -479,14 +406,9 @@ HOW TO USE THIS FILE:
 - Auto port-forward on deploy, CLI uses port 18080 (v0.5: deploy-system starts background `kubectl port-forward` from localhost:18080 to svc/moto-club:8080; CLI defaults to http://localhost:18080 via MOTO_CLUB_URL; port 18080 avoids conflicts with 80/443/8080)
 - Drop `undeploy-system` target (v0.5: use `dev-cluster-down` instead; cluster deletion cleans up everything including port-forward)
 
-**Remaining:**
-(none - service-deploy.md v0.5 implementation complete)
-
 ---
 
-## pre-commit.md v0.2
-
-**Status:** Complete
+## pre-commit v0.2
 
 **Implemented:**
 - .githooks/pre-commit: blocks secrets (.pem, .key, .env files)
@@ -494,6 +416,3 @@ HOW TO USE THIS FILE:
 - .githooks/pre-commit: cargo clippy --all-targets -- -D warnings (when Rust files changed, v0.2 changelog)
 - .githooks/pre-commit: nix flake check --no-build (when Nix files changed)
 - make install: sets git core.hooksPath to .githooks
-
-**Remaining:**
-(none - pre-commit.md v0.2 implementation complete)

@@ -7,7 +7,7 @@ TASK_NUM=0
 while true; do
     TASK_NUM=$((TASK_NUM + 1))
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    OUTPUT_FILE="/tmp/moto-loop-${TIMESTAMP}-${TASK_NUM}.txt"
+    OUTPUT_FILE="/tmp/${PWD##*/}-loop-${TIMESTAMP}-${TASK_NUM}.txt"
 
     echo "=== Starting task ${TASK_NUM} ==="
 
