@@ -877,6 +877,41 @@ async fn register_garage(
     // Validate K8s ServiceAccount token and namespace
     validate_garage_token(&state, &headers, &req.garage_id).await?;
 
+    // Verify garage exists in the garages table before upserting into wg_garages.
+    // Without this check, the FK constraint on wg_garages.garage_id would produce
+    // a generic database error instead of a proper GARAGE_NOT_FOUND 404.
+    let garage_uuid = Uuid::parse_str(&req.garage_id).map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiError::new(
+                error_codes::GARAGE_NOT_FOUND,
+                format!("Garage '{}' not found", req.garage_id),
+            )),
+        )
+    })?;
+    garage_repo::get_by_id(&state.db_pool, garage_uuid)
+        .await
+        .map_err(|e| {
+            if let moto_club_db::DbError::NotFound { .. } = e {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiError::new(
+                        error_codes::GARAGE_NOT_FOUND,
+                        format!("Garage '{}' not found", req.garage_id),
+                    )),
+                )
+            } else {
+                tracing::error!(error = %e, garage_id = %req.garage_id, "Failed to verify garage exists");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new(
+                        error_codes::INTERNAL_ERROR,
+                        format!("Failed to verify garage exists: {e}"),
+                    )),
+                )
+            }
+        })?;
+
     let registration = GarageRegistration {
         garage_id: req.garage_id.clone(),
         public_key: req.public_key,
