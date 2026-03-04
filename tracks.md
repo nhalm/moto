@@ -93,6 +93,7 @@ WHAT DOES NOT GO HERE:
 - `close_session` missing ownership check: handler now calls `wg_session_repo::verify_ownership` before closing, returns 403 `SESSION_NOT_OWNED` for sessions belonging to a different user (ownership determined via device FK); added `close_session_not_owned` integration test
 - `get_device` missing ownership check: handler extracted owner with `let _owner = ...` but never compared it to the device's owner. Fixed to return 403 `DEVICE_NOT_OWNED` when device belongs to a different user.
 - Fallback TTL validation ignores `MIN_TTL_SECONDS`: `garages.rs` fallback path checked `ttl_seconds <= 0` instead of `< *MIN_TTL_SECONDS`, accepting values 1-299 that should be rejected (minimum is 300s). Fixed to use `MIN_TTL_SECONDS` consistent with the `GarageService` path.
+- Fallback `create_garage` writes full UUID namespace: `garages.rs` used `format!("moto-garage-{id}")` with full UUID, but `service.rs` and `namespace.rs` use `garage_id.short()` (8-char prefix). Fixed to use `GarageId::from_uuid(id).short()` for consistent namespace naming.
 
 ---
 
