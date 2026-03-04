@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.17 |
+| Version | 0.18 |
 | Status | Ready to Rip |
 | Last Updated | 2026-03-04 |
 
@@ -96,7 +96,7 @@ run:            # Run the CLI
 build-garage:               # Build garage container (Docker-wrapped Nix, works on Mac and Linux)
 test-garage:                # Run smoke tests on container
 shell-garage:               # Interactive shell in container
-push-garage:                # Push garage image to local registry
+push-garage:                # Push garage image to local registry, clean up local copy
 
 # Bike (base image)
 build-bike:                 # Build moto-bike base container image
@@ -131,7 +131,7 @@ registry-start:    # Start local Docker registry on localhost:5000
 registry-stop:     # Stop and remove local registry
 ```
 
-Optional targets for local development with a registry.
+Optional targets for standalone local development with a registry. **Note:** `registry-start` binds to port 5000, but the `REGISTRY` variable (used by all `push-*` targets) defaults to `localhost:5050` (the k3d registry port). To push to the standalone registry, override: `make push-garage REGISTRY=localhost:5000`.
 
 ### Testing Targets
 
@@ -180,7 +180,7 @@ See [local-dev.md](local-dev.md) for full local development specification.
 ```makefile
 deploy-images:       # Build and push all service images (garage, club, keybox)
 deploy-secrets:      # Generate and apply K8s secrets to moto-system namespace
-deploy-system:       # Deploy all moto-system components (kubectl apply -k)
+deploy-system:       # Deploy all moto-system components (kubectl apply -k) + start port-forward (localhost:18080)
 deploy-status:       # Show status of moto-system pods
 deploy:              # Full deploy: deploy-images + deploy-secrets + deploy-system + deploy-status
 ```
@@ -198,6 +198,11 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 - Keep names short but clear
 
 ## Changelog
+
+### v0.18 (2026-03-04)
+- Fix `push-garage` comment: add "clean up local copy" (was present in Makefile and in push-club/push-keybox but missing from spec)
+- Document `registry-start` vs `REGISTRY` port mismatch (5000 vs 5050) with override guidance
+- Document `deploy-system` port-forward side effect (starts `localhost:18080` → moto-club)
 
 ### v0.17 (2026-03-04)
 - Add `run` to Development Targets (was in Makefile and .PHONY but missing from spec)

@@ -30,24 +30,22 @@ same convention as tracks.md.
 
 ## makefile.md
 
-(none)
+- **`dev-down` Makefile help text says "Stop all dev services and database" but spec says "Stop postgres only".** The v0.9 local-dev.md changelog claims this was fixed, but the Makefile `##` comment was never updated. Fix: change the `##` comment to match the spec.
 
 ## testing.md
 
-- `moto-club-wg`: `integration` feature flag declared (`Cargo.toml` line 12) with a stub `mod integration_tests` in `ipam.rs:239-280` that contains zero actual test functions (only comments). Either add real tests or remove the dead feature flag and empty module.
+- `moto-club-wg`: stale `// Run with: cargo test --features integration` comments in `sessions.rs:459` and `peers.rs:345` reference a feature flag that no longer exists (removed from `Cargo.toml`). Delete the misleading comments.
 
 ## moto-club.md
 
-- **`close_session` does not check session ownership.** `wg.rs:789` extracts owner with `let _owner = ...` but never compares it to the session's owner. `SESSION_NOT_OWNED` error code is defined but never returned. Spec requires 403 for sessions belonging to a different user.
-- **`get_device` does not check device ownership.** `wg.rs:560` extracts owner with `let _owner = ...` but never compares it to the device's owner. `DEVICE_NOT_OWNED` error code is defined but never returned. Spec requires 403 for devices belonging to a different user.
-- **Fallback `create_garage` writes full UUID namespace.** `garages.rs:282` uses `format!("moto-garage-{id}")` with full UUID, but `service.rs:206` and `namespace.rs:38` use `garage_id.short()` (8-char prefix). Garages created via the fallback path get mismatched namespace names.
-- **Fallback TTL validation ignores `MIN_TTL_SECONDS`.** `garages.rs:253` checks `ttl_seconds <= 0` instead of `< *MIN_TTL_SECONDS`. Accepts values 1-299 that should be rejected (minimum is 300s). The `GarageService`-backed path validates correctly.
-- **`MOTO_CLUB_DEV_CONTAINER_IMAGE` env var not fully wired.** `main.rs` reads the env var and passes it to `GarageK8s`, but the fallback path in `garages.rs:288` and `DEFAULT_IMAGE` constant in `lib.rs:70` still hardcode `"ghcr.io/nhalm/moto-dev:latest"`.
-- **GET `/api/v1/wg/garages/{id}` returns dummy `peer_version` and `registered_at`.** `wg.rs:927-929` hardcodes `peer_version: 0` and `registered_at: Utc::now()` with comments acknowledging the gap. PostgreSQL values are never queried in this handler.
+- **`state.k8s_client` is always `None` — K8s SA token validation permanently bypassed.** `main.rs:266-270` creates `K8sClient` and consumes it into `GarageK8s`, but `AppState` (built at `main.rs:320-328`) never calls `.with_k8s_client()`. Result: `validate_garage_token` in `wg.rs:363-367` short-circuits to `Ok(())` for all requests, and `/health/ready` in `health.rs:214-223` reports K8s as `"ok"` without checking. Fix: clone the client via `garage_k8s.client()` (accessor at `lib.rs:93`) and pass to `.with_k8s_client()`.
+- **`set_session` does not increment `peer_version`.** `postgres_stores.rs:321-349` creates the session row but never calls `wg_garage_repo::increment_peer_version`. Only `remove_session` (line 371) increments. Spec requires increment on both create and close (lines 512, 685, 1055). Impact: garages won't see new peers until the session is closed.
 
 ## keybox.md
 
-(none)
+- **`POST /auth/issue-garage-svid` returns 401 instead of 403 for invalid service token.** `api.rs:685` and `pg_api.rs:361` propagate `validate_service_token` errors with bare `?`, yielding 401. All other service-token-gated endpoints (set_secret, delete_secret, get_audit_logs, rotate_dek) use `.map_err()` to return 403. Fix: add the same `.map_err()` wrapper.
+- **`POST /auth/token` ignores `MOTO_KEYBOX_SVID_TTL_SECONDS`.** `api.rs:641` and `pg_api.rs:325` construct `SvidClaims::new(&spiffe_id, DEFAULT_SVID_TTL_SECS)` with hardcoded 900s instead of using the issuer's configured TTL. Setting the env var has no effect on issued SVIDs.
+- **ABAC service global-secret prefix check too broad.** `abac.rs:149-152` has `|| secret.name.starts_with(&claims.principal_id)` without trailing slash. A service named `ai` gets access to secrets prefixed `ai-proxy/`. Fix: remove the second `||` branch or require the trailing slash.
 
 ## dev-container.md
 

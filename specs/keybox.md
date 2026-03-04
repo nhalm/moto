@@ -2,11 +2,14 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.12 |
+| Version | 0.13 |
 | Status | Ready to Rip |
 | Last Updated | 2026-03-04 |
 
 ## Changelog
+
+### v0.13 (2026-03-04)
+- Fix `MOTO_KEYBOX_SERVICE_TOKEN` example value: show hex string, not file path (was confusable with `_FILE` variant)
 
 ### v0.12 (2026-03-04)
 - Document K8s TokenReview as MVP-deferred: `POST /auth/token` currently accepts principal identity directly without K8s SA JWT validation. K8s TokenReview integration is a future item.
@@ -513,7 +516,7 @@ MOTO_KEYBOX_SVID_SIGNING_KEY_FILE="/run/secrets/svid-signing-key"
 # Optional
 MOTO_KEYBOX_DATABASE_URL="postgres://keybox:password@localhost:5432/keybox"  # Omit for in-memory mode (testing only)
 MOTO_KEYBOX_SVID_TTL_SECONDS="900"              # Default 15 min
-MOTO_KEYBOX_SERVICE_TOKEN="/run/secrets/service-token"  # Direct token value
+MOTO_KEYBOX_SERVICE_TOKEN="a1b2c3d4..."                 # Direct token value (hex string)
 MOTO_KEYBOX_SERVICE_TOKEN_FILE="/run/secrets/service-token"  # Read token from file (preferred)
 MOTO_KEYBOX_BIND_ADDR="0.0.0.0:8080"            # Default 0.0.0.0:8080
 MOTO_KEYBOX_HEALTH_BIND_ADDR="0.0.0.0:8081"     # Default 0.0.0.0:8081
