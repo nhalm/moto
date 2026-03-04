@@ -28,5 +28,4 @@ Read it in full at the start of each iteration.
 
 ## keybox.md bug-fix
 - Fix `POST /auth/issue-garage-svid` returning 401 instead of 403 for invalid service token: add `.map_err()` wrapper like other service-token-gated endpoints
-- Fix `POST /auth/token` ignoring `MOTO_KEYBOX_SVID_TTL_SECONDS`: uses hardcoded 900s instead of configured TTL
 

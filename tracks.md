@@ -329,6 +329,7 @@ WHAT DOES NOT GO HERE:
 
 - `/health/ready` checks DB connection at runtime: `health_router()` now accepts `Option<DbPool>`, `ready_handler` runs `SELECT 1` against the pool when using PostgreSQL backend; `main.rs` restructured to create pool before health router so it can be shared; returns 503 `not_ready` if DB is unreachable
 - Fix ABAC service global-secret prefix check too broad: removed bare `starts_with(principal_id)` fallback in `evaluate_global`; now only checks `starts_with(principal_id + "/")` so service `ai` cannot access `ai-proxy/` secrets
+- Fix `POST /auth/token` ignoring `MOTO_KEYBOX_SVID_TTL_SECONDS`: both `api.rs` and `pg_api.rs` `issue_token` handlers used hardcoded `DEFAULT_SVID_TTL_SECS` (900s) instead of `state.svid_issuer.ttl_secs()`; added `ttl_secs()` getter to `SvidIssuer`
 
 ---
 
