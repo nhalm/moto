@@ -625,6 +625,35 @@ async fn delete_garage(
             )
         })?;
 
+    // Close all active sessions and broadcast peer removals
+    let garage_id_str = garage.id.to_string();
+    match state.session_manager.on_garage_terminated(&garage_id_str) {
+        Ok(closed_sessions) => {
+            for session in &closed_sessions {
+                state
+                    .peer_broadcaster
+                    .broadcast_remove(&session.garage_id, session.device_pubkey.clone());
+            }
+            if !closed_sessions.is_empty() {
+                tracing::info!(
+                    garage_id = %garage.id,
+                    garage_name = %name,
+                    sessions_closed = closed_sessions.len(),
+                    "closed active sessions on garage termination"
+                );
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                garage_id = %garage.id,
+                garage_name = %name,
+                error = %e,
+                "failed to close sessions on garage termination"
+            );
+            // Don't fail the delete — garage is already terminated in DB
+        }
+    }
+
     // Delete K8s namespace (cascades to all resources)
     // Per spec: if deletion fails, log error and return success anyway
     // Reconciler will retry namespace deletion on next cycle
