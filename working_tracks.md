@@ -53,3 +53,7 @@ Read it in full at the start of each iteration.
 ## service-deploy.md bug-fix
 
 (all items completed)
+
+## service-deploy.md bug-fix (2)
+
+(all items completed)

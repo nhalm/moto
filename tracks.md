@@ -555,3 +555,7 @@ WHAT DOES NOT GO HERE:
 - Add security contexts to `club.yaml` matching `keybox.yaml` (runAsUser/runAsGroup/runAsNonRoot pod-level, readOnlyRootFilesystem/allowPrivilegeEscalation/capabilities container-level).
 - Add metrics port 9090 to `keybox.yaml` Service and container port list per moto-bike.md spec.
 - Replace static manifests with generated ones from bike.toml via `scripts/generate-manifests.sh`. Added `make generate-manifests` target. Generated manifests include deployment builder security baseline (rolling updates, full security contexts, common env vars).
+
+## service-deploy.md bug-fix (2)
+
+- Fix `scripts/generate-manifests.sh` single-quoted heredocs (`<< 'YAML'`) so `parse_toml` values are actually interpolated — replicas, resources now read from bike.toml. Added `parse_toml_section()` for TOML section-aware parsing. Fixed macOS sed compatibility.
