@@ -375,19 +375,23 @@ impl SessionStore for PostgresSessionStore {
             Err(e) => return Err(SessionError::Storage(e.to_string())),
         };
 
-        // Only close and increment peer_version if not already closed
-        if db_session.closed_at.is_none() {
-            let _ = tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current()
-                    .block_on(async { wg_session_repo::close(&pool, session_uuid).await })
-            });
-
-            let _ = tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    wg_garage_repo::increment_peer_version(&pool, db_session.garage_id).await
-                })
-            });
+        // Already closed — return None so callers know no actual close happened.
+        // This prevents spurious broadcast_remove on idempotent re-closes.
+        if db_session.closed_at.is_some() {
+            return Ok(None);
         }
+
+        // Actually close and increment peer_version
+        let _ = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(async { wg_session_repo::close(&pool, session_uuid).await })
+        });
+
+        let _ = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                wg_garage_repo::increment_peer_version(&pool, db_session.garage_id).await
+            })
+        });
 
         // Convert to domain Session
         let public_key = WgPublicKey::from_base64(&db_session.device_pubkey)
