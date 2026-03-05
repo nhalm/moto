@@ -31,6 +31,11 @@ metadata:
     app.kubernetes.io/component: moto-keybox
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/component: moto-keybox
@@ -40,6 +45,10 @@ spec:
         app.kubernetes.io/part-of: moto
         app.kubernetes.io/component: moto-keybox
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
       containers:
         - name: moto-keybox
           image: moto-registry:5000/moto-keybox:latest
@@ -47,6 +56,16 @@ spec:
             - containerPort: 8080
             - containerPort: 8081
           env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: RUST_LOG
+              value: info
             - name: MOTO_KEYBOX_DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -81,6 +100,12 @@ spec:
               port: 8081
             failureThreshold: 30
             periodSeconds: 1
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           volumeMounts:
             - name: keybox-keys
               mountPath: /run/secrets/keybox
