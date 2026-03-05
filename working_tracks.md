@@ -12,7 +12,11 @@ Read it in full at the start of each iteration.
 
 ## moto-club.md bug-fix
 
-- Fallback create_garage has no collision-retry for auto-generated names: name collision returns 409 instead of transparent retry up to 3 times with random suffix
+- Fallback `create_garage` collision-retry for auto-generated names (see bug-fix.md)
+
+## container-system.md bug-fix
+
+(all items completed)
 
 ## moto-bike.md bug-fix
 

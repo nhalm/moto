@@ -50,7 +50,7 @@ same convention as tracks.md.
 
 ## container-system.md
 
-- **`make registry-start` uses port 5000 instead of 5050.** `Makefile:191` runs `docker run -d -p 5000:5000` but the `REGISTRY` variable defaults to `localhost:5050` (line 117) and spec v1.1 changed the port to 5050. Fix: change `-p 5000:5000` to `-p 5050:5000` and update the echo message.
+(none)
 
 ## local-cluster.md
 
@@ -66,10 +66,7 @@ same convention as tracks.md.
 
 ## moto-bike.md
 
-- **K8s manifest missing POD_NAME and POD_NAMESPACE injection.** `infra/k8s/moto-system/club.yaml` does not inject `POD_NAME` and `POD_NAMESPACE` via K8s downward API. Spec (line 99, 106-107) requires these for structured logging. Fix: add `valueFrom.fieldRef` entries for `metadata.name` and `metadata.namespace`.
-- **K8s manifest missing RUST_LOG env var.** `infra/k8s/moto-system/club.yaml` env section does not set `RUST_LOG`. Spec (line 110) requires `RUST_LOG="info"` for log level control. Fix: add `RUST_LOG: "info"` to the env section.
-- **K8s manifest missing rolling update strategy.** `infra/k8s/moto-system/club.yaml` has no `strategy` section. Spec (lines 411-416) requires `RollingUpdate` with `maxSurge: 1` and `maxUnavailable: 0`. Fix: add strategy block to deployment spec.
-- **K8s manifest incomplete security context.** `infra/k8s/moto-system/club.yaml` has pod-level `runAsUser`/`runAsGroup`/`runAsNonRoot` but is missing container-level `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, and `capabilities.drop: [ALL]`. Spec (lines 69-78) requires full hardening. Fix: add container-level securityContext.
+(none)
 
 ## supporting-services.md
 
