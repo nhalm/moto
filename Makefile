@@ -45,7 +45,7 @@ clean: ## Clean build artifacts
 	cargo clean
 
 run: ## Run the CLI
-	cargo run --bin moto-cli
+	cargo run --bin moto
 
 fix: fmt ## Auto-fix lint issues
 	cargo clippy --workspace --all-targets --fix --allow-dirty

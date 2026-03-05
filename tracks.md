@@ -487,6 +487,7 @@ WHAT DOES NOT GO HERE:
 ## makefile.md bug-fix
 
 - Fix `dev-down` Makefile help text: says "Stop all dev services and database" but spec says "Stop postgres only"
+- `make run` target uses `cargo run --bin moto-cli` but binary is named `moto`. Change to `cargo run --bin moto`.
 
 ---
 
