@@ -1,8 +1,8 @@
 # Project Structure Specification
 
-**Version:** 1.5
+**Version:** 1.6
 **Status:** Ripping
-**Last Updated:** 2026-02-24
+**Last Updated:** 2026-03-05
 
 ---
 
@@ -155,24 +155,13 @@ moto/
 │       ├── moto-payments/
 │       └── moto-lending/
 │
-├── docker/
-│   ├── garage.Dockerfile             # Dev container image
-│   ├── club.Dockerfile               # Club server image
-│   └── bike.Dockerfile               # Bike runtime image
-│
 ├── infra/
 │   ├── k8s/
-│   │   ├── cluster/                  # k3s cluster setup
-│   │   ├── garage/                   # Garage namespace templates
-│   │   ├── bike/                     # Bike namespace templates
-│   │   └── services/                 # PostgreSQL, Redis, etc.
+│   │   └── moto-system/              # K8s manifests for control plane
 │   │
-│   ├── nix/
-│   │   ├── modules/                  # NixOS modules
-│   │   ├── pkgs/                     # Nix packages
-│   │   └── shells/                   # Dev shells
+│   ├── modules/                      # Nix modules (base, dev-tools, terminal, wireguard)
 │   │
-│   └── scripts/                      # Setup scripts
+│   └── pkgs/                         # Nix package definitions (garage, bike, club, keybox)
 │
 ├── specs/                            # Specifications
 │   ├── README.md
@@ -401,6 +390,10 @@ Both CLI and server need the same types (GarageInfo, etc). Put them in `moto-clu
 ---
 
 ## Changelog
+
+### v1.6 (2026-03-05)
+- Fix: Remove `docker/` directory — container builds use Nix `dockerTools` in `infra/pkgs/`, not Dockerfiles
+- Fix: Update `infra/` tree to match actual layout (`infra/modules/`, `infra/pkgs/`, `infra/k8s/moto-system/`) instead of outdated `infra/nix/` structure
 
 ### v1.5 (2026-02-24)
 - Docs: Add `moto-club-ws` crate to Club Crates table and directory tree (re-introduced by moto-club.md v1.6)

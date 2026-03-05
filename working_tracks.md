@@ -12,7 +12,19 @@ Read it in full at the start of each iteration.
 
 ## moto-club.md bug-fix
 
-- Fallback name validation missing start/end alphanumeric + 63-char limit: `garages.rs` checks character set (lowercase + digits + hyphens) but doesn't enforce that name must start/end with alphanumeric or respect K8s 63-char label limit. Names like `-foo-` pass validation.
+(all items completed)
+
+## container-system.md bug-fix
+
+- Makefile: fix registry-start port from 5000 to 5050
+
+## moto-bike.md bug-fix
+
+- bike.toml: update replicas from 2 to 3
+- K8s manifest: add POD_NAME and POD_NAMESPACE via downward API
+- K8s manifest: add RUST_LOG="info" env var
+- K8s manifest: add rolling update strategy (maxSurge: 1, maxUnavailable: 0)
+- K8s manifest: add container-level securityContext (readOnlyRootFilesystem, allowPrivilegeEscalation, capabilities)
 
 ## keybox.md bug-fix
 

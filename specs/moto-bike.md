@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
+| Version | 0.4 |
 | Status | Ripping |
-| Last Updated | 2026-01-28 |
+| Last Updated | 2026-03-05 |
 
 ## Overview
 
@@ -100,26 +100,22 @@ Engines read all config from environment variables. Never from files (except CA 
 
 **Common env vars (all engines):**
 
+Engines use a `MOTO_{ENGINE}_` prefix for engine-specific config (e.g., `MOTO_CLUB_BIND_ADDR`). Some values are standard across all engines:
+
 ```bash
-# Identity
-ENGINE_NAME="club"                    # Which engine
-POD_NAME="moto-club-abc123"          # K8s pod name (injected)
-POD_NAMESPACE="moto-prod"            # K8s namespace (injected)
+# Identity (injected by K8s downward API)
+POD_NAME="moto-club-abc123"          # K8s pod name
+POD_NAMESPACE="moto-prod"            # K8s namespace
 
 # Runtime
 RUST_LOG="info"                       # Log level
 RUST_BACKTRACE="1"                    # Backtraces on panic
 
-# Networking
-BIND_ADDRESS="0.0.0.0"
-BIND_PORT="8080"
-
-# Observability
-METRICS_PORT="9090"
-HEALTH_PORT="8081"
-
-# Secrets (fetched from keybox, not hardcoded)
-KEYBOX_URL="http://keybox.moto-system:8080"
+# Engine-specific (example for club)
+MOTO_CLUB_BIND_ADDR="0.0.0.0:8080"
+MOTO_CLUB_HEALTH_BIND_ADDR="0.0.0.0:8081"
+MOTO_CLUB_METRICS_BIND_ADDR="0.0.0.0:9090"
+MOTO_CLUB_KEYBOX_URL="http://keybox.moto-system:8080"
 ```
 
 **Engine-specific config:**
@@ -220,7 +216,7 @@ Each main engine crate has a `bike.toml` in its crate root. Shared/tool crates d
 name = "club"
 
 [deploy]
-replicas = 2
+replicas = 3
 port = 8080
 
 [health]
@@ -249,6 +245,8 @@ memory_limit = "2Gi"
 | `resources.*` | `resources.requests`, `resources.limits` |
 
 The Service is auto-generated with the same name as the Deployment, providing DNS-based service discovery.
+
+**Local-dev overrides:** Local K8s manifests (see [service-deploy.md](service-deploy.md)) may use lower replicas and resource values for development. bike.toml defines the production target; local-dev intentionally runs leaner.
 
 #### Build Pipeline
 
@@ -360,7 +358,7 @@ metadata:
   name: moto-club
   namespace: moto-prod
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: moto-club
@@ -426,7 +424,7 @@ spec:
   scaleTargetRef:
     kind: Deployment
     name: moto-club
-  minReplicas: 2
+  minReplicas: 3
   maxReplicas: 10
   metrics:
   - type: Resource
@@ -533,6 +531,11 @@ moto bike logs club -f --tail 100
 ---
 
 ## Changelog
+
+### v0.5 (2026-03-05)
+- Fix: bike.toml `deploy.replicas` changed from 2 to 3 for production. HPA `minReplicas` updated to match.
+- Fix: env var examples updated to show actual `MOTO_{ENGINE}_` prefix pattern instead of unprefixed names. `ENGINE_NAME` removed (not used). `BIND_ADDRESS`/`BIND_PORT` replaced with `MOTO_CLUB_BIND_ADDR` combined form.
+- Docs: Added local-dev override note — local K8s manifests may use lower replicas and resources than bike.toml specifies.
 
 ### v0.4
 - Docs: Fix bike.toml location from `engines/moto-club/` to `crates/moto-club/`

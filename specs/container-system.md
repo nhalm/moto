@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.3 |
+| Version | 1.4 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-28 |
+| Last Updated | 2026-03-05 |
 
 ## Overview
 
@@ -510,7 +510,7 @@ Bike containers have no shell, so testing is different:
 - Check exposed ports match spec
 - Verify non-root user (UID 1000)
 
-### CI/CD Pipeline
+### CI/CD Pipeline (future)
 
 **CI uses direct Nix, not Makefile.**
 
@@ -1053,6 +1053,10 @@ nix path-info --json .#moto-club-image | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v1.4 (2026-03-05)
+- Docs: Mark CI/CD Pipeline section as `(future)` — `.github/workflows/` not yet implemented
+- Fix: `make registry-start` uses port 5000 but should use 5050 (see bug-fix.md)
 
 ### v1.3 (2026-02-28)
 - Bump Rust toolchain from 1.85 to 1.88 (`home` crate v0.5.12 requires Rust 1.88)

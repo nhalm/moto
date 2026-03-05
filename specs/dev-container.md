@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.17 |
+| Version | 0.18 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-24 |
+| Last Updated | 2026-03-05 |
 
 ## Overview
 
@@ -84,7 +84,7 @@ All tools are installed via Nix in the devShell/container.
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Rust | 1.85 stable | Primary language |
+| Rust | 1.88 stable | Primary language |
 | Node.js | 22.x LTS | For tooling (claude-code) |
 
 **Rust toolchain:**
@@ -495,6 +495,9 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.18 (2026-03-05)
+- Fix: Bump Rust version from 1.85 to 1.88 to match container-system.md v1.3 and flake.nix
 
 ### v0.17 (2026-02-24)
 - Docs: Fix resource limits table to match garage-isolation.md (100m/3 CPU, 256Mi/7Gi memory)

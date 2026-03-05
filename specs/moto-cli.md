@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.11 |
+| Version | 0.12 |
 | Status | Ready to Rip |
-| Last Updated | 2026-02-27 |
+| Last Updated | 2026-03-05 |
 
 ## Overview
 
@@ -412,7 +412,7 @@ Usage: moto bike logs <name> [options]
 
 Options:
   --follow, -f    Stream logs continuously (Ctrl+C to stop)
-  --tail <n>      Show last n lines (default: 100)
+  --tail, -n <n>  Show last n lines (default: 100)
   --since <dur>   Show logs from last duration (e.g., 5m, 1h)
 ```
 
@@ -664,6 +664,9 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.12 (2026-03-05)
+- Fix: Add `-n` short flag for `--tail` on `bike logs` (matches `garage logs` convention)
 
 ### v0.11 (2026-02-27)
 - Fix: `--kubectl` uses `tmux new-session -A -s garage` instead of `tmux attach-session -t garage`; `-A` creates the session if it doesn't exist, matching ttyd behavior

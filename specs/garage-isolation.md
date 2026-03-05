@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
-| Last Updated | 2026-02-22 |
+| Version | 0.5 |
+| Last Updated | 2026-03-05 |
 
 ## Overview
 
@@ -239,7 +239,7 @@ spec:
 | Other garages | No | Full isolation |
 | Kubernetes API | No | No service account |
 | Cloud metadata (169.254.x.x) | No | Prevent credential theft |
-| WireGuard range (100.64.x.x) | No | Blocked at NetworkPolicy level |
+| WireGuard overlay (fd00:moto::/48) | No | Blocked at NetworkPolicy level |
 
 ### Resource Limits
 
@@ -317,12 +317,13 @@ metadata:
   name: wireguard-config
   namespace: moto-garage-{id}
 data:
-  address: "100.64.x.y/32"
-  peers: |
-    [Peer]
-    PublicKey = {moto-club-pubkey}
-    Endpoint = {derp-server}:443
-    AllowedIPs = 100.64.0.0/10
+  wg0.conf: |
+    [Interface]
+    Address = fd00:moto:1::{id}/128
+    ListenPort = 51820
+
+    # Peers are managed dynamically by the garage daemon
+    # by polling moto-club's peer list endpoint
 ---
 apiVersion: v1
 kind: Secret
@@ -335,7 +336,7 @@ data:
   public_key: {base64-encoded}
 ```
 
-The garage pod mounts these and reads on startup. No API call to moto-club needed.
+The garage pod mounts these and reads on startup. No API call to moto-club needed. Peers are not baked into the ConfigMap — the garage daemon discovers peers dynamically via moto-club's WebSocket peer stream.
 
 ### Secrets Access
 
@@ -360,8 +361,9 @@ metadata:
   namespace: moto-garage-{id}
 type: Opaque
 stringData:
-  svid.jwt: "{signed-svid-token}"
+  token: "{signed-svid-token}"
   spiffe_id: "spiffe://moto.local/garage/{garage-id}"
+  expires_at: "2026-03-05T12:00:00Z"
 ```
 
 This avoids mounting K8s ServiceAccount token - the garage has no K8s API access.
@@ -390,7 +392,7 @@ Secrets are pull-based and on-demand. Garage only gets secrets it explicitly req
 | Resource exhaustion | ResourceQuota and LimitRange per namespace |
 | Host filesystem access | No hostPath volumes |
 | Cloud credential theft | NetworkPolicy blocks 169.254.0.0/16 (metadata service) |
-| WireGuard network pivoting | NetworkPolicy blocks 100.64.0.0/10 |
+| WireGuard network pivoting | NetworkPolicy blocks WireGuard overlay (100.64.0.0/10 in NetworkPolicy) |
 
 **Accepted Risks:**
 
@@ -402,6 +404,11 @@ Secrets are pull-based and on-demand. Garage only gets secrets it explicitly req
 | moto-club knows WG private key | Key is per-garage, ephemeral; moto-club already controls lifecycle |
 
 ## Changelog
+
+### v0.5 (2026-03-05)
+- Fix: WireGuard ConfigMap now shows actual `wg0.conf` INI format with IPv6 overlay address (`fd00:moto:1::{id}/128`) instead of abstract keys with outdated IPv4 (`100.64.x.y/32`). Peers are managed dynamically by the garage daemon, not baked into the ConfigMap.
+- Fix: SVID secret key renamed from `svid.jwt` to `token` to match implementation. Added `expires_at` field for expiry tracking without JWT parsing.
+- Fix: Network access summary and threat model table updated to reference IPv6 overlay (`fd00:moto::/48`) instead of IPv4 CGNAT range.
 
 ### v0.4 (2026-02-22)
 - Fix: remove `/nix` emptyDir volume and mount — mounting emptyDir over `/nix` shadows the image's pre-installed `/nix/store` contents, breaking all tool symlinks (including `garage-entrypoint`). The image provides `/nix/store` read-only via `readOnlyRootFilesystem`.

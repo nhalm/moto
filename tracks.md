@@ -494,6 +494,7 @@ WHAT DOES NOT GO HERE:
 - Fix `close_session` spuriously incrementing `peer_version` when re-closing an already-closed session: `remove_session` now fetches raw DB session, checks `closed_at`, and only calls `close()` + `increment_peer_version` when the session is actually open
 - Fix `close_session` idempotent re-close triggering spurious `broadcast_remove`: `remove_session` in `PostgresSessionStore` now returns `None` when session is already closed, so `SessionManager::close_session` returns `NotFound` and the handler skips `broadcast_remove`
 - Fix `extend_ttl` max-TTL guard uses original `ttl_seconds` not actual total: compute `(expires_at + extension - created_at).num_seconds()` instead of `garage.ttl_seconds + req.seconds`
+- Fallback name validation missing start/end alphanumeric + 63-char limit: `garages.rs` checks character set (lowercase + digits + hyphens) but doesn't enforce that name must start/end with alphanumeric or respect K8s 63-char label limit. Names like `-foo-` pass validation.
 
 ---
 
