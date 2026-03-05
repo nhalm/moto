@@ -40,7 +40,7 @@ Read it in full at the start of each iteration.
 
 ## garage-isolation.md bug-fix
 
-- Fix NetworkPolicy keybox egress rule pod selector from `app: keybox` to `app.kubernetes.io/component: moto-keybox` to match actual keybox pod labels.
+(all items completed)
 
 ## garage-lifecycle.md bug-fix
 

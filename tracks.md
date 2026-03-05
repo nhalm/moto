@@ -378,6 +378,10 @@ WHAT DOES NOT GO HERE:
 - LimitRange: garage-limits per spec (moto-k8s LimitRangeOps trait, moto-club-k8s GarageLimitRangeOps trait and build_garage_limits, integrated into GarageService.create_k8s_resources)
 - Fix: remove /nix emptyDir volume and mount (v0.4: mounting emptyDir over /nix shadows the image's pre-installed /nix/store contents, breaking all tool symlinks; image provides /nix/store read-only via readOnlyRootFilesystem)
 
+## garage-isolation.md bug-fix
+
+- Fix NetworkPolicy keybox egress rule pod selector from `app: keybox` to `app.kubernetes.io/component: moto-keybox` to match actual keybox pod labels.
+
 ---
 
 ## supporting-services v0.3
