@@ -181,6 +181,16 @@ fn extract_owner(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiErr
     Ok(token.to_string())
 }
 
+/// Generate a random 4-character alphanumeric suffix for name collision retries.
+fn generate_random_suffix() -> String {
+    use rand::Rng;
+    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+    let mut rng = rand::rng();
+    (0..4)
+        .map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char)
+        .collect()
+}
+
 /// Generate a random garage name (adjective-animal format).
 fn generate_garage_name() -> String {
     use rand::prelude::IndexedRandom;
@@ -288,23 +298,18 @@ async fn create_garage(
     }
 
     // Generate name if not provided
-    let name = req.name.unwrap_or_else(generate_garage_name);
+    let auto_generated = req.name.is_none();
+    let base_name = req.name.unwrap_or_else(generate_garage_name);
 
     // Validate name format (K8s label rules)
-    if let Err(msg) = validate_garage_name(&name) {
+    if let Err(msg) = validate_garage_name(&base_name) {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiError::new("INVALID_NAME", msg)),
         ));
     }
 
-    // Generate ID
-    let id = Uuid::now_v7();
-    let garage_id = GarageId::from_uuid(id);
-    let namespace = format!("moto-garage-{}", garage_id.short());
-    let pod_name = "dev-container".to_string();
     let branch = req.branch.unwrap_or_else(|| "main".to_string());
-    // Default image can be overridden via request; falls back to env var or hardcoded default
     let image = req.image.unwrap_or_else(|| {
         state.garage_k8s.as_ref().map_or_else(
             || moto_club_garage::DEFAULT_IMAGE.to_string(),
@@ -312,50 +317,80 @@ async fn create_garage(
         )
     });
 
-    // Create in database
-    let input = garage_repo::CreateGarage {
-        id,
-        name: name.clone(),
-        owner,
-        branch,
-        image,
-        ttl_seconds,
-        namespace,
-        pod_name,
-    };
+    // Retry logic for auto-generated names: on collision, append random 4-char suffix
+    let max_collision_retries: u32 = 3;
+    let mut name = base_name.clone();
+    let mut last_error = None;
 
-    let garage = garage_repo::create(&state.db_pool, input)
-        .await
-        .map_err(|e| {
-            match e {
-                DbError::AlreadyExists { .. } => (
+    for attempt in 0..=max_collision_retries {
+        if attempt > 0 {
+            name = format!("{}-{}", base_name, generate_random_suffix());
+            tracing::debug!(name = %name, attempt, "retrying with suffix after name collision");
+        }
+
+        let id = Uuid::now_v7();
+        let garage_id = GarageId::from_uuid(id);
+        let namespace = format!("moto-garage-{}", garage_id.short());
+        let pod_name = "dev-container".to_string();
+
+        let input = garage_repo::CreateGarage {
+            id,
+            name: name.clone(),
+            owner: owner.clone(),
+            branch: branch.clone(),
+            image: image.clone(),
+            ttl_seconds,
+            namespace,
+            pod_name,
+        };
+
+        match garage_repo::create(&state.db_pool, input).await {
+            Ok(garage) => return Ok((StatusCode::CREATED, Json(GarageResponse::from(garage)))),
+            Err(DbError::AlreadyExists { .. }) if auto_generated => {
+                tracing::debug!(name = %name, "auto-generated name collision, will retry");
+                last_error = Some(name.clone());
+            }
+            Err(DbError::AlreadyExists { .. }) => {
+                return Err((
                     StatusCode::CONFLICT,
                     Json(ApiError::new(
                         error_codes::GARAGE_ALREADY_EXISTS,
                         format!("Garage name '{name}' is already taken"),
                     )),
-                ),
-                DbError::Sqlx(e) => {
-                    tracing::error!("Database error creating garage: {e}");
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ApiError::new(error_codes::DATABASE_ERROR, "Database error")),
-                    )
-                }
-                DbError::NotFound { .. } | DbError::NotOwned { .. } | DbError::Migration(_) => {
-                    // Shouldn't happen for create
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ApiError::new(
-                            error_codes::INTERNAL_ERROR,
-                            "Unexpected error",
-                        )),
-                    )
-                }
+                ));
             }
-        })?;
+            Err(DbError::Sqlx(e)) => {
+                tracing::error!("Database error creating garage: {e}");
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new(error_codes::DATABASE_ERROR, "Database error")),
+                ));
+            }
+            Err(_) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new(
+                        error_codes::INTERNAL_ERROR,
+                        "Unexpected error",
+                    )),
+                ));
+            }
+        }
+    }
 
-    Ok((StatusCode::CREATED, Json(GarageResponse::from(garage))))
+    // Exhausted all retries for auto-generated name
+    tracing::error!(
+        last_name = ?last_error,
+        attempts = max_collision_retries + 1,
+        "failed to generate unique garage name"
+    );
+    Err((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ApiError::new(
+            error_codes::INTERNAL_ERROR,
+            "Failed to generate unique garage name",
+        )),
+    ))
 }
 
 /// Maps `GarageServiceError` to HTTP response.
