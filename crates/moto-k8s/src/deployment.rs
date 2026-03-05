@@ -3,7 +3,9 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
+use k8s_openapi::api::apps::v1::{
+    Deployment, DeploymentSpec, DeploymentStrategy, RollingUpdateDeployment,
+};
 use k8s_openapi::api::core::v1::{
     Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, ObjectFieldSelector, PodSpec,
     PodTemplateSpec, Probe, ResourceRequirements, Service, ServicePort, ServiceSpec,
@@ -386,6 +388,13 @@ fn build_deployment(config: &BikeDeploymentConfig) -> Deployment {
         },
         spec: Some(DeploymentSpec {
             replicas: Some(i32::try_from(config.replicas).unwrap_or(i32::MAX)),
+            strategy: Some(DeploymentStrategy {
+                type_: Some("RollingUpdate".to_string()),
+                rolling_update: Some(RollingUpdateDeployment {
+                    max_surge: Some(IntOrString::Int(1)),
+                    max_unavailable: Some(IntOrString::Int(0)),
+                }),
+            }),
             selector: LabelSelector {
                 match_labels: Some({
                     let mut selector = BTreeMap::new();
@@ -657,6 +666,13 @@ mod tests {
         // RUST_LOG static value
         assert_eq!(env[2].name, "RUST_LOG");
         assert_eq!(env[2].value, Some("info".to_string()));
+
+        // Check rolling update strategy
+        let strategy = spec.strategy.unwrap();
+        assert_eq!(strategy.type_, Some("RollingUpdate".to_string()));
+        let rolling = strategy.rolling_update.unwrap();
+        assert_eq!(rolling.max_surge, Some(IntOrString::Int(1)));
+        assert_eq!(rolling.max_unavailable, Some(IntOrString::Int(0)));
 
         // Check security context
         let security = pod_spec.security_context.unwrap();
