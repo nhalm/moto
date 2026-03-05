@@ -3,7 +3,7 @@
 //! Coordinates between the database layer and Kubernetes to manage
 //! garage lifecycles.
 
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, warn};
@@ -334,9 +334,10 @@ impl GarageService {
             return Err(GarageServiceError::Expired(name.to_string()));
         }
 
-        // Check new TTL doesn't exceed max
-        let new_total_ttl = garage.ttl_seconds + input.seconds;
-        if new_total_ttl > *MAX_TTL_SECONDS {
+        // Check new TTL (from creation to new expiry) doesn't exceed max
+        let new_expires_at = garage.expires_at + Duration::seconds(i64::from(input.seconds));
+        let new_total_ttl = (new_expires_at - garage.created_at).num_seconds();
+        if new_total_ttl > i64::from(*MAX_TTL_SECONDS) {
             return Err(GarageServiceError::InvalidTtl {
                 message: format!(
                     "total TTL would be {new_total_ttl}s, maximum is {}s",

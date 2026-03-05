@@ -17,7 +17,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -747,15 +747,16 @@ async fn extend_garage_ttl(
         ));
     }
 
-    // Check if total TTL would exceed max
-    let new_ttl = garage.ttl_seconds + req.seconds;
-    if new_ttl > *MAX_TTL_SECONDS {
+    // Check if total TTL (from creation to new expiry) would exceed max
+    let new_expires_at = garage.expires_at + Duration::seconds(i64::from(req.seconds));
+    let new_total_ttl = (new_expires_at - garage.created_at).num_seconds();
+    if new_total_ttl > i64::from(*MAX_TTL_SECONDS) {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiError::new(
                 error_codes::INVALID_TTL,
                 format!(
-                    "Total TTL would be {new_ttl}s, which exceeds maximum of {}s",
+                    "Total TTL would be {new_total_ttl}s, which exceeds maximum of {}s",
                     *MAX_TTL_SECONDS
                 ),
             )),
