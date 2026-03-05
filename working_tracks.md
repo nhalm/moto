@@ -52,6 +52,4 @@ Read it in full at the start of each iteration.
 
 ## service-deploy.md bug-fix
 
-- Add security contexts to `club.yaml` matching `keybox.yaml` (runAsUser/runAsGroup/runAsNonRoot pod-level, readOnlyRootFilesystem/allowPrivilegeEscalation/capabilities container-level).
-- Add metrics port 9090 to `keybox.yaml` Service and container port list per moto-bike.md spec.
 - Replace static manifests with deployment builder usage or generate from bike.toml per moto-bike.md v0.6 changelog.

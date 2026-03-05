@@ -547,3 +547,10 @@ WHAT DOES NOT GO HERE:
 
 - Add `--name` CLI arg to `garage open` command and pass it through to `CreateGarageInput.name`.
 - Add `--image` CLI arg to `garage open` command and pass it through to `CreateGarageInput.image`.
+
+---
+
+## service-deploy.md bug-fix
+
+- Add security contexts to `club.yaml` matching `keybox.yaml` (runAsUser/runAsGroup/runAsNonRoot pod-level, readOnlyRootFilesystem/allowPrivilegeEscalation/capabilities container-level).
+- Add metrics port 9090 to `keybox.yaml` Service and container port list per moto-bike.md spec.
