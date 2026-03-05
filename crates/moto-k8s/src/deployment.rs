@@ -585,6 +585,11 @@ fn build_env_vars() -> Vec<EnvVar> {
             value: Some("info".to_string()),
             ..Default::default()
         },
+        EnvVar {
+            name: "RUST_BACKTRACE".to_string(),
+            value: Some("1".to_string()),
+            ..Default::default()
+        },
     ]
 }
 
@@ -648,7 +653,7 @@ mod tests {
 
         // Check env vars
         let env = container.env.as_ref().unwrap();
-        assert_eq!(env.len(), 3);
+        assert_eq!(env.len(), 4);
 
         // POD_NAME via downward API
         assert_eq!(env[0].name, "POD_NAME");
@@ -677,6 +682,10 @@ mod tests {
         // RUST_LOG static value
         assert_eq!(env[2].name, "RUST_LOG");
         assert_eq!(env[2].value, Some("info".to_string()));
+
+        // RUST_BACKTRACE static value
+        assert_eq!(env[3].name, "RUST_BACKTRACE");
+        assert_eq!(env[3].value, Some("1".to_string()));
 
         // Check rolling update strategy
         let strategy = spec.strategy.unwrap();

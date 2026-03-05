@@ -147,6 +147,13 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+## container-system.md bug-fix (2)
+
+- Add `[profile.release]` section to root `Cargo.toml` with `lto = true`, `codegen-units = 1`, `strip = true` per spec.
+- Update `Cargo.toml` `rust-version` from `"1.85"` to `"1.88"` to match `flake.nix` toolchain pin.
+
+---
+
 ## moto-cli v0.11
 
 - Global flags: --json/-j, --verbose/-v (counted), --quiet/-q, --context/-c, --help/-h, --version/-V
@@ -527,3 +534,7 @@ WHAT DOES NOT GO HERE:
 - (spec-only) Fix `push-garage` comment to include "clean up local copy"
 - (spec-only) Document `registry-start` vs `REGISTRY` port mismatch with override guidance
 - (spec-only) Document `deploy-system` port-forward side effect
+
+## moto-bike.md bug-fix (2)
+
+- Add `RUST_BACKTRACE="1"` to deployment builder `build_env_vars()` per spec.

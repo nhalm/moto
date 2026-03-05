@@ -36,8 +36,7 @@ Read it in full at the start of each iteration.
 
 ## container-system.md bug-fix (2)
 
-- Add `[profile.release]` section to root `Cargo.toml` with `lto = true`, `codegen-units = 1`, `strip = true` per spec.
-- Update `Cargo.toml` `rust-version` from `"1.85"` to `"1.88"` to match `flake.nix` toolchain pin.
+(all items completed)
 
 ## garage-isolation.md bug-fix
 
@@ -50,7 +49,7 @@ Read it in full at the start of each iteration.
 
 ## moto-bike.md bug-fix (2)
 
-- Add `RUST_BACKTRACE="1"` to deployment builder `build_env_vars()` per spec.
+(all items completed)
 
 ## service-deploy.md bug-fix
 
