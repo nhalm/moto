@@ -52,4 +52,4 @@ Read it in full at the start of each iteration.
 
 ## service-deploy.md bug-fix
 
-- Replace static manifests with deployment builder usage or generate from bike.toml per moto-bike.md v0.6 changelog.
+(all items completed)

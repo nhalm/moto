@@ -1,3 +1,5 @@
+# Generated from crates/moto-keybox-server/bike.toml by scripts/generate-manifests.sh
+# Do not edit manually — regenerate with: make generate-manifests
 ---
 apiVersion: v1
 kind: Service
@@ -71,6 +73,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: RUST_LOG
               value: info
+            - name: RUST_BACKTRACE
+              value: "1"
             - name: MOTO_KEYBOX_DATABASE_URL
               valueFrom:
                 secretKeyRef:

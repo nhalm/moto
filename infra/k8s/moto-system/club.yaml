@@ -1,3 +1,5 @@
+# Generated from crates/moto-club/bike.toml by scripts/generate-manifests.sh
+# Do not edit manually — regenerate with: make generate-manifests
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -102,6 +104,11 @@ metadata:
     app.kubernetes.io/component: moto-club
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/component: moto-club
@@ -124,6 +131,18 @@ spec:
             - containerPort: 8081
             - containerPort: 9090
           env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: RUST_LOG
+              value: info
+            - name: RUST_BACKTRACE
+              value: "1"
             - name: MOTO_CLUB_DATABASE_URL
               valueFrom:
                 secretKeyRef:

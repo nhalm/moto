@@ -86,4 +86,3 @@ same convention as tracks.md.
 
 - `club.yaml` has no security contexts. `keybox.yaml` has both pod-level (`runAsUser: 1000`, `runAsGroup: 1000`, `runAsNonRoot: true`) and container-level (`readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities: drop: [ALL]`). Add matching security contexts to `club.yaml`.
 - `keybox.yaml` missing metrics port 9090. `club.yaml` has it in both Service (port 9090) and container ports (`containerPort: 9090`). Spec (moto-bike.md line 168) says all engines expose Prometheus metrics on port 9090. Add port 9090 to keybox Service and container port list.
-- Both `keybox.yaml` and `club.yaml` are hand-written static manifests. Spec (moto-bike.md v0.6 changelog line 538) says keybox "must use the deployment builder (not a hand-written static manifest)." Either replace static manifests with deployment builder usage, or generate them from bike.toml so they stay in sync.
