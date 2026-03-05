@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{
-    Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec, Probe,
-    ResourceRequirements, Service, ServicePort, ServiceSpec,
+    Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, ObjectFieldSelector, PodSpec,
+    PodTemplateSpec, Probe, ResourceRequirements, Service, ServicePort, ServiceSpec,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
@@ -420,11 +420,7 @@ fn build_deployment(config: &BikeDeploymentConfig) -> Deployment {
                                 ..Default::default()
                             },
                         ]),
-                        env: Some(vec![EnvVar {
-                            name: "RUST_LOG".to_string(),
-                            value: Some("info".to_string()),
-                            ..Default::default()
-                        }]),
+                        env: Some(build_env_vars()),
                         resources: Some(resources),
                         liveness_probe: Some(liveness_probe),
                         readiness_probe: Some(readiness_probe),
@@ -539,6 +535,39 @@ fn build_probe(path: &str, port: u16, period_seconds: i32) -> Probe {
     }
 }
 
+/// Builds the common env vars for all bike containers.
+fn build_env_vars() -> Vec<EnvVar> {
+    vec![
+        EnvVar {
+            name: "POD_NAME".to_string(),
+            value_from: Some(EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: "metadata.name".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "POD_NAMESPACE".to_string(),
+            value_from: Some(EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: "metadata.namespace".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        EnvVar {
+            name: "RUST_LOG".to_string(),
+            value: Some("info".to_string()),
+            ..Default::default()
+        },
+    ]
+}
+
 /// Builds a startup probe with higher failure threshold.
 fn build_startup_probe(path: &str, port: u16) -> Probe {
     Probe {
@@ -599,9 +628,35 @@ mod tests {
 
         // Check env vars
         let env = container.env.as_ref().unwrap();
-        assert_eq!(env.len(), 1);
-        assert_eq!(env[0].name, "RUST_LOG");
-        assert_eq!(env[0].value, Some("info".to_string()));
+        assert_eq!(env.len(), 3);
+
+        // POD_NAME via downward API
+        assert_eq!(env[0].name, "POD_NAME");
+        assert!(env[0].value.is_none());
+        let pod_name_ref = env[0]
+            .value_from
+            .as_ref()
+            .unwrap()
+            .field_ref
+            .as_ref()
+            .unwrap();
+        assert_eq!(pod_name_ref.field_path, "metadata.name");
+
+        // POD_NAMESPACE via downward API
+        assert_eq!(env[1].name, "POD_NAMESPACE");
+        assert!(env[1].value.is_none());
+        let pod_ns_ref = env[1]
+            .value_from
+            .as_ref()
+            .unwrap()
+            .field_ref
+            .as_ref()
+            .unwrap();
+        assert_eq!(pod_ns_ref.field_path, "metadata.namespace");
+
+        // RUST_LOG static value
+        assert_eq!(env[2].name, "RUST_LOG");
+        assert_eq!(env[2].value, Some("info".to_string()));
 
         // Check security context
         let security = pod_spec.security_context.unwrap();

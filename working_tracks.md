@@ -17,7 +17,6 @@ Read it in full at the start of each iteration.
 
 ## moto-bike.md bug-fix
 
-- K8s manifest: add POD_NAME and POD_NAMESPACE via downward API
 - K8s manifest: add rolling update strategy (maxSurge: 1, maxUnavailable: 0)
 - K8s manifest: add container-level securityContext (readOnlyRootFilesystem, allowPrivilegeEscalation, capabilities)
 
