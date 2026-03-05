@@ -3,7 +3,7 @@
 | | |
 |--------|----------------------------------------------|
 | Version | 0.10 |
-| Status | Ready to Rip |
+| Status | Ripping |
 | Last Updated | 2026-02-26 |
 
 ## Overview

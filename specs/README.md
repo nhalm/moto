@@ -39,16 +39,16 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [project-structure](project-structure.md) | Ripping | Directory layout, crate organization, workspace |
 | [moto-cli](moto-cli.md) | Ripping | CLI commands, args, UX |
 | [jj-workflow](jj-workflow.md) | Ripping | How code flows via jj from garage to main |
-| [pre-commit](pre-commit.md) | Ready to Rip | Git hooks for fast feedback to agents |
-| [makefile](makefile.md) | Ready to Rip | Makefile targets and conventions |
-| [testing](testing.md) | Ready to Rip | Test infrastructure, Docker Compose, integration tests |
+| [pre-commit](pre-commit.md) | Ripping | Git hooks for fast feedback to agents |
+| [makefile](makefile.md) | Ripping | Makefile targets and conventions |
+| [testing](testing.md) | Ripping | Test infrastructure, Docker Compose, integration tests |
 
 ## Phase 1: Infrastructure (The Garage)
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [moto-club](moto-club.md) | Ready to Rip | Central orchestration, garage management |
-| [keybox](keybox.md) | Ready to Rip | Secrets manager, SPIFFE-based identity |
+| [moto-club](moto-club.md) | Ripping | Central orchestration, garage management |
+| [keybox](keybox.md) | Ripping | Secrets manager, SPIFFE-based identity |
 | [dev-container](dev-container.md) | Ripping | Nix dockerTools container, tooling, environment |
 | [container-system](container-system.md) | Ripping | Build pipeline, registry |
 | [local-cluster](local-cluster.md) | Ripping | Local k3s cluster, moto cluster CLI |
@@ -57,8 +57,8 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [moto-bike](moto-bike.md) | Ripping | Bike base image, engine contract |
 | [supporting-services](supporting-services.md) | Ripping | Postgres, Redis deployment |
 | [moto-wgtunnel](moto-wgtunnel.md) | Ripping | WireGuard tunnels for terminal access |
-| [local-dev](local-dev.md) | Ready to Rip | Local dev stack: cargo run + docker-compose |
-| [service-deploy](service-deploy.md) | Ready to Rip | K8s deployment of moto-club, keybox, postgres |
+| [local-dev](local-dev.md) | Ripping | Local dev stack: cargo run + docker-compose |
+| [service-deploy](service-deploy.md) | Ripping | K8s deployment of moto-club, keybox, postgres |
 
 ## Phase 2: Future
 
