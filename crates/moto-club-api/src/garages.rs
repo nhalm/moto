@@ -204,6 +204,29 @@ fn generate_garage_name() -> String {
     format!("{adj}-{animal}")
 }
 
+/// Validate a garage name against K8s label rules:
+/// - Max 63 characters
+/// - Lowercase alphanumeric and hyphens only
+/// - Must start and end with an alphanumeric character
+fn validate_garage_name(name: &str) -> Result<(), &'static str> {
+    if name.len() > 63 {
+        return Err("Garage name must be at most 63 characters");
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        return Err("Garage name must contain only lowercase letters, numbers, and hyphens");
+    }
+    if name.is_empty()
+        || !name.starts_with(|c: char| c.is_ascii_alphanumeric())
+        || !name.ends_with(|c: char| c.is_ascii_alphanumeric())
+    {
+        return Err("Garage name must start and end with an alphanumeric character");
+    }
+    Ok(())
+}
+
 /// Create a new garage.
 ///
 /// POST /api/v1/garages
@@ -267,17 +290,11 @@ async fn create_garage(
     // Generate name if not provided
     let name = req.name.unwrap_or_else(generate_garage_name);
 
-    // Validate name format (lowercase alphanumeric with hyphens)
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-    {
+    // Validate name format (K8s label rules)
+    if let Err(msg) = validate_garage_name(&name) {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiError::new(
-                "INVALID_NAME",
-                "Garage name must contain only lowercase letters, numbers, and hyphens",
-            )),
+            Json(ApiError::new("INVALID_NAME", msg)),
         ));
     }
 
@@ -974,5 +991,51 @@ mod tests {
         assert_eq!(parts.len(), 2);
         assert!(!parts[0].is_empty());
         assert!(!parts[1].is_empty());
+    }
+
+    #[test]
+    fn validate_garage_name_valid() {
+        assert!(validate_garage_name("bold-mongoose").is_ok());
+        assert!(validate_garage_name("a").is_ok());
+        assert!(validate_garage_name("a1").is_ok());
+        assert!(validate_garage_name("my-garage-42").is_ok());
+    }
+
+    #[test]
+    fn validate_garage_name_rejects_leading_hyphen() {
+        assert!(validate_garage_name("-foo").is_err());
+    }
+
+    #[test]
+    fn validate_garage_name_rejects_trailing_hyphen() {
+        assert!(validate_garage_name("foo-").is_err());
+    }
+
+    #[test]
+    fn validate_garage_name_rejects_both_hyphens() {
+        assert!(validate_garage_name("-foo-").is_err());
+    }
+
+    #[test]
+    fn validate_garage_name_rejects_empty() {
+        assert!(validate_garage_name("").is_err());
+    }
+
+    #[test]
+    fn validate_garage_name_rejects_over_63_chars() {
+        let long_name = format!("a{}", "b".repeat(63));
+        assert_eq!(long_name.len(), 64);
+        assert!(validate_garage_name(&long_name).is_err());
+    }
+
+    #[test]
+    fn validate_garage_name_accepts_exactly_63_chars() {
+        let name = "a".repeat(63);
+        assert!(validate_garage_name(&name).is_ok());
+    }
+
+    #[test]
+    fn validate_garage_name_rejects_uppercase() {
+        assert!(validate_garage_name("Foo").is_err());
     }
 }
