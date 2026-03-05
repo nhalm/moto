@@ -439,16 +439,16 @@ impl SvidValidator {
     pub fn validate_enforcing_pod_uid(&self, token: &str) -> Result<SvidClaims> {
         let claims = self.validate(token)?;
 
-        if let Some(ref pod_uid) = claims.pod_uid {
-            if pod_uid.is_empty() {
-                return Err(Error::Auth {
-                    message: "SVID contains empty pod UID binding".to_string(),
-                });
-            }
-            // Pod UID binding is present and non-empty.
-            // The signed token guarantees integrity of the claim.
-            // Future: verify pod is still alive via K8s API.
+        if let Some(ref pod_uid) = claims.pod_uid
+            && pod_uid.is_empty()
+        {
+            return Err(Error::Auth {
+                message: "SVID contains empty pod UID binding".to_string(),
+            });
         }
+        // Pod UID binding is present and non-empty.
+        // The signed token guarantees integrity of the claim.
+        // Future: verify pod is still alive via K8s API.
 
         Ok(claims)
     }

@@ -495,10 +495,10 @@ fn create_garage(config: &DevConfig, owner: Option<&str>) -> Result<String> {
     }
 
     let response = String::from_utf8_lossy(&output.stdout);
-    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
-        if let Some(name) = parsed.get("name").and_then(|n| n.as_str()) {
-            return Ok(name.to_string());
-        }
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response)
+        && let Some(name) = parsed.get("name").and_then(|n| n.as_str())
+    {
+        return Ok(name.to_string());
     }
 
     Err(CliError::general(format!(
@@ -891,10 +891,10 @@ fn count_garages(club_api: &str) -> i64 {
         Ok(o) if o.status.success() => {
             let body = String::from_utf8_lossy(&o.stdout);
             // Parse JSON response to count garages
-            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body) {
-                if let Some(garages) = parsed.get("garages").and_then(|g| g.as_array()) {
-                    return i64::try_from(garages.len()).unwrap_or(0);
-                }
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body)
+                && let Some(garages) = parsed.get("garages").and_then(|g| g.as_array())
+            {
+                return i64::try_from(garages.len()).unwrap_or(0);
             }
             0
         }
@@ -914,10 +914,10 @@ fn get_cluster_status_str() -> &'static str {
             for line in stdout.lines() {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.first() == Some(&"moto") {
-                    if let Some(servers) = parts.get(1) {
-                        if servers.starts_with("0/") {
-                            return "stopped";
-                        }
+                    if let Some(servers) = parts.get(1)
+                        && servers.starts_with("0/")
+                    {
+                        return "stopped";
                     }
                     return "running";
                 }

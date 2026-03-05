@@ -314,16 +314,16 @@ impl GaragePodOps for GarageK8s {
         };
 
         // Check if terminated successfully (exit code 0)
-        if let Some(state) = &clone_status.state {
-            if let Some(terminated) = &state.terminated {
-                let succeeded = terminated.exit_code == 0;
-                debug!(
-                    exit_code = terminated.exit_code,
-                    succeeded = succeeded,
-                    "clone-repo init container terminated"
-                );
-                return Ok(Some(succeeded));
-            }
+        if let Some(state) = &clone_status.state
+            && let Some(terminated) = &state.terminated
+        {
+            let succeeded = terminated.exit_code == 0;
+            debug!(
+                exit_code = terminated.exit_code,
+                succeeded = succeeded,
+                "clone-repo init container terminated"
+            );
+            return Ok(Some(succeeded));
         }
 
         // Init container still running or waiting

@@ -154,7 +154,7 @@ pub struct TunnelStatusResponse {
 impl TunnelStatusResponse {
     /// Create a new status response.
     #[must_use]
-    pub fn new(tunnels: Vec<TunnelStatusInfo>) -> Self {
+    pub const fn new(tunnels: Vec<TunnelStatusInfo>) -> Self {
         let count = tunnels.len();
         Self { tunnels, count }
     }

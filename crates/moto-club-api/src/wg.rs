@@ -1054,16 +1054,16 @@ async fn get_garage_peers(
     };
 
     // Conditional GET: return 304 if version matches
-    if let Some(client_version) = params.version {
-        if client_version == current_version {
-            tracing::debug!(
-                garage_id = %garage_id,
-                version = client_version,
-                "Peer list unchanged, returning 304"
-            );
-            // 304 Not Modified has no body per HTTP spec
-            return StatusCode::NOT_MODIFIED.into_response();
-        }
+    if let Some(client_version) = params.version
+        && client_version == current_version
+    {
+        tracing::debug!(
+            garage_id = %garage_id,
+            version = client_version,
+            "Peer list unchanged, returning 304"
+        );
+        // 304 Not Modified has no body per HTTP spec
+        return StatusCode::NOT_MODIFIED.into_response();
     }
 
     // Get active sessions for this garage and build peer list

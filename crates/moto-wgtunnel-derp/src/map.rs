@@ -223,11 +223,11 @@ impl DerpMapManager {
     #[must_use]
     pub fn select_region(&self) -> Option<u16> {
         // First, check if the preferred region is available
-        if let Some(preferred) = self.preferred_region {
-            if self.is_region_available(preferred) {
-                debug!(region_id = preferred, "selecting preferred region");
-                return Some(preferred);
-            }
+        if let Some(preferred) = self.preferred_region
+            && self.is_region_available(preferred)
+        {
+            debug!(region_id = preferred, "selecting preferred region");
+            return Some(preferred);
         }
 
         // Otherwise, find the first available region
@@ -332,11 +332,11 @@ impl DerpMapManager {
     ///
     /// The region becomes available for connection attempts again.
     pub fn mark_disconnected(&mut self, region_id: u16) {
-        if let Some(state) = self.regions.get_mut(&region_id) {
-            if state.status.is_connected() {
-                state.status = RegionStatus::Available;
-                debug!(region_id, "region disconnected");
-            }
+        if let Some(state) = self.regions.get_mut(&region_id)
+            && state.status.is_connected()
+        {
+            state.status = RegionStatus::Available;
+            debug!(region_id, "region disconnected");
         }
     }
 

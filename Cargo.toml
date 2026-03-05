@@ -8,7 +8,7 @@ edition = "2024"
 authors = ["Moto Contributors"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/moto-dev/moto"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [workspace.dependencies]
 # Async runtime
@@ -108,6 +108,11 @@ moto-keybox-cli = { path = "crates/moto-keybox-cli" }
 moto-keybox-server = { path = "crates/moto-keybox-server" }
 moto-club-ws = { path = "crates/moto-club-ws" }
 moto-test-utils = { path = "crates/moto-test-utils" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

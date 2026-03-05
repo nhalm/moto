@@ -90,7 +90,7 @@ impl DerpConfig {
 
     /// Check if configuration is empty (no servers).
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.servers.is_empty()
     }
 

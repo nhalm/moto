@@ -1139,17 +1139,17 @@ async fn get_audit_logs(
             }
 
             // Filter by principal ID
-            if let Some(ref pid) = query.principal_id {
-                if e.principal_id.as_ref() != Some(pid) {
-                    return false;
-                }
+            if let Some(ref pid) = query.principal_id
+                && e.principal_id.as_ref() != Some(pid)
+            {
+                return false;
             }
 
             // Filter by secret name
-            if let Some(ref name) = query.secret_name {
-                if e.secret_name.as_ref() != Some(name) {
-                    return false;
-                }
+            if let Some(ref name) = query.secret_name
+                && e.secret_name.as_ref() != Some(name)
+            {
+                return false;
             }
 
             true

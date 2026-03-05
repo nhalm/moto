@@ -81,19 +81,18 @@ async fn ready_handler(State(state): State<HealthState>) -> impl IntoResponse {
     }
 
     // Check DB connectivity when using PostgreSQL backend
-    if let Some(ref pool) = state.pool {
-        if sqlx::query_scalar::<_, i32>("SELECT 1")
+    if let Some(ref pool) = state.pool
+        && sqlx::query_scalar::<_, i32>("SELECT 1")
             .fetch_one(pool)
             .await
             .is_err()
-        {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ReadyResponse {
-                    status: "not_ready",
-                }),
-            );
-        }
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ReadyResponse {
+                status: "not_ready",
+            }),
+        );
     }
 
     (StatusCode::OK, Json(ReadyResponse { status: "ok" }))

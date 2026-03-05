@@ -419,10 +419,10 @@ fn get_cluster_status() -> Result<ClusterStatus> {
         if parts.first() == Some(&CLUSTER_NAME) {
             // Check servers column (index 1) for running state
             // Format is "running/total" e.g., "1/1" or "0/1"
-            if let Some(servers) = parts.get(1) {
-                if servers.starts_with("0/") {
-                    return Ok(ClusterStatus::Stopped);
-                }
+            if let Some(servers) = parts.get(1)
+                && servers.starts_with("0/")
+            {
+                return Ok(ClusterStatus::Stopped);
             }
             return Ok(ClusterStatus::Running);
         }
@@ -790,10 +790,10 @@ mod tests {
         for line in stdout.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.first() == Some(&CLUSTER_NAME) {
-                if let Some(servers) = parts.get(1) {
-                    if servers.starts_with("0/") {
-                        return ClusterStatus::Stopped;
-                    }
+                if let Some(servers) = parts.get(1)
+                    && servers.starts_with("0/")
+                {
+                    return ClusterStatus::Stopped;
                 }
                 return ClusterStatus::Running;
             }

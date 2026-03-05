@@ -631,16 +631,15 @@ impl MagicConn {
                         debug!(%key, region_id, "peer gone from DERP");
                         // Clear DERP connection for this peer
                         let mut peers_guard = peers.write().await;
-                        if let Some(peer) = peers_guard.get_mut(&key) {
-                            if peer
+                        if let Some(peer) = peers_guard.get_mut(&key)
+                            && peer
                                 .derp_region
                                 .as_ref()
                                 .is_some_and(|(id, _)| *id == region_id)
-                            {
-                                peer.path_state.clear_path();
-                                peer.derp_handle = None;
-                                peer.derp_region = None;
-                            }
+                        {
+                            peer.path_state.clear_path();
+                            peer.derp_handle = None;
+                            peer.derp_region = None;
                         }
                     }
                     DerpEvent::Health(msg) => {

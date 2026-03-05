@@ -525,10 +525,10 @@ impl SessionStore for PostgresSessionStore {
 /// shorthand form (`fd00:moto:2::1`) used by the DB repo layer.
 fn parse_client_overlay_ip(ip_str: &str) -> Result<OverlayIp, String> {
     // Try parsing as standard IPv6 first (handles fd00:6d6f:746f:2::N)
-    if let Ok(overlay_ip) = ip_str.parse::<OverlayIp>() {
-        if overlay_ip.is_client() {
-            return Ok(overlay_ip);
-        }
+    if let Ok(overlay_ip) = ip_str.parse::<OverlayIp>()
+        && overlay_ip.is_client()
+    {
+        return Ok(overlay_ip);
     }
 
     // Fall back to shorthand fd00:moto:2::N format
@@ -547,10 +547,10 @@ fn parse_client_overlay_ip(ip_str: &str) -> Result<OverlayIp, String> {
 /// and the shorthand form (`fd00:moto:1::abcd:1234:5678:9abc`) used by the DB repo layer.
 fn parse_garage_overlay_ip(ip_str: &str) -> Result<OverlayIp, String> {
     // Try parsing as standard IPv6 first (handles fd00:6d6f:746f:1::N)
-    if let Ok(overlay_ip) = ip_str.parse::<OverlayIp>() {
-        if overlay_ip.is_garage() {
-            return Ok(overlay_ip);
-        }
+    if let Ok(overlay_ip) = ip_str.parse::<OverlayIp>()
+        && overlay_ip.is_garage()
+    {
+        return Ok(overlay_ip);
     }
 
     // Fall back to shorthand fd00:moto:1:: format

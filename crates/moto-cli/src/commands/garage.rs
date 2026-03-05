@@ -236,17 +236,17 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             let show_all = effective_context == Some("all");
 
             // Validate context if specified (and not "all")
-            if let Some(ctx) = effective_context {
-                if ctx != "all" {
-                    let contexts = moto_k8s::K8sClient::list_contexts().unwrap_or_default();
-                    if !contexts.is_empty() && !contexts.contains(&ctx.to_string()) {
-                        return Err(CliError::not_found(format!(
-                            "Context '{ctx}' not found in kubeconfig.\n\n\
+            if let Some(ctx) = effective_context
+                && ctx != "all"
+            {
+                let contexts = moto_k8s::K8sClient::list_contexts().unwrap_or_default();
+                if !contexts.is_empty() && !contexts.contains(&ctx.to_string()) {
+                    return Err(CliError::not_found(format!(
+                        "Context '{ctx}' not found in kubeconfig.\n\n\
                              Available contexts: {}\n\
                              Try: moto garage list --context all",
-                            contexts.join(", ")
-                        )));
-                    }
+                        contexts.join(", ")
+                    )));
                 }
             }
 

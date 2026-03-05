@@ -93,11 +93,11 @@ pub fn run(cmd: &IssueDevSvidCommand) -> Result<()> {
         .map_err(|e| CliError::general(format!("Failed to issue SVID: {e}")))?;
 
     // Create parent directories if needed
-    if let Some(parent) = cmd.output.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent)?;
-            tracing::debug!("Created output directory: {}", parent.display());
-        }
+    if let Some(parent) = cmd.output.parent()
+        && !parent.exists()
+    {
+        fs::create_dir_all(parent)?;
+        tracing::debug!("Created output directory: {}", parent.display());
     }
 
     // Write the token to the output file

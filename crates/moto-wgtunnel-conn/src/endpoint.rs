@@ -282,10 +282,10 @@ impl EndpointSelector {
         }
 
         // If prefer_direct is false, try direct endpoints after DERP
-        if !self.config.prefer_direct {
-            if let Some(addr) = self.direct_endpoints.pop_front() {
-                return Some(Endpoint::Direct(addr));
-            }
+        if !self.config.prefer_direct
+            && let Some(addr) = self.direct_endpoints.pop_front()
+        {
+            return Some(Endpoint::Direct(addr));
         }
 
         None
@@ -294,10 +294,11 @@ impl EndpointSelector {
     /// Peek at the next endpoint without consuming it.
     #[must_use]
     pub fn peek_endpoint(&self) -> Option<Endpoint> {
-        if self.config.prefer_direct && !self.in_derp_mode {
-            if let Some(&addr) = self.direct_endpoints.front() {
-                return Some(Endpoint::Direct(addr));
-            }
+        if self.config.prefer_direct
+            && !self.in_derp_mode
+            && let Some(&addr) = self.direct_endpoints.front()
+        {
+            return Some(Endpoint::Direct(addr));
         }
 
         if let Some((region_id, region_name)) = self.derp_regions.front() {
@@ -307,10 +308,10 @@ impl EndpointSelector {
             });
         }
 
-        if !self.config.prefer_direct {
-            if let Some(&addr) = self.direct_endpoints.front() {
-                return Some(Endpoint::Direct(addr));
-            }
+        if !self.config.prefer_direct
+            && let Some(&addr) = self.direct_endpoints.front()
+        {
+            return Some(Endpoint::Direct(addr));
         }
 
         None

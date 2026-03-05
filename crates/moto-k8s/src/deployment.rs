@@ -333,12 +333,13 @@ fn deployment_status(
     // Check conditions for specific states
     if let Some(conditions) = &status.conditions {
         for condition in conditions {
-            if condition.type_ == "Progressing" && condition.status == "True" {
-                if let Some(reason) = &condition.reason {
-                    if reason == "NewReplicaSetAvailable" && ready >= desired {
-                        return "running".to_string();
-                    }
-                }
+            if condition.type_ == "Progressing"
+                && condition.status == "True"
+                && let Some(reason) = &condition.reason
+                && reason == "NewReplicaSetAvailable"
+                && ready >= desired
+            {
+                return "running".to_string();
             }
             if condition.type_ == "Available" && condition.status == "False" {
                 return "degraded".to_string();

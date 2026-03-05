@@ -406,12 +406,11 @@ impl DerpClient {
                             let mut buf = data;
                             match protocol::decode_frame(&mut buf) {
                                 Ok(frame) => {
-                                    if let Some(event) = Self::frame_to_event(frame) {
-                                        if event_tx.send(event).await.is_err() {
+                                    if let Some(event) = Self::frame_to_event(frame)
+                                        && event_tx.send(event).await.is_err() {
                                             debug!("event receiver dropped, closing connection");
                                             break;
                                         }
-                                    }
                                 }
                                 Err(e) => {
                                     warn!(error = %e, "failed to decode frame");

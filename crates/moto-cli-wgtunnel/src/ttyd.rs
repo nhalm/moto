@@ -231,10 +231,10 @@ impl TtydClient {
                 if event::poll(std::time::Duration::from_millis(100)).unwrap_or(false) {
                     match event::read() {
                         Ok(Event::Key(key_event)) => {
-                            if let Some(bytes) = key_event_to_bytes(key_event) {
-                                if event_tx.blocking_send(bytes).is_err() {
-                                    break;
-                                }
+                            if let Some(bytes) = key_event_to_bytes(key_event)
+                                && event_tx.blocking_send(bytes).is_err()
+                            {
+                                break;
                             }
                         }
                         Ok(Event::Resize(cols, rows)) => {

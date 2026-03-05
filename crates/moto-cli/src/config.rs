@@ -86,10 +86,10 @@ impl Config {
     /// `~/Library/Application Support/` on macOS.
     #[must_use]
     pub fn config_path() -> Option<PathBuf> {
-        if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-            if !xdg.is_empty() {
-                return Some(PathBuf::from(xdg).join("moto").join("config.toml"));
-            }
+        if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
+            && !xdg.is_empty()
+        {
+            return Some(PathBuf::from(xdg).join("moto").join("config.toml"));
         }
         std::env::var("HOME").ok().map(|home| {
             PathBuf::from(home)

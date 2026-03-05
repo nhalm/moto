@@ -82,11 +82,11 @@ pub async fn handle_peers_socket<C: PeerStreamingContext>(
         for session in sessions {
             if let Ok(Some(device)) = context.get_device(&session.device_pubkey) {
                 let event = PeerEvent::add(device.public_key, device.overlay_ip);
-                if let Ok(json) = event.to_json() {
-                    if sender.send(Message::Text(json.into())).await.is_err() {
-                        tracing::debug!(garage_id = %garage_id, "Failed to send initial peer");
-                        return;
-                    }
+                if let Ok(json) = event.to_json()
+                    && sender.send(Message::Text(json.into())).await.is_err()
+                {
+                    tracing::debug!(garage_id = %garage_id, "Failed to send initial peer");
+                    return;
                 }
             }
         }

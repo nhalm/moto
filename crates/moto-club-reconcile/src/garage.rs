@@ -194,18 +194,18 @@ impl GarageReconciler {
                     "orphan namespace found (in K8s but not in DB)"
                 );
 
-                if self.config.delete_orphans {
-                    if let Ok(garage_id) = id_str.parse::<Uuid>() {
-                        let garage_id = GarageId::from_uuid(garage_id);
-                        match self.k8s.delete_garage_namespace(&garage_id).await {
-                            Ok(()) => {
-                                info!(garage_id = %id_str, "deleted orphan namespace");
-                                stats.orphans_deleted += 1;
-                            }
-                            Err(e) => {
-                                warn!(garage_id = %id_str, error = %e, "failed to delete orphan namespace");
-                                stats.errors += 1;
-                            }
+                if self.config.delete_orphans
+                    && let Ok(garage_id) = id_str.parse::<Uuid>()
+                {
+                    let garage_id = GarageId::from_uuid(garage_id);
+                    match self.k8s.delete_garage_namespace(&garage_id).await {
+                        Ok(()) => {
+                            info!(garage_id = %id_str, "deleted orphan namespace");
+                            stats.orphans_deleted += 1;
+                        }
+                        Err(e) => {
+                            warn!(garage_id = %id_str, error = %e, "failed to delete orphan namespace");
+                            stats.errors += 1;
                         }
                     }
                 }

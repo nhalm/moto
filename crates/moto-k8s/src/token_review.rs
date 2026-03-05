@@ -145,10 +145,10 @@ fn extract_namespace_from_user_info(user_info: &UserInfo) -> Option<String> {
     if let Some(extra) = &user_info.extra {
         // Try common keys for namespace
         for key in &["authentication.kubernetes.io/pod-namespace", "namespace"] {
-            if let Some(values) = extra.get(*key) {
-                if let Some(ns) = values.first() {
-                    return Some(ns.clone());
-                }
+            if let Some(values) = extra.get(*key)
+                && let Some(ns) = values.first()
+            {
+                return Some(ns.clone());
             }
         }
     }

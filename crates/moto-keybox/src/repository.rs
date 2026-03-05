@@ -538,17 +538,17 @@ impl SecretRepository {
             }
 
             // Match service (for service scope)
-            if let Some(svc) = service {
-                if stored.metadata.service.as_deref() != Some(svc) {
-                    continue;
-                }
+            if let Some(svc) = service
+                && stored.metadata.service.as_deref() != Some(svc)
+            {
+                continue;
             }
 
             // Match instance_id (for instance scope)
-            if let Some(inst) = instance_id {
-                if stored.metadata.instance_id.as_deref() != Some(inst) {
-                    continue;
-                }
+            if let Some(inst) = instance_id
+                && stored.metadata.instance_id.as_deref() != Some(inst)
+            {
+                continue;
             }
 
             // Check if principal can read this secret

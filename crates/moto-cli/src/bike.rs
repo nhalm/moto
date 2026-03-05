@@ -138,10 +138,10 @@ pub fn find_bike_toml() -> Result<PathBuf> {
         }
 
         // Stop if we've reached git root
-        if let Some(ref root) = git_root {
-            if current == *root {
-                break;
-            }
+        if let Some(ref root) = git_root
+            && current == *root
+        {
+            break;
         }
 
         // Try to go up one directory
@@ -151,10 +151,10 @@ pub fn find_bike_toml() -> Result<PathBuf> {
         }
 
         // Also stop if we've gone past git root (shouldn't happen, but be safe)
-        if let Some(ref root) = git_root {
-            if !current.starts_with(root) {
-                break;
-            }
+        if let Some(ref root) = git_root
+            && !current.starts_with(root)
+        {
+            break;
         }
     }
 
