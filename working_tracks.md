@@ -44,8 +44,7 @@ Read it in full at the start of each iteration.
 
 ## garage-lifecycle.md bug-fix
 
-- Add `--name` CLI arg to `garage open` command and pass it through to `CreateGarageInput.name`.
-- Add `--image` CLI arg to `garage open` command and pass it through to `CreateGarageInput.image`.
+(all items completed)
 
 ## moto-bike.md bug-fix (2)
 

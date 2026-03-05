@@ -542,3 +542,8 @@ WHAT DOES NOT GO HERE:
 ## moto-bike.md bug-fix (2)
 
 - Add `RUST_BACKTRACE="1"` to deployment builder `build_env_vars()` per spec.
+
+## garage-lifecycle.md bug-fix
+
+- Add `--name` CLI arg to `garage open` command and pass it through to `CreateGarageInput.name`.
+- Add `--image` CLI arg to `garage open` command and pass it through to `CreateGarageInput.image`.

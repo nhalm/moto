@@ -31,6 +31,10 @@ pub enum GarageAction {
 
     /// Open a new garage
     Open {
+        /// Human-friendly name (auto-generated if omitted)
+        #[arg(short, long)]
+        name: Option<String>,
+
         /// Owner of the garage (defaults to current user)
         #[arg(short, long)]
         owner: Option<String>,
@@ -43,6 +47,10 @@ pub enum GarageAction {
         /// Default: 4h or config file setting.
         #[arg(long)]
         ttl: Option<String>,
+
+        /// Override dev container image
+        #[arg(short, long)]
+        image: Option<String>,
 
         /// Engine to work on (default: current directory name)
         #[arg(short, long)]
@@ -364,9 +372,11 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
         }
 
         GarageAction::Open {
+            name,
             owner,
             branch,
             ttl,
+            image,
             engine,
             with_postgres,
             with_redis,
@@ -374,7 +384,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             kubectl,
         } => {
             let client = create_client(flags, owner.as_deref())?;
-            let name = crate::names::generate();
+            let name = name.unwrap_or_else(crate::names::generate);
 
             // Use CLI flag, then config default, then hardcoded default
             let ttl_str = ttl
@@ -391,7 +401,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 name: Some(name.clone()),
                 branch: branch.clone(),
                 ttl_seconds: Some(ttl_seconds),
-                image: None,
+                image,
                 engine: engine.clone(),
                 with_postgres: if with_postgres { Some(true) } else { None },
                 with_redis: if with_redis { Some(true) } else { None },
