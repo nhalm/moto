@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{
-    Container, ContainerPort, HTTPGetAction, PodSpec, PodTemplateSpec, Probe, ResourceRequirements,
-    Service, ServicePort, ServiceSpec,
+    Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec, Probe,
+    ResourceRequirements, Service, ServicePort, ServiceSpec,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
@@ -420,6 +420,11 @@ fn build_deployment(config: &BikeDeploymentConfig) -> Deployment {
                                 ..Default::default()
                             },
                         ]),
+                        env: Some(vec![EnvVar {
+                            name: "RUST_LOG".to_string(),
+                            value: Some("info".to_string()),
+                            ..Default::default()
+                        }]),
                         resources: Some(resources),
                         liveness_probe: Some(liveness_probe),
                         readiness_probe: Some(readiness_probe),
@@ -591,6 +596,12 @@ mod tests {
         assert_eq!(ports[0].container_port, 8080);
         assert_eq!(ports[1].container_port, 8081);
         assert_eq!(ports[2].container_port, 9090);
+
+        // Check env vars
+        let env = container.env.as_ref().unwrap();
+        assert_eq!(env.len(), 1);
+        assert_eq!(env[0].name, "RUST_LOG");
+        assert_eq!(env[0].value, Some("info".to_string()));
 
         // Check security context
         let security = pod_spec.security_context.unwrap();

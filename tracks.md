@@ -280,6 +280,7 @@ WHAT DOES NOT GO HERE:
 ## moto-bike bug-fix
 
 - bike.toml: update replicas from 2 to 3 (crates/moto-club/bike.toml deploy.replicas, crates/moto-cli/src/bike.rs default_replicas)
+- K8s manifest: add RUST_LOG="info" env var (crates/moto-k8s/src/deployment.rs build_deployment container env)
 
 ---
 
