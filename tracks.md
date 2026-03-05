@@ -482,6 +482,7 @@ WHAT DOES NOT GO HERE:
 ## keybox.md bug-fix
 
 - Fix `POST /auth/issue-garage-svid` returning 401 instead of 403 for invalid service token: add `.map_err()` wrapper like other service-token-gated endpoints
+- Fix `with_repository()` constructor hardcoding `admin_service` to `"moto-club"`: add `admin_service: &str` parameter to match `AppState::new()` constructor
 
 ---
 

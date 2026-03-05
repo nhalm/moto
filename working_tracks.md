@@ -9,3 +9,13 @@ Read it in full at the start of each iteration.
 - Check this file for items blocked on what you just completed — remove resolved `(blocked: ...)` annotations
 - Keep this file small — it should fit comfortably in context
 -->
+
+## moto-club.md bug-fix
+
+- `close_session` idempotent re-close triggers spurious `broadcast_remove`: `wg.rs` calls `peer_broadcaster.broadcast_remove()` even when the session was already closed. Fix: check `closed_at` on the returned session before broadcasting, or have `remove_session` signal whether it actually closed.
+- `extend_ttl` max-TTL guard uses original `ttl_seconds` not actual total: `garages.rs` checks `garage.ttl_seconds + req.seconds` against `MAX_TTL_SECONDS`, but `garage.ttl_seconds` is the original creation TTL, not `(expires_at - created_at)`. Fix: compute `(garage.expires_at + Duration::seconds(req.seconds) - garage.created_at).num_seconds()`.
+- Fallback name validation missing start/end alphanumeric + 63-char limit: `garages.rs` checks character set (lowercase + digits + hyphens) but doesn't enforce that name must start/end with alphanumeric or respect K8s 63-char label limit. Names like `-foo-` pass validation.
+
+## keybox.md bug-fix
+
+(all items completed)

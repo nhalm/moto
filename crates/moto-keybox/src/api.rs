@@ -99,13 +99,14 @@ impl AppState {
         repository: SecretRepository,
         svid_issuer: SvidIssuer,
         svid_validator: SvidValidator,
+        admin_service: &str,
     ) -> Self {
         Self {
             repository: Arc::new(RwLock::new(repository)),
             svid_issuer: Arc::new(svid_issuer),
             svid_validator: Arc::new(svid_validator),
             service_token: None,
-            admin_service: "moto-club".to_string(),
+            admin_service: admin_service.to_string(),
         }
     }
 
