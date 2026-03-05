@@ -141,7 +141,11 @@ fn build_keybox_egress_rule() -> NetworkPolicyEgressRule {
             }),
             pod_selector: Some(LabelSelector {
                 match_labels: Some(
-                    std::iter::once(("app".to_string(), "keybox".to_string())).collect(),
+                    std::iter::once((
+                        "app.kubernetes.io/component".to_string(),
+                        "moto-keybox".to_string(),
+                    ))
+                    .collect(),
                 ),
                 ..Default::default()
             }),
@@ -277,7 +281,10 @@ mod tests {
         // Check pod selector
         let pod_selector = peer.pod_selector.as_ref().unwrap();
         let pod_labels = pod_selector.match_labels.as_ref().unwrap();
-        assert_eq!(pod_labels.get("app"), Some(&"keybox".to_string()));
+        assert_eq!(
+            pod_labels.get("app.kubernetes.io/component"),
+            Some(&"moto-keybox".to_string())
+        );
 
         // Check port
         let ports = rule.ports.as_ref().unwrap();
