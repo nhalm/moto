@@ -7,8 +7,9 @@ use k8s_openapi::api::apps::v1::{
     Deployment, DeploymentSpec, DeploymentStrategy, RollingUpdateDeployment,
 };
 use k8s_openapi::api::core::v1::{
-    Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, ObjectFieldSelector, PodSpec,
-    PodTemplateSpec, Probe, ResourceRequirements, Service, ServicePort, ServiceSpec,
+    Capabilities, Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction,
+    ObjectFieldSelector, PodSpec, PodTemplateSpec, Probe, ResourceRequirements, SecurityContext,
+    Service, ServicePort, ServiceSpec,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
@@ -434,6 +435,15 @@ fn build_deployment(config: &BikeDeploymentConfig) -> Deployment {
                         liveness_probe: Some(liveness_probe),
                         readiness_probe: Some(readiness_probe),
                         startup_probe: Some(startup_probe),
+                        security_context: Some(SecurityContext {
+                            read_only_root_filesystem: Some(true),
+                            allow_privilege_escalation: Some(false),
+                            capabilities: Some(Capabilities {
+                                drop: Some(vec!["ALL".to_string()]),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        }),
                         ..Default::default()
                     }],
                     security_context: Some(k8s_openapi::api::core::v1::PodSecurityContext {
@@ -674,11 +684,18 @@ mod tests {
         assert_eq!(rolling.max_surge, Some(IntOrString::Int(1)));
         assert_eq!(rolling.max_unavailable, Some(IntOrString::Int(0)));
 
-        // Check security context
+        // Check pod-level security context
         let security = pod_spec.security_context.unwrap();
         assert_eq!(security.run_as_user, Some(1000));
         assert_eq!(security.run_as_group, Some(1000));
         assert_eq!(security.run_as_non_root, Some(true));
+
+        // Check container-level security context
+        let container_security = container.security_context.as_ref().unwrap();
+        assert_eq!(container_security.read_only_root_filesystem, Some(true));
+        assert_eq!(container_security.allow_privilege_escalation, Some(false));
+        let caps = container_security.capabilities.as_ref().unwrap();
+        assert_eq!(caps.drop, Some(vec!["ALL".to_string()]));
     }
 
     #[test]

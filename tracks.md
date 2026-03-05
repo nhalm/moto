@@ -282,6 +282,8 @@ WHAT DOES NOT GO HERE:
 - bike.toml: update replicas from 2 to 3 (crates/moto-club/bike.toml deploy.replicas, crates/moto-cli/src/bike.rs default_replicas)
 - K8s manifest: add RUST_LOG="info" env var (crates/moto-k8s/src/deployment.rs build_deployment container env)
 - K8s manifest: add POD_NAME and POD_NAMESPACE via downward API (crates/moto-k8s/src/deployment.rs build_deployment container env)
+- K8s manifest: add rolling update strategy (maxSurge: 1, maxUnavailable: 0)
+- K8s manifest: add container-level securityContext (readOnlyRootFilesystem, allowPrivilegeEscalation, capabilities)
 
 ---
 
