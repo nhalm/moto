@@ -38,13 +38,12 @@ same convention as tracks.md.
 
 ## moto-club.md
 
-- **`close_session` idempotent re-close triggers spurious `broadcast_remove`.** `wg.rs:840-858` calls `peer_broadcaster.broadcast_remove()` even when the session was already closed. `postgres_stores.rs:remove_session` correctly skips the DB close and `peer_version` increment for already-closed sessions, but returns `Ok(Some(session))` without indicating it was a no-op. Fix: check `closed_at` on the returned session before broadcasting, or have `remove_session` signal whether it actually closed.
-- **`extend_ttl` max-TTL guard uses original `ttl_seconds` not actual total.** `garages.rs:750-763` checks `garage.ttl_seconds + req.seconds` against `MAX_TTL_SECONDS`, but `garage.ttl_seconds` is the original creation TTL, not `(expires_at - created_at)`. If the garage was previously extended, the guard uses a stale value — can allow or reject incorrectly. Fix: compute `(garage.expires_at + Duration::seconds(req.seconds) - garage.created_at).num_seconds()`.
-- **Fallback name validation missing start/end alphanumeric + 63-char limit.** `garages.rs:271-282` checks character set (lowercase + digits + hyphens) but doesn't enforce that name must start/end with alphanumeric or respect K8s 63-char label limit. Names like `-foo-` pass validation.
+- **`close_session` idempotent re-close returns 404 instead of 204.** `postgres_stores.rs:remove_session` correctly returns `Ok(None)` for already-closed sessions, but `SessionManager::close_session` (`sessions.rs:309-313`) converts `None` to `Err(SessionError::NotFound)`, causing the HTTP handler to return 404. Spec (line 571) requires 204. Fix: have `close_session` return `Result<Option<Session>>` and let the handler treat `None` as 204 (no broadcast needed).
+- **Fallback `create_garage` has no collision-retry for auto-generated names.** `garages.rs:291-356` generates a name and goes straight to DB insert — a name collision returns `GARAGE_ALREADY_EXISTS` (409). Spec requires transparent retry up to 3 times with random suffix, then `INTERNAL_ERROR`.
 
 ## keybox.md
 
-- **`with_repository()` constructor hardcodes `admin_service` to `"moto-club"`.** `api.rs:97-110` secondary constructor ignores `MOTO_KEYBOX_ADMIN_SERVICE` env var. Tests and integration paths using `with_repository()` always use `"moto-club"` regardless of configuration. The primary `AppState::new()` constructor handles it correctly.
+(none)
 
 ## dev-container.md
 
