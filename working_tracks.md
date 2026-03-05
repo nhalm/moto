@@ -12,7 +12,7 @@ Read it in full at the start of each iteration.
 
 ## moto-club.md bug-fix
 
-- Fallback `create_garage` collision-retry for auto-generated names (see bug-fix.md)
+(all items completed)
 
 ## container-system.md bug-fix
 
@@ -20,7 +20,8 @@ Read it in full at the start of each iteration.
 
 ## moto-bike.md bug-fix
 
-(all items completed)
+- Create `crates/moto-keybox-server/bike.toml` (name="keybox", replicas=3, resources per spec)
+- Keybox manifest: add security baseline (POD_NAME, RUST_LOG, strategy, securityContext) or migrate to deployment builder
 
 ## keybox.md bug-fix
 

@@ -38,7 +38,7 @@ same convention as tracks.md.
 
 ## moto-club.md
 
-- **Fallback `create_garage` has no collision-retry for auto-generated names.** `garages.rs:291-356` generates a name and goes straight to DB insert — a name collision returns `GARAGE_ALREADY_EXISTS` (409). Spec requires transparent retry up to 3 times with random suffix, then `INTERNAL_ERROR`.
+(none)
 
 ## keybox.md
 
@@ -66,7 +66,8 @@ same convention as tracks.md.
 
 ## moto-bike.md
 
-(none)
+- **Keybox needs a `bike.toml`.** `crates/moto-keybox-server/` has no `bike.toml`. Create one with `name = "keybox"`, `replicas = 3`, `port = 8080`, `health.port = 8081`, `health.path = "/health/ready"`, and resource defaults (cpu_request="250m", cpu_limit="1", memory_request="256Mi", memory_limit="1Gi").
+- **Keybox static manifest (`keybox.yaml`) missing security baseline.** `infra/k8s/moto-system/keybox.yaml` is missing: (1) POD_NAME/POD_NAMESPACE via downward API, (2) RUST_LOG="info", (3) RollingUpdate strategy with maxSurge:1/maxUnavailable:0, (4) container securityContext (readOnlyRootFilesystem, allowPrivilegeEscalation:false, capabilities drop ALL), (5) pod securityContext (runAsUser:1000, runAsGroup:1000, runAsNonRoot:true). Apply same local-dev baseline as club.yaml, or migrate keybox to use the deployment builder.
 
 ## supporting-services.md
 

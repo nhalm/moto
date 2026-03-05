@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
+| Version | 0.6 |
 | Status | Ripping |
 | Last Updated | 2026-03-05 |
 
@@ -123,6 +123,7 @@ MOTO_CLUB_KEYBOX_URL="http://keybox.moto-system:8080"
 | Engine | Key Config |
 |--------|------------|
 | `club` | `DATABASE_URL`, `REDIS_URL` |
+| `keybox` | `DATABASE_URL`, `MASTER_KEY_FILE`, `SVID_SIGNING_KEY_FILE` |
 | `vault` | `HSM_ENDPOINT`, `ENCRYPTION_KEY_ID` |
 | `proxy` | `UPSTREAM_SERVICES`, `ROUTE_CONFIG` |
 
@@ -208,7 +209,7 @@ No shell. No init system. Single binary.
 
 #### bike.toml
 
-Each main engine crate has a `bike.toml` in its crate root. Shared/tool crates don't need one - only the final deployable engines (club, vault, proxy).
+Each main engine crate has a `bike.toml` in its crate root. Shared/tool crates don't need one - only the final deployable engines (club, keybox, vault, proxy).
 
 **Location:** `crates/moto-club/bike.toml`
 
@@ -473,6 +474,7 @@ spec:
 | Engine | CPU Req | CPU Lim | Mem Req | Mem Lim |
 |--------|---------|---------|---------|---------|
 | `club` | 500m | 2 | 512Mi | 2Gi |
+| `keybox` | 250m | 1 | 256Mi | 1Gi |
 | `vault` | 1 | 4 | 1Gi | 4Gi |
 | `proxy` | 500m | 2 | 256Mi | 1Gi |
 
@@ -531,6 +533,9 @@ moto bike logs club -f --tail 100
 ---
 
 ## Changelog
+
+### v0.6 (2026-03-05)
+- Add keybox as a bike engine: add to engine-specific config table, resource defaults table, and bike.toml engine list. Keybox needs a `bike.toml` and must use the deployment builder (not a hand-written static manifest) to get the standard security baseline.
 
 ### v0.5 (2026-03-05)
 - Fix: bike.toml `deploy.replicas` changed from 2 to 3 for production. HPA `minReplicas` updated to match.
