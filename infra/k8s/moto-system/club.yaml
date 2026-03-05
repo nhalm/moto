@@ -103,7 +103,7 @@ metadata:
     app.kubernetes.io/part-of: moto
     app.kubernetes.io/component: moto-club
 spec:
-  replicas: 1
+  replicas: 3
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -160,11 +160,11 @@ spec:
               value: "[]"
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
               cpu: 500m
               memory: 512Mi
+            limits:
+              cpu: 2
+              memory: 2Gi
           livenessProbe:
             httpGet:
               path: /health/live

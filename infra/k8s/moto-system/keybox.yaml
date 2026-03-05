@@ -36,7 +36,7 @@ metadata:
     app.kubernetes.io/part-of: moto
     app.kubernetes.io/component: moto-keybox
 spec:
-  replicas: 1
+  replicas: 3
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -88,11 +88,11 @@ spec:
               value: /run/secrets/keybox/service-token
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: 250m
+              memory: 256Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 1
+              memory: 1Gi
           livenessProbe:
             httpGet:
               path: /health/live

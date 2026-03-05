@@ -22,7 +22,19 @@ OUTPUT_DIR="$REPO_ROOT/infra/k8s/moto-system"
 parse_toml() {
     local file="$1" key="$2" default="${3:-}"
     local value
-    value=$(grep -E "^${key}\s*=" "$file" 2>/dev/null | head -1 | sed 's/.*=\s*//; s/^"//; s/"$//' | tr -d '[:space:]')
+    value=$(grep -E "^${key}\s*=" "$file" 2>/dev/null | head -1 | sed 's/.*=[[:space:]]*//' | tr -d '"[:space:]')
+    echo "${value:-$default}"
+}
+
+# Extracts a value from a specific [section] in a bike.toml file.
+parse_toml_section() {
+    local file="$1" section="$2" key="$3" default="${4:-}"
+    local value
+    value=$(awk -v sect="[${section}]" '
+        $0 == sect { found=1; next }
+        /^\[/ { found=0 }
+        found { print }
+    ' "$file" | grep -E "^${key}\s*=" | head -1 | sed 's/.*=[[:space:]]*//' | tr -d '"[:space:]')
     echo "${value:-$default}"
 }
 
@@ -37,36 +49,44 @@ generate_keybox() {
     local name
     name=$(parse_toml "$bike_toml" "name" "keybox")
     local deploy_port
-    deploy_port=$(parse_toml "$bike_toml" "port" "8080")
+    deploy_port=$(parse_toml_section "$bike_toml" "deploy" "port" "8080")
     local health_port
-    health_port=$(parse_toml "$bike_toml" "port" "8081")
-    # Parse health section port (appears after [health] heading)
-    health_port=$(awk '/^\[health\]/,/^\[/' "$bike_toml" | parse_toml /dev/stdin "port" "8081")
+    health_port=$(parse_toml_section "$bike_toml" "health" "port" "8081")
+    local replicas
+    replicas=$(parse_toml_section "$bike_toml" "deploy" "replicas" "1")
+    local cpu_request
+    cpu_request=$(parse_toml_section "$bike_toml" "resources" "cpu_request" "50m")
+    local cpu_limit
+    cpu_limit=$(parse_toml_section "$bike_toml" "resources" "cpu_limit" "500m")
+    local memory_request
+    memory_request=$(parse_toml_section "$bike_toml" "resources" "memory_request" "128Mi")
+    local memory_limit
+    memory_limit=$(parse_toml_section "$bike_toml" "resources" "memory_limit" "512Mi")
 
-    cat > "$OUTPUT_DIR/keybox.yaml" << 'YAML'
+    cat > "$OUTPUT_DIR/keybox.yaml" << YAML
 # Generated from crates/moto-keybox-server/bike.toml by scripts/generate-manifests.sh
 # Do not edit manually — regenerate with: make generate-manifests
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: moto-keybox
+  name: moto-${name}
   namespace: moto-system
   labels:
     app.kubernetes.io/part-of: moto
-    app.kubernetes.io/component: moto-keybox
+    app.kubernetes.io/component: moto-${name}
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/component: moto-keybox
+    app.kubernetes.io/component: moto-${name}
   ports:
     - name: api
-      port: 8080
-      targetPort: 8080
+      port: ${deploy_port}
+      targetPort: ${deploy_port}
       protocol: TCP
     - name: health
-      port: 8081
-      targetPort: 8081
+      port: ${health_port}
+      targetPort: ${health_port}
       protocol: TCP
     - name: metrics
       port: 9090
@@ -76,13 +96,13 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: moto-keybox
+  name: moto-${name}
   namespace: moto-system
   labels:
     app.kubernetes.io/part-of: moto
-    app.kubernetes.io/component: moto-keybox
+    app.kubernetes.io/component: moto-${name}
 spec:
-  replicas: 1
+  replicas: ${replicas}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -90,23 +110,23 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app.kubernetes.io/component: moto-keybox
+      app.kubernetes.io/component: moto-${name}
   template:
     metadata:
       labels:
         app.kubernetes.io/part-of: moto
-        app.kubernetes.io/component: moto-keybox
+        app.kubernetes.io/component: moto-${name}
     spec:
       securityContext:
         runAsUser: 1000
         runAsGroup: 1000
         runAsNonRoot: true
       containers:
-        - name: moto-keybox
-          image: moto-registry:5000/moto-keybox:latest
+        - name: moto-${name}
+          image: moto-registry:5000/moto-${name}:latest
           ports:
-            - containerPort: 8080
-            - containerPort: 8081
+            - containerPort: ${deploy_port}
+            - containerPort: ${health_port}
             - containerPort: 9090
           env:
             - name: POD_NAME
@@ -134,25 +154,25 @@ spec:
               value: /run/secrets/keybox/service-token
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: ${cpu_request}
+              memory: ${memory_request}
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: ${cpu_limit}
+              memory: ${memory_limit}
           livenessProbe:
             httpGet:
               path: /health/live
-              port: 8081
+              port: ${health_port}
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: 8081
+              port: ${health_port}
             periodSeconds: 5
           startupProbe:
             httpGet:
               path: /health/startup
-              port: 8081
+              port: ${health_port}
             failureThreshold: 30
             periodSeconds: 1
           securityContext:
@@ -182,26 +202,43 @@ generate_club() {
         exit 1
     fi
 
-    cat > "$OUTPUT_DIR/club.yaml" << 'YAML'
+    local name
+    name=$(parse_toml "$bike_toml" "name" "club")
+    local deploy_port
+    deploy_port=$(parse_toml_section "$bike_toml" "deploy" "port" "8080")
+    local health_port
+    health_port=$(parse_toml_section "$bike_toml" "health" "port" "8081")
+    local replicas
+    replicas=$(parse_toml_section "$bike_toml" "deploy" "replicas" "1")
+    local cpu_request
+    cpu_request=$(parse_toml_section "$bike_toml" "resources" "cpu_request" "50m")
+    local cpu_limit
+    cpu_limit=$(parse_toml_section "$bike_toml" "resources" "cpu_limit" "500m")
+    local memory_request
+    memory_request=$(parse_toml_section "$bike_toml" "resources" "memory_request" "128Mi")
+    local memory_limit
+    memory_limit=$(parse_toml_section "$bike_toml" "resources" "memory_limit" "512Mi")
+
+    cat > "$OUTPUT_DIR/club.yaml" << YAML
 # Generated from crates/moto-club/bike.toml by scripts/generate-manifests.sh
 # Do not edit manually — regenerate with: make generate-manifests
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: moto-club
+  name: moto-${name}
   namespace: moto-system
   labels:
     app.kubernetes.io/part-of: moto
-    app.kubernetes.io/component: moto-club
+    app.kubernetes.io/component: moto-${name}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: moto-club
+  name: moto-${name}
   labels:
     app.kubernetes.io/part-of: moto
-    app.kubernetes.io/component: moto-club
+    app.kubernetes.io/component: moto-${name}
 rules:
   - apiGroups: [""]
     resources: [namespaces]
@@ -240,39 +277,39 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: moto-club
+  name: moto-${name}
   labels:
     app.kubernetes.io/part-of: moto
-    app.kubernetes.io/component: moto-club
+    app.kubernetes.io/component: moto-${name}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: moto-club
+  name: moto-${name}
 subjects:
   - kind: ServiceAccount
-    name: moto-club
+    name: moto-${name}
     namespace: moto-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: moto-club
+  name: moto-${name}
   namespace: moto-system
   labels:
     app.kubernetes.io/part-of: moto
-    app.kubernetes.io/component: moto-club
+    app.kubernetes.io/component: moto-${name}
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/component: moto-club
+    app.kubernetes.io/component: moto-${name}
   ports:
     - name: api
-      port: 8080
-      targetPort: 8080
+      port: ${deploy_port}
+      targetPort: ${deploy_port}
       protocol: TCP
     - name: health
-      port: 8081
-      targetPort: 8081
+      port: ${health_port}
+      targetPort: ${health_port}
       protocol: TCP
     - name: metrics
       port: 9090
@@ -282,13 +319,13 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: moto-club
+  name: moto-${name}
   namespace: moto-system
   labels:
     app.kubernetes.io/part-of: moto
-    app.kubernetes.io/component: moto-club
+    app.kubernetes.io/component: moto-${name}
 spec:
-  replicas: 1
+  replicas: ${replicas}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -296,24 +333,24 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app.kubernetes.io/component: moto-club
+      app.kubernetes.io/component: moto-${name}
   template:
     metadata:
       labels:
         app.kubernetes.io/part-of: moto
-        app.kubernetes.io/component: moto-club
+        app.kubernetes.io/component: moto-${name}
     spec:
-      serviceAccountName: moto-club
+      serviceAccountName: moto-${name}
       securityContext:
         runAsUser: 1000
         runAsGroup: 1000
         runAsNonRoot: true
       containers:
-        - name: moto-club
-          image: moto-registry:5000/moto-club:latest
+        - name: moto-${name}
+          image: moto-registry:5000/moto-${name}:latest
           ports:
-            - containerPort: 8080
-            - containerPort: 8081
+            - containerPort: ${deploy_port}
+            - containerPort: ${health_port}
             - containerPort: 9090
           env:
             - name: POD_NAME
@@ -345,25 +382,25 @@ spec:
               value: "[]"
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: ${cpu_request}
+              memory: ${memory_request}
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: ${cpu_limit}
+              memory: ${memory_limit}
           livenessProbe:
             httpGet:
               path: /health/live
-              port: 8081
+              port: ${health_port}
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: 8081
+              port: ${health_port}
             periodSeconds: 5
           startupProbe:
             httpGet:
               path: /health/startup
-              port: 8081
+              port: ${health_port}
             failureThreshold: 30
             periodSeconds: 1
           securityContext:
