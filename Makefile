@@ -188,8 +188,8 @@ clean-nix-cache: ## Remove Nix store cache volume
 ##@ Registry
 
 registry-start: ## Start local Docker registry
-	@echo "Starting local registry on localhost:5000..."
-	@docker run -d -p 5000:5000 --name moto-registry registry:2 2>/dev/null || \
+	@echo "Starting local registry on localhost:5050..."
+	@docker run -d -p 5050:5000 --name moto-registry registry:2 2>/dev/null || \
 		(docker start moto-registry 2>/dev/null && echo "Registry already exists, started.") || \
 		echo "Registry already running."
 
