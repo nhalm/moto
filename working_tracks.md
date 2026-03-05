@@ -32,7 +32,7 @@ Read it in full at the start of each iteration.
 
 ## testing.md bug-fix
 
-- Rename `infra/smoke-test.sh` to `infra/smoke-test-garage.sh` and update Makefile `test-garage` target to match spec naming convention.
+(all items completed)
 
 ## container-system.md bug-fix (2)
 

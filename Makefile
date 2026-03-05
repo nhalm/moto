@@ -70,7 +70,7 @@ build-garage: ## Build garage container (Docker-wrapped Nix)
 
 test-garage: build-garage ## Run smoke tests on garage container
 	@echo "Running smoke tests..."
-	./infra/smoke-test.sh
+	./infra/smoke-test-garage.sh
 
 shell-garage: ## Interactive shell in garage container
 	@if ! docker image inspect moto-garage:latest &>/dev/null; then \

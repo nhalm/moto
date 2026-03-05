@@ -3,8 +3,8 @@
 # Verifies the container builds correctly and contains expected tooling.
 #
 # Usage:
-#   ./infra/smoke-test.sh         # Run tests
-#   ./infra/smoke-test.sh --keep  # Keep container for debugging
+#   ./infra/smoke-test-garage.sh         # Run tests
+#   ./infra/smoke-test-garage.sh --keep  # Keep container for debugging
 
 set -euo pipefail
 

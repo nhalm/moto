@@ -494,6 +494,7 @@ WHAT DOES NOT GO HERE:
 ## testing.md bug-fix
 
 - Delete stale `// Run with: cargo test --features integration` comments in `moto-club-wg` sessions.rs:459 and peers.rs:345 (feature flag no longer exists)
+- Rename `infra/smoke-test.sh` to `infra/smoke-test-garage.sh` and update Makefile `test-garage` target to match spec naming convention.
 
 ---
 
