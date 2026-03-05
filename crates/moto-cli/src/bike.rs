@@ -50,7 +50,7 @@ impl Default for DeployConfig {
 }
 
 const fn default_replicas() -> u32 {
-    2
+    3
 }
 
 const fn default_port() -> u16 {
@@ -199,7 +199,7 @@ mod tests {
 
         assert_eq!(config.name, "test-service");
         // Default values from DeployConfig::default()
-        assert_eq!(config.deploy.replicas, 2);
+        assert_eq!(config.deploy.replicas, 3);
         assert_eq!(config.deploy.port, 8080);
         assert_eq!(config.health.port, 8081);
         assert_eq!(config.health.path, "/health/ready");

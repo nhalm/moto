@@ -140,6 +140,10 @@ WHAT DOES NOT GO HERE:
 - Bump Rust toolchain from 1.85 to 1.88 (v1.3: `home` crate v0.5.12 requires Rust 1.88; flake.nix rustToolchain updated to `pkgs.rust-bin.stable."1.88.0".minimal`)
 - Add `stdenv.cc` and `lld` to `commonArgs.nativeBuildInputs` (v1.3: crane needs a C compiler/linker; `.cargo/config.toml` specifies `-fuse-ld=lld` for Linux targets)
 
+## container-system.md bug-fix
+
+- Makefile: fix registry-start port from 5000 to 5050
+
 ---
 
 ## moto-cli v0.11
@@ -270,6 +274,12 @@ WHAT DOES NOT GO HERE:
 - Final bike images in flake: moto-club-image using mkBike helper (infra/pkgs/moto-club.nix, flake.nix exports packages.{x86_64,aarch64}-linux.moto-club-image)
 - Engine Contract: Prometheus metrics endpoint on port 9090 (moto-club main.rs with metrics-exporter-prometheus, moto-club-api metrics.rs with http_requests_total and http_request_duration_seconds, process metrics via metrics-process)
 - Engine Contract: Graceful shutdown (SIGTERM handling, 30s grace period) - moto-club main.rs shutdown_signal() with tokio::signal
+
+---
+
+## moto-bike bug-fix
+
+- bike.toml: update replicas from 2 to 3 (crates/moto-club/bike.toml deploy.replicas, crates/moto-cli/src/bike.rs default_replicas)
 
 ---
 

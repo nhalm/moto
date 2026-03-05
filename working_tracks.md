@@ -12,15 +12,11 @@ Read it in full at the start of each iteration.
 
 ## moto-club.md bug-fix
 
-(all items completed)
-
-## container-system.md bug-fix
-
-- Makefile: fix registry-start port from 5000 to 5050
+- close_session idempotent re-close returns 404 instead of 204: SessionManager converts None to NotFound, handler returns 404; fix to return Option<Session> and treat None as 204
+- Fallback create_garage has no collision-retry for auto-generated names: name collision returns 409 instead of transparent retry up to 3 times with random suffix
 
 ## moto-bike.md bug-fix
 
-- bike.toml: update replicas from 2 to 3
 - K8s manifest: add POD_NAME and POD_NAMESPACE via downward API
 - K8s manifest: add RUST_LOG="info" env var
 - K8s manifest: add rolling update strategy (maxSurge: 1, maxUnavailable: 0)
