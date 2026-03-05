@@ -102,6 +102,7 @@ WHAT DOES NOT GO HERE:
 - `get_device` missing ownership check: handler extracted owner with `let _owner = ...` but never compared it to the device's owner. Fixed to return 403 `DEVICE_NOT_OWNED` when device belongs to a different user.
 - Fallback TTL validation ignores `MIN_TTL_SECONDS`: `garages.rs` fallback path checked `ttl_seconds <= 0` instead of `< *MIN_TTL_SECONDS`, accepting values 1-299 that should be rejected (minimum is 300s). Fixed to use `MIN_TTL_SECONDS` consistent with the `GarageService` path.
 - Fallback `create_garage` writes full UUID namespace: `garages.rs` used `format!("moto-garage-{id}")` with full UUID, but `service.rs` and `namespace.rs` use `garage_id.short()` (8-char prefix). Fixed to use `GarageId::from_uuid(id).short()` for consistent namespace naming.
+- Fallback `create_garage` collision-retry for auto-generated names: name collision returned 409 instead of transparent retry. Fixed to retry up to 3 times with random 4-char alphanumeric suffix (e.g., "bold-mongoose-7x2k"), returning `INTERNAL_ERROR` on exhaustion. User-provided names still return 409.
 - `MOTO_CLUB_DEV_CONTAINER_IMAGE` env var not fully wired: `main.rs` reads the env var and passes it to `GarageK8s`, but `DEFAULT_IMAGE` in `moto-club-garage/src/lib.rs` and the fallback path in `garages.rs` hardcoded `"ghcr.io/nhalm/moto-dev:latest"`. Fixed: `DEFAULT_IMAGE` now reads from env var via `LazyLock`, `service.rs` uses `GarageK8s.dev_container_image()`, API fallback queries `GarageK8s` or falls back to `DEFAULT_IMAGE`. Also fixed `GarageK8s::new()` default to match spec.
 - GET `/api/v1/wg/garages/{id}` returns dummy `peer_version` and `registered_at`: handler hardcoded `peer_version: 0` and `registered_at: Utc::now()` instead of using database values. Fixed by adding `peer_version` and `registered_at` fields to `RegisteredGarage` struct, populating from `WgGarage` in PostgreSQL store, and using `garage.peer_version`/`garage.registered_at` in handler.
 - `register_garage` returns FK error instead of `GARAGE_NOT_FOUND` 404: added garage existence check via `garage_repo::get_by_id` before upserting into `wg_garages`, returning proper 404 `GARAGE_NOT_FOUND` instead of FK constraint violation surfacing as generic internal error
@@ -284,6 +285,7 @@ WHAT DOES NOT GO HERE:
 - K8s manifest: add POD_NAME and POD_NAMESPACE via downward API (crates/moto-k8s/src/deployment.rs build_deployment container env)
 - K8s manifest: add rolling update strategy (maxSurge: 1, maxUnavailable: 0)
 - K8s manifest: add container-level securityContext (readOnlyRootFilesystem, allowPrivilegeEscalation, capabilities)
+- Create `crates/moto-keybox-server/bike.toml` (name="keybox", replicas=3, resources per spec)
 
 ---
 
