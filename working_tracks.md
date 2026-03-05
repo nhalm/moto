@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## moto-club.md bug-fix
 
-- close_session idempotent re-close returns 404 instead of 204: SessionManager converts None to NotFound, handler returns 404; fix to return Option<Session> and treat None as 204
 - Fallback create_garage has no collision-retry for auto-generated names: name collision returns 409 instead of transparent retry up to 3 times with random suffix
 
 ## moto-bike.md bug-fix

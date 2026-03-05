@@ -303,13 +303,14 @@ impl<S: SessionStore> SessionManager<S> {
 
     /// Close a session.
     ///
+    /// Returns `Ok(Some(session))` if the session was found and removed,
+    /// or `Ok(None)` if the session was already closed (idempotent).
+    ///
     /// # Errors
     ///
-    /// Returns error if storage operation fails or session not found.
-    pub fn close_session(&self, session_id: &str) -> Result<Session> {
-        self.store
-            .remove_session(session_id)?
-            .ok_or_else(|| SessionError::NotFound(session_id.to_string()))
+    /// Returns error if storage operation fails.
+    pub fn close_session(&self, session_id: &str) -> Result<Option<Session>> {
+        self.store.remove_session(session_id)
     }
 
     /// List sessions for a device (by public key).

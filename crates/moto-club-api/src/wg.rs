@@ -837,25 +837,27 @@ async fn close_session(
             ),
         })?;
 
-    // Close the session
+    // Close the session (idempotent: re-close returns 204)
     let closed_session = state
         .session_manager
         .close_session(&session_id)
         .map_err(|e| {
             tracing::debug!(error = %e, session_id = %session_id, "Failed to close session");
             (
-                StatusCode::NOT_FOUND,
+                StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ApiError::new(
-                    error_codes::SESSION_NOT_FOUND,
-                    format!("Session '{session_id}' not found"),
+                    error_codes::INTERNAL_ERROR,
+                    "Failed to close session".to_string(),
                 )),
             )
         })?;
 
-    // Notify garages listening on the peer WebSocket
-    state
-        .peer_broadcaster
-        .broadcast_remove(&closed_session.garage_id, closed_session.device_pubkey);
+    // Only broadcast removal if the session was actually removed (not a re-close)
+    if let Some(session) = closed_session {
+        state
+            .peer_broadcaster
+            .broadcast_remove(&session.garage_id, session.device_pubkey);
+    }
 
     Ok::<_, (StatusCode, Json<ApiError>)>(StatusCode::NO_CONTENT)
 }
