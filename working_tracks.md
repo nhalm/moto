@@ -20,7 +20,7 @@ Read it in full at the start of each iteration.
 
 ## moto-bike.md bug-fix
 
-- Keybox manifest: add security baseline (POD_NAME, RUST_LOG, strategy, securityContext) or migrate to deployment builder
+(all items completed)
 
 ## keybox.md bug-fix
 
