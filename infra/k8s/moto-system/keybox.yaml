@@ -20,6 +20,10 @@ spec:
       port: 8081
       targetPort: 8081
       protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -55,6 +59,7 @@ spec:
           ports:
             - containerPort: 8080
             - containerPort: 8081
+            - containerPort: 9090
           env:
             - name: POD_NAME
               valueFrom:
