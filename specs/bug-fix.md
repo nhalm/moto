@@ -38,13 +38,13 @@ same convention as tracks.md.
 
 ## moto-club.md
 
-- **`delete_garage` does not close active sessions or broadcast peer removals.** `garages.rs:617-644` terminates the garage (DB status + K8s namespace delete) but never calls `session_manager.on_garage_terminated()` or `peer_broadcaster.broadcast_remove()`. Active WireGuard sessions remain open in `wg_sessions`, garages are not notified via WebSocket, and `peer_version` is not incremented at delete time.
-- **Session TTL not capped to garage's remaining TTL.** `sessions.rs:259-262` uses the requested TTL (or default) without comparing to the garage's `expires_at`. Spec requires: "If requested TTL exceeds garage remaining TTL, it's capped (session can't outlive garage)." The garage's expiry is not passed to `SessionManager::create_session`.
-- **`register_garage` returns FK error instead of `GARAGE_NOT_FOUND` 404.** `wg.rs:871-916` calls `peer_registry.register_garage()` without first verifying the garage exists in the `garages` table. If the UUID doesn't match, the `ON CONFLICT` upsert hits a FK constraint violation surfaced as a generic storage error, not the spec-mandated 404.
+- **`close_session` idempotent re-close triggers spurious `broadcast_remove`.** `wg.rs:840-858` calls `peer_broadcaster.broadcast_remove()` even when the session was already closed. `postgres_stores.rs:remove_session` correctly skips the DB close and `peer_version` increment for already-closed sessions, but returns `Ok(Some(session))` without indicating it was a no-op. Fix: check `closed_at` on the returned session before broadcasting, or have `remove_session` signal whether it actually closed.
+- **`extend_ttl` max-TTL guard uses original `ttl_seconds` not actual total.** `garages.rs:750-763` checks `garage.ttl_seconds + req.seconds` against `MAX_TTL_SECONDS`, but `garage.ttl_seconds` is the original creation TTL, not `(expires_at - created_at)`. If the garage was previously extended, the guard uses a stale value — can allow or reject incorrectly. Fix: compute `(garage.expires_at + Duration::seconds(req.seconds) - garage.created_at).num_seconds()`.
+- **Fallback name validation missing start/end alphanumeric + 63-char limit.** `garages.rs:271-282` checks character set (lowercase + digits + hyphens) but doesn't enforce that name must start/end with alphanumeric or respect K8s 63-char label limit. Names like `-foo-` pass validation.
 
 ## keybox.md
 
-- **`POST /auth/token` cannot set `service` claim for bikes.** `TokenRequest` (`api.rs:188`) has `principal_type`, `principal_id`, and `pod_uid` but no `service` field. Bikes calling `POST /auth/token` cannot obtain an SVID with a `service` claim, so they can never pass ABAC for service-scoped secrets. The `SvidClaims::with_service()` method exists but is unreachable through the token endpoint.
+- **`with_repository()` constructor hardcodes `admin_service` to `"moto-club"`.** `api.rs:97-110` secondary constructor ignores `MOTO_KEYBOX_ADMIN_SERVICE` env var. Tests and integration paths using `with_repository()` always use `"moto-club"` regardless of configuration. The primary `AppState::new()` constructor handles it correctly.
 
 ## dev-container.md
 
