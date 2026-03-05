@@ -1,6 +1,6 @@
 # Project Structure Specification
 
-**Version:** 1.6
+**Version:** 1.7
 **Status:** Ripping
 **Last Updated:** 2026-03-05
 
@@ -186,7 +186,7 @@ moto/
 | Crate | Type | Purpose |
 |-------|------|---------|
 | `moto-common` | lib | Shared utilities: error types, config loading, `Secret<T>` wrapper |
-| `moto-club-types` | lib | Types shared between CLI and server: `GarageId`, `GarageInfo`, `GarageState`, API request/response types |
+| `moto-club-types` | lib | Types shared between CLI and server: `GarageId` |
 | `moto-k8s` | lib | Low-level K8s operations: namespace CRUD, pod CRUD, label helpers |
 | `moto-garage` | lib | **DEPRECATED** - Remove this crate. CLI talks directly to moto-club API. |
 | `moto-cli` | bin | CLI commands: `moto garage {list,open,close}`, `moto bike {...}` |
@@ -253,16 +253,7 @@ moto/
 
 **GarageId** - UUID v7 newtype with `.short()` for display (first 8 chars)
 
-**GarageState** - Enum: `Pending`, `Running`, `Ready`, `Terminating`, `Terminated`
-
-**GarageInfo** - Struct:
-- `id: GarageId`
-- `name: String` (human-friendly)
-- `namespace: String` (K8s namespace name)
-- `state: GarageState`
-- `created_at: DateTime<Utc>`
-- `expires_at: Option<DateTime<Utc>>`
-- `owner: Option<String>`
+Note: `GarageStatus` enum and `Garage` struct live in `moto-club-db`, not in `moto-club-types`. See [moto-club.md](moto-club.md) for the full Garage model.
 
 **BikeId**, **BikeState**, **BikeInfo** (future) - Similar pattern for bikes
 
@@ -274,7 +265,7 @@ moto/
 
 **NamespaceOps** - Trait: `create_namespace()`, `delete_namespace()`, `list_namespaces()`, `get_namespace()`
 
-**Labels** - Constants: `moto.dev/type`, `moto.dev/id`, `moto.dev/name`, `moto.dev/owner`
+**Labels** - Constants: `moto.dev/type`, `moto.dev/garage-id`, `moto.dev/garage-name`, `moto.dev/bike-id`, `moto.dev/bike-name`, `moto.dev/owner`, `moto.dev/expires-at`, `moto.dev/engine`
 
 ### moto-garage
 
@@ -390,6 +381,10 @@ Both CLI and server need the same types (GarageInfo, etc). Put them in `moto-clu
 ---
 
 ## Changelog
+
+### v1.7 (2026-03-05)
+- Fix: `moto-club-types` only exports `GarageId`; `GarageStatus` and `Garage` live in `moto-club-db`. Remove stale `GarageState`/`GarageInfo` definitions from Key Types section.
+- Fix: K8s labels use resource-specific names (`moto.dev/garage-id`, `moto.dev/garage-name`, `moto.dev/bike-id`, `moto.dev/bike-name`) not generic (`moto.dev/id`, `moto.dev/name`). Add `moto.dev/expires-at` and `moto.dev/engine`.
 
 ### v1.6 (2026-03-05)
 - Fix: Remove `docker/` directory — container builds use Nix `dockerTools` in `infra/pkgs/`, not Dockerfiles

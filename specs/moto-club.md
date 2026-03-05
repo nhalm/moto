@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 2.5 |
+| Version | 2.6 |
 | Status | Ripping |
 | Last Updated | 2026-03-04 |
 
@@ -742,7 +742,7 @@ Response 200:
   "api_version": "v1",
   "git_sha": "abc1234",              // Build git commit (if available)
   "features": {
-    "websocket": false,              // WebSocket streaming enabled
+    "websocket": true,               // WebSocket streaming enabled
     "derp_regions": 1                // Number of DERP regions available
   }
 }
@@ -773,8 +773,10 @@ Manages wrenching environments.
 struct CreateGarageRequest {
     name: Option<String>,       // Human-friendly name (auto-generated if omitted, IMMUTABLE)
     branch: Option<String>,     // Git branch (CLI determines from local repo if omitted)
-    ttl_seconds: Option<u64>,   // Time-to-live in seconds (default: 14400 = 4h)
+    ttl_seconds: Option<i32>,   // Time-to-live in seconds (default: 14400 = 4h)
     image: Option<String>,      // Override dev container image
+    with_postgres: Option<bool>, // Provision per-garage Postgres
+    with_redis: Option<bool>,   // Provision per-garage Redis
 }
 
 struct Garage {
@@ -784,7 +786,7 @@ struct Garage {
     branch: String,
     status: GarageStatus,
     image: String,              // Dev container image used
-    ttl_seconds: u64,
+    ttl_seconds: i32,
     expires_at: DateTime<Utc>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -834,7 +836,7 @@ enum GarageStatus {
 **Extend TTL:**
 ```rust
 struct ExtendTtlRequest {
-    seconds: u64,   // Seconds to ADD to current expiry
+    seconds: i32,   // Seconds to ADD to current expiry
 }
 
 // Example: garage expires in 30 min, extend by 7200 (2h)
@@ -1182,6 +1184,8 @@ KUBECONFIG="/path/to/kubeconfig"          # Optional, for local dev
 
 # Optional
 MOTO_CLUB_BIND_ADDR="0.0.0.0:8080"
+MOTO_CLUB_HEALTH_BIND_ADDR="0.0.0.0:8081"
+MOTO_CLUB_METRICS_BIND_ADDR="0.0.0.0:9090"
 MOTO_CLUB_MIN_TTL_SECONDS="300"           # 5 minutes minimum
 MOTO_CLUB_DEFAULT_TTL_SECONDS="14400"     # 4 hours
 MOTO_CLUB_MAX_TTL_SECONDS="172800"        # 48 hours
@@ -1241,6 +1245,12 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v2.6 (2026-03-05)
+- Fix: `/api/v1/info` example `websocket` field: `false` → `true` (code returns true since v1.4)
+- Fix: `CreateGarageRequest` add `with_postgres` and `with_redis` fields (implemented since supporting-services.md)
+- Fix: `ttl_seconds` type: `u64` → `i32` to match code and PostgreSQL `INTEGER` column. Same for `ExtendTtlRequest.seconds`.
+- Fix: Configuration section add `MOTO_CLUB_HEALTH_BIND_ADDR` (default `0.0.0.0:8081`) and `MOTO_CLUB_METRICS_BIND_ADDR` (default `0.0.0.0:9090`)
 
 ### v2.5 (2026-03-04)
 - Fix namespace format in spec: `moto-garage-{short_id}` (first 8 chars of UUID, e.g., `moto-garage-01963e4a`). Code has always used the short form; spec examples previously showed full UUID.

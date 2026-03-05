@@ -286,6 +286,7 @@ WHAT DOES NOT GO HERE:
 - K8s manifest: add rolling update strategy (maxSurge: 1, maxUnavailable: 0)
 - K8s manifest: add container-level securityContext (readOnlyRootFilesystem, allowPrivilegeEscalation, capabilities)
 - Create `crates/moto-keybox-server/bike.toml` (name="keybox", replicas=3, resources per spec)
+- Keybox manifest: add security baseline (POD_NAME, POD_NAMESPACE, RUST_LOG, rolling update strategy, pod securityContext, container securityContext) to infra/k8s/moto-system/keybox.yaml
 
 ---
 

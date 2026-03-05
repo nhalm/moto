@@ -30,11 +30,11 @@ same convention as tracks.md.
 
 ## makefile.md
 
-(none)
+- `make run` target (Makefile line 48) uses `cargo run --bin moto-cli` but the binary is named `moto` in `crates/moto-cli/Cargo.toml` line 12. Other targets (`install`, `dev`, `dev-cluster`) correctly use `--bin moto`. Fix: change to `cargo run --bin moto`.
 
 ## testing.md
 
-(none)
+- Garage container smoke test is `infra/smoke-test.sh` but spec naming convention (line 43) says `infra/smoke-test-{service}.sh`. Rename to `infra/smoke-test-garage.sh` and update Makefile `test-garage` target to match.
 
 ## moto-club.md
 
@@ -50,7 +50,8 @@ same convention as tracks.md.
 
 ## container-system.md
 
-(none)
+- Missing `[profile.release]` section in root `Cargo.toml`. Spec (lines 927-931) requires `lto = true`, `codegen-units = 1`, `strip = true` for bike container size optimization.
+- `Cargo.toml` line 11 has `rust-version = "1.85"` but `flake.nix` line 21 pins `1.88.0`. Update `rust-version` to `"1.88"` to match the actual toolchain.
 
 ## local-cluster.md
 
@@ -58,15 +59,16 @@ same convention as tracks.md.
 
 ## garage-isolation.md
 
-(none)
+- NetworkPolicy keybox egress rule (`crates/moto-club-k8s/src/network_policy.rs` line 144) uses pod selector `app: keybox`, but keybox pods (`infra/k8s/moto-system/keybox.yaml` line 46) have label `app.kubernetes.io/component: moto-keybox`. The selector never matches, so garage pods cannot reach keybox through the NetworkPolicy. Fix: align the pod selector label to match the actual keybox pod labels.
 
 ## garage-lifecycle.md
 
-(none)
+- CLI `garage open` missing `--name` flag. Spec (line 82) defines `--name <name>` but CLI (`crates/moto-cli/src/commands/garage.rs` GarageAction::Open) always auto-generates the name. The backend `CreateGarageInput.name` already accepts `Option<String>`. Add `--name` CLI arg and pass it through.
+- CLI `garage open` missing `--image` flag. Spec (line 86) defines `--image <image>` to override the dev container image but CLI always passes `image: None`. The backend `CreateGarageInput.image` already accepts `Option<String>`. Add `--image` CLI arg and pass it through.
 
 ## moto-bike.md
 
-(none)
+- Deployment builder `build_env_vars()` (`crates/moto-k8s/src/deployment.rs` lines 558-588) only injects `POD_NAME`, `POD_NAMESPACE`, `RUST_LOG`. Missing `RUST_BACKTRACE="1"` which spec (line 112) lists as a common env var for all engines.
 
 ## supporting-services.md
 
@@ -82,4 +84,6 @@ same convention as tracks.md.
 
 ## service-deploy.md
 
-(none)
+- `club.yaml` has no security contexts. `keybox.yaml` has both pod-level (`runAsUser: 1000`, `runAsGroup: 1000`, `runAsNonRoot: true`) and container-level (`readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities: drop: [ALL]`). Add matching security contexts to `club.yaml`.
+- `keybox.yaml` missing metrics port 9090. `club.yaml` has it in both Service (port 9090) and container ports (`containerPort: 9090`). Spec (moto-bike.md line 168) says all engines expose Prometheus metrics on port 9090. Add port 9090 to keybox Service and container port list.
+- Both `keybox.yaml` and `club.yaml` are hand-written static manifests. Spec (moto-bike.md v0.6 changelog line 538) says keybox "must use the deployment builder (not a hand-written static manifest)." Either replace static manifests with deployment builder usage, or generate them from bike.toml so they stay in sync.

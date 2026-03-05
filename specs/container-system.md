@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 1.4 |
+| Version | 1.5 |
 | Status | Ripping |
 | Last Updated | 2026-03-05 |
 
@@ -160,20 +160,17 @@ Engine binaries (moto-club, moto-keybox) MUST be built with crane. Crane reads `
   description = "Moto - fintech infrastructure";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs = { self, nixpkgs, flake-utils, rust-overlay, crane }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
+    flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
@@ -192,7 +189,7 @@ Engine binaries (moto-club, moto-keybox) MUST be built with crane. Crane reads `
           inherit src;
           strictDeps = true;
           nativeBuildInputs = with pkgs; [ pkg-config stdenv.cc lld ];
-          buildInputs = with pkgs; [ openssl postgresql.lib ];
+          buildInputs = with pkgs; [ openssl ];
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -419,7 +416,7 @@ export MOTO_REGISTRY="ghcr.io/nhalm"
 
 ```bash
 # Run local registry (one-time setup)
-docker run -d -p 5050:5050 --name moto-registry registry:2
+docker run -d -p 5050:5000 --name moto-registry registry:2
 
 # Or via k3s (built-in option)
 # k3s ships with containerd, can use embedded registry
@@ -1053,6 +1050,13 @@ nix path-info --json .#moto-club-image | jq '.[] | .path'
 ```
 
 ## Changelog
+
+### v1.5 (2026-03-05)
+- Fix: Registry example port mapping: `-p 5050:5050` → `-p 5050:5000` (registry:2 listens on 5000 internally)
+- Fix: Flake example `nixpkgs.url`: `nixos-24.05` → `nixos-unstable` to match actual flake.nix
+- Fix: Flake example `crane` input: remove stale `inputs.nixpkgs.follows` (newer crane doesn't have nixpkgs input)
+- Fix: Flake example `eachSystem`: use `eachDefaultSystem` (includes darwin) with `isLinux` guard for container packages
+- Fix: Flake example `commonArgs.buildInputs`: remove `postgresql.lib` (only in devShell, not needed for engine builds)
 
 ### v1.4 (2026-03-05)
 - Docs: Mark CI/CD Pipeline section as `(future)` — `.github/workflows/` not yet implemented

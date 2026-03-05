@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.4 |
+| Version | 0.5 |
 | Status | Ripping |
 | Last Updated | 2026-02-04 |
 
@@ -83,7 +83,12 @@ Creates a new wrenching environment.
 --branch <branch>       Git branch to work on (default: current)
 --ttl <duration>        Time-to-live (default: 4h, max: 48h)
 --image <image>         Override dev container image
+--owner <name>          Owner of the garage (default: current user)
+--engine <name>         Engine to work on (default: current directory name)
+--with-postgres         Provision per-garage Postgres instance
+--with-redis            Provision per-garage Redis instance
 --no-attach             Create but don't connect
+--kubectl               Connect via kubectl exec instead of WireGuard
 ```
 
 **Flow:**
@@ -256,6 +261,9 @@ Garage can fetch:
 - Global secrets (AI keys via ai-proxy, etc.)
 
 ## Changelog
+
+### v0.5 (2026-03-05)
+- Add `--owner`, `--engine`, `--with-postgres`, `--with-redis`, `--kubectl` flags to `garage open` options (implemented in CLI but not documented)
 
 ### v0.4
 - Fix: Implement `--branch` flag in CLI (currently documented but not in CLI args)

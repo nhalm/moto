@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.18 |
+| Version | 0.19 |
 | Status | Ripping |
 | Last Updated | 2026-03-05 |
 
@@ -458,7 +458,7 @@ pkgs.dockerTools.buildLayeredImage {
   tag = "latest";
   contents = allContents;
   config = {
-    Cmd = [ "/bin/bash" ];
+    Cmd = [ "garage-entrypoint" ];
     WorkingDir = "/workspace";
     Env = allEnv;
     Volumes = {
@@ -495,6 +495,9 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.19 (2026-03-05)
+- Fix: Container example `Cmd` from `["/bin/bash"]` to `["garage-entrypoint"]` (changed in v0.14 changelog but example was never updated)
 
 ### v0.18 (2026-03-05)
 - Fix: Bump Rust version from 1.85 to 1.88 to match container-system.md v1.3 and flake.nix

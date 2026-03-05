@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.12 |
+| Version | 0.13 |
 | Status | Ripping |
 | Last Updated | 2026-03-05 |
 
@@ -22,6 +22,7 @@ moto
 ├── garage
 │   ├── open        # Create a new garage
 │   ├── enter       # Connect to garage terminal
+│   ├── extend      # Extend garage TTL
 │   ├── logs        # View garage logs
 │   ├── list        # List garages
 │   └── close       # Tear down a garage
@@ -125,9 +126,14 @@ Creates a new garage. Names are auto-generated.
 Usage: moto garage open [options]
 
 Options:
-  --engine <name>   Engine to work on (default: current directory name)
-  --ttl <duration>  Time-to-live (default: 4h, max: 48h)
-  --owner <name>    Owner of the garage (default: current user)
+  --engine <name>        Engine to work on (default: current directory name)
+  --ttl <duration>       Time-to-live (default: 4h, max: 48h)
+  --owner <name>         Owner of the garage (default: current user)
+  --branch <branch>      Git branch (default: "main")
+  --with-postgres        Provision a per-garage Postgres instance
+  --with-redis           Provision a per-garage Redis instance
+  --no-attach            Create but don't connect
+  --kubectl              Connect via kubectl exec instead of WireGuard
 ```
 
 **Duration format:** `<number><unit>` where unit is `m` (minutes), `h` (hours), or `d` (days).
@@ -196,6 +202,28 @@ Connecting to bold-mongoose via kubectl...
 Use `Ctrl+P, Ctrl+Q` to detach. Garage keeps running.
 
 **Exit codes:** 0 normal exit, 1 connection failed, 2 not found
+
+---
+
+#### `moto garage extend`
+
+Extends a garage's TTL.
+
+```
+Usage: moto garage extend <name> [options]
+
+Options:
+  --ttl <duration>  Additional time to add (default: 4h)
+```
+
+**Example:**
+```
+$ moto garage extend bold-mongoose --ttl 2h
+Garage bold-mongoose extended by 2h.
+  Expires: 2026-01-20 04:48:00
+```
+
+**Exit codes:** 0 success, 1 error, 2 not found
 
 ---
 
@@ -472,27 +500,27 @@ Usage: moto cluster status
 **Example:**
 ```
 $ moto cluster status
-Cluster: local (k3s)
-Status: healthy
+Cluster: moto (k3d)
+Status: running
 
-Components:
-  moto-club:  running
-  keybox:     running
-  postgres:   running
+K8s API:   healthy (https://0.0.0.0:6550)
+Registry:  healthy (http://localhost:5050)
 ```
 
 **JSON output:**
 ```json
 {
-  "cluster": {
-    "name": "local",
-    "type": "k3s",
-    "status": "healthy"
+  "name": "moto",
+  "type": "k3d",
+  "status": "running",
+  "api": {
+    "endpoint": "https://0.0.0.0:6550",
+    "healthy": true
   },
-  "components": [
-    {"name": "moto-club", "status": "running"},
-    {"name": "keybox", "status": "running"}
-  ]
+  "registry": {
+    "endpoint": "http://localhost:5050",
+    "healthy": true
+  }
 }
 ```
 
@@ -527,14 +555,14 @@ $ moto dev up
 [5/9] Generating keybox keys...     found (.dev/keybox/)
 [6/9] Running migrations...         up to date
 [7/9] Starting keybox...            healthy (localhost:8090)
-[8/9] Starting moto-club...         healthy (localhost:8080)
+[8/9] Starting moto-club...         healthy (localhost:18080)
 [9/9] Opening garage...             bold-mongoose
 
 moto dev environment ready!
 
   Postgres:  localhost:5432
   Keybox:    localhost:8090
-  Club:      localhost:8080
+  Club:      localhost:18080
   Garage:    bold-mongoose
 
   To connect: moto garage enter bold-mongoose
@@ -594,7 +622,7 @@ Cluster:   running (k3d-moto)
 Registry:  healthy (localhost:5050)
 Postgres:  healthy (localhost:5432)
 Keybox:    healthy (localhost:8090)
-Club:      healthy (localhost:8080)
+Club:      healthy (localhost:18080)
 Image:     moto-garage:latest (in registry)
 Garages:   1 running
 ```
@@ -664,6 +692,13 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.13 (2026-03-05)
+- Add `moto garage extend` command to hierarchy and reference section
+- Fix: `garage open` options table now includes `--branch`, `--with-postgres`, `--with-redis`, `--no-attach`, `--kubectl`
+- Fix: `cluster status` JSON uses actual structure (top-level fields with nested `api`/`registry` objects, not flat `components` array)
+- Fix: `cluster status` text example matches actual output format (K8s API + Registry health, not component list)
+- Fix: Club port in `dev up` and `dev status` examples: `localhost:8080` → `localhost:18080`
 
 ### v0.12 (2026-03-05)
 - Fix: Add `-n` short flag for `--tail` on `bike logs` (matches `garage logs` convention)

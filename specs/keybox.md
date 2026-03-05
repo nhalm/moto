@@ -2,11 +2,14 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.13 |
+| Version | 0.14 |
 | Status | Ripping |
 | Last Updated | 2026-03-04 |
 
 ## Changelog
+
+### v0.14 (2026-03-05)
+- Fix: Components table now lists all 5 crates with correct types. `moto-keybox` is a library (not the server binary). Add `moto-keybox-server` (bin) and `moto-keybox-db` (lib).
 
 ### v0.13 (2026-03-04)
 - Fix `MOTO_KEYBOX_SERVICE_TOKEN` example value: show hex string, not file path (was confusable with `_FILE` variant)
@@ -101,11 +104,13 @@ Secrets manager for moto. Provides credentials to garages (wrenching) and bikes 
 
 **Components:**
 
-| Crate | Purpose |
-|-------|---------|
-| `moto-keybox` | Server: auth, SVID issuance, secret storage, ABAC |
-| `moto-keybox-client` | Library: garages/bikes use to fetch secrets |
-| `moto-keybox-cli` | CLI: manage secrets, view audit logs |
+| Crate | Type | Purpose |
+|-------|------|---------|
+| `moto-keybox` | lib | Core: SVID, ABAC, envelope encryption, repository |
+| `moto-keybox-server` | bin | HTTP server: auth, secrets, audit endpoints |
+| `moto-keybox-db` | lib | Database: models, migrations, repositories |
+| `moto-keybox-client` | lib | Client: garages/bikes use to fetch secrets |
+| `moto-keybox-cli` | bin | Admin CLI: manage secrets, view audit logs |
 
 ### SPIFFE-Inspired Identity
 
