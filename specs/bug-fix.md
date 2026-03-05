@@ -82,4 +82,4 @@ same convention as tracks.md.
 
 ## service-deploy.md
 
-- `scripts/generate-manifests.sh` uses single-quoted heredocs (`<< 'YAML'`), so all `parse_toml` calls are dead code — no shell variable substitution occurs. The generated manifests ignore bike.toml values: replicas hardcoded to 1 (bike.toml says 3), resources hardcoded to 50m/128Mi/500m/512Mi (bike.toml says 250m/256Mi/1/1Gi). Fix: use unquoted heredocs (`<< YAML`) and interpolate parsed values, or rewrite to use `sed`/`envsubst` with a template.
+(none)
