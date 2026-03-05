@@ -493,6 +493,7 @@ WHAT DOES NOT GO HERE:
 - Fix `peer_broadcaster` never called on session create/close: `create_session` and `close_session` never call `broadcast_add()` or `broadcast_remove()`, so garages connected via `WS /internal/wg/garages/{id}/peers` receive no events when sessions change
 - Fix `close_session` spuriously incrementing `peer_version` when re-closing an already-closed session: `remove_session` now fetches raw DB session, checks `closed_at`, and only calls `close()` + `increment_peer_version` when the session is actually open
 - Fix `close_session` idempotent re-close triggering spurious `broadcast_remove`: `remove_session` in `PostgresSessionStore` now returns `None` when session is already closed, so `SessionManager::close_session` returns `NotFound` and the handler skips `broadcast_remove`
+- Fix `extend_ttl` max-TTL guard uses original `ttl_seconds` not actual total: compute `(expires_at + extension - created_at).num_seconds()` instead of `garage.ttl_seconds + req.seconds`
 
 ---
 
