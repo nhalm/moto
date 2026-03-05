@@ -112,6 +112,10 @@ spec:
         app.kubernetes.io/component: moto-club
     spec:
       serviceAccountName: moto-club
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
       containers:
         - name: moto-club
           image: moto-registry:5000/moto-club:latest
@@ -158,6 +162,12 @@ spec:
               port: 8081
             failureThreshold: 30
             periodSeconds: 1
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           volumeMounts:
             - name: keybox-service-token
               mountPath: /run/secrets/club
