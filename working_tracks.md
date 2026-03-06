@@ -84,7 +84,7 @@ Read it in full at the start of each iteration.
 
 ## ai-proxy.md v0.2
 
-- Implement API key caching with configurable TTL (default 5 min)
+(all items completed)
 
 ## ai-proxy.md v0.3
 
