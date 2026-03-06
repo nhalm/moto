@@ -618,3 +618,5 @@ WHAT DOES NOT GO HERE:
 - Add request size limit (10 MB max request body)
 - Add request timeouts (connect 10s, first byte 30s, idle 120s, total 600s)
 - Add bike engine deployment config (bike.toml, K8s Deployment/Service/ServiceAccount in moto-system)
+- Implement garage identity validation via moto-club API
+- Implement garage validation caching (default 60s)

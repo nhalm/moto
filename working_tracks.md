@@ -84,10 +84,8 @@ Read it in full at the start of each iteration.
 
 ## ai-proxy.md v0.2
 
-- Implement garage identity validation via moto-club API
 - Implement streaming SSE pass-through (chunked transfer, flush immediately, no buffering)
 - Implement API key caching with configurable TTL (default 5 min)
-- Implement garage validation caching (default 60s)
 - Add configuration parsing for all MOTO_AI_PROXY_* env vars
 - Add structured canonical logging with request_id, garage_id, provider, duration_ms
 
