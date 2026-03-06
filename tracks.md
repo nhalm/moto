@@ -580,3 +580,4 @@ WHAT DOES NOT GO HERE:
 - Implement event streaming WebSocket endpoint: /ws/v1/events with garages query param filter
 - Implement TTL warning events in reconciler: emit ttl_warning at 15 and 5 minutes before expiry
 - Implement status_change events on garage state transitions (from garage service and reconciler)
+- Implement error events from reconciler (pod failures, crash loops)

@@ -68,7 +68,6 @@ Read it in full at the start of each iteration.
 
 ## moto-club-websocket.md v0.2
 
-- Implement error events from reconciler (pod failures, crash loops)
 - Update CLI to prefer WebSocket for log streaming, fall back to direct K8s API
 
 ## moto-club-websocket.md v0.3

@@ -91,6 +91,9 @@ pub enum ReconcileError {
     Kubernetes(#[from] moto_k8s::Error),
 }
 
+/// Restart count threshold for detecting crash loops.
+const CRASH_LOOP_RESTART_THRESHOLD: i32 = 3;
+
 /// Reconciles garage state between K8s and the database.
 ///
 /// Runs periodically to ensure the database reflects the actual K8s state.
@@ -102,6 +105,8 @@ pub struct GarageReconciler {
     event_broadcaster: Option<Arc<EventBroadcaster>>,
     /// Tracks (`garage_id`, `threshold_minutes`) pairs for which warnings have been sent.
     ttl_warnings_sent: Arc<Mutex<HashSet<(Uuid, u32)>>>,
+    /// Tracks garage IDs for which crash loop error events have been sent.
+    crash_loop_errors_sent: Arc<Mutex<HashSet<Uuid>>>,
 }
 
 impl GarageReconciler {
@@ -114,6 +119,7 @@ impl GarageReconciler {
             config,
             event_broadcaster: None,
             ttl_warnings_sent: Arc::new(Mutex::new(HashSet::new())),
+            crash_loop_errors_sent: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -141,6 +147,19 @@ impl GarageReconciler {
                     from: from.to_string(),
                     to: to.to_string(),
                     reason: reason.map(String::from),
+                },
+            );
+        }
+    }
+
+    /// Broadcasts an `error` event if an event broadcaster is configured.
+    fn emit_error(&self, owner: &str, garage_name: &str, message: &str) {
+        if let Some(ref broadcaster) = self.event_broadcaster {
+            broadcaster.broadcast(
+                owner,
+                GarageEvent::Error {
+                    garage: garage_name.to_string(),
+                    message: message.to_string(),
                 },
             );
         }
@@ -319,6 +338,7 @@ impl GarageReconciler {
     }
 
     /// Reconciles a single garage's status from K8s pod state.
+    #[allow(clippy::too_many_lines)]
     async fn reconcile_garage_status(
         &self,
         id_str: &str,
@@ -371,6 +391,15 @@ impl GarageReconciler {
                     garage_name = %garage.name,
                     "pod failed, transitioning to Failed state"
                 );
+                // Emit error event with failure details
+                let message = self.get_pod_failure_message(&garage_id).await;
+                self.emit_error(&garage.owner, &garage.name, &message);
+                info!(
+                    garage_id = %id_str,
+                    garage_name = %garage.name,
+                    message = %message,
+                    "emitted error event for pod failure"
+                );
                 GarageStatus::Failed
             }
             GaragePodStatus::Succeeded => {
@@ -418,6 +447,18 @@ impl GarageReconciler {
             }
         };
 
+        // Check for crash loops on non-ready, non-terminated pods
+        if matches!(
+            new_status,
+            GarageStatus::Pending | GarageStatus::Initializing
+        ) {
+            self.check_crash_loop(&garage_id, uuid, &garage.owner, &garage.name)
+                .await;
+        } else {
+            // Pod recovered or reached a terminal state — clear crash loop tracking
+            self.crash_loop_errors_sent.lock().unwrap().remove(&uuid);
+        }
+
         // Update status if changed (but don't downgrade from Ready to Running)
         if new_status != garage.status && should_update_status(garage.status, new_status) {
             debug!(
@@ -444,6 +485,113 @@ impl GarageReconciler {
         }
 
         Ok(())
+    }
+}
+
+impl GarageReconciler {
+    /// Gets a descriptive failure message from a pod's container statuses.
+    async fn get_pod_failure_message(&self, garage_id: &GarageId) -> String {
+        let Ok(pod) = self.k8s.get_garage_pod(garage_id).await else {
+            return "Pod failed".to_string();
+        };
+
+        // Check init container failures first
+        if let Some(ref status) = pod.status
+            && let Some(ref init_statuses) = status.init_container_statuses
+        {
+            for cs in init_statuses {
+                if let Some(ref state) = cs.state
+                    && let Some(ref terminated) = state.terminated
+                    && terminated.exit_code != 0
+                {
+                    let reason = terminated.reason.as_deref().unwrap_or("unknown");
+                    return format!(
+                        "Init container '{}' failed: {} (exit code {})",
+                        cs.name, reason, terminated.exit_code
+                    );
+                }
+            }
+        }
+
+        // Check main container failures
+        if let Some(ref status) = pod.status
+            && let Some(ref container_statuses) = status.container_statuses
+        {
+            for cs in container_statuses {
+                if let Some(ref state) = cs.state
+                    && let Some(ref terminated) = state.terminated
+                    && terminated.exit_code != 0
+                {
+                    let reason = terminated.reason.as_deref().unwrap_or("unknown");
+                    return format!(
+                        "Container '{}' failed: {} (exit code {})",
+                        cs.name, reason, terminated.exit_code
+                    );
+                }
+            }
+        }
+
+        "Pod failed".to_string()
+    }
+
+    /// Checks if a pod is in a crash loop and emits an error event if so.
+    ///
+    /// Detects crash loops by checking for `CrashLoopBackOff` waiting reason
+    /// or restart count exceeding the threshold. Each garage is only warned once
+    /// until the crash loop clears.
+    async fn check_crash_loop(
+        &self,
+        garage_id: &GarageId,
+        uuid: Uuid,
+        owner: &str,
+        garage_name: &str,
+    ) {
+        if self.event_broadcaster.is_none() {
+            return;
+        }
+
+        // Skip if we already sent a crash loop error for this garage
+        if self.crash_loop_errors_sent.lock().unwrap().contains(&uuid) {
+            return;
+        }
+
+        let Ok(pod) = self.k8s.get_garage_pod(garage_id).await else {
+            return;
+        };
+
+        let Some(ref status) = pod.status else {
+            return;
+        };
+
+        let container_statuses = status.container_statuses.as_deref().unwrap_or_default();
+
+        for cs in container_statuses {
+            let is_crash_loop = cs
+                .state
+                .as_ref()
+                .and_then(|s| s.waiting.as_ref())
+                .is_some_and(|w| w.reason.as_deref() == Some("CrashLoopBackOff"));
+
+            let high_restarts = cs.restart_count >= CRASH_LOOP_RESTART_THRESHOLD;
+
+            if is_crash_loop || high_restarts {
+                let message = format!(
+                    "Pod crash loop detected (container '{}', {} restarts)",
+                    cs.name, cs.restart_count
+                );
+                self.emit_error(owner, garage_name, &message);
+                self.crash_loop_errors_sent.lock().unwrap().insert(uuid);
+
+                info!(
+                    garage_id = %garage_id,
+                    garage_name = %garage_name,
+                    container = %cs.name,
+                    restart_count = cs.restart_count,
+                    "emitted error event for crash loop"
+                );
+                return;
+            }
+        }
     }
 }
 
