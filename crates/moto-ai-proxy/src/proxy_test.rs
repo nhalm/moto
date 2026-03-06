@@ -3,11 +3,12 @@ use std::convert::Infallible;
 use std::time::Duration;
 
 use axum::body::Body;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use futures_util::StreamExt;
 use secrecy::{ExposeSecret, SecretString};
 use tokio_stream::wrappers::ReceiverStream;
+use tower::ServiceExt;
 
 use crate::auth::{AuthError, GarageValidator};
 use crate::keys::KeyStore;
@@ -251,4 +252,128 @@ async fn non_streaming_response_forwarded_correctly() {
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["id"], "msg_123");
     assert_eq!(body["stop_reason"], "end_turn");
+}
+
+/// Mock key store with multiple providers for unified endpoint tests.
+struct MultiKeyStore {
+    keys: HashMap<Provider, SecretString>,
+}
+
+impl MultiKeyStore {
+    fn new() -> Self {
+        Self {
+            keys: HashMap::new(),
+        }
+    }
+
+    fn with_key(mut self, provider: Provider, key: &str) -> Self {
+        self.keys
+            .insert(provider, SecretString::from(key.to_string()));
+        self
+    }
+}
+
+impl KeyStore for MultiKeyStore {
+    async fn get_key(&self, provider: Provider) -> Option<SecretString> {
+        self.keys
+            .get(&provider)
+            .map(|k| SecretString::from(k.expose_secret().to_string()))
+    }
+}
+
+fn build_test_router(key_store: MultiKeyStore) -> axum::Router {
+    let client = reqwest::Client::new();
+    proxy::proxy_router(client, key_store, AcceptAllValidator)
+}
+
+#[tokio::test]
+async fn chat_completions_returns_400_for_missing_model() {
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(r#"{"messages": []}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["type"], "invalid_request_error");
+    assert!(json["error"]["message"].as_str().unwrap().contains("model"));
+}
+
+#[tokio::test]
+async fn chat_completions_returns_400_for_unknown_model() {
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(r#"{"model": "mistral-large", "messages": []}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["type"], "invalid_request_error");
+    assert!(
+        json["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("unknown model prefix")
+    );
+}
+
+#[tokio::test]
+async fn chat_completions_returns_503_for_unconfigured_provider() {
+    // No keys configured at all.
+    let key_store = MultiKeyStore::new();
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(r#"{"model": "gpt-4o", "messages": []}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(
+        json["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("provider not configured")
+    );
+}
+
+#[tokio::test]
+async fn chat_completions_returns_401_without_auth() {
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"model": "gpt-4o", "messages": []}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }

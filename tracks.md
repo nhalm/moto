@@ -628,3 +628,4 @@ WHAT DOES NOT GO HERE:
 ## ai-proxy.md v0.3
 
 - Implement passthrough routes (/passthrough/anthropic/, /passthrough/openai/, /passthrough/gemini/)
+- Implement unified endpoint (/v1/chat/completions) using OpenAI-compatible format

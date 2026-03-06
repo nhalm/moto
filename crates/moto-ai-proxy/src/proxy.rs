@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::body::Body;
+use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
@@ -322,6 +322,119 @@ pub async fn passthrough_gemini<K: KeyStore, G: GarageValidator>(
     .await
 }
 
+/// Handler for `POST /v1/chat/completions` — unified endpoint.
+///
+/// Reads the request body, extracts the `model` field, and routes to the
+/// correct provider. For `OpenAI` and Gemini, the request is forwarded directly
+/// (both support OpenAI-compatible format). Anthropic requires translation
+/// (handled by the translation layer when implemented).
+pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
+    State(state): State<ProxyState<K, G>>,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let request_id = Uuid::now_v7();
+    let start = Instant::now();
+    let path = uri.path().to_string();
+
+    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
+        Ok(id) => id,
+        Err(resp) => {
+            let status = resp.status().as_u16();
+            let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+            tracing::info!(
+                request_id = %request_id,
+                garage_id = "",
+                mode = "unified",
+                method = "POST",
+                path = %path,
+                status = status,
+                duration_ms = duration_ms,
+                "request completed"
+            );
+            return resp;
+        }
+    };
+
+    // Parse the model field from the request body.
+    let model = serde_json::from_slice::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from));
+
+    let Some(model) = model else {
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+        tracing::info!(
+            request_id = %request_id,
+            garage_id = %garage_id,
+            mode = "unified",
+            method = "POST",
+            path = %path,
+            status = 400u16,
+            duration_ms = duration_ms,
+            "request completed"
+        );
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "missing or invalid 'model' field in request body",
+            "invalid_request_error",
+        );
+    };
+
+    let Some(provider) = Provider::from_model(&model) else {
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+        tracing::info!(
+            request_id = %request_id,
+            garage_id = %garage_id,
+            model = %model,
+            mode = "unified",
+            method = "POST",
+            path = %path,
+            status = 400u16,
+            duration_ms = duration_ms,
+            "request completed"
+        );
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "unknown model prefix, cannot determine provider",
+            "invalid_request_error",
+        );
+    };
+
+    let upstream_path = provider.unified_chat_path();
+
+    // Forward the buffered body to the upstream provider.
+    let result = forward_to_provider(
+        provider,
+        Method::POST,
+        upstream_path,
+        uri.query(),
+        &headers,
+        Body::from(body),
+        &state.client,
+        state.key_store.as_ref(),
+    )
+    .await;
+
+    let status = result.response.status().as_u16();
+    let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+    tracing::info!(
+        request_id = %request_id,
+        garage_id = %garage_id,
+        provider = %provider,
+        model = %model,
+        mode = "unified",
+        method = "POST",
+        path = %path,
+        status = status,
+        upstream_status = result.upstream_status,
+        duration_ms = duration_ms,
+        "request completed"
+    );
+
+    result.response
+}
+
 /// Builds the proxy router with passthrough routes and garage auth.
 pub fn proxy_router<K: KeyStore + 'static, G: GarageValidator + 'static>(
     client: Client,
@@ -345,6 +458,10 @@ pub fn proxy_router<K: KeyStore + 'static, G: GarageValidator + 'static>(
         .route(
             "/passthrough/gemini/{*path}",
             axum::routing::any(passthrough_gemini::<K, G>),
+        )
+        .route(
+            "/v1/chat/completions",
+            axum::routing::post(chat_completions::<K, G>),
         )
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_SIZE))
         .with_state(state)
