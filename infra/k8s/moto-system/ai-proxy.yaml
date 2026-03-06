@@ -1,0 +1,130 @@
+# Generated from crates/moto-ai-proxy/bike.toml by scripts/generate-manifests.sh
+# Do not edit manually — regenerate with: make generate-manifests
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: moto-ai-proxy
+  namespace: moto-system
+  labels:
+    app.kubernetes.io/part-of: moto
+    app.kubernetes.io/component: moto-ai-proxy
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: moto-ai-proxy
+  namespace: moto-system
+  labels:
+    app.kubernetes.io/part-of: moto
+    app.kubernetes.io/component: moto-ai-proxy
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: moto-ai-proxy
+  ports:
+    - name: api
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: health
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moto-ai-proxy
+  namespace: moto-system
+  labels:
+    app.kubernetes.io/part-of: moto
+    app.kubernetes.io/component: moto-ai-proxy
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: moto-ai-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: moto
+        app.kubernetes.io/component: moto-ai-proxy
+    spec:
+      serviceAccountName: moto-ai-proxy
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+      containers:
+        - name: moto-ai-proxy
+          image: moto-registry:5000/moto-ai-proxy:latest
+          ports:
+            - containerPort: 8080
+            - containerPort: 8081
+            - containerPort: 9090
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: RUST_LOG
+              value: info
+            - name: RUST_BACKTRACE
+              value: "1"
+            - name: MOTO_AI_PROXY_KEYBOX_URL
+              value: http://moto-keybox.moto-system:8080
+            - name: MOTO_AI_PROXY_CLUB_URL
+              value: http://moto-club.moto-system:8080
+            - name: MOTO_AI_PROXY_SVID_FILE
+              value: /var/run/secrets/svid/svid.jwt
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8081
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8081
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: 8081
+            failureThreshold: 30
+            periodSeconds: 1
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: svid
+              mountPath: /var/run/secrets/svid
+              readOnly: true
+      volumes:
+        - name: svid
+          secret:
+            secretName: ai-proxy-svid
