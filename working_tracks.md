@@ -96,7 +96,5 @@ Read it in full at the start of each iteration.
 
 ## ai-proxy.md v0.5
 
-- Use SecretString (zeroize-on-drop) for cached API keys
-- Implement local dev integration: ai-proxy in moto dev up startup sequence
 - Implement local dev key seeding (prompt or MOTO_DEV_*_KEY env vars)
 - Support --no-ai-proxy flag for moto dev up

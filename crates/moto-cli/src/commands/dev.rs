@@ -1,6 +1,6 @@
 //! Dev subcommands: up, down, status.
 //!
-//! Manages the local development environment (postgres, keybox, moto-club).
+//! Manages the local development environment (postgres, keybox, moto-club, ai-proxy).
 //! See local-dev.md for the full specification.
 
 use clap::{Args, Subcommand};
@@ -24,6 +24,8 @@ pub struct DevConfig {
     pub keybox_api: String,
     pub club_health: String,
     pub club_api: String,
+    pub ai_proxy_health: String,
+    pub ai_proxy_api: String,
     pub registry: String,
 }
 
@@ -38,11 +40,21 @@ impl DevConfig {
             .unwrap_or_else(|_| "0.0.0.0:8091".to_string());
         let keybox_health_port = keybox_health_bind.rsplit(':').next().unwrap_or("8091");
 
+        let ai_proxy_bind = std::env::var("MOTO_AI_PROXY_BIND_ADDR")
+            .unwrap_or_else(|_| "0.0.0.0:18090".to_string());
+        let ai_proxy_api_port = ai_proxy_bind.rsplit(':').next().unwrap_or("18090");
+
+        let ai_proxy_health_bind = std::env::var("MOTO_AI_PROXY_HEALTH_BIND_ADDR")
+            .unwrap_or_else(|_| "0.0.0.0:18091".to_string());
+        let ai_proxy_health_port = ai_proxy_health_bind.rsplit(':').next().unwrap_or("18091");
+
         Self {
             keybox_health: format!("localhost:{keybox_health_port}"),
             keybox_api: format!("localhost:{keybox_api_port}"),
             club_health: "localhost:8081".to_string(),
             club_api: "localhost:18080".to_string(),
+            ai_proxy_health: format!("localhost:{ai_proxy_health_port}"),
+            ai_proxy_api: format!("localhost:{ai_proxy_api_port}"),
             registry: "localhost:5050".to_string(),
         }
     }
@@ -127,6 +139,41 @@ impl DevConfig {
         ]
     }
 
+    /// Environment variables for spawning moto-ai-proxy.
+    fn ai_proxy_env() -> Vec<(&'static str, String)> {
+        vec![
+            (
+                "MOTO_AI_PROXY_BIND_ADDR",
+                env_or("MOTO_AI_PROXY_BIND_ADDR", "0.0.0.0:18090"),
+            ),
+            (
+                "MOTO_AI_PROXY_HEALTH_BIND_ADDR",
+                env_or("MOTO_AI_PROXY_HEALTH_BIND_ADDR", "0.0.0.0:18091"),
+            ),
+            (
+                "MOTO_AI_PROXY_KEYBOX_URL",
+                env_or("MOTO_AI_PROXY_KEYBOX_URL", "http://localhost:8090"),
+            ),
+            (
+                "MOTO_AI_PROXY_SVID_FILE",
+                env_or("MOTO_AI_PROXY_SVID_FILE", ".dev/ai-proxy/svid.jwt"),
+            ),
+            (
+                "MOTO_AI_PROXY_CLUB_URL",
+                env_or("MOTO_AI_PROXY_CLUB_URL", "http://localhost:18080"),
+            ),
+            (
+                "MOTO_AI_PROXY_KEY_CACHE_TTL_SECS",
+                env_or("MOTO_AI_PROXY_KEY_CACHE_TTL_SECS", "300"),
+            ),
+            (
+                "MOTO_AI_PROXY_GARAGE_CACHE_TTL_SECS",
+                env_or("MOTO_AI_PROXY_GARAGE_CACHE_TTL_SECS", "60"),
+            ),
+            ("RUST_LOG", env_or("RUST_LOG", "moto_ai_proxy=debug")),
+        ]
+    }
+
     /// The club database URL for running migrations.
     fn club_database_url() -> String {
         env_or(
@@ -176,6 +223,7 @@ struct DevStatusJson {
     postgres: String,
     keybox: String,
     club: String,
+    ai_proxy: String,
     image: String,
     garages: i64,
 }
@@ -187,6 +235,7 @@ struct DevUpJson {
     postgres: String,
     keybox: String,
     club: String,
+    ai_proxy: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     garage: Option<String>,
 }
@@ -209,7 +258,7 @@ pub async fn run(cmd: DevCommand, flags: &GlobalFlags) -> Result<()> {
 /// Print a step header without newline.
 fn step_print(step: u8, msg: &str, quiet: bool) {
     if !quiet {
-        print!("[{step}/9] {msg:<30}");
+        print!("[{step}/10] {msg:<30}");
         std::io::stdout().flush().ok();
     }
 }
@@ -421,6 +470,44 @@ fn run_migrations() -> Result<()> {
     Ok(())
 }
 
+/// Ensure a dev SVID exists for ai-proxy service identity.
+fn ensure_ai_proxy_svid() -> Result<String> {
+    let svid_path = std::path::Path::new(".dev/ai-proxy/svid.jwt");
+
+    if svid_path.exists() {
+        return Ok("found (.dev/ai-proxy/svid.jwt)".to_string());
+    }
+
+    std::fs::create_dir_all(".dev/ai-proxy")
+        .map_err(|e| CliError::general(format!("Failed to create .dev/ai-proxy/: {e}")))?;
+
+    let status = ProcessCommand::new("cargo")
+        .args([
+            "run",
+            "--bin",
+            "moto-keybox",
+            "--",
+            "issue-dev-svid",
+            "--signing-key",
+            ".dev/keybox/signing.key",
+            "--service-name",
+            "ai-proxy",
+            "--output",
+            ".dev/ai-proxy/svid.jwt",
+            "--force",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|e| CliError::general(format!("Failed to issue ai-proxy SVID: {e}")))?;
+
+    if !status.success() {
+        return Err(CliError::general("Failed to issue ai-proxy dev SVID"));
+    }
+
+    Ok("generated".to_string())
+}
+
 /// Spawn a cargo subprocess with environment variables.
 fn spawn_subprocess(
     bin: &str,
@@ -527,7 +614,7 @@ async fn dev_up(
     let quiet = flags.quiet;
     let verbose = flags.verbose;
 
-    // Idempotency: silently kill existing processes on club/keybox ports
+    // Idempotency: silently kill existing processes on club/keybox/ai-proxy ports
     let quiet_flags = GlobalFlags {
         quiet: true,
         ..GlobalFlags::default()
@@ -535,6 +622,11 @@ async fn dev_up(
     stop_port_process(
         extract_port(&config.club_api, "18080"),
         "club",
+        &quiet_flags,
+    );
+    stop_port_process(
+        extract_port(&config.ai_proxy_api, "18090"),
+        "ai-proxy",
         &quiet_flags,
     );
     stop_port_process(
@@ -643,10 +735,43 @@ async fn dev_up(
     }
     step_done(&format!("healthy ({})", config.club_api), quiet);
 
-    // Step 9: Garage (best effort)
+    // Step 9: ai-proxy (SVID + spawn)
+    step_print(9, "Starting ai-proxy...", quiet);
+    let svid_result = ensure_ai_proxy_svid().inspect_err(|_| {
+        if !quiet {
+            println!();
+        }
+        club.start_kill().ok();
+        keybox.start_kill().ok();
+    })?;
+    if verbose >= 2 && !quiet {
+        print!("(svid: {svid_result}) ");
+        std::io::stdout().flush().ok();
+    }
+    let mut ai_proxy = spawn_subprocess("moto-ai-proxy", &DevConfig::ai_proxy_env(), verbose)
+        .inspect_err(|_| {
+            if !quiet {
+                println!();
+            }
+            club.start_kill().ok();
+            keybox.start_kill().ok();
+        })?;
+    let ai_proxy_health_url = format!("http://{}/health/ready", config.ai_proxy_health);
+    if let Err(e) = wait_for_health(&ai_proxy_health_url, 30).await {
+        if !quiet {
+            println!();
+        }
+        ai_proxy.start_kill().ok();
+        club.start_kill().ok();
+        keybox.start_kill().ok();
+        return Err(e);
+    }
+    step_done(&format!("healthy ({})", config.ai_proxy_api), quiet);
+
+    // Step 10: Garage (best effort)
     let mut garage_name = None;
     if !no_garage {
-        step_print(9, "Opening garage...", quiet);
+        step_print(10, "Opening garage...", quiet);
         let moto_user = get_moto_user().ok();
         match create_garage(&config, moto_user.as_deref()) {
             Ok(name) => {
@@ -669,6 +794,7 @@ async fn dev_up(
             postgres: "healthy".to_string(),
             keybox: "healthy".to_string(),
             club: "healthy".to_string(),
+            ai_proxy: "healthy".to_string(),
             garage: garage_name.clone(),
         };
         println!("{}", serde_json::to_string_pretty(&json)?);
@@ -679,6 +805,7 @@ async fn dev_up(
         println!("  Postgres:  localhost:5432");
         println!("  Keybox:    {}", config.keybox_api);
         println!("  Club:      {}", config.club_api);
+        println!("  AI Proxy:  {}", config.ai_proxy_api);
         if let Some(ref name) = garage_name {
             println!("  Garage:    {name}");
         }
@@ -696,10 +823,21 @@ async fn dev_up(
                 println!();
                 println!("Shutting down...");
             }
-            keybox.start_kill().ok();
+            ai_proxy.start_kill().ok();
             club.start_kill().ok();
+            keybox.start_kill().ok();
+        }
+        status = ai_proxy.wait() => {
+            club.start_kill().ok();
+            keybox.start_kill().ok();
+            match status {
+                Ok(s) => eprintln!("ai-proxy exited unexpectedly (status: {s})"),
+                Err(e) => eprintln!("ai-proxy exited unexpectedly: {e}"),
+            }
+            return Err(CliError::general("ai-proxy exited unexpectedly"));
         }
         status = club.wait() => {
+            ai_proxy.start_kill().ok();
             keybox.start_kill().ok();
             match status {
                 Ok(s) => eprintln!("moto-club exited unexpectedly (status: {s})"),
@@ -708,6 +846,7 @@ async fn dev_up(
             return Err(CliError::general("moto-club exited unexpectedly"));
         }
         status = keybox.wait() => {
+            ai_proxy.start_kill().ok();
             club.start_kill().ok();
             match status {
                 Ok(s) => eprintln!("keybox exited unexpectedly (status: {s})"),
@@ -732,15 +871,19 @@ fn dev_down(clean: bool, flags: &GlobalFlags) -> Result<()> {
     let config = DevConfig::load();
 
     let club_port = extract_port(&config.club_api, "18080");
+    let ai_proxy_port = extract_port(&config.ai_proxy_api, "18090");
     let keybox_port = extract_port(&config.keybox_api, "8090");
 
     // Step 1: Stop club process
     stop_port_process(club_port, "club", flags);
 
-    // Step 2: Stop keybox process
+    // Step 2: Stop ai-proxy process
+    stop_port_process(ai_proxy_port, "ai-proxy", flags);
+
+    // Step 3: Stop keybox process
     stop_port_process(keybox_port, "keybox", flags);
 
-    // Step 3: Stop postgres
+    // Step 4: Stop postgres
     if !flags.quiet {
         println!("Stopping postgres...");
     }
@@ -771,7 +914,7 @@ fn dev_down(clean: bool, flags: &GlobalFlags) -> Result<()> {
         }
     }
 
-    // Step 4: With --clean, remove .dev/ directory
+    // Step 5: With --clean, remove .dev/ directory
     if clean {
         if !flags.quiet {
             println!("Removing .dev/ directory...");
@@ -938,6 +1081,8 @@ fn dev_status(flags: &GlobalFlags) -> Result<()> {
     let keybox_healthy =
         check_http_health(&format!("http://{}/health/ready", config.keybox_health));
     let club_healthy = check_http_health(&format!("http://{}/health/ready", config.club_health));
+    let ai_proxy_healthy =
+        check_http_health(&format!("http://{}/health/ready", config.ai_proxy_health));
     let image_found = check_image_in_registry(&config.registry);
     let garage_count = count_garages(&config.club_api);
 
@@ -957,6 +1102,11 @@ fn dev_status(flags: &GlobalFlags) -> Result<()> {
         "unhealthy"
     };
     let club_str = if club_healthy { "healthy" } else { "unhealthy" };
+    let ai_proxy_str = if ai_proxy_healthy {
+        "healthy"
+    } else {
+        "unhealthy"
+    };
     let image_str = if image_found { "found" } else { "not_found" };
 
     if flags.json {
@@ -966,6 +1116,7 @@ fn dev_status(flags: &GlobalFlags) -> Result<()> {
             postgres: postgres_str.to_string(),
             keybox: keybox_str.to_string(),
             club: club_str.to_string(),
+            ai_proxy: ai_proxy_str.to_string(),
             image: image_str.to_string(),
             garages: garage_count.max(0),
         };
@@ -987,6 +1138,7 @@ fn dev_status(flags: &GlobalFlags) -> Result<()> {
         println!("Postgres:  {postgres_str} (localhost:5432)");
         println!("Keybox:    {keybox_str} (localhost:8090)");
         println!("Club:      {club_str} (localhost:18080)");
+        println!("AI Proxy:  {ai_proxy_str} ({})", config.ai_proxy_api);
         println!("Image:     {image_detail}");
         println!("Garages:   {garage_detail}");
     }
@@ -996,7 +1148,8 @@ fn dev_status(flags: &GlobalFlags) -> Result<()> {
         && registry_healthy
         && postgres_healthy
         && keybox_healthy
-        && club_healthy;
+        && club_healthy
+        && ai_proxy_healthy;
 
     if !all_healthy {
         std::process::exit(1);
@@ -1024,18 +1177,21 @@ mod tests {
     #[test]
     fn test_dev_config_default_ports() {
         // Verify the hardcoded dev defaults match the spec
-        // keybox API: 8090, keybox health: 8091, club health: 8081, club API: 18080, registry: 5050
         let config = DevConfig {
             keybox_health: "localhost:8091".to_string(),
             keybox_api: "localhost:8090".to_string(),
             club_health: "localhost:8081".to_string(),
             club_api: "localhost:18080".to_string(),
+            ai_proxy_health: "localhost:18091".to_string(),
+            ai_proxy_api: "localhost:18090".to_string(),
             registry: "localhost:5050".to_string(),
         };
         assert_eq!(config.keybox_api, "localhost:8090");
         assert_eq!(config.keybox_health, "localhost:8091");
         assert_eq!(config.club_health, "localhost:8081");
         assert_eq!(config.club_api, "localhost:18080");
+        assert_eq!(config.ai_proxy_health, "localhost:18091");
+        assert_eq!(config.ai_proxy_api, "localhost:18090");
         assert_eq!(config.registry, "localhost:5050");
     }
 
@@ -1047,6 +1203,7 @@ mod tests {
             postgres: "healthy".to_string(),
             keybox: "healthy".to_string(),
             club: "healthy".to_string(),
+            ai_proxy: "healthy".to_string(),
             image: "found".to_string(),
             garages: 1,
         };
@@ -1059,6 +1216,7 @@ mod tests {
         assert_eq!(parsed["postgres"], "healthy");
         assert_eq!(parsed["keybox"], "healthy");
         assert_eq!(parsed["club"], "healthy");
+        assert_eq!(parsed["ai_proxy"], "healthy");
         assert_eq!(parsed["image"], "found");
         assert_eq!(parsed["garages"], 1);
     }
@@ -1077,11 +1235,14 @@ mod tests {
             keybox_api: "localhost:8090".to_string(),
             club_health: "localhost:8081".to_string(),
             club_api: "localhost:18080".to_string(),
+            ai_proxy_health: "localhost:18091".to_string(),
+            ai_proxy_api: "localhost:18090".to_string(),
             registry: "localhost:5050".to_string(),
         };
         assert_eq!(config.keybox_api, "localhost:8090");
         assert_eq!(extract_port(&config.keybox_api, "8090"), "8090");
         assert_eq!(extract_port(&config.club_api, "18080"), "18080");
+        assert_eq!(extract_port(&config.ai_proxy_api, "18090"), "18090");
     }
 
     #[test]
@@ -1091,6 +1252,7 @@ mod tests {
             postgres: "healthy".to_string(),
             keybox: "healthy".to_string(),
             club: "healthy".to_string(),
+            ai_proxy: "healthy".to_string(),
             garage: Some("bold-mongoose".to_string()),
         };
 
@@ -1101,6 +1263,7 @@ mod tests {
         assert_eq!(parsed["postgres"], "healthy");
         assert_eq!(parsed["keybox"], "healthy");
         assert_eq!(parsed["club"], "healthy");
+        assert_eq!(parsed["ai_proxy"], "healthy");
         assert_eq!(parsed["garage"], "bold-mongoose");
     }
 
@@ -1111,6 +1274,7 @@ mod tests {
             postgres: "healthy".to_string(),
             keybox: "healthy".to_string(),
             club: "healthy".to_string(),
+            ai_proxy: "healthy".to_string(),
             garage: None,
         };
 
@@ -1137,6 +1301,7 @@ mod tests {
             postgres: "unhealthy".to_string(),
             keybox: "unhealthy".to_string(),
             club: "unhealthy".to_string(),
+            ai_proxy: "unhealthy".to_string(),
             image: "not_found".to_string(),
             garages: 0,
         };
@@ -1146,6 +1311,7 @@ mod tests {
 
         assert_eq!(parsed["cluster"], "not_found");
         assert_eq!(parsed["registry"], "unhealthy");
+        assert_eq!(parsed["ai_proxy"], "unhealthy");
         assert_eq!(parsed["garages"], 0);
     }
 }

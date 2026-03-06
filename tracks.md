@@ -652,3 +652,5 @@ WHAT DOES NOT GO HERE:
 - Implement passthrough path allowlist (block admin/billing endpoints, return 403 for disallowed paths)
 - Use garage SVID for auth instead of predictable garage-{id} token
 - Implement error sanitization: wrap all errors in OpenAI error format, scrub API key material
+- Use SecretString (zeroize-on-drop) for cached API keys
+- Implement local dev integration: ai-proxy in moto dev up startup sequence
