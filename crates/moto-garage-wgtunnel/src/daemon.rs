@@ -435,6 +435,40 @@ impl Daemon {
                     "adding peer"
                 );
 
+                // Create a per-peer WireGuard tunnel via boringtun
+                let keepalive = Duration::from_secs(u64::from(self.config.keepalive_secs));
+                match WgPrivateKey::from_bytes(&self.private_key.as_bytes()) {
+                    Ok(private_key_copy) => {
+                        match Tunnel::with_keepalive(
+                            private_key_copy,
+                            peer_info.public_key().clone(),
+                            None,
+                            Some(keepalive),
+                        ) {
+                            Ok(tunnel) => {
+                                self.wg_tunnels.insert(key_str.clone(), tunnel);
+                                tracing::info!(
+                                    public_key = %peer_info.public_key(),
+                                    "WireGuard tunnel created for peer"
+                                );
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    public_key = %peer_info.public_key(),
+                                    error = %e,
+                                    "failed to create WireGuard tunnel for peer"
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error = %e,
+                            "failed to copy private key for tunnel creation"
+                        );
+                    }
+                }
+
                 // Add to our peer map
                 let state = PeerState::new(peer_info.public_key().clone());
                 self.peers.insert(key_str, state);
@@ -442,9 +476,6 @@ impl Daemon {
                 // Update health check
                 #[allow(clippy::cast_possible_truncation)]
                 self.health.set_active_peers(self.peers.len() as u32);
-
-                // In a real implementation, we would also configure the WireGuard tunnel
-                // to accept this peer. This is a placeholder for the tunnel integration.
             }
 
             PeerAction::Remove { public_key } => {
@@ -455,15 +486,20 @@ impl Daemon {
                     "removing peer"
                 );
 
+                // Remove the WireGuard tunnel for this peer
+                if self.wg_tunnels.remove(&key_str).is_some() {
+                    tracing::info!(
+                        public_key = %public_key,
+                        "WireGuard tunnel removed for peer"
+                    );
+                }
+
                 // Remove from our peer map
                 self.peers.remove(&key_str);
 
                 // Update health check
                 #[allow(clippy::cast_possible_truncation)]
                 self.health.set_active_peers(self.peers.len() as u32);
-
-                // In a real implementation, we would also remove the peer from
-                // the WireGuard tunnel configuration.
             }
         }
     }
@@ -488,6 +524,8 @@ impl Daemon {
                     elapsed_secs = state.last_activity.elapsed().as_secs(),
                     "removing stale peer (grace period exceeded)"
                 );
+                // Also remove the WireGuard tunnel for this peer
+                self.wg_tunnels.remove(&key);
             }
         }
 
@@ -974,6 +1012,7 @@ mod tests {
 
         assert_eq!(daemon.peer_count(), 1);
         assert_eq!(daemon.health.active_peers(), 1);
+        assert_eq!(daemon.wg_tunnels.len(), 1);
     }
 
     #[test]
@@ -987,10 +1026,12 @@ mod tests {
         // Add then remove
         daemon.handle_peer_action(PeerAction::add(peer_info));
         assert_eq!(daemon.peer_count(), 1);
+        assert_eq!(daemon.wg_tunnels.len(), 1);
 
         daemon.handle_peer_action(PeerAction::remove(peer_key));
         assert_eq!(daemon.peer_count(), 0);
         assert_eq!(daemon.health.active_peers(), 0);
+        assert_eq!(daemon.wg_tunnels.len(), 0);
     }
 
     #[test]
@@ -1006,6 +1047,7 @@ mod tests {
 
         assert_eq!(daemon.peer_count(), 5);
         assert_eq!(daemon.health.active_peers(), 5);
+        assert_eq!(daemon.wg_tunnels.len(), 5);
     }
 
     #[test]
