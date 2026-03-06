@@ -72,7 +72,5 @@ Read it in full at the start of each iteration.
 
 ## moto-club-websocket.md v0.3
 
-- Add owner-based auth (same as REST API) to log and event streaming endpoints
 - Add garage state validation for log streaming: reject Pending and Terminated, allow Initializing/Ready/Failed
-- Add connection limits: max 5 concurrent log WS connections per garage, max 3 event WS connections per user
 - Add reason field to status_change events on transitions to Terminated or Failed (values from TerminationReason enum)

@@ -586,3 +586,5 @@ WHAT DOES NOT GO HERE:
 ## moto-club-websocket.md v0.3
 
 - Add dropped message type for log backpressure: buffer up to 256 messages, drop oldest and notify client
+- Add connection limits: max 5 concurrent log WS connections per garage, max 3 event WS connections per user
+- Add owner-based auth (same as REST API) to log and event streaming endpoints
