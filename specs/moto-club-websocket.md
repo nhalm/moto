@@ -192,7 +192,7 @@ Maximum 3 concurrent event streaming WebSocket connections per user.
 - **Binary WebSocket frames** for high-throughput log streaming (future optimization)
 - **Server-Sent Events (SSE)** alternative for event streaming (simpler for HTTP-only clients)
 - **WebSocket compression** via permessage-deflate (future, when log volume warrants it)
-- **Garage daemon WS client** — the daemon has `peer_stream_url()` and `handle_peer_action()` scaffolded but `run()` is a placeholder. Connecting to the peer streaming endpoint is tracked in moto-wgtunnel.md, not here.
+- **Garage daemon WS client** — now spec'd in moto-wgtunnel.md v0.10. The daemon's `run()` connects to the peer streaming endpoint and configures WireGuard peers via the engine.
 
 ## References
 

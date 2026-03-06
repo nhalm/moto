@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.13 |
+| Version | 0.14 |
 | Status | Ripping |
-| Last Updated | 2026-03-05 |
+| Last Updated | 2026-03-06 |
 
 ## Overview
 
@@ -24,6 +24,7 @@ moto
 │   ├── enter       # Connect to garage terminal
 │   ├── extend      # Extend garage TTL
 │   ├── logs        # View garage logs
+│   ├── watch       # Watch garage events in real time
 │   ├── list        # List garages
 │   └── close       # Tear down a garage
 ├── bike
@@ -250,6 +251,56 @@ $ moto garage logs bold-mongoose -f
 ```
 
 **Exit codes:** 0 success, 1 error, 2 not found
+
+---
+
+#### `moto garage watch`
+
+Watch garage events in real time. Connects to the event streaming WebSocket (`/ws/v1/events`).
+
+```
+Usage: moto garage watch [options]
+
+Options:
+  --garages <names>   Comma-separated garage names (default: all owned)
+```
+
+**Example:**
+```
+$ moto garage watch
+Watching all garages... (Ctrl+C to stop)
+
+[bold-mongoose] Status: Pending → Initializing
+[bold-mongoose] Status: Initializing → Ready
+[quiet-falcon]  TTL warning: 15 minutes remaining (expires 2026-01-21 12:00:00)
+[quiet-falcon]  TTL warning: 5 minutes remaining (expires 2026-01-21 12:00:00)
+[quiet-falcon]  Status: Ready → Terminated (ttl_expired)
+```
+
+**Example (specific garages):**
+```
+$ moto garage watch --garages bold-mongoose
+Watching bold-mongoose... (Ctrl+C to stop)
+
+[bold-mongoose] Status: Pending → Ready
+```
+
+**JSON output (`--json`):**
+
+Events are printed one per line (JSON Lines format):
+```json
+{"type":"status_change","garage":"bold-mongoose","from":"Pending","to":"Initializing"}
+{"type":"ttl_warning","garage":"quiet-falcon","minutes_remaining":15,"expires_at":"2026-01-21T12:00:00Z"}
+{"type":"status_change","garage":"quiet-falcon","from":"Ready","to":"Terminated","reason":"ttl_expired"}
+```
+
+**Connection behavior:**
+- Uses WebSocket to moto-club (same auth as other commands)
+- On disconnect, reconnects with backoff (1s, 2s, 4s, capped at 10s)
+- On reconnect, fetches current garage state via REST before resuming WebSocket
+- Maximum 3 concurrent event connections per user (server-enforced)
+
+**Exit codes:** 0 normal exit (Ctrl+C), 1 connection error
 
 ---
 
@@ -692,6 +743,11 @@ Try: Create a bike.toml or cd to a directory containing one.
 ---
 
 ## Changelog
+
+### v0.14 (2026-03-06)
+- Add `moto garage watch` command: real-time event streaming via WebSocket (`/ws/v1/events`)
+- Supports `--garages` filter, `--json` for JSON Lines output, reconnect with backoff
+- Reference: Event types defined in [moto-club-websocket.md](moto-club-websocket.md)
 
 ### v0.13 (2026-03-05)
 - Add `moto garage extend` command to hierarchy and reference section

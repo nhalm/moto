@@ -73,3 +73,18 @@ Read it in full at the start of each iteration.
 ## moto-club-websocket.md v0.3
 
 (all items completed)
+
+## moto-wgtunnel.md v0.10
+
+- [ ] Implement daemon `run()` event loop: register with moto-club, spawn health server, init WireGuard tunnel via engine, connect to peer streaming WebSocket, loop receiving PeerEvents + Ping/Pong, graceful shutdown on SIGTERM
+- [ ] Implement WebSocket client connection in daemon: read K8s SA token from `/var/run/secrets/kubernetes.io/serviceaccount/token`, connect to `peer_stream_url()` with Bearer auth, parse incoming PeerEvent JSON messages
+- [ ] Implement reconnect logic: exponential backoff (1s, 2s, 4s, 8s, cap 30s) on WebSocket disconnect, log warning on each attempt, server re-sends full peer list on reconnect
+- [ ] Replace `handle_peer_action()` placeholders: `PeerAction::Add` calls engine to add WireGuard peer with public_key + allowed_ip; `PeerAction::Remove` calls engine to remove peer by public_key
+- [ ] Update health endpoint to reflect WebSocket connection status (`moto_club_connected`) and WireGuard tunnel status (`wireguard`)
+
+## moto-cli.md v0.14
+
+- [ ] Add `Watch` variant to `GarageAction` enum with `--garages` option (comma-separated names, optional)
+- [ ] Add `stream_events_ws()` method to `MotoClubClient`: connect to `/ws/v1/events?garages=...` WebSocket, same auth pattern as `stream_logs_ws()`, return channel of parsed GarageEvent messages
+- [ ] Implement `watch` command handler: connect via `stream_events_ws()`, format events for human output (e.g. `[garage-name] Status: From → To`), support `--json` for JSON Lines output (one event per line)
+- [ ] Implement reconnect logic in watch: backoff (1s, 2s, 4s, cap 10s), fetch current state via REST on reconnect before resuming WebSocket

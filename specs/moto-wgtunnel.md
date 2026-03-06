@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.9 |
+| Version | 0.10 |
 | Status | Ripping |
-| Last Updated | 2026-02-04 |
+| Last Updated | 2026-03-06 |
 
 ## Overview
 
@@ -627,12 +627,50 @@ Response 200:
 | moto-wgtunnel-conn | ✓ Complete | MagicConn, STUN, endpoint selection |
 | moto-wgtunnel-engine | ✓ Complete | Tunnel management, platform TUN |
 | moto-club-wg | ✓ Complete | IPAM, peers, sessions, DERP |
-| moto-garage-wgtunnel | ✓ Complete | Daemon, registration, health |
+| moto-garage-wgtunnel | Partial | Daemon scaffolded; `run()` is a placeholder (see below) |
 | moto-cli-wgtunnel | ✓ Complete | WireGuard engine, direct UDP, DERP relay, ttyd terminal all wired up |
 
-All integration tasks are complete. The tunnel system is fully functional.
+### Garage Daemon WebSocket Client (Remaining)
+
+The daemon has `peer_stream_url()` and `handle_peer_action()` scaffolded but `run()` is a placeholder. The daemon needs to:
+
+1. **Connect to peer streaming WebSocket** at `peer_stream_url()` with `Authorization: Bearer <k8s-sa-token>`
+   - Read token from `/var/run/secrets/kubernetes.io/serviceaccount/token`
+   - Convert moto-club base URL to WebSocket scheme (`http→ws`, `https→wss`)
+
+2. **Process incoming PeerEvents** — parse JSON messages from the WebSocket:
+   - `{"action": "add", "public_key": "...", "allowed_ip": "fd00:moto:2::1/128"}` → configure WireGuard peer
+   - `{"action": "remove", "public_key": "..."}` → remove WireGuard peer
+   - Use `moto-wgtunnel-engine` to actually add/remove peers on the WireGuard interface
+
+3. **Reconnect on disconnect** — if the WebSocket drops:
+   - Exponential backoff: 1s, 2s, 4s, 8s, capped at 30s
+   - On reconnect, server sends full peer list as `add` events (re-sync)
+   - Log warning on each reconnect attempt
+
+4. **Event loop in `run()`** — the complete daemon loop:
+   a. Call `register()` to register garage WireGuard endpoint with moto-club
+   b. Spawn health endpoint HTTP server (existing `health.rs`)
+   c. Initialize WireGuard tunnel via `moto-wgtunnel-engine`
+   d. Connect to peer streaming WebSocket
+   e. Loop: receive PeerEvents, configure WireGuard peers, handle Ping/Pong
+   f. On shutdown signal (SIGTERM): close WebSocket, clean up tunnel
+
+5. **Replace placeholders** in `handle_peer_action()`:
+   - `PeerAction::Add` → call engine to add peer with public_key and allowed_ip
+   - `PeerAction::Remove` → call engine to remove peer by public_key
+
+6. **Health endpoint integration** — update health state based on:
+   - WebSocket connection status (`moto_club_connected: true/false`)
+   - WireGuard tunnel status (`wireguard: "up"/"down"`)
+   - Active peer count
 
 ## Changelog
+
+### v0.10 (2026-03-06)
+- Fix: moto-garage-wgtunnel status corrected from Complete to Partial — `run()` is a placeholder, `handle_peer_action()` has stub implementations
+- Add: Garage Daemon WebSocket Client section specifying what `run()` must do: connect to peer streaming WebSocket, process PeerEvents, configure WireGuard via engine, reconnect with backoff, health integration
+- Reference: Peer streaming protocol defined in [moto-club-websocket.md](moto-club-websocket.md)
 
 ### v0.9
 - Update implementation status: moto-cli-wgtunnel is Complete (was incorrectly marked Partial)
