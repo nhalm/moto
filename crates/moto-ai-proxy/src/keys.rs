@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
@@ -91,7 +91,7 @@ impl KeyStore for KeyboxKeyStore {
             if let Some(entry) = cache.get(secret_name)
                 && entry.fetched_at.elapsed() < self.ttl
             {
-                return Some(SecretString::from(entry.key.expose_secret().to_string()));
+                return Some(entry.key.clone());
             }
         }
 
@@ -104,7 +104,7 @@ impl KeyStore for KeyboxKeyStore {
             cache.insert(
                 secret_name.to_string(),
                 CachedKey {
-                    key: SecretString::from(key.expose_secret().to_string()),
+                    key: key.clone(),
                     fetched_at: Instant::now(),
                 },
             );
@@ -127,6 +127,8 @@ pub async fn has_cached_keys(store: &impl KeyStore) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use secrecy::ExposeSecret;
+
     use super::*;
 
     /// A mock key store for testing.
@@ -152,9 +154,7 @@ mod tests {
 
     impl KeyStore for MockKeyStore {
         async fn get_key(&self, secret_name: &str) -> Option<SecretString> {
-            self.keys
-                .get(secret_name)
-                .map(|k| SecretString::from(k.expose_secret().to_string()))
+            self.keys.get(secret_name).cloned()
         }
     }
 

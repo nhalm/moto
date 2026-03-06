@@ -6,7 +6,7 @@ use axum::body::Body;
 use axum::http::{HeaderMap, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use futures_util::StreamExt;
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use tokio_stream::wrappers::ReceiverStream;
 use tower::ServiceExt;
 
@@ -38,9 +38,7 @@ impl MockKeyStore {
 
 impl KeyStore for MockKeyStore {
     async fn get_key(&self, secret_name: &str) -> Option<SecretString> {
-        self.keys
-            .get(secret_name)
-            .map(|k| SecretString::from(k.expose_secret().to_string()))
+        self.keys.get(secret_name).cloned()
     }
 }
 
@@ -292,9 +290,7 @@ impl MultiKeyStore {
 
 impl KeyStore for MultiKeyStore {
     async fn get_key(&self, secret_name: &str) -> Option<SecretString> {
-        self.keys
-            .get(secret_name)
-            .map(|k| SecretString::from(k.expose_secret().to_string()))
+        self.keys.get(secret_name).cloned()
     }
 }
 
