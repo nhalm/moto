@@ -182,6 +182,29 @@ pub async fn list_by_status(pool: &DbPool, status: GarageStatus) -> DbResult<Vec
     Ok(garages)
 }
 
+/// List garages expiring within the given number of minutes.
+///
+/// Returns non-terminated garages where `expires_at` is between now and
+/// `now + minutes`. Used by TTL warning events.
+///
+/// # Errors
+///
+/// Returns a database error if the query fails.
+pub async fn list_expiring_within(pool: &DbPool, minutes: i32) -> DbResult<Vec<Garage>> {
+    let now = Utc::now();
+    let threshold = now + Duration::minutes(i64::from(minutes));
+    let garages = sqlx::query_as::<_, Garage>(
+        "SELECT * FROM garages WHERE expires_at > $1 AND expires_at <= $2 AND status != $3 ORDER BY expires_at ASC",
+    )
+    .bind(now)
+    .bind(threshold)
+    .bind(GarageStatus::Terminated)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(garages)
+}
+
 /// List garages that have expired but are not yet terminated.
 ///
 /// Returns garages where `expires_at < now` and `status != terminated`.

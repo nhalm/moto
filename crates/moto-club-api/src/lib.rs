@@ -115,6 +115,13 @@ impl AppState {
         }
     }
 
+    /// Sets the event broadcaster (shared with the reconciler for TTL warnings).
+    #[must_use]
+    pub fn with_event_broadcaster(mut self, event_broadcaster: Arc<EventBroadcaster>) -> Self {
+        self.event_broadcaster = event_broadcaster;
+        self
+    }
+
     /// Creates a new `AppState` with a K8s client for token validation.
     #[must_use]
     pub fn with_k8s_client(mut self, k8s_client: K8sClient) -> Self {

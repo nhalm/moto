@@ -2075,6 +2075,7 @@ dependencies = [
  "moto-club-k8s",
  "moto-club-reconcile",
  "moto-club-wg",
+ "moto-club-ws",
  "moto-k8s",
  "tokio",
  "tracing",
@@ -2170,9 +2171,11 @@ dependencies = [
 name = "moto-club-reconcile"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "moto-club-db",
  "moto-club-k8s",
  "moto-club-types",
+ "moto-club-ws",
  "moto-k8s",
  "thiserror 2.0.18",
  "tokio",

@@ -49,6 +49,7 @@ use moto_club_wg::{
     DERP_SERVERS_ENV_VAR, Ipam, PeerBroadcaster, PeerRegistry, SessionManager,
     parse_derp_servers_env,
 };
+use moto_club_ws::EventBroadcaster;
 use moto_k8s::K8sClient;
 
 /// Default bind address for main API.
@@ -273,10 +274,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "kubernetes client initialized"
     );
 
+    // Create event broadcaster (shared between reconciler and API)
+    let event_broadcaster = Arc::new(EventBroadcaster::new());
+
     // Create and start reconciler in background
     let reconcile_interval = config.reconcile_interval;
     let reconcile_config = ReconcileConfig::default().with_interval(reconcile_interval);
-    let reconciler = GarageReconciler::new(db_pool.clone(), garage_k8s.clone(), reconcile_config);
+    let reconciler = GarageReconciler::new(db_pool.clone(), garage_k8s.clone(), reconcile_config)
+        .with_event_broadcaster(Arc::clone(&event_broadcaster));
 
     tokio::spawn(async move {
         info!(
@@ -324,6 +329,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         derp_map,
         peer_broadcaster,
     )
+    .with_event_broadcaster(event_broadcaster)
     .with_k8s_client(k8s_client)
     .with_garage_k8s(api_garage_k8s)
     .with_garage_service(garage_service);

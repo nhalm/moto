@@ -4,8 +4,10 @@
 //! K8s is the source of truth.
 
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use chrono::Utc;
 use thiserror::Error;
 use tokio::time::interval;
 use tracing::{debug, error, info, instrument, warn};
@@ -16,7 +18,11 @@ use moto_club_k8s::{
     GarageK8s, GarageNamespaceOps, GaragePodOps, GaragePodStatus, GaragePostgresOps, GarageRedisOps,
 };
 use moto_club_types::GarageId;
+use moto_club_ws::events::{EventBroadcaster, GarageEvent};
 use moto_k8s::Labels;
+
+/// TTL warning thresholds in minutes (15 and 5 minutes before expiry).
+const TTL_WARNING_THRESHOLDS: &[u32] = &[15, 5];
 
 /// Configuration for the reconciliation loop.
 #[derive(Debug, Clone)]
@@ -67,6 +73,8 @@ pub struct ReconcileStats {
     pub orphans_deleted: usize,
     /// Number of garages terminated due to TTL expiry.
     pub ttl_expired: usize,
+    /// Number of TTL warning events emitted.
+    pub ttl_warnings: usize,
     /// Number of errors encountered.
     pub errors: usize,
 }
@@ -91,13 +99,29 @@ pub struct GarageReconciler {
     db: DbPool,
     k8s: GarageK8s,
     config: ReconcileConfig,
+    event_broadcaster: Option<Arc<EventBroadcaster>>,
+    /// Tracks (`garage_id`, `threshold_minutes`) pairs for which warnings have been sent.
+    ttl_warnings_sent: Arc<Mutex<HashSet<(Uuid, u32)>>>,
 }
 
 impl GarageReconciler {
     /// Creates a new reconciler.
     #[must_use]
-    pub const fn new(db: DbPool, k8s: GarageK8s, config: ReconcileConfig) -> Self {
-        Self { db, k8s, config }
+    pub fn new(db: DbPool, k8s: GarageK8s, config: ReconcileConfig) -> Self {
+        Self {
+            db,
+            k8s,
+            config,
+            event_broadcaster: None,
+            ttl_warnings_sent: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+
+    /// Sets the event broadcaster for emitting TTL warning events.
+    #[must_use]
+    pub fn with_event_broadcaster(mut self, broadcaster: Arc<EventBroadcaster>) -> Self {
+        self.event_broadcaster = Some(broadcaster);
+        self
     }
 
     /// Runs the reconciliation loop continuously.
@@ -115,12 +139,14 @@ impl GarageReconciler {
                         || stats.terminated > 0
                         || stats.orphans > 0
                         || stats.ttl_expired > 0
+                        || stats.ttl_warnings > 0
                     {
                         info!(
                             checked = stats.checked,
                             updated = stats.updated,
                             terminated = stats.terminated,
                             ttl_expired = stats.ttl_expired,
+                            ttl_warnings = stats.ttl_warnings,
                             orphans = stats.orphans,
                             orphans_deleted = stats.orphans_deleted,
                             "reconciliation complete"
@@ -254,7 +280,10 @@ impl GarageReconciler {
             }
         }
 
-        // Step 5: TTL enforcement — terminate expired garages and delete namespaces
+        // Step 5: Emit TTL warning events for garages approaching expiry
+        self.emit_ttl_warnings(&mut stats).await;
+
+        // Step 6: TTL enforcement — terminate expired garages and delete namespaces
         self.enforce_ttl(&mut stats).await;
 
         Ok(stats)
@@ -500,6 +529,63 @@ impl GarageReconciler {
     }
 }
 
+impl GarageReconciler {
+    /// Emits TTL warning events for garages approaching expiry.
+    ///
+    /// Checks for garages expiring within 15 and 5 minutes. Each (garage, threshold)
+    /// pair is only warned once — tracked via `ttl_warnings_sent`.
+    async fn emit_ttl_warnings(&self, stats: &mut ReconcileStats) {
+        let Some(ref broadcaster) = self.event_broadcaster else {
+            return;
+        };
+
+        // Query garages expiring within the largest threshold (15 minutes)
+        let max_threshold = TTL_WARNING_THRESHOLDS.iter().copied().max().unwrap_or(15);
+        let garages =
+            match garage_repo::list_expiring_within(&self.db, max_threshold.cast_signed()).await {
+                Ok(g) => g,
+                Err(e) => {
+                    warn!(error = %e, "failed to list garages for TTL warnings");
+                    stats.errors += 1;
+                    return;
+                }
+            };
+
+        let now = Utc::now();
+        let mut sent = self.ttl_warnings_sent.lock().unwrap();
+
+        for garage in &garages {
+            let remaining = garage.expires_at.signed_duration_since(now);
+            let remaining_minutes = u32::try_from(remaining.num_minutes().max(0)).unwrap_or(0);
+
+            for &threshold in TTL_WARNING_THRESHOLDS {
+                if remaining_minutes < threshold && !sent.contains(&(garage.id, threshold)) {
+                    let event = GarageEvent::TtlWarning {
+                        garage: garage.name.clone(),
+                        minutes_remaining: remaining_minutes,
+                        expires_at: garage.expires_at.to_rfc3339(),
+                    };
+
+                    broadcaster.broadcast(&garage.owner, event);
+                    sent.insert((garage.id, threshold));
+                    stats.ttl_warnings += 1;
+
+                    info!(
+                        garage_name = %garage.name,
+                        minutes_remaining = remaining_minutes,
+                        threshold = threshold,
+                        "emitted TTL warning event"
+                    );
+                }
+            }
+        }
+
+        // Clean up entries for garages that have been terminated (no longer in the expiring list)
+        let active_ids: HashSet<Uuid> = garages.iter().map(|g| g.id).collect();
+        sent.retain(|(id, _)| active_ids.contains(id));
+    }
+}
+
 /// Determines if a status update should be applied.
 ///
 /// We avoid some transitions that don't make sense:
@@ -552,6 +638,7 @@ mod tests {
         assert_eq!(stats.orphans, 0);
         assert_eq!(stats.orphans_deleted, 0);
         assert_eq!(stats.ttl_expired, 0);
+        assert_eq!(stats.ttl_warnings, 0);
         assert_eq!(stats.errors, 0);
     }
 

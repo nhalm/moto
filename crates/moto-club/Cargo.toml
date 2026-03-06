@@ -41,6 +41,7 @@ moto-club-k8s = { workspace = true }
 moto-club-garage = { workspace = true }
 moto-club-reconcile = { workspace = true }
 moto-club-wg = { workspace = true }
+moto-club-ws = { workspace = true }
 moto-k8s = { workspace = true }
 
 [lints]
