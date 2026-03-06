@@ -91,7 +91,6 @@ Read it in full at the start of each iteration.
 - Add bike engine deployment config (bike.toml, K8s Deployment/Service/ServiceAccount in moto-system)
 - Add configuration parsing for all MOTO_AI_PROXY_* env vars
 - Add request timeouts (connect 10s, first byte 30s, idle 120s, total 600s)
-- Add request size limit (10 MB max request body)
 - Add structured canonical logging with request_id, garage_id, provider, duration_ms
 
 ## ai-proxy.md v0.3

@@ -615,3 +615,4 @@ WHAT DOES NOT GO HERE:
 - Add health endpoints (/health/live, /health/ready, /health/startup)
 - Implement path-based provider routing (Anthropic, OpenAI, Gemini upstreams)
 - Implement keybox secret injection via SVID authentication (spiffe://moto.local/service/ai-proxy)
+- Add request size limit (10 MB max request body)
