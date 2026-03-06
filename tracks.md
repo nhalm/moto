@@ -559,3 +559,11 @@ WHAT DOES NOT GO HERE:
 ## service-deploy.md bug-fix (2)
 
 - Fix `scripts/generate-manifests.sh` single-quoted heredocs (`<< 'YAML'`) so `parse_toml` values are actually interpolated — replicas, resources now read from bike.toml. Added `parse_toml_section()` for TOML section-aware parsing. Fixed macOS sed compatibility.
+
+## moto-cron.md v0.2
+
+- Add TTL enforcement step to reconciler's reconcile_once(): call list_expired(limit 10), terminate each, delete K8s namespace
+- Process expired garages oldest-first (ORDER BY expires_at ASC), at most 10 per cycle
+- Log each termination: garage_id, garage_name, reason=ttl_expired
+- On namespace deletion failure after DB termination, log warning and continue (orphan cleanup catches it next cycle)
+- Continue to next expired garage on individual failure (don't fail the batch)

@@ -65,6 +65,8 @@ pub struct ReconcileStats {
     pub orphans: usize,
     /// Number of orphan namespaces deleted.
     pub orphans_deleted: usize,
+    /// Number of garages terminated due to TTL expiry.
+    pub ttl_expired: usize,
     /// Number of errors encountered.
     pub errors: usize,
 }
@@ -109,11 +111,16 @@ impl GarageReconciler {
 
             match self.reconcile_once().await {
                 Ok(stats) => {
-                    if stats.updated > 0 || stats.terminated > 0 || stats.orphans > 0 {
+                    if stats.updated > 0
+                        || stats.terminated > 0
+                        || stats.orphans > 0
+                        || stats.ttl_expired > 0
+                    {
                         info!(
                             checked = stats.checked,
                             updated = stats.updated,
                             terminated = stats.terminated,
+                            ttl_expired = stats.ttl_expired,
                             orphans = stats.orphans,
                             orphans_deleted = stats.orphans_deleted,
                             "reconciliation complete"
@@ -246,6 +253,9 @@ impl GarageReconciler {
                 }
             }
         }
+
+        // Step 5: TTL enforcement — terminate expired garages and delete namespaces
+        self.enforce_ttl(&mut stats).await;
 
         Ok(stats)
     }
@@ -434,6 +444,62 @@ impl GarageReconciler {
     }
 }
 
+impl GarageReconciler {
+    /// Enforces TTL on expired garages.
+    ///
+    /// Lists expired garages (oldest-first), terminates each in the DB,
+    /// then deletes the K8s namespace. Processes at most 10 per cycle.
+    async fn enforce_ttl(&self, stats: &mut ReconcileStats) {
+        let expired = match garage_repo::list_expired(&self.db).await {
+            Ok(garages) => garages,
+            Err(e) => {
+                warn!(error = %e, "failed to list expired garages for TTL enforcement");
+                stats.errors += 1;
+                return;
+            }
+        };
+
+        // Rate limit: at most 10 per cycle
+        for garage in expired.into_iter().take(10) {
+            let id_str = garage.id.to_string();
+            let garage_id = GarageId::from_uuid(garage.id);
+
+            // Terminate in DB
+            match garage_repo::terminate(&self.db, garage.id, TerminationReason::TtlExpired).await {
+                Ok(_) => {
+                    info!(
+                        garage_id = %id_str,
+                        garage_name = %garage.name,
+                        reason = "ttl_expired",
+                        "garage expired, terminated"
+                    );
+                    stats.ttl_expired += 1;
+                }
+                Err(e) => {
+                    warn!(
+                        garage_id = %id_str,
+                        garage_name = %garage.name,
+                        error = %e,
+                        "failed to terminate expired garage"
+                    );
+                    stats.errors += 1;
+                    continue;
+                }
+            }
+
+            // Delete K8s namespace (best-effort after DB termination)
+            if let Err(e) = self.k8s.delete_garage_namespace(&garage_id).await {
+                warn!(
+                    garage_id = %id_str,
+                    garage_name = %garage.name,
+                    error = %e,
+                    "failed to delete namespace for expired garage, orphan cleanup will retry"
+                );
+            }
+        }
+    }
+}
+
 /// Determines if a status update should be applied.
 ///
 /// We avoid some transitions that don't make sense:
@@ -485,6 +551,7 @@ mod tests {
         assert_eq!(stats.terminated, 0);
         assert_eq!(stats.orphans, 0);
         assert_eq!(stats.orphans_deleted, 0);
+        assert_eq!(stats.ttl_expired, 0);
         assert_eq!(stats.errors, 0);
     }
 

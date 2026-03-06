@@ -15,7 +15,7 @@
 //! 3. For each non-terminated garage in DB:
 //!    - If no matching K8s namespace: mark as Terminated with reason `namespace_missing`
 //!
-//! **Note:** TTL enforcement is NOT done here. That's handled by moto-cron.
+//! 4. TTL enforcement: list expired garages, terminate in DB, delete K8s namespace
 //!
 //! # Example
 //!
