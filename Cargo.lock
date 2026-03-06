@@ -2020,7 +2020,9 @@ name = "moto-ai-proxy"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "moto-keybox-client",
  "reqwest",
+ "secrecy",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

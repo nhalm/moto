@@ -15,6 +15,8 @@
 //! - `MOTO_AI_PROXY_GARAGE_CACHE_TTL_SECS`: Garage validation cache duration (default: `60`)
 //! - `MOTO_AI_PROXY_MODEL_MAP`: Custom model prefix → provider mappings (JSON)
 
+use std::time::Duration;
+
 use tokio::net::TcpListener;
 use tokio::signal;
 use tracing::{error, info};
@@ -22,7 +24,10 @@ use tracing_subscriber::EnvFilter;
 
 use moto_ai_proxy::config::Config;
 use moto_ai_proxy::health;
+use moto_ai_proxy::keys::KeyboxKeyStore;
 use moto_ai_proxy::proxy;
+
+use moto_keybox_client::{KeyboxClient, KeyboxConfig, SvidCache};
 
 #[tokio::main]
 async fn main() {
@@ -67,16 +72,31 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Mark startup complete — SVID loading and key fetch will gate this in later work items
+    // Initialize keybox client with SVID for ai-proxy service identity.
+    let svid_file = config.svid_file.to_string_lossy().to_string();
+    let svid_cache = SvidCache::from_file(&svid_file).await.unwrap_or_else(|e| {
+        info!(error = %e, svid_file = %svid_file, "SVID file not available, using empty cache (will retry on first request)");
+        SvidCache::new()
+    });
+
+    let keybox_config = KeyboxConfig::new(&config.keybox_url);
+    let keybox_client = KeyboxClient::new(keybox_config, svid_cache)?;
+
+    let key_store = KeyboxKeyStore::new(
+        keybox_client,
+        Duration::from_secs(config.key_cache_ttl_secs),
+    );
+
+    // Mark startup complete — SVID is loaded (or will be retried on first request).
     health::mark_startup_complete();
 
     // Build HTTP client for upstream requests
     let client = reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
+        .connect_timeout(Duration::from_secs(10))
         .build()?;
 
-    // Build proxy router with passthrough routes
-    let app = proxy::proxy_router(client);
+    // Build proxy router with passthrough routes and key injection
+    let app = proxy::proxy_router(client, key_store);
 
     let listener = TcpListener::bind(config.bind_addr).await?;
     info!(addr = %config.bind_addr, "moto-ai-proxy listening");

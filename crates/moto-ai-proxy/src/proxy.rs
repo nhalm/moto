@@ -1,25 +1,38 @@
 //! Core proxy logic — forwards requests to upstream AI providers.
 
+use std::sync::Arc;
+
 use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use reqwest::Client;
+use secrecy::ExposeSecret;
 
+use crate::keys::KeyStore;
 use crate::provider::Provider;
 
 /// Shared state for proxy handlers.
-#[derive(Clone)]
-pub struct ProxyState {
+pub struct ProxyState<K: KeyStore + 'static> {
     /// HTTP client for upstream requests.
     pub client: Client,
+    /// Key store for fetching provider API keys.
+    pub key_store: Arc<K>,
 }
 
-/// Forwards a request to the given provider's upstream, rewriting the path.
-///
-/// `remaining_path` is the path after the `/passthrough/{provider}/` prefix.
-/// Auth injection is not handled here — it will be added in the keybox integration work item.
-pub async fn forward_to_provider(
+impl<K: KeyStore + 'static> Clone for ProxyState<K> {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            key_store: Arc::clone(&self.key_store),
+        }
+    }
+}
+
+/// Forwards a request to the given provider's upstream, rewriting the path
+/// and injecting the real API key from keybox.
+#[allow(clippy::too_many_arguments)]
+pub async fn forward_to_provider<K: KeyStore>(
     provider: Provider,
     method: Method,
     remaining_path: &str,
@@ -27,7 +40,17 @@ pub async fn forward_to_provider(
     headers: &HeaderMap,
     body: Body,
     client: &Client,
+    key_store: &K,
 ) -> Response {
+    // Fetch the API key for this provider.
+    let Some(api_key) = key_store.get_key(provider).await else {
+        return error_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            &format!("provider not configured: {provider}"),
+            "server_error",
+        );
+    };
+
     let base = provider.upstream_base();
     let mut upstream_url = format!("{base}{remaining_path}");
     if let Some(q) = query {
@@ -38,6 +61,12 @@ pub async fn forward_to_provider(
     // Build the upstream request, forwarding Content-Type and Accept headers.
     let mut req = client.request(reqwest_method(&method), &upstream_url);
 
+    // Inject the real API key using the provider-specific auth header.
+    req = req.header(
+        provider.auth_header(),
+        provider.auth_value(api_key.expose_secret()),
+    );
+
     if let Some(ct) = headers.get("content-type")
         && let Ok(v) = ct.to_str()
     {
@@ -47,6 +76,14 @@ pub async fn forward_to_provider(
         && let Ok(v) = accept.to_str()
     {
         req = req.header("accept", v);
+    }
+
+    // Forward anthropic-version header for Anthropic passthrough.
+    if provider == Provider::Anthropic
+        && let Some(av) = headers.get("anthropic-version")
+        && let Ok(v) = av.to_str()
+    {
+        req = req.header("anthropic-version", v);
     }
 
     // Stream the body through via reqwest's body wrapper.
@@ -88,8 +125,8 @@ pub async fn forward_to_provider(
 }
 
 /// Handler for `/passthrough/anthropic/*path`.
-pub async fn passthrough_anthropic(
-    State(state): State<ProxyState>,
+pub async fn passthrough_anthropic<K: KeyStore>(
+    State(state): State<ProxyState<K>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
@@ -104,13 +141,14 @@ pub async fn passthrough_anthropic(
         &headers,
         body,
         &state.client,
+        state.key_store.as_ref(),
     )
     .await
 }
 
 /// Handler for `/passthrough/openai/*path`.
-pub async fn passthrough_openai(
-    State(state): State<ProxyState>,
+pub async fn passthrough_openai<K: KeyStore>(
+    State(state): State<ProxyState<K>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
@@ -125,13 +163,14 @@ pub async fn passthrough_openai(
         &headers,
         body,
         &state.client,
+        state.key_store.as_ref(),
     )
     .await
 }
 
 /// Handler for `/passthrough/gemini/*path`.
-pub async fn passthrough_gemini(
-    State(state): State<ProxyState>,
+pub async fn passthrough_gemini<K: KeyStore>(
+    State(state): State<ProxyState<K>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
@@ -146,25 +185,29 @@ pub async fn passthrough_gemini(
         &headers,
         body,
         &state.client,
+        state.key_store.as_ref(),
     )
     .await
 }
 
 /// Builds the proxy router with passthrough routes.
-pub fn proxy_router(client: Client) -> axum::Router {
-    let state = ProxyState { client };
+pub fn proxy_router<K: KeyStore + 'static>(client: Client, key_store: K) -> axum::Router {
+    let state = ProxyState {
+        client,
+        key_store: Arc::new(key_store),
+    };
     axum::Router::new()
         .route(
             "/passthrough/anthropic/{*path}",
-            axum::routing::any(passthrough_anthropic),
+            axum::routing::any(passthrough_anthropic::<K>),
         )
         .route(
             "/passthrough/openai/{*path}",
-            axum::routing::any(passthrough_openai),
+            axum::routing::any(passthrough_openai::<K>),
         )
         .route(
             "/passthrough/gemini/{*path}",
-            axum::routing::any(passthrough_gemini),
+            axum::routing::any(passthrough_gemini::<K>),
         )
         .with_state(state)
 }
