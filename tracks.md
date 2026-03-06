@@ -614,3 +614,4 @@ WHAT DOES NOT GO HERE:
 - Create moto-ai-proxy crate with binary entrypoint and config loading
 - Add health endpoints (/health/live, /health/ready, /health/startup)
 - Implement path-based provider routing (Anthropic, OpenAI, Gemini upstreams)
+- Implement keybox secret injection via SVID authentication (spiffe://moto.local/service/ai-proxy)
