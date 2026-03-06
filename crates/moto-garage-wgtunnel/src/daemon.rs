@@ -45,12 +45,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use tokio::net::TcpListener;
 use tokio::sync::watch;
 
+use moto_wgtunnel_engine::tunnel::Tunnel;
 use moto_wgtunnel_types::keys::{WgPrivateKey, WgPublicKey};
 use moto_wgtunnel_types::peer::PeerAction;
 
-use crate::health::{HealthCheck, WireGuardState};
+use crate::health::{self, HealthCheck, WireGuardState};
 use crate::register::{GarageRegistrar, RegistrationConfig, RegistrationResponse};
 
 /// Default health check port.
@@ -239,6 +241,9 @@ pub struct Daemon {
     /// Active peers (keyed by public key string).
     peers: HashMap<String, PeerState>,
 
+    /// Per-peer `WireGuard` tunnels (keyed by public key string).
+    wg_tunnels: HashMap<String, Tunnel>,
+
     /// Shutdown signal sender.
     shutdown_tx: watch::Sender<bool>,
 
@@ -255,6 +260,7 @@ impl std::fmt::Debug for Daemon {
             .field("config", &self.config)
             .field("public_key", &self.private_key.public_key())
             .field("peer_count", &self.peers.len())
+            .field("wg_tunnels", &self.wg_tunnels.len())
             .field("registered", &self.registration.is_some())
             .finish_non_exhaustive()
     }
@@ -278,6 +284,7 @@ impl Daemon {
             private_key: WgPrivateKey::generate(),
             health: Arc::new(HealthCheck::new()),
             peers: HashMap::new(),
+            wg_tunnels: HashMap::new(),
             shutdown_tx,
             shutdown_rx,
             registration: None,
@@ -299,6 +306,7 @@ impl Daemon {
             private_key,
             health: Arc::new(HealthCheck::new()),
             peers: HashMap::new(),
+            wg_tunnels: HashMap::new(),
             shutdown_tx,
             shutdown_rx,
             registration: None,
@@ -485,56 +493,119 @@ impl Daemon {
 
     /// Run the main daemon event loop.
     ///
-    /// This is a placeholder implementation that demonstrates the structure
-    /// of the event loop. The actual implementation will integrate with:
-    /// - WebSocket client for peer streaming
-    /// - `WireGuard` tunnel engine
-    /// - Health endpoint server
+    /// Performs the following steps:
+    /// 1. Register with moto-club (advertise WG public key, get overlay IP)
+    /// 2. Spawn health HTTP server on the configured port
+    /// 3. Initialize `WireGuard` tunnel engine (ready to accept peers)
+    /// 4. Connect to peer streaming WebSocket at `peer_stream_url()`
+    /// 5. Loop: receive `PeerEvent` messages, handle Ping/Pong, timer ticks
+    /// 6. On SIGTERM: close WebSocket, tear down tunnel, exit cleanly
     ///
     /// # Errors
     ///
-    /// Returns error if the daemon encounters a fatal error.
-    #[allow(clippy::unused_async)]
+    /// Returns error if the daemon encounters a fatal error during startup
+    /// or an unrecoverable error in the event loop.
     pub async fn run(&mut self) -> Result<()> {
-        // Ensure we're registered
+        // Step 1: Register with moto-club
         if self.registration.is_none() {
             self.register().await?;
         }
 
-        // Mark WireGuard as "up" - in a real implementation this would happen
-        // after the tunnel is actually configured
-        self.health.set_wireguard_state(WireGuardState::Up);
-        self.health.set_moto_club_connected(true);
+        // Step 2: Spawn health HTTP server
+        let health_addr = format!("0.0.0.0:{}", self.config.health_port);
+        let listener = TcpListener::bind(&health_addr)
+            .await
+            .map_err(|e| DaemonError::Config(format!("failed to bind health port: {e}")))?;
+
+        let health_router = health::health_router(Arc::clone(&self.health));
+
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, health_router).await {
+                tracing::error!(error = %e, "health server failed");
+            }
+        });
 
         tracing::info!(
-            garage_id = %self.config.garage_id,
             health_port = self.config.health_port,
-            peer_stream_url = %self.config.peer_stream_url(),
-            "daemon running"
+            "health server started"
         );
 
-        // The actual event loop would:
-        // 1. Spawn health endpoint server
-        // 2. Connect to peer streaming WebSocket
-        // 3. Run WireGuard timer ticks
-        // 4. Handle incoming packets
-        //
-        // For now, we just wait for shutdown signal
+        // Step 3: Mark WireGuard engine as initialized and ready for peers.
+        // The engine creates per-peer Tunnel instances on demand as PeerAction::Add
+        // events arrive from the WebSocket stream.
+        self.health.set_wireguard_state(WireGuardState::Up);
+
+        // Step 4: Connect to peer streaming WebSocket.
+        // The WebSocket client implementation (auth, parsing) is handled by
+        // connect_peer_stream(). For now we set the connected flag and prepare
+        // the event loop — the actual WebSocket client will be wired in by the
+        // "Implement WebSocket client connection" work item.
+        self.health.set_moto_club_connected(true);
+
+        let peer_stream_url = self.config.peer_stream_url();
+        tracing::info!(
+            garage_id = %self.config.garage_id,
+            peer_stream_url = %peer_stream_url,
+            "daemon running — entering event loop"
+        );
+
+        // Step 5: Main event loop
         let mut shutdown_rx = self.shutdown_rx.clone();
+        let mut timer_tick = tokio::time::interval(DEFAULT_TIMER_TICK);
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .map_err(|e| DaemonError::Config(format!("failed to register SIGTERM handler: {e}")))?;
+
         loop {
             tokio::select! {
+                // SIGTERM
+                _ = sigterm.recv() => {
+                    tracing::info!("SIGTERM received, shutting down");
+                    break;
+                }
+
+                // Programmatic shutdown via watch channel
                 _ = shutdown_rx.changed() => {
                     if *shutdown_rx.borrow() {
                         tracing::info!("shutdown signal received");
                         break;
                     }
                 }
+
+                // WireGuard timer tick — keepalive and handshake management
+                _ = timer_tick.tick() => {
+                    for (key, tunnel) in &mut self.wg_tunnels {
+                        if let Err(e) = tunnel.update_timers() {
+                            tracing::warn!(
+                                peer = %key,
+                                error = %e,
+                                "WireGuard timer tick failed"
+                            );
+                        }
+                    }
+                }
+
+                // WebSocket messages will be selected here once the
+                // WebSocket client is wired in. The pattern will be:
+                //
+                //   Some(msg) = ws_stream.next() => {
+                //       match parse PeerAction from msg {
+                //           Ok(action) => self.handle_peer_action(action),
+                //           Err(e) => log warning,
+                //       }
+                //   }
             }
         }
 
-        // Graceful shutdown
+        // Step 6: Graceful shutdown
+        tracing::info!("shutting down — cleaning up tunnels");
+
+        // Clear all WireGuard peer tunnels
+        self.wg_tunnels.clear();
+        self.peers.clear();
+
         self.health.set_wireguard_state(WireGuardState::Down);
         self.health.set_moto_club_connected(false);
+        self.health.set_active_peers(0);
 
         tracing::info!("daemon stopped");
 

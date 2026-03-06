@@ -38,8 +38,10 @@
 //! # }
 //! ```
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use serde::{Deserialize, Serialize};
 
 /// `WireGuard` tunnel state.
@@ -300,6 +302,23 @@ impl HealthCheck {
     pub fn is_healthy(&self) -> bool {
         self.wireguard_state().is_up() && self.moto_club_connected()
     }
+}
+
+/// Health endpoint handler: `GET /health`.
+async fn health_handler(State(health): State<Arc<HealthCheck>>) -> impl IntoResponse {
+    let status = health.status();
+    let code = status.http_status_code();
+    (
+        StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+        Json(status),
+    )
+}
+
+/// Create an axum [`Router`] serving the health endpoint.
+pub fn health_router(health: Arc<HealthCheck>) -> Router {
+    Router::new()
+        .route("/health", get(health_handler))
+        .with_state(health)
 }
 
 #[cfg(test)]

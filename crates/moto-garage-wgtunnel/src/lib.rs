@@ -33,5 +33,5 @@ pub mod health;
 pub mod register;
 
 pub use daemon::{Daemon, DaemonConfig, DaemonError, PeerState};
-pub use health::{HealthCheck, HealthStatus, OverallStatus, WireGuardState};
+pub use health::{HealthCheck, HealthStatus, OverallStatus, WireGuardState, health_router};
 pub use register::{GarageRegistrar, RegistrationConfig, RegistrationError, RegistrationResponse};
