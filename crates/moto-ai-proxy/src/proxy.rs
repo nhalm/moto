@@ -207,10 +207,15 @@ pub async fn forward_to_provider<K: KeyStore>(
     }
 }
 
-/// Injects `X-Moto-Request-Id` response header for correlation/debugging.
-fn inject_moto_headers(response: &mut Response, request_id: &Uuid) {
+/// Injects `X-Moto-Request-Id` and `X-Moto-Provider` response headers.
+fn inject_moto_headers(response: &mut Response, request_id: &Uuid, provider: Option<&str>) {
     if let Ok(val) = HeaderValue::from_str(&request_id.to_string()) {
         response.headers_mut().insert("x-moto-request-id", val);
+    }
+    if let Some(name) = provider
+        && let Ok(val) = HeaderValue::from_str(name)
+    {
+        response.headers_mut().insert("x-moto-provider", val);
     }
 }
 
@@ -247,7 +252,7 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
                 "request completed"
             );
             let mut resp = resp;
-            inject_moto_headers(&mut resp, &request_id);
+            inject_moto_headers(&mut resp, &request_id, Some(&info.name));
             return resp;
         }
     };
@@ -280,7 +285,7 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
     );
 
     let mut resp = result.response;
-    inject_moto_headers(&mut resp, &request_id);
+    inject_moto_headers(&mut resp, &request_id, Some(&info.name));
     resp
 }
 
@@ -442,7 +447,7 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
                 &start,
             );
             let mut resp = resp;
-            inject_moto_headers(&mut resp, &request_id);
+            inject_moto_headers(&mut resp, &request_id, None);
             return resp;
         }
     };
@@ -462,7 +467,7 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
                 &start,
             );
             let mut resp = *resp;
-            inject_moto_headers(&mut resp, &request_id);
+            inject_moto_headers(&mut resp, &request_id, None);
             return resp;
         }
     };
@@ -471,6 +476,7 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
     let model = resolved.model;
     let is_streaming = resolved.is_streaming;
     let upstream_path = info.chat_path.clone();
+    let provider_name = info.name.clone();
 
     // Forward the body to the upstream provider.
     let result = forward_to_provider(
@@ -509,7 +515,7 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
         result.response
     };
 
-    inject_moto_headers(&mut resp, &request_id);
+    inject_moto_headers(&mut resp, &request_id, Some(&provider_name));
     resp
 }
 
@@ -747,7 +753,7 @@ pub async fn list_models<K: KeyStore, G: GarageValidator>(
                 &start,
             );
             let mut resp = resp;
-            inject_moto_headers(&mut resp, &request_id);
+            inject_moto_headers(&mut resp, &request_id, None);
             return resp;
         }
     };
@@ -791,7 +797,7 @@ pub async fn list_models<K: KeyStore, G: GarageValidator>(
         response_body.to_string(),
     )
         .into_response();
-    inject_moto_headers(&mut resp, &request_id);
+    inject_moto_headers(&mut resp, &request_id, None);
     resp
 }
 

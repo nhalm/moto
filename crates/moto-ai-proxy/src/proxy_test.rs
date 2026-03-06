@@ -628,6 +628,74 @@ async fn chat_completions_returns_503_for_custom_provider_without_key() {
 }
 
 #[tokio::test]
+async fn chat_completions_includes_x_moto_provider_header() {
+    // Provider is resolved but upstream unreachable → 503, but X-Moto-Provider should be set.
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(
+            r#"{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]}"#,
+        ))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    let provider = resp.headers().get("x-moto-provider");
+    assert!(
+        provider.is_some(),
+        "response should include X-Moto-Provider header"
+    );
+    assert_eq!(provider.unwrap().to_str().unwrap(), "openai");
+}
+
+#[tokio::test]
+async fn chat_completions_no_provider_header_on_auth_error() {
+    // No auth → 401, X-Moto-Provider should NOT be set (no provider resolved).
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"model": "gpt-4o", "messages": []}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    assert!(
+        resp.headers().get("x-moto-provider").is_none(),
+        "X-Moto-Provider should not be set when no provider is resolved"
+    );
+}
+
+#[tokio::test]
+async fn chat_completions_no_provider_header_on_unknown_model() {
+    // Unknown model → 400, X-Moto-Provider should NOT be set.
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(r#"{"model": "unknown-model", "messages": []}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        resp.headers().get("x-moto-provider").is_none(),
+        "X-Moto-Provider should not be set for unknown model"
+    );
+}
+
+#[tokio::test]
 async fn chat_completions_routes_finetuned_model_to_openai() {
     // Fine-tuned model ft:gpt-4o:org:model:id should route to OpenAI.
     // No OpenAI key configured, so it should return 503 (not 400 "unknown model prefix").
