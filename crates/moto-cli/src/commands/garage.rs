@@ -750,28 +750,104 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 eprintln!();
             }
 
-            let mut rx = client
-                .stream_events_ws(garages.as_deref())
-                .await
-                .map_err(client_error_to_cli_error)?;
+            let backoff_steps: &[u64] = &[1, 2, 4, 10];
+            let mut backoff_index: usize = 0;
 
-            let mut stdout = io::stdout().lock();
-            while let Some(result) = rx.recv().await {
-                match result {
-                    Ok(event) => {
-                        if flags.json {
-                            // JSON Lines: one compact JSON object per line
-                            let line = serde_json::to_string(&event)?;
-                            writeln!(stdout, "{line}")?;
-                        } else {
-                            let formatted = format_event(&event);
-                            writeln!(stdout, "{formatted}")?;
-                        }
-                        stdout.flush()?;
+            loop {
+                let connect_result = client.stream_events_ws(garages.as_deref()).await;
+
+                let mut rx = match connect_result {
+                    Ok(rx) => {
+                        // Reset backoff on successful connection
+                        backoff_index = 0;
+                        rx
                     }
                     Err(e) => {
-                        return Err(CliError::general(format!("event stream error: {e}")));
+                        let delay = backoff_steps[backoff_index.min(backoff_steps.len() - 1)];
+                        if !flags.quiet && !flags.json {
+                            eprintln!("Connection failed: {e}. Reconnecting in {delay}s...");
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                        backoff_index = (backoff_index + 1).min(backoff_steps.len() - 1);
+                        continue;
                     }
+                };
+
+                // Process events until channel closes (disconnect)
+                {
+                    let mut stdout = io::stdout().lock();
+                    while let Some(result) = rx.recv().await {
+                        match result {
+                            Ok(event) => {
+                                if flags.json {
+                                    let line = serde_json::to_string(&event)?;
+                                    writeln!(stdout, "{line}")?;
+                                } else {
+                                    let formatted = format_event(&event);
+                                    writeln!(stdout, "{formatted}")?;
+                                }
+                                stdout.flush()?;
+                            }
+                            Err(e) => {
+                                if !flags.quiet && !flags.json {
+                                    eprintln!("Stream error: {e}");
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // WebSocket disconnected — reconnect with backoff
+                let delay = backoff_steps[backoff_index.min(backoff_steps.len() - 1)];
+                if !flags.quiet && !flags.json {
+                    eprintln!("Disconnected. Reconnecting in {delay}s...");
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                backoff_index = (backoff_index + 1).min(backoff_steps.len() - 1);
+
+                // Fetch current state via REST before resuming WebSocket
+                if let Ok(response) = client.list_garages().await {
+                    let now = chrono::Utc::now();
+                    let target_garages: Vec<_> = if let Some(ref names) = garages {
+                        response
+                            .garages
+                            .iter()
+                            .filter(|g| names.contains(&g.name))
+                            .collect()
+                    } else {
+                        response.garages.iter().collect()
+                    };
+
+                    if !target_garages.is_empty() {
+                        let mut stdout = io::stdout().lock();
+                        for g in &target_garages {
+                            if flags.json {
+                                let event = GarageEvent::StatusChange {
+                                    garage: g.name.clone(),
+                                    from: "unknown".to_string(),
+                                    to: g.status.clone(),
+                                    reason: Some("reconnect_sync".to_string()),
+                                };
+                                if let Ok(line) = serde_json::to_string(&event) {
+                                    let _ = writeln!(stdout, "{line}");
+                                }
+                            } else {
+                                let ttl = format_ttl_remaining(&g.expires_at, now);
+                                let _ = writeln!(
+                                    stdout,
+                                    "[{}] Current state: {} (TTL: {})",
+                                    g.name, g.status, ttl
+                                );
+                            }
+                        }
+                        let _ = stdout.flush();
+                    }
+                }
+
+                if !flags.quiet && !flags.json {
+                    eprintln!("Reconnected. Resuming watch...");
+                    eprintln!();
                 }
             }
         }
