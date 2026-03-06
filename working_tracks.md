@@ -72,5 +72,4 @@ Read it in full at the start of each iteration.
 
 ## moto-club-websocket.md v0.3
 
-- Add garage state validation for log streaming: reject Pending and Terminated, allow Initializing/Ready/Failed
-- Add reason field to status_change events on transitions to Terminated or Failed (values from TerminationReason enum)
+(all items completed)
