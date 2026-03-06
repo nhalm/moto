@@ -26,6 +26,7 @@ use moto_ai_proxy::auth::ClubGarageValidator;
 use moto_ai_proxy::config::Config;
 use moto_ai_proxy::health;
 use moto_ai_proxy::keys::KeyboxKeyStore;
+use moto_ai_proxy::provider::ModelRouter;
 use moto_ai_proxy::proxy;
 
 use moto_keybox_client::{KeyboxClient, KeyboxConfig, SvidCache};
@@ -109,8 +110,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Duration::from_secs(config.garage_cache_ttl_secs),
     );
 
+    // Parse custom model mappings from MOTO_AI_PROXY_MODEL_MAP.
+    let model_router = ModelRouter::new(config.model_map.as_deref())
+        .map_err(|e| format!("invalid MOTO_AI_PROXY_MODEL_MAP: {e}"))?;
+
     // Build proxy router with passthrough routes, key injection, and garage auth
-    let app = proxy::proxy_router(client, key_store, garage_validator);
+    let app = proxy::proxy_router(client, key_store, garage_validator, model_router);
 
     let listener = TcpListener::bind(config.bind_addr).await?;
     info!(addr = %config.bind_addr, "moto-ai-proxy listening");

@@ -12,26 +12,29 @@ use tower::ServiceExt;
 
 use crate::auth::{AuthError, GarageValidator};
 use crate::keys::KeyStore;
-use crate::provider::Provider;
+use crate::provider::{ModelRouter, Provider};
 use crate::proxy;
 
 /// Mock key store that returns pre-configured keys.
 struct MockKeyStore {
-    keys: HashMap<Provider, SecretString>,
+    keys: HashMap<String, SecretString>,
 }
 
 impl MockKeyStore {
     fn with_key(provider: Provider, key: &str) -> Self {
         let mut keys = HashMap::new();
-        keys.insert(provider, SecretString::from(key.to_string()));
+        keys.insert(
+            provider.secret_name().to_string(),
+            SecretString::from(key.to_string()),
+        );
         Self { keys }
     }
 }
 
 impl KeyStore for MockKeyStore {
-    async fn get_key(&self, provider: Provider) -> Option<SecretString> {
+    async fn get_key(&self, secret_name: &str) -> Option<SecretString> {
         self.keys
-            .get(&provider)
+            .get(secret_name)
             .map(|k| SecretString::from(k.expose_secret().to_string()))
     }
 }
@@ -134,6 +137,7 @@ async fn streaming_sse_passthrough_forwards_events_unchanged() {
         client: client.clone(),
         key_store: std::sync::Arc::new(key_store),
         garage_validator: std::sync::Arc::new(AcceptAllValidator),
+        model_router: ModelRouter::default(),
     };
 
     // Make a direct request to the mock upstream via forward_to_provider
@@ -256,7 +260,7 @@ async fn non_streaming_response_forwarded_correctly() {
 
 /// Mock key store with multiple providers for unified endpoint tests.
 struct MultiKeyStore {
-    keys: HashMap<Provider, SecretString>,
+    keys: HashMap<String, SecretString>,
 }
 
 impl MultiKeyStore {
@@ -267,23 +271,44 @@ impl MultiKeyStore {
     }
 
     fn with_key(mut self, provider: Provider, key: &str) -> Self {
+        self.keys.insert(
+            provider.secret_name().to_string(),
+            SecretString::from(key.to_string()),
+        );
+        self
+    }
+
+    fn with_custom_key(mut self, secret_name: &str, key: &str) -> Self {
         self.keys
-            .insert(provider, SecretString::from(key.to_string()));
+            .insert(secret_name.to_string(), SecretString::from(key.to_string()));
         self
     }
 }
 
 impl KeyStore for MultiKeyStore {
-    async fn get_key(&self, provider: Provider) -> Option<SecretString> {
+    async fn get_key(&self, secret_name: &str) -> Option<SecretString> {
         self.keys
-            .get(&provider)
+            .get(secret_name)
             .map(|k| SecretString::from(k.expose_secret().to_string()))
     }
 }
 
 fn build_test_router(key_store: MultiKeyStore) -> axum::Router {
     let client = reqwest::Client::new();
-    proxy::proxy_router(client, key_store, AcceptAllValidator)
+    proxy::proxy_router(
+        client,
+        key_store,
+        AcceptAllValidator,
+        ModelRouter::default(),
+    )
+}
+
+fn build_test_router_with_model_map(
+    key_store: MultiKeyStore,
+    model_router: ModelRouter,
+) -> axum::Router {
+    let client = reqwest::Client::new();
+    proxy::proxy_router(client, key_store, AcceptAllValidator, model_router)
 }
 
 #[tokio::test]
@@ -492,4 +517,61 @@ async fn list_models_returns_empty_when_no_keys() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["object"], "list");
     assert_eq!(json["data"].as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn chat_completions_routes_custom_model_prefix() {
+    // Configure a custom model mapping for "mistral-" prefix.
+    let model_map = r#"[{"prefix": "mistral-", "provider": "mistral", "upstream": "https://api.mistral.ai/", "auth_header": "Authorization", "auth_prefix": "Bearer "}]"#;
+    let model_router = ModelRouter::new(Some(model_map)).unwrap();
+    let key_store = MultiKeyStore::new().with_custom_key("ai-proxy/mistral", "sk-mistral-test");
+    let app = build_test_router_with_model_map(key_store, model_router);
+
+    // Sending a mistral model should attempt to route to the custom provider.
+    // Since we can't reach the real upstream, it will fail with a connection error (502),
+    // but the important thing is it doesn't return 400 "unknown model prefix".
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(
+            r#"{"model": "mistral-large", "messages": [{"role": "user", "content": "Hi"}]}"#,
+        ))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    // Should NOT be 400 (unknown model) — it should try to reach the custom upstream.
+    assert_ne!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn chat_completions_returns_503_for_custom_provider_without_key() {
+    // Custom mapping exists but no key configured.
+    let model_map = r#"[{"prefix": "mistral-", "provider": "mistral", "upstream": "https://api.mistral.ai/", "auth_header": "Authorization", "auth_prefix": "Bearer "}]"#;
+    let model_router = ModelRouter::new(Some(model_map)).unwrap();
+    let key_store = MultiKeyStore::new(); // No keys at all.
+    let app = build_test_router_with_model_map(key_store, model_router);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(
+            r#"{"model": "mistral-large", "messages": [{"role": "user", "content": "Hi"}]}"#,
+        ))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(
+        json["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("provider not configured")
+    );
 }

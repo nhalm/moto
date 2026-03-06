@@ -22,10 +22,11 @@ use crate::provider::Provider;
 /// Abstracted behind a trait so tests can inject a mock key store
 /// without requiring a real keybox instance.
 pub trait KeyStore: Send + Sync {
-    /// Gets the API key for a provider, returning `None` if not configured.
+    /// Gets the API key by secret name (e.g., `ai-proxy/anthropic`),
+    /// returning `None` if not configured.
     fn get_key(
         &self,
-        provider: Provider,
+        secret_name: &str,
     ) -> impl std::future::Future<Output = Option<SecretString>> + Send;
 }
 
@@ -41,8 +42,8 @@ struct CachedKey {
 pub struct KeyboxKeyStore {
     /// The keybox client (authenticated with ai-proxy SVID).
     client: KeyboxClient,
-    /// Cached keys per provider.
-    cache: Arc<RwLock<HashMap<Provider, CachedKey>>>,
+    /// Cached keys by secret name.
+    cache: Arc<RwLock<HashMap<String, CachedKey>>>,
     /// Cache TTL.
     ttl: Duration,
 }
@@ -59,21 +60,23 @@ impl KeyboxKeyStore {
     }
 
     /// Fetches a key from keybox (bypassing cache).
-    async fn fetch_key(&self, provider: Provider) -> Option<SecretString> {
-        let secret_name = provider.secret_name();
-        debug!(provider = %provider, secret = secret_name, "fetching key from keybox");
+    async fn fetch_key(&self, secret_name: &str) -> Option<SecretString> {
+        debug!(secret = secret_name, "fetching key from keybox");
 
         match self.client.get_secret(Scope::Service, secret_name).await {
             Ok(key) => {
-                debug!(provider = %provider, "fetched key from keybox");
+                debug!(secret = secret_name, "fetched key from keybox");
                 Some(key)
             }
             Err(moto_keybox_client::Error::AccessDenied { .. }) => {
-                warn!(provider = %provider, "key not found in keybox (provider not configured)");
+                warn!(
+                    secret = secret_name,
+                    "key not found in keybox (provider not configured)"
+                );
                 None
             }
             Err(e) => {
-                error!(provider = %provider, error = %e, "failed to fetch key from keybox");
+                error!(secret = secret_name, error = %e, "failed to fetch key from keybox");
                 None
             }
         }
@@ -81,11 +84,11 @@ impl KeyboxKeyStore {
 }
 
 impl KeyStore for KeyboxKeyStore {
-    async fn get_key(&self, provider: Provider) -> Option<SecretString> {
+    async fn get_key(&self, secret_name: &str) -> Option<SecretString> {
         // Check cache first.
         {
             let cache = self.cache.read().await;
-            if let Some(entry) = cache.get(&provider)
+            if let Some(entry) = cache.get(secret_name)
                 && entry.fetched_at.elapsed() < self.ttl
             {
                 return Some(SecretString::from(entry.key.expose_secret().to_string()));
@@ -93,13 +96,13 @@ impl KeyStore for KeyboxKeyStore {
         }
 
         // Cache miss or expired — fetch from keybox.
-        let key = self.fetch_key(provider).await?;
+        let key = self.fetch_key(secret_name).await?;
 
         // Update cache.
         {
             let mut cache = self.cache.write().await;
             cache.insert(
-                provider,
+                secret_name.to_string(),
                 CachedKey {
                     key: SecretString::from(key.expose_secret().to_string()),
                     fetched_at: Instant::now(),
@@ -113,9 +116,9 @@ impl KeyStore for KeyboxKeyStore {
 
 /// Returns whether any provider key is cached (used by readiness check).
 pub async fn has_cached_keys(store: &impl KeyStore) -> bool {
-    // Try each provider — if any returns a key, we're ready.
+    // Try each built-in provider — if any returns a key, we're ready.
     for provider in Provider::ALL {
-        if store.get_key(provider).await.is_some() {
+        if store.get_key(provider.secret_name()).await.is_some() {
             return true;
         }
     }
@@ -128,7 +131,7 @@ mod tests {
 
     /// A mock key store for testing.
     struct MockKeyStore {
-        keys: HashMap<Provider, SecretString>,
+        keys: HashMap<String, SecretString>,
     }
 
     impl MockKeyStore {
@@ -139,16 +142,18 @@ mod tests {
         }
 
         fn with_key(mut self, provider: Provider, key: &str) -> Self {
-            self.keys
-                .insert(provider, SecretString::from(key.to_string()));
+            self.keys.insert(
+                provider.secret_name().to_string(),
+                SecretString::from(key.to_string()),
+            );
             self
         }
     }
 
     impl KeyStore for MockKeyStore {
-        async fn get_key(&self, provider: Provider) -> Option<SecretString> {
+        async fn get_key(&self, secret_name: &str) -> Option<SecretString> {
             self.keys
-                .get(&provider)
+                .get(secret_name)
                 .map(|k| SecretString::from(k.expose_secret().to_string()))
         }
     }
@@ -159,14 +164,14 @@ mod tests {
             .with_key(Provider::Anthropic, "sk-ant-test")
             .with_key(Provider::OpenAi, "sk-test");
 
-        let key = store.get_key(Provider::Anthropic).await;
+        let key = store.get_key(Provider::Anthropic.secret_name()).await;
         assert!(key.is_some());
         assert_eq!(key.unwrap().expose_secret(), "sk-ant-test");
 
-        let key = store.get_key(Provider::OpenAi).await;
+        let key = store.get_key(Provider::OpenAi.secret_name()).await;
         assert!(key.is_some());
 
-        let key = store.get_key(Provider::Gemini).await;
+        let key = store.get_key(Provider::Gemini.secret_name()).await;
         assert!(key.is_none());
     }
 

@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::auth::{self, AuthError, GarageValidator};
 use crate::keys::KeyStore;
-use crate::provider::Provider;
+use crate::provider::{ModelRouter, Provider, ProviderInfo};
 use crate::translate::anthropic as anthropic_translate;
 
 /// Known models to return for Anthropic (no public /v1/models endpoint).
@@ -39,6 +39,8 @@ pub struct ProxyState<K: KeyStore + 'static, G: GarageValidator + 'static> {
     pub key_store: Arc<K>,
     /// Garage identity validator.
     pub garage_validator: Arc<G>,
+    /// Model router for resolving model names to providers.
+    pub model_router: ModelRouter,
 }
 
 impl<K: KeyStore + 'static, G: GarageValidator + 'static> Clone for ProxyState<K, G> {
@@ -47,6 +49,7 @@ impl<K: KeyStore + 'static, G: GarageValidator + 'static> Clone for ProxyState<K
             client: self.client.clone(),
             key_store: Arc::clone(&self.key_store),
             garage_validator: Arc::clone(&self.garage_validator),
+            model_router: self.model_router.clone(),
         }
     }
 }
@@ -88,7 +91,7 @@ pub struct ForwardResult {
 /// and injecting the real API key from keybox.
 #[allow(clippy::too_many_arguments)]
 pub async fn forward_to_provider<K: KeyStore>(
-    provider: Provider,
+    info: &ProviderInfo,
     method: Method,
     remaining_path: &str,
     query: Option<&str>,
@@ -98,19 +101,18 @@ pub async fn forward_to_provider<K: KeyStore>(
     key_store: &K,
 ) -> ForwardResult {
     // Fetch the API key for this provider.
-    let Some(api_key) = key_store.get_key(provider).await else {
+    let Some(api_key) = key_store.get_key(&info.secret_name).await else {
         return ForwardResult {
             response: error_response(
                 StatusCode::SERVICE_UNAVAILABLE,
-                &format!("provider not configured: {provider}"),
+                &format!("provider not configured: {}", info.name),
                 "server_error",
             ),
             upstream_status: None,
         };
     };
 
-    let base = provider.upstream_base();
-    let mut upstream_url = format!("{base}{remaining_path}");
+    let mut upstream_url = format!("{}{remaining_path}", info.upstream_base);
     if let Some(q) = query {
         upstream_url.push('?');
         upstream_url.push_str(q);
@@ -120,10 +122,7 @@ pub async fn forward_to_provider<K: KeyStore>(
     let mut req = client.request(reqwest_method(&method), &upstream_url);
 
     // Inject the real API key using the provider-specific auth header.
-    req = req.header(
-        provider.auth_header(),
-        provider.auth_value(api_key.expose_secret()),
-    );
+    req = req.header(&*info.auth_header, info.auth_value(api_key.expose_secret()));
 
     if let Some(ct) = headers.get("content-type")
         && let Ok(v) = ct.to_str()
@@ -138,7 +137,7 @@ pub async fn forward_to_provider<K: KeyStore>(
 
     // Forward anthropic-version header for Anthropic requests.
     // Use the client-provided value if present, otherwise default to a known version.
-    if provider == Provider::Anthropic {
+    if info.is_anthropic {
         if let Some(av) = headers.get("anthropic-version")
             && let Ok(v) = av.to_str()
         {
@@ -155,22 +154,22 @@ pub async fn forward_to_provider<K: KeyStore>(
     let upstream_resp = match tokio::time::timeout(FIRST_BYTE_TIMEOUT, req.send()).await {
         Ok(Ok(r)) => r,
         Ok(Err(e)) => {
-            tracing::error!(provider = %provider, error = %e, "upstream request failed");
+            tracing::error!(provider = %info.name, error = %e, "upstream request failed");
             return ForwardResult {
                 response: error_response(
                     StatusCode::BAD_GATEWAY,
-                    &format!("upstream error: {provider}"),
+                    &format!("upstream error: {}", info.name),
                     "server_error",
                 ),
                 upstream_status: None,
             };
         }
         Err(_) => {
-            tracing::error!(provider = %provider, "upstream first byte timeout ({}s)", FIRST_BYTE_TIMEOUT.as_secs());
+            tracing::error!(provider = %info.name, "upstream first byte timeout ({}s)", FIRST_BYTE_TIMEOUT.as_secs());
             return ForwardResult {
                 response: error_response(
                     StatusCode::GATEWAY_TIMEOUT,
-                    &format!("upstream timeout: {provider}"),
+                    &format!("upstream timeout: {}", info.name),
                     "server_error",
                 ),
                 upstream_status: None,
@@ -218,6 +217,7 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
     remaining: &str,
     body: Body,
 ) -> Response {
+    let info = provider.info();
     let request_id = Uuid::now_v7();
     let start = Instant::now();
     let method_str = method.to_string();
@@ -231,7 +231,7 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
             tracing::info!(
                 request_id = %request_id,
                 garage_id = "",
-                provider = %provider,
+                provider = %info.name,
                 mode = "passthrough",
                 method = %method_str,
                 path = %path,
@@ -244,7 +244,7 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
     };
 
     let result = forward_to_provider(
-        provider,
+        &info,
         method,
         remaining,
         uri.query(),
@@ -260,7 +260,7 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
     tracing::info!(
         request_id = %request_id,
         garage_id = %garage_id,
-        provider = %provider,
+        provider = %info.name,
         mode = "passthrough",
         method = %method_str,
         path = %path,
@@ -338,7 +338,7 @@ pub async fn passthrough_gemini<K: KeyStore, G: GarageValidator>(
 
 /// Result of resolving and translating a request.
 struct ResolvedRequest {
-    provider: Provider,
+    info: ProviderInfo,
     model: String,
     body: Body,
     /// Whether the original request had `stream: true`.
@@ -347,7 +347,10 @@ struct ResolvedRequest {
 
 /// Resolves the provider from the request body's `model` field and prepares
 /// the body for forwarding, translating if needed (e.g., Anthropic).
-fn resolve_and_translate(body: &Bytes) -> Result<ResolvedRequest, Box<Response>> {
+fn resolve_and_translate(
+    body: &Bytes,
+    model_router: &ModelRouter,
+) -> Result<ResolvedRequest, Box<Response>> {
     let parsed: Value = serde_json::from_slice(body).map_err(|_| {
         Box::new(error_response(
             StatusCode::BAD_REQUEST,
@@ -369,7 +372,7 @@ fn resolve_and_translate(body: &Bytes) -> Result<ResolvedRequest, Box<Response>>
         )));
     };
 
-    let Some(provider) = Provider::from_model(&model) else {
+    let Some(info) = model_router.resolve(&model) else {
         return Err(Box::new(error_response(
             StatusCode::BAD_REQUEST,
             "unknown model prefix, cannot determine provider",
@@ -383,7 +386,7 @@ fn resolve_and_translate(body: &Bytes) -> Result<ResolvedRequest, Box<Response>>
         .unwrap_or(false);
 
     // Translate request body for Anthropic; other providers use OpenAI format natively.
-    let forwarded_body = if provider == Provider::Anthropic {
+    let forwarded_body = if info.is_anthropic {
         let anthropic_value = anthropic_translate::translate_request(&parsed);
         Body::from(anthropic_value.to_string())
     } else {
@@ -391,7 +394,7 @@ fn resolve_and_translate(body: &Bytes) -> Result<ResolvedRequest, Box<Response>>
     };
 
     Ok(ResolvedRequest {
-        provider,
+        info,
         model,
         body: forwarded_body,
         is_streaming,
@@ -431,7 +434,7 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
         }
     };
 
-    let resolved = match resolve_and_translate(&body) {
+    let resolved = match resolve_and_translate(&body, &state.model_router) {
         Ok(r) => r,
         Err(resp) => {
             log_request(
@@ -449,16 +452,16 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
         }
     };
 
-    let provider = resolved.provider;
+    let info = resolved.info;
     let model = resolved.model;
     let is_streaming = resolved.is_streaming;
-    let upstream_path = provider.unified_chat_path();
+    let upstream_path = info.chat_path.clone();
 
     // Forward the body to the upstream provider.
     let result = forward_to_provider(
-        provider,
+        &info,
         Method::POST,
-        upstream_path,
+        &upstream_path,
         uri.query(),
         &headers,
         resolved.body,
@@ -481,7 +484,7 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
     );
 
     // For Anthropic responses, translate back to OpenAI format.
-    if provider == Provider::Anthropic && result.response.status().is_success() {
+    if info.is_anthropic && result.response.status().is_success() {
         if is_streaming {
             return translate_anthropic_streaming_response(result.response);
         }
@@ -638,7 +641,7 @@ async fn fetch_provider_models<K: KeyStore>(
     client: &Client,
     key_store: &K,
 ) -> Vec<Value> {
-    let Some(api_key) = key_store.get_key(provider).await else {
+    let Some(api_key) = key_store.get_key(provider.secret_name()).await else {
         return Vec::new();
     };
 
@@ -774,11 +777,13 @@ pub fn proxy_router<K: KeyStore + 'static, G: GarageValidator + 'static>(
     client: Client,
     key_store: K,
     garage_validator: G,
+    model_router: ModelRouter,
 ) -> axum::Router {
     let state = ProxyState {
         client,
         key_store: Arc::new(key_store),
         garage_validator: Arc::new(garage_validator),
+        model_router,
     };
     axum::Router::new()
         .route(

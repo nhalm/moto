@@ -1,5 +1,7 @@
 //! Provider registry — maps route prefixes to upstream AI providers.
 
+use serde::Deserialize;
+
 /// Known AI provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Provider {
@@ -105,6 +107,121 @@ impl std::fmt::Display for Provider {
     }
 }
 
+/// Resolved provider information for routing and forwarding.
+///
+/// Produced by either a built-in `Provider` or a `CustomMapping`.
+#[derive(Debug, Clone)]
+pub struct ProviderInfo {
+    /// Provider name (for logs, errors, display).
+    pub name: String,
+    /// Upstream base URL (with trailing slash).
+    pub upstream_base: String,
+    /// Auth header name for upstream requests.
+    pub auth_header: String,
+    /// Auth value prefix (e.g., `"Bearer "` or `""`).
+    pub auth_prefix: String,
+    /// Keybox secret name (e.g., `ai-proxy/anthropic`).
+    pub secret_name: String,
+    /// Whether this is the Anthropic provider (needs translation + `anthropic-version` header).
+    pub is_anthropic: bool,
+    /// Upstream path for unified chat endpoint.
+    pub chat_path: String,
+}
+
+impl ProviderInfo {
+    /// Formats the auth header value for upstream requests.
+    #[must_use]
+    pub fn auth_value(&self, key: &str) -> String {
+        format!("{}{key}", self.auth_prefix)
+    }
+}
+
+impl Provider {
+    /// Converts this built-in provider to a `ProviderInfo`.
+    #[must_use]
+    pub fn info(self) -> ProviderInfo {
+        ProviderInfo {
+            name: self.name().to_string(),
+            upstream_base: self.upstream_base().to_string(),
+            auth_header: self.auth_header().to_string(),
+            auth_prefix: match self {
+                Self::OpenAi => "Bearer ".to_string(),
+                Self::Anthropic | Self::Gemini => String::new(),
+            },
+            secret_name: self.secret_name().to_string(),
+            is_anthropic: self == Self::Anthropic,
+            chat_path: self.unified_chat_path().to_string(),
+        }
+    }
+}
+
+/// Custom model prefix → provider mapping from `MOTO_AI_PROXY_MODEL_MAP`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CustomMapping {
+    /// Model name prefix to match (e.g., `"mistral-"`).
+    pub prefix: String,
+    /// Provider name (used for secret lookup as `ai-proxy/{provider}`).
+    pub provider: String,
+    /// Upstream base URL (with trailing slash).
+    pub upstream: String,
+    /// Auth header name (e.g., `"Authorization"`).
+    pub auth_header: String,
+    /// Auth value prefix (e.g., `"Bearer "`).
+    pub auth_prefix: String,
+}
+
+impl CustomMapping {
+    fn to_info(&self) -> ProviderInfo {
+        ProviderInfo {
+            name: self.provider.clone(),
+            upstream_base: self.upstream.clone(),
+            auth_header: self.auth_header.clone(),
+            auth_prefix: self.auth_prefix.clone(),
+            secret_name: format!("ai-proxy/{}", self.provider),
+            is_anthropic: false,
+            chat_path: "v1/chat/completions".to_string(),
+        }
+    }
+}
+
+/// Model router: resolves model names to provider info.
+///
+/// Checks custom mappings first (from `MOTO_AI_PROXY_MODEL_MAP`),
+/// then falls back to built-in provider prefix matching.
+#[derive(Debug, Clone, Default)]
+pub struct ModelRouter {
+    custom: Vec<CustomMapping>,
+}
+
+impl ModelRouter {
+    /// Creates a new model router, optionally parsing custom mappings from JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `model_map_json` contains invalid JSON.
+    pub fn new(model_map_json: Option<&str>) -> Result<Self, serde_json::Error> {
+        let custom = match model_map_json {
+            Some(json) => serde_json::from_str(json)?,
+            None => Vec::new(),
+        };
+        Ok(Self { custom })
+    }
+
+    /// Resolves a model name to provider info.
+    ///
+    /// Checks custom mappings first, then built-in providers.
+    #[must_use]
+    pub fn resolve(&self, model: &str) -> Option<ProviderInfo> {
+        let lower = model.to_lowercase();
+        for mapping in &self.custom {
+            if lower.starts_with(&mapping.prefix) {
+                return Some(mapping.to_info());
+            }
+        }
+        Provider::from_model(model).map(Provider::info)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,5 +294,81 @@ mod tests {
             "v1beta/openai/chat/completions"
         );
         assert_eq!(Provider::Anthropic.unified_chat_path(), "v1/messages");
+    }
+
+    #[test]
+    fn provider_info_auth_value_with_prefix() {
+        let info = Provider::OpenAi.info();
+        assert_eq!(info.auth_value("sk-test"), "Bearer sk-test");
+    }
+
+    #[test]
+    fn provider_info_auth_value_without_prefix() {
+        let info = Provider::Anthropic.info();
+        assert_eq!(info.auth_value("sk-ant-test"), "sk-ant-test");
+    }
+
+    #[test]
+    fn provider_info_anthropic_flag() {
+        assert!(Provider::Anthropic.info().is_anthropic);
+        assert!(!Provider::OpenAi.info().is_anthropic);
+        assert!(!Provider::Gemini.info().is_anthropic);
+    }
+
+    #[test]
+    fn model_router_resolves_builtin_providers() {
+        let router = ModelRouter::default();
+        let info = router.resolve("claude-sonnet-4-20250514").unwrap();
+        assert_eq!(info.name, "anthropic");
+        assert!(info.is_anthropic);
+
+        let info = router.resolve("gpt-4o").unwrap();
+        assert_eq!(info.name, "openai");
+
+        let info = router.resolve("gemini-2.0-flash").unwrap();
+        assert_eq!(info.name, "gemini");
+    }
+
+    #[test]
+    fn model_router_returns_none_for_unknown() {
+        let router = ModelRouter::default();
+        assert!(router.resolve("mistral-large").is_none());
+    }
+
+    #[test]
+    fn model_router_custom_mapping_takes_priority() {
+        let json = r#"[{"prefix": "mistral-", "provider": "mistral", "upstream": "https://api.mistral.ai/", "auth_header": "Authorization", "auth_prefix": "Bearer "}]"#;
+        let router = ModelRouter::new(Some(json)).unwrap();
+
+        let info = router.resolve("mistral-large").unwrap();
+        assert_eq!(info.name, "mistral");
+        assert_eq!(info.upstream_base, "https://api.mistral.ai/");
+        assert_eq!(info.auth_header, "Authorization");
+        assert_eq!(info.auth_value("sk-test"), "Bearer sk-test");
+        assert_eq!(info.secret_name, "ai-proxy/mistral");
+        assert!(!info.is_anthropic);
+        assert_eq!(info.chat_path, "v1/chat/completions");
+    }
+
+    #[test]
+    fn model_router_custom_does_not_shadow_builtin() {
+        let json = r#"[{"prefix": "mistral-", "provider": "mistral", "upstream": "https://api.mistral.ai/", "auth_header": "Authorization", "auth_prefix": "Bearer "}]"#;
+        let router = ModelRouter::new(Some(json)).unwrap();
+
+        // Built-in providers still work.
+        let info = router.resolve("claude-sonnet-4-20250514").unwrap();
+        assert_eq!(info.name, "anthropic");
+    }
+
+    #[test]
+    fn model_router_empty_json_array() {
+        let router = ModelRouter::new(Some("[]")).unwrap();
+        assert!(router.resolve("mistral-large").is_none());
+        assert!(router.resolve("gpt-4o").is_some());
+    }
+
+    #[test]
+    fn model_router_invalid_json_returns_error() {
+        assert!(ModelRouter::new(Some("not json")).is_err());
     }
 }
