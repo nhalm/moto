@@ -540,6 +540,7 @@ fn translate_anthropic_streaming_response(response: Response) -> Response {
     // Buffer partial SSE events across chunks, split on double-newline boundaries.
     let translated_stream = {
         let mut buffer = String::new();
+        let mut translator = anthropic_translate::StreamingTranslator::new();
         body_stream.filter_map(move |chunk_result| {
             let output = match chunk_result {
                 Ok(chunk) => {
@@ -554,8 +555,7 @@ fn translate_anthropic_streaming_response(response: Response) -> Response {
                         buffer = buffer[boundary + 2..].to_string();
 
                         if let Some(event) = anthropic_translate::parse_sse_event(&event_block)
-                            && let Some(translated) =
-                                anthropic_translate::translate_streaming_event(&event)
+                            && let Some(translated) = translator.translate_event(&event)
                         {
                             translated_parts.push(translated);
                         }
