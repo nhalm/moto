@@ -26,10 +26,12 @@
 
 use std::time::Duration;
 
+use futures_util::{SinkExt, StreamExt};
 use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio_tungstenite::tungstenite;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
@@ -466,6 +468,126 @@ impl MotoClubClient {
         debug!(url = %url, garage = %garage_name, seconds = %seconds, "extending garage TTL");
 
         self.post_json(&url, &request).await
+    }
+
+    /// Stream garage logs over WebSocket.
+    ///
+    /// Connects to `/ws/v1/garages/{name}/logs` and returns a receiver of log lines.
+    /// Each received string is a raw log line (extracted from the JSON `log` message).
+    /// On `error` or `eof` messages, the stream ends.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the WebSocket connection cannot be established.
+    pub async fn stream_logs_ws(
+        &self,
+        garage_name: &str,
+        tail: i64,
+        follow: bool,
+        since: Option<&str>,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<String, String>>, ClientError> {
+        // Convert http(s):// to ws(s)://
+        let ws_base = if self.config.base_url.starts_with("https://") {
+            self.config.base_url.replacen("https://", "wss://", 1)
+        } else {
+            self.config.base_url.replacen("http://", "ws://", 1)
+        };
+
+        let mut url =
+            format!("{ws_base}/ws/v1/garages/{garage_name}/logs?tail={tail}&follow={follow}");
+        if let Some(s) = since {
+            use std::fmt::Write;
+            let _ = write!(url, "&since={s}");
+        }
+
+        debug!(url = %url, "connecting to log WebSocket");
+
+        let request = tungstenite::http::Request::builder()
+            .uri(&url)
+            .header("Authorization", self.auth_header())
+            .header("Connection", "Upgrade")
+            .header("Upgrade", "websocket")
+            .header("Sec-WebSocket-Version", "13")
+            .header(
+                "Sec-WebSocket-Key",
+                tungstenite::handshake::client::generate_key(),
+            )
+            .body(())
+            .map_err(|e| ClientError::Server {
+                code: "WEBSOCKET_ERROR".to_string(),
+                message: format!("failed to build WebSocket request: {e}"),
+            })?;
+
+        // Use the configured timeout for connecting
+        let tcp_stream = tokio::time::timeout(
+            self.config.timeout,
+            tokio::net::TcpStream::connect(
+                request
+                    .uri()
+                    .authority()
+                    .map_or("localhost:18080", tungstenite::http::uri::Authority::as_str),
+            ),
+        )
+        .await
+        .map_err(|_| ClientError::Unreachable {
+            url: url.clone(),
+            reason: "connection timed out".to_string(),
+        })?
+        .map_err(|e| ClientError::Unreachable {
+            url: url.clone(),
+            reason: e.to_string(),
+        })?;
+
+        let (ws_stream, _response) = tokio_tungstenite::client_async(request, tcp_stream)
+            .await
+            .map_err(|e| ClientError::Unreachable {
+                url: url.clone(),
+                reason: format!("WebSocket handshake failed: {e}"),
+            })?;
+
+        let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+
+        let (tx, rx) = tokio::sync::mpsc::channel(256);
+
+        tokio::spawn(async move {
+            while let Some(msg_result) = ws_receiver.next().await {
+                match msg_result {
+                    Ok(tungstenite::Message::Text(text)) => {
+                        // Parse the JSON message
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                            match value.get("type").and_then(|t| t.as_str()) {
+                                Some("log") => {
+                                    if let Some(line) = value.get("line").and_then(|l| l.as_str())
+                                        && tx.send(Ok(format!("{line}\n"))).await.is_err()
+                                    {
+                                        break;
+                                    }
+                                }
+                                Some("error") => {
+                                    let msg = value
+                                        .get("message")
+                                        .and_then(|m| m.as_str())
+                                        .unwrap_or("unknown error");
+                                    let _ = tx.send(Err(msg.to_string())).await;
+                                    break;
+                                }
+                                Some("eof") => {
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    Ok(tungstenite::Message::Ping(data)) => {
+                        let _ = ws_sender.send(tungstenite::Message::Pong(data)).await;
+                    }
+                    Ok(tungstenite::Message::Close(_)) | Err(_) => break,
+                    _ => {}
+                }
+            }
+        });
+
+        Ok(rx)
     }
 
     /// Send a POST request with JSON body and parse JSON response.

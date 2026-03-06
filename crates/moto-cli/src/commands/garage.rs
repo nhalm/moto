@@ -631,76 +631,100 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             tail,
             since,
         } => {
+            if follow && flags.json {
+                return Err(CliError::invalid_input(
+                    "JSON output is not supported with --follow",
+                ));
+            }
+
             let client = create_client(flags, None)?;
 
-            // Get garage details to find the namespace
-            let garage = client.get_garage(&name).await.map_err(|e| match e {
-                ClientError::GarageNotFound(_) => CliError::not_found(format!(
-                    "Garage '{name}' not found.\n\nTry: moto garage list"
-                )),
-                _ => client_error_to_cli_error(e),
-            })?;
+            // Try WebSocket first, fall back to direct K8s API
+            let ws_result = client
+                .stream_logs_ws(&name, tail, follow, since.as_deref())
+                .await;
 
-            // Derive namespace: moto-garage-{first 8 hex chars of UUID}
-            let namespace = format!("moto-garage-{}", &garage.id.to_string()[..8]);
-
-            // Parse since duration if provided
-            let since_seconds = since.as_deref().map(parse_duration).transpose()?;
-
-            let k8s_client = if let Some(ctx) = flags.context.as_deref() {
-                K8sClient::with_context(ctx).await?
-            } else {
-                K8sClient::new().await?
-            };
-
-            let log_options = PodLogOptions {
-                tail_lines: Some(tail),
-                since_seconds,
-                follow,
-            };
-
-            if follow {
-                // Streaming mode - not compatible with JSON output
-                if flags.json {
-                    return Err(CliError::invalid_input(
-                        "JSON output is not supported with --follow",
-                    ));
+            match ws_result {
+                Ok(mut rx) => {
+                    tracing::debug!("streaming logs via WebSocket");
+                    let mut stdout = io::stdout().lock();
+                    while let Some(result) = rx.recv().await {
+                        match result {
+                            Ok(line) => {
+                                stdout.write_all(line.as_bytes())?;
+                                stdout.flush()?;
+                            }
+                            Err(e) => {
+                                return Err(CliError::general(format!("log stream error: {e}")));
+                            }
+                        }
+                    }
                 }
+                Err(ws_err) => {
+                    // Fall back to direct K8s API
+                    tracing::debug!(error = %ws_err, "WebSocket log streaming unavailable, falling back to K8s API");
 
-                let mut stream = k8s_client
-                    .stream_pod_logs(&namespace, None, &log_options)
-                    .await
-                    .map_err(|_| {
-                        CliError::not_found(format!(
-                            "Garage '{name}' pod not found.\n\nThe garage may still be starting up.\nTry: moto garage list"
-                        ))
+                    let garage = client.get_garage(&name).await.map_err(|e| match e {
+                        ClientError::GarageNotFound(_) => CliError::not_found(format!(
+                            "Garage '{name}' not found.\n\nTry: moto garage list"
+                        )),
+                        _ => client_error_to_cli_error(e),
                     })?;
 
-                let mut stdout = std::io::stdout().lock();
-                while let Some(result) = stream.next().await {
-                    match result {
-                        Ok(line) => {
-                            stdout.write_all(line.as_bytes())?;
-                            stdout.flush()?;
-                        }
-                        Err(e) => {
-                            return Err(CliError::general(format!("log stream error: {e}")));
-                        }
-                    }
-                }
-            } else {
-                let logs = k8s_client
-                    .get_pod_logs(&namespace, None, &log_options)
-                    .await?;
+                    let namespace = format!("moto-garage-{}", &garage.id.to_string()[..8]);
+                    let since_seconds = since.as_deref().map(parse_duration).transpose()?;
 
-                if logs.is_empty() {
-                    if !flags.quiet {
-                        eprintln!("No logs found for garage '{name}'.");
-                    }
-                } else {
-                    print!("{logs}");
-                    if !logs.ends_with('\n') {
-                        println!();
+                    let k8s_client = if let Some(ctx) = flags.context.as_deref() {
+                        K8sClient::with_context(ctx).await?
+                    } else {
+                        K8sClient::new().await?
+                    };
+
+                    let log_options = PodLogOptions {
+                        tail_lines: Some(tail),
+                        since_seconds,
+                        follow,
+                    };
+
+                    if follow {
+                        let mut stream = k8s_client
+                            .stream_pod_logs(&namespace, None, &log_options)
+                            .await
+                            .map_err(|_| {
+                                CliError::not_found(format!(
+                                    "Garage '{name}' pod not found.\n\nThe garage may still be starting up.\nTry: moto garage list"
+                                ))
+                            })?;
+
+                        let mut stdout = io::stdout().lock();
+                        while let Some(result) = stream.next().await {
+                            match result {
+                                Ok(line) => {
+                                    stdout.write_all(line.as_bytes())?;
+                                    stdout.flush()?;
+                                }
+                                Err(e) => {
+                                    return Err(CliError::general(format!(
+                                        "log stream error: {e}"
+                                    )));
+                                }
+                            }
+                        }
+                    } else {
+                        let logs = k8s_client
+                            .get_pod_logs(&namespace, None, &log_options)
+                            .await?;
+
+                        if logs.is_empty() {
+                            if !flags.quiet {
+                                eprintln!("No logs found for garage '{name}'.");
+                            }
+                        } else {
+                            print!("{logs}");
+                            if !logs.ends_with('\n') {
+                                println!();
+                            }
+                        }
                     }
                 }
             }
