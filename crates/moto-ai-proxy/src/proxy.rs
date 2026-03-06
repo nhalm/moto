@@ -10,6 +10,7 @@ use axum::response::{IntoResponse, Response};
 use reqwest::Client;
 use secrecy::ExposeSecret;
 
+use crate::auth::{self, AuthError, GarageValidator};
 use crate::keys::KeyStore;
 use crate::provider::Provider;
 
@@ -20,20 +21,48 @@ const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024;
 const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Shared state for proxy handlers.
-pub struct ProxyState<K: KeyStore + 'static> {
+pub struct ProxyState<K: KeyStore + 'static, G: GarageValidator + 'static> {
     /// HTTP client for upstream requests.
     pub client: Client,
     /// Key store for fetching provider API keys.
     pub key_store: Arc<K>,
+    /// Garage identity validator.
+    pub garage_validator: Arc<G>,
 }
 
-impl<K: KeyStore + 'static> Clone for ProxyState<K> {
+impl<K: KeyStore + 'static, G: GarageValidator + 'static> Clone for ProxyState<K, G> {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
             key_store: Arc::clone(&self.key_store),
+            garage_validator: Arc::clone(&self.garage_validator),
         }
     }
+}
+
+/// Validates the garage identity from request headers.
+///
+/// Extracts the auth token, parses the garage ID, and validates via the garage validator.
+async fn validate_garage_auth<G: GarageValidator>(
+    headers: &HeaderMap,
+    validator: &G,
+) -> Result<String, Response> {
+    let token = auth::extract_token(headers).ok_or_else(|| {
+        let err = AuthError::MissingToken;
+        error_response(err.status_code(), &err.message(), err.error_type())
+    })?;
+
+    let garage_id = auth::extract_garage_id(&token).ok_or_else(|| {
+        let err = AuthError::InvalidToken;
+        error_response(err.status_code(), &err.message(), err.error_type())
+    })?;
+
+    validator
+        .validate_garage(&garage_id)
+        .await
+        .map_err(|err| error_response(err.status_code(), &err.message(), err.error_type()))?;
+
+    Ok(garage_id)
 }
 
 /// Forwards a request to the given provider's upstream, rewriting the path
@@ -141,14 +170,19 @@ pub async fn forward_to_provider<K: KeyStore>(
 }
 
 /// Handler for `/passthrough/anthropic/*path`.
-pub async fn passthrough_anthropic<K: KeyStore>(
-    State(state): State<ProxyState<K>>,
+pub async fn passthrough_anthropic<K: KeyStore, G: GarageValidator>(
+    State(state): State<ProxyState<K, G>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
     Path(remaining): Path<String>,
     body: Body,
 ) -> Response {
+    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    tracing::debug!(garage_id = %garage_id, provider = "anthropic", "garage authenticated");
     forward_to_provider(
         Provider::Anthropic,
         method,
@@ -163,14 +197,19 @@ pub async fn passthrough_anthropic<K: KeyStore>(
 }
 
 /// Handler for `/passthrough/openai/*path`.
-pub async fn passthrough_openai<K: KeyStore>(
-    State(state): State<ProxyState<K>>,
+pub async fn passthrough_openai<K: KeyStore, G: GarageValidator>(
+    State(state): State<ProxyState<K, G>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
     Path(remaining): Path<String>,
     body: Body,
 ) -> Response {
+    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    tracing::debug!(garage_id = %garage_id, provider = "openai", "garage authenticated");
     forward_to_provider(
         Provider::OpenAi,
         method,
@@ -185,14 +224,19 @@ pub async fn passthrough_openai<K: KeyStore>(
 }
 
 /// Handler for `/passthrough/gemini/*path`.
-pub async fn passthrough_gemini<K: KeyStore>(
-    State(state): State<ProxyState<K>>,
+pub async fn passthrough_gemini<K: KeyStore, G: GarageValidator>(
+    State(state): State<ProxyState<K, G>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
     Path(remaining): Path<String>,
     body: Body,
 ) -> Response {
+    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    tracing::debug!(garage_id = %garage_id, provider = "gemini", "garage authenticated");
     forward_to_provider(
         Provider::Gemini,
         method,
@@ -206,24 +250,29 @@ pub async fn passthrough_gemini<K: KeyStore>(
     .await
 }
 
-/// Builds the proxy router with passthrough routes.
-pub fn proxy_router<K: KeyStore + 'static>(client: Client, key_store: K) -> axum::Router {
+/// Builds the proxy router with passthrough routes and garage auth.
+pub fn proxy_router<K: KeyStore + 'static, G: GarageValidator + 'static>(
+    client: Client,
+    key_store: K,
+    garage_validator: G,
+) -> axum::Router {
     let state = ProxyState {
         client,
         key_store: Arc::new(key_store),
+        garage_validator: Arc::new(garage_validator),
     };
     axum::Router::new()
         .route(
             "/passthrough/anthropic/{*path}",
-            axum::routing::any(passthrough_anthropic::<K>),
+            axum::routing::any(passthrough_anthropic::<K, G>),
         )
         .route(
             "/passthrough/openai/{*path}",
-            axum::routing::any(passthrough_openai::<K>),
+            axum::routing::any(passthrough_openai::<K, G>),
         )
         .route(
             "/passthrough/gemini/{*path}",
-            axum::routing::any(passthrough_gemini::<K>),
+            axum::routing::any(passthrough_gemini::<K, G>),
         )
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_SIZE))
         .with_state(state)

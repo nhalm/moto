@@ -22,6 +22,7 @@ use tokio::signal;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
+use moto_ai_proxy::auth::ClubGarageValidator;
 use moto_ai_proxy::config::Config;
 use moto_ai_proxy::health;
 use moto_ai_proxy::keys::KeyboxKeyStore;
@@ -101,8 +102,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .timeout(Duration::from_secs(600))
         .build()?;
 
-    // Build proxy router with passthrough routes and key injection
-    let app = proxy::proxy_router(client, key_store);
+    // Initialize garage validator for identity checks via moto-club.
+    let garage_validator = ClubGarageValidator::new(
+        client.clone(),
+        config.club_url.clone(),
+        Duration::from_secs(config.garage_cache_ttl_secs),
+    );
+
+    // Build proxy router with passthrough routes, key injection, and garage auth
+    let app = proxy::proxy_router(client, key_store, garage_validator);
 
     let listener = TcpListener::bind(config.bind_addr).await?;
     info!(addr = %config.bind_addr, "moto-ai-proxy listening");
