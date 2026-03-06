@@ -31,6 +31,7 @@
 //! axum::serve(listener, app).await?;
 //! ```
 
+pub mod events_ws;
 pub mod garages;
 pub mod health;
 pub mod logs_ws;
@@ -45,6 +46,7 @@ use moto_club_db::DbPool;
 use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
 use moto_club_wg::{PeerBroadcaster, PeerRegistry, SessionManager};
+use moto_club_ws::EventBroadcaster;
 use moto_k8s::K8sClient;
 use moto_wgtunnel_types::derp::DerpMap;
 
@@ -73,6 +75,8 @@ pub struct AppState {
     pub derp_map: Arc<DerpMap>,
     /// Peer event broadcaster for garage WebSocket connections.
     pub peer_broadcaster: Arc<PeerBroadcaster>,
+    /// Garage event broadcaster for event streaming WebSocket connections.
+    pub event_broadcaster: Arc<EventBroadcaster>,
     /// Kubernetes client for `ServiceAccount` token validation.
     /// When `None`, token validation is skipped (for testing/local dev).
     pub k8s_client: Option<K8sClient>,
@@ -103,6 +107,7 @@ impl AppState {
             session_manager,
             derp_map: Arc::new(derp_map),
             peer_broadcaster,
+            event_broadcaster: Arc::new(EventBroadcaster::new()),
             k8s_client: None,
             garage_k8s: None,
             garage_service: None,
@@ -149,7 +154,7 @@ impl AppState {
 
 use moto_club_wg::{RegisteredDevice, Session};
 use moto_club_ws::logs::{GarageInfo, LogStreamError};
-use moto_club_ws::{LogStreamingContext, PeerStreamingContext};
+use moto_club_ws::{EventStreamingContext, LogStreamingContext, PeerStreamingContext};
 use moto_k8s::{LogStream, PodLogOptions, PodOps};
 use moto_wgtunnel_types::WgPublicKey;
 
@@ -215,6 +220,22 @@ impl PeerStreamingContext for AppState {
     }
 }
 
+impl EventStreamingContext for AppState {
+    async fn list_owned_garage_names(&self, owner: &str) -> Result<Vec<String>, String> {
+        use moto_club_db::garage_repo;
+
+        let garages = garage_repo::list_by_owner(&self.db_pool, owner, false)
+            .await
+            .map_err(|e| format!("database error: {e}"))?;
+
+        Ok(garages.into_iter().map(|g| g.name).collect())
+    }
+
+    fn event_broadcaster(&self) -> Arc<EventBroadcaster> {
+        Arc::clone(&self.event_broadcaster)
+    }
+}
+
 /// Creates the main API router with all routes.
 ///
 /// The router includes:
@@ -227,6 +248,7 @@ pub fn router(state: AppState) -> Router {
         .merge(health::router())
         .merge(garages::router())
         .merge(logs_ws::router())
+        .merge(events_ws::router())
         .merge(wg::router())
         .layer(middleware::from_fn(metrics::record_http_metrics))
         .with_state(state)
