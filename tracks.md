@@ -632,3 +632,5 @@ WHAT DOES NOT GO HERE:
 - Implement OpenAI → Anthropic request translation (messages, system message extraction, field mapping)
 - Implement Anthropic → OpenAI non-streaming response translation
 - Implement Anthropic → OpenAI streaming SSE response translation (event-by-event)
+- Implement tool use translation between OpenAI and Anthropic formats
+- Implement Gemini routing via OpenAI-compat mode (no translation, auth injection only)

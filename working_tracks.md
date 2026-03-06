@@ -88,9 +88,7 @@ Read it in full at the start of each iteration.
 
 ## ai-proxy.md v0.3
 
-- Implement tool use translation between OpenAI and Anthropic formats
-- Implement Gemini routing via OpenAI-compat mode (no translation, auth injection only)
-
+(all items completed)
 
 ## ai-proxy.md v0.4
 

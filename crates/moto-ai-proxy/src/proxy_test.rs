@@ -377,3 +377,56 @@ async fn chat_completions_returns_401_without_auth() {
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn gemini_provider_routes_to_openai_compat_endpoint() {
+    // Verify Gemini model routing and OpenAI-compat configuration.
+    assert_eq!(
+        Provider::from_model("gemini-2.0-flash"),
+        Some(Provider::Gemini)
+    );
+    assert_eq!(
+        Provider::from_model("gemini-1.5-pro"),
+        Some(Provider::Gemini)
+    );
+    assert_eq!(
+        Provider::Gemini.unified_chat_path(),
+        "v1beta/openai/chat/completions"
+    );
+    assert_eq!(Provider::Gemini.auth_header(), "x-goog-api-key");
+    // Gemini auth value is the raw key (no Bearer prefix).
+    assert_eq!(Provider::Gemini.auth_value("test-key"), "test-key");
+    assert_eq!(
+        Provider::Gemini.upstream_base(),
+        "https://generativelanguage.googleapis.com/"
+    );
+}
+
+#[tokio::test]
+async fn chat_completions_returns_503_for_unconfigured_gemini() {
+    // No Gemini key configured — should return 503 for Gemini model.
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(
+            r#"{"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": "Hi"}]}"#,
+        ))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(
+        json["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("provider not configured")
+    );
+}
