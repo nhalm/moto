@@ -9,3 +9,6 @@ pub mod health;
 pub mod keys;
 pub mod provider;
 pub mod proxy;
+
+#[cfg(test)]
+mod proxy_test;

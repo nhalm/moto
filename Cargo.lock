@@ -2020,6 +2020,7 @@ name = "moto-ai-proxy"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "futures-util",
  "moto-keybox-client",
  "reqwest",
  "secrecy",
@@ -2027,6 +2028,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "uuid",

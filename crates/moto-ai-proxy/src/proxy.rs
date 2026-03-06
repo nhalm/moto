@@ -169,13 +169,17 @@ pub async fn forward_to_provider<K: KeyStore>(
     let status = StatusCode::from_u16(upstream_status_code).unwrap_or(StatusCode::BAD_GATEWAY);
     let mut response_headers = HeaderMap::new();
 
-    // Forward Content-Type from upstream.
+    // Forward Content-Type from upstream (text/event-stream for SSE).
     if let Some(ct) = upstream_resp.headers().get("content-type") {
         response_headers.insert("content-type", ct.clone());
     }
-    // Forward Transfer-Encoding for streaming.
+    // Forward Transfer-Encoding for streaming (chunked).
     if let Some(te) = upstream_resp.headers().get("transfer-encoding") {
         response_headers.insert("transfer-encoding", te.clone());
+    }
+    // Forward Cache-Control from upstream (SSE uses no-cache).
+    if let Some(cc) = upstream_resp.headers().get("cache-control") {
+        response_headers.insert("cache-control", cc.clone());
     }
 
     let body = Body::from_stream(upstream_resp.bytes_stream());

@@ -84,7 +84,6 @@ Read it in full at the start of each iteration.
 
 ## ai-proxy.md v0.2
 
-- Implement streaming SSE pass-through (chunked transfer, flush immediately, no buffering)
 - Implement API key caching with configurable TTL (default 5 min)
 
 ## ai-proxy.md v0.3

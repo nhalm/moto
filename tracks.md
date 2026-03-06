@@ -622,3 +622,4 @@ WHAT DOES NOT GO HERE:
 - Implement garage validation caching (default 60s)
 - Add structured canonical logging with request_id, garage_id, provider, duration_ms
 - Add configuration parsing for all MOTO_AI_PROXY_* env vars
+- Implement streaming SSE pass-through (chunked transfer, flush immediately, no buffering)
