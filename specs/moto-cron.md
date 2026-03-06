@@ -3,7 +3,7 @@
 | | |
 |--------|----------------------------------------------|
 | Version | 0.3 |
-| Status | Ready to Rip |
+| Status | Ripping |
 | Last Updated | 2026-03-06 |
 
 ## Overview
@@ -66,14 +66,14 @@ New step:
 
 moto-club.md mentions moto-cron cleaning up expired WireGuard session records. This is deferred to a future version — session cleanup is not blocking and can be addressed separately.
 
-## TTL Warnings (future)
+## TTL Warnings
 
-When moto-club-websocket event streaming is implemented, garages should receive warnings before expiry:
+The reconciler emits warning events before garage expiry via the event streaming WebSocket:
 
 - 15 minutes before expiry
 - 5 minutes before expiry
 
-These are event stream messages, not blocking actions. The garage agent can call `moto garage extend` to prevent termination. See [moto-club-websocket.md](moto-club-websocket.md).
+These are event stream messages, not blocking actions. The garage agent can call `moto garage extend` to prevent termination. Warnings are deduplicated per `(garage_id, threshold)` to avoid repeats across reconcile cycles. See [moto-club-websocket.md](moto-club-websocket.md).
 
 ## Configuration
 
