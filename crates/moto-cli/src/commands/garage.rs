@@ -1,4 +1,4 @@
-//! Garage subcommands: list, open, close, logs, enter, extend.
+//! Garage subcommands: list, open, close, logs, enter, extend, watch.
 //!
 //! The CLI talks directly to moto-club API for all garage operations.
 //! Local mode (direct K8s access) is deprecated per project-structure.md v1.2.
@@ -119,6 +119,13 @@ pub enum GarageAction {
         /// Time to add to current TTL (e.g., 2h, 30m)
         #[arg(long, default_value = "2h")]
         ttl: String,
+    },
+
+    /// Watch garage events in real time
+    Watch {
+        /// Comma-separated garage names to watch (default: all owned)
+        #[arg(long, value_delimiter = ',')]
+        garages: Option<Vec<String>>,
     },
 }
 
@@ -728,6 +735,12 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                     }
                 }
             }
+        }
+
+        GarageAction::Watch { garages: _ } => {
+            return Err(CliError::general(
+                "garage watch is not yet implemented.\n\nThis feature is coming soon.",
+            ));
         }
 
         GarageAction::Extend { name, ttl } => {
