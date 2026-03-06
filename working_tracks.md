@@ -86,7 +86,6 @@ Read it in full at the start of each iteration.
 
 - Implement streaming SSE pass-through (chunked transfer, flush immediately, no buffering)
 - Implement API key caching with configurable TTL (default 5 min)
-- Add configuration parsing for all MOTO_AI_PROXY_* env vars
 
 ## ai-proxy.md v0.3
 

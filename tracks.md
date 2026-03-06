@@ -621,3 +621,4 @@ WHAT DOES NOT GO HERE:
 - Implement garage identity validation via moto-club API
 - Implement garage validation caching (default 60s)
 - Add structured canonical logging with request_id, garage_id, provider, duration_ms
+- Add configuration parsing for all MOTO_AI_PROXY_* env vars
