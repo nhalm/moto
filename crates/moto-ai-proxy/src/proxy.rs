@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use axum::body::Body;
-use axum::extract::{Path, State};
+use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use reqwest::Client;
@@ -11,6 +11,9 @@ use secrecy::ExposeSecret;
 
 use crate::keys::KeyStore;
 use crate::provider::Provider;
+
+/// Maximum request body size (10 MB).
+const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024;
 
 /// Shared state for proxy handlers.
 pub struct ProxyState<K: KeyStore + 'static> {
@@ -209,6 +212,7 @@ pub fn proxy_router<K: KeyStore + 'static>(client: Client, key_store: K) -> axum
             "/passthrough/gemini/{*path}",
             axum::routing::any(passthrough_gemini::<K>),
         )
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_SIZE))
         .with_state(state)
 }
 
