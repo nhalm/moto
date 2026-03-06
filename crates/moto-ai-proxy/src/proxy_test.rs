@@ -404,6 +404,57 @@ async fn chat_completions_returns_401_without_auth() {
 }
 
 #[tokio::test]
+async fn responses_include_x_moto_request_id_header() {
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    // Even error responses should include X-Moto-Request-Id.
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(r#"{"model": "unknown-model", "messages": []}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let request_id = resp.headers().get("x-moto-request-id");
+    assert!(
+        request_id.is_some(),
+        "response should include X-Moto-Request-Id header"
+    );
+    let id_str = request_id.unwrap().to_str().unwrap();
+    assert!(!id_str.is_empty());
+    // Should be a valid UUID.
+    assert!(
+        uuid::Uuid::parse_str(id_str).is_ok(),
+        "X-Moto-Request-Id should be a valid UUID"
+    );
+}
+
+#[tokio::test]
+async fn list_models_includes_x_moto_request_id_header() {
+    let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/v1/models")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let request_id = resp.headers().get("x-moto-request-id");
+    assert!(
+        request_id.is_some(),
+        "response should include X-Moto-Request-Id header"
+    );
+}
+
+#[tokio::test]
 async fn gemini_provider_routes_to_openai_compat_endpoint() {
     // Verify Gemini model routing and OpenAI-compat configuration.
     assert_eq!(

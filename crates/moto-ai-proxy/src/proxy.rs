@@ -207,6 +207,13 @@ pub async fn forward_to_provider<K: KeyStore>(
     }
 }
 
+/// Injects `X-Moto-Request-Id` response header for correlation/debugging.
+fn inject_moto_headers(response: &mut Response, request_id: &Uuid) {
+    if let Ok(val) = HeaderValue::from_str(&request_id.to_string()) {
+        response.headers_mut().insert("x-moto-request-id", val);
+    }
+}
+
 /// Shared passthrough handler — validates auth, forwards to provider, emits canonical log.
 async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
     provider: Provider,
@@ -239,6 +246,8 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
                 duration_ms = duration_ms,
                 "request completed"
             );
+            let mut resp = resp;
+            inject_moto_headers(&mut resp, &request_id);
             return resp;
         }
     };
@@ -270,7 +279,9 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
         "request completed"
     );
 
-    result.response
+    let mut resp = result.response;
+    inject_moto_headers(&mut resp, &request_id);
+    resp
 }
 
 /// Handler for `/passthrough/anthropic/*path`.
@@ -430,6 +441,8 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
                 None,
                 &start,
             );
+            let mut resp = resp;
+            inject_moto_headers(&mut resp, &request_id);
             return resp;
         }
     };
@@ -448,7 +461,9 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
                 None,
                 &start,
             );
-            return *resp;
+            let mut resp = *resp;
+            inject_moto_headers(&mut resp, &request_id);
+            return resp;
         }
     };
 
@@ -484,14 +499,18 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
     );
 
     // For Anthropic responses, translate back to OpenAI format.
-    if info.is_anthropic && result.response.status().is_success() {
+    let mut resp = if info.is_anthropic && result.response.status().is_success() {
         if is_streaming {
-            return translate_anthropic_streaming_response(result.response);
+            translate_anthropic_streaming_response(result.response)
+        } else {
+            translate_anthropic_response(result.response).await
         }
-        return translate_anthropic_response(result.response).await;
-    }
+    } else {
+        result.response
+    };
 
-    result.response
+    inject_moto_headers(&mut resp, &request_id);
+    resp
 }
 
 /// Buffers an Anthropic response body, translates it to `OpenAI` format, and returns a new response.
@@ -727,6 +746,8 @@ pub async fn list_models<K: KeyStore, G: GarageValidator>(
                 None,
                 &start,
             );
+            let mut resp = resp;
+            inject_moto_headers(&mut resp, &request_id);
             return resp;
         }
     };
@@ -761,7 +782,7 @@ pub async fn list_models<K: KeyStore, G: GarageValidator>(
         &start,
     );
 
-    (
+    let mut resp: Response = (
         status,
         [(
             axum::http::header::CONTENT_TYPE,
@@ -769,7 +790,9 @@ pub async fn list_models<K: KeyStore, G: GarageValidator>(
         )],
         response_body.to_string(),
     )
-        .into_response()
+        .into_response();
+    inject_moto_headers(&mut resp, &request_id);
+    resp
 }
 
 /// Builds the proxy router with passthrough routes and garage auth.

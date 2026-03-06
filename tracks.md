@@ -634,3 +634,17 @@ WHAT DOES NOT GO HERE:
 - Implement Anthropic → OpenAI streaming SSE response translation (event-by-event)
 - Implement tool use translation between OpenAI and Anthropic formats
 - Implement Gemini routing via OpenAI-compat mode (no translation, auth injection only)
+
+## ai-proxy.md v0.4
+
+- Add /v1/models endpoint returning merged model list from all configured providers
+- Add MOTO_AI_PROXY_MODEL_MAP support for custom model prefix → provider mappings
+- Implement model-based auto-routing: inspect model field and route to correct provider
+- Support all provider keys stored simultaneously (no single-backend limitation)
+- Remove MOTO_AI_PROXY_BACKEND env var (routing is automatic)
+- Return 503 per-provider when a provider key is missing (other providers still work)
+
+## ai-proxy.md v0.5
+
+- Implement fine-tuned model name handling (strip ft: prefix before matching)
+- Add X-Moto-Request-Id response header (correlation ID)
