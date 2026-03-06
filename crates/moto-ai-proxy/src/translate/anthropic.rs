@@ -140,6 +140,100 @@ fn translate_tool_choice(choice: &Value) -> Option<Value> {
     }
 }
 
+/// Translates an Anthropic non-streaming response into an `OpenAI` chat completion response.
+///
+/// Field mapping:
+/// - `id` → `id` (passed through)
+/// - `content[*].text` → `choices[0].message.content` (text blocks concatenated)
+/// - `model` → `model` (passed through)
+/// - `stop_reason` → `choices[0].finish_reason` (mapped: `end_turn`→`stop`, `max_tokens`→`length`, `tool_use`→`tool_calls`)
+/// - `usage.input_tokens` → `usage.prompt_tokens` (rename)
+/// - `usage.output_tokens` → `usage.completion_tokens` (rename)
+#[must_use]
+pub fn translate_response(anthropic_body: &Value) -> Value {
+    let mut openai = serde_json::Map::new();
+
+    // Pass through id.
+    if let Some(id) = anthropic_body.get("id") {
+        openai.insert("id".into(), id.clone());
+    }
+
+    openai.insert("object".into(), Value::String("chat.completion".into()));
+
+    // Pass through model.
+    if let Some(model) = anthropic_body.get("model") {
+        openai.insert("model".into(), model.clone());
+    }
+
+    // Build choices[0].message from content blocks.
+    let content = extract_text_content(anthropic_body);
+    let finish_reason = translate_stop_reason(anthropic_body);
+
+    let mut message = serde_json::Map::new();
+    message.insert("role".into(), Value::String("assistant".into()));
+    message.insert("content".into(), Value::String(content));
+
+    let mut choice = serde_json::Map::new();
+    choice.insert("index".into(), Value::Number(0.into()));
+    choice.insert("message".into(), Value::Object(message));
+    choice.insert("finish_reason".into(), finish_reason);
+
+    openai.insert("choices".into(), Value::Array(vec![Value::Object(choice)]));
+
+    // Translate usage: input_tokens → prompt_tokens, output_tokens → completion_tokens.
+    if let Some(Value::Object(usage)) = anthropic_body.get("usage") {
+        let mut openai_usage = serde_json::Map::new();
+        if let Some(input) = usage.get("input_tokens") {
+            openai_usage.insert("prompt_tokens".into(), input.clone());
+        }
+        if let Some(output) = usage.get("output_tokens") {
+            openai_usage.insert("completion_tokens".into(), output.clone());
+        }
+        // Add total_tokens for OpenAI compat.
+        let total = usage
+            .get("input_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0)
+            + usage
+                .get("output_tokens")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
+        openai_usage.insert("total_tokens".into(), Value::Number(total.into()));
+        openai.insert("usage".into(), Value::Object(openai_usage));
+    }
+
+    Value::Object(openai)
+}
+
+/// Extracts and concatenates text from Anthropic content blocks.
+fn extract_text_content(body: &Value) -> String {
+    match body.get("content") {
+        Some(Value::Array(blocks)) => blocks
+            .iter()
+            .filter_map(|block| {
+                if block.get("type").and_then(Value::as_str) == Some("text") {
+                    block.get("text").and_then(Value::as_str)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(""),
+        _ => String::new(),
+    }
+}
+
+/// Maps Anthropic `stop_reason` to `OpenAI` `finish_reason`.
+fn translate_stop_reason(body: &Value) -> Value {
+    match body.get("stop_reason").and_then(Value::as_str) {
+        Some("end_turn") => Value::String("stop".into()),
+        Some("max_tokens") => Value::String("length".into()),
+        Some("tool_use") => Value::String("tool_calls".into()),
+        Some(other) => Value::String(other.into()),
+        None => Value::Null,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,5 +436,104 @@ mod tests {
         assert!(result.get("logprobs").is_none());
         assert!(result.get("frequency_penalty").is_none());
         assert!(result.get("presence_penalty").is_none());
+    }
+
+    #[test]
+    fn basic_response_translation() {
+        let anthropic = json!({
+            "id": "msg_123",
+            "type": "message",
+            "content": [{"type": "text", "text": "Hello world"}],
+            "model": "claude-sonnet-4-20250514",
+            "stop_reason": "end_turn",
+            "usage": {
+                "input_tokens": 10,
+                "output_tokens": 25
+            }
+        });
+
+        let result = translate_response(&anthropic);
+        assert_eq!(result["id"], "msg_123");
+        assert_eq!(result["object"], "chat.completion");
+        assert_eq!(result["model"], "claude-sonnet-4-20250514");
+        assert_eq!(result["choices"][0]["index"], 0);
+        assert_eq!(result["choices"][0]["message"]["role"], "assistant");
+        assert_eq!(result["choices"][0]["message"]["content"], "Hello world");
+        assert_eq!(result["choices"][0]["finish_reason"], "stop");
+        assert_eq!(result["usage"]["prompt_tokens"], 10);
+        assert_eq!(result["usage"]["completion_tokens"], 25);
+        assert_eq!(result["usage"]["total_tokens"], 35);
+    }
+
+    #[test]
+    fn stop_reason_max_tokens_maps_to_length() {
+        let anthropic = json!({
+            "id": "msg_456",
+            "content": [{"type": "text", "text": "Truncated"}],
+            "model": "claude-sonnet-4-20250514",
+            "stop_reason": "max_tokens"
+        });
+
+        let result = translate_response(&anthropic);
+        assert_eq!(result["choices"][0]["finish_reason"], "length");
+    }
+
+    #[test]
+    fn stop_reason_tool_use_maps_to_tool_calls() {
+        let anthropic = json!({
+            "id": "msg_789",
+            "content": [{"type": "text", "text": ""}],
+            "model": "claude-sonnet-4-20250514",
+            "stop_reason": "tool_use"
+        });
+
+        let result = translate_response(&anthropic);
+        assert_eq!(result["choices"][0]["finish_reason"], "tool_calls");
+    }
+
+    #[test]
+    fn multiple_text_blocks_concatenated() {
+        let anthropic = json!({
+            "id": "msg_multi",
+            "content": [
+                {"type": "text", "text": "Hello "},
+                {"type": "text", "text": "world"}
+            ],
+            "model": "claude-sonnet-4-20250514",
+            "stop_reason": "end_turn"
+        });
+
+        let result = translate_response(&anthropic);
+        assert_eq!(result["choices"][0]["message"]["content"], "Hello world");
+    }
+
+    #[test]
+    fn missing_usage_omitted() {
+        let anthropic = json!({
+            "id": "msg_no_usage",
+            "content": [{"type": "text", "text": "Hi"}],
+            "model": "claude-sonnet-4-20250514",
+            "stop_reason": "end_turn"
+        });
+
+        let result = translate_response(&anthropic);
+        assert!(result.get("usage").is_none());
+    }
+
+    #[test]
+    fn non_text_blocks_ignored() {
+        let anthropic = json!({
+            "id": "msg_tool",
+            "content": [
+                {"type": "text", "text": "Let me check."},
+                {"type": "tool_use", "id": "tu_1", "name": "get_weather", "input": {"location": "NYC"}}
+            ],
+            "model": "claude-sonnet-4-20250514",
+            "stop_reason": "tool_use"
+        });
+
+        let result = translate_response(&anthropic);
+        // Only text blocks are extracted for message content.
+        assert_eq!(result["choices"][0]["message"]["content"], "Let me check.");
     }
 }

@@ -328,12 +328,30 @@ pub async fn passthrough_gemini<K: KeyStore, G: GarageValidator>(
     .await
 }
 
+/// Result of resolving and translating a request.
+struct ResolvedRequest {
+    provider: Provider,
+    model: String,
+    body: Body,
+    /// Whether the original request had `stream: true`.
+    is_streaming: bool,
+}
+
 /// Resolves the provider from the request body's `model` field and prepares
 /// the body for forwarding, translating if needed (e.g., Anthropic).
-fn resolve_and_translate(body: &Bytes) -> Result<(Provider, String, Body), Box<Response>> {
-    let model = serde_json::from_slice::<Value>(body)
-        .ok()
-        .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from));
+fn resolve_and_translate(body: &Bytes) -> Result<ResolvedRequest, Box<Response>> {
+    let parsed: Value = serde_json::from_slice(body).map_err(|_| {
+        Box::new(error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid JSON in request body",
+            "invalid_request_error",
+        ))
+    })?;
+
+    let model = parsed
+        .get("model")
+        .and_then(|m| m.as_str())
+        .map(String::from);
 
     let Some(model) = model else {
         return Err(Box::new(error_response(
@@ -351,22 +369,25 @@ fn resolve_and_translate(body: &Bytes) -> Result<(Provider, String, Body), Box<R
         )));
     };
 
+    let is_streaming = parsed
+        .get("stream")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
     // Translate request body for Anthropic; other providers use OpenAI format natively.
     let forwarded_body = if provider == Provider::Anthropic {
-        let openai_value: Value = serde_json::from_slice(body).map_err(|_| {
-            Box::new(error_response(
-                StatusCode::BAD_REQUEST,
-                "invalid JSON in request body",
-                "invalid_request_error",
-            ))
-        })?;
-        let anthropic_value = anthropic_translate::translate_request(&openai_value);
+        let anthropic_value = anthropic_translate::translate_request(&parsed);
         Body::from(anthropic_value.to_string())
     } else {
         Body::from(body.clone())
     };
 
-    Ok((provider, model, forwarded_body))
+    Ok(ResolvedRequest {
+        provider,
+        model,
+        body: forwarded_body,
+        is_streaming,
+    })
 }
 
 /// Handler for `POST /v1/chat/completions` — unified endpoint.
@@ -402,8 +423,8 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
         }
     };
 
-    let (provider, model, forwarded_body) = match resolve_and_translate(&body) {
-        Ok(resolved) => resolved,
+    let resolved = match resolve_and_translate(&body) {
+        Ok(r) => r,
         Err(resp) => {
             log_request(
                 &request_id,
@@ -420,6 +441,9 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
         }
     };
 
+    let provider = resolved.provider;
+    let model = resolved.model;
+    let is_streaming = resolved.is_streaming;
     let upstream_path = provider.unified_chat_path();
 
     // Forward the body to the upstream provider.
@@ -429,7 +453,7 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
         upstream_path,
         uri.query(),
         &headers,
-        forwarded_body,
+        resolved.body,
         &state.client,
         state.key_store.as_ref(),
     )
@@ -448,7 +472,55 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
         &start,
     );
 
+    // For non-streaming Anthropic responses, translate back to OpenAI format.
+    if provider == Provider::Anthropic && !is_streaming && result.response.status().is_success() {
+        return translate_anthropic_response(result.response).await;
+    }
+
     result.response
+}
+
+/// Buffers an Anthropic response body, translates it to `OpenAI` format, and returns a new response.
+async fn translate_anthropic_response(response: Response) -> Response {
+    let status = response.status();
+    let headers = response.headers().clone();
+
+    let body_bytes = match axum::body::to_bytes(response.into_body(), MAX_REQUEST_BODY_SIZE).await {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to buffer Anthropic response for translation");
+            return error_response(
+                StatusCode::BAD_GATEWAY,
+                "failed to read upstream response",
+                "server_error",
+            );
+        }
+    };
+
+    let Ok(anthropic_value) = serde_json::from_slice::<Value>(&body_bytes) else {
+        tracing::error!("failed to parse Anthropic response as JSON for translation");
+        return error_response(
+            StatusCode::BAD_GATEWAY,
+            "failed to parse upstream response",
+            "server_error",
+        );
+    };
+
+    let openai_value = anthropic_translate::translate_response(&anthropic_value);
+    let translated_body = openai_value.to_string();
+
+    let mut resp = Response::new(Body::from(translated_body));
+    *resp.status_mut() = status;
+    resp.headers_mut()
+        .insert("content-type", HeaderValue::from_static("application/json"));
+    // Preserve any extra headers from the original response (e.g., cache-control).
+    for (name, value) in &headers {
+        if name != "content-type" && name != "content-length" && name != "transfer-encoding" {
+            resp.headers_mut().insert(name.clone(), value.clone());
+        }
+    }
+
+    resp
 }
 
 /// Emits a canonical log line for a unified endpoint request.
