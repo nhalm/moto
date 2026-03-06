@@ -83,8 +83,8 @@ pub mod tunnel;
 
 pub use client::{
     ClientError, CreateGarageRequest, DeviceResponse, ExtendGarageResponse, GarageDetailsResponse,
-    GarageInfo, ListGaragesResponse, ListSessionsResponse, MotoClubClient, MotoClubConfig,
-    SessionInfo, SessionResponse as ApiSessionResponse,
+    GarageEvent, GarageInfo, ListGaragesResponse, ListSessionsResponse, MotoClubClient,
+    MotoClubConfig, SessionInfo, SessionResponse as ApiSessionResponse,
 };
 pub use enter::{
     ConsoleProgress, EnterConfig, EnterError, EnterProgress, EnterResult, GarageSession,

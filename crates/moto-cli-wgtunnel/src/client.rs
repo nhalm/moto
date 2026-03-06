@@ -598,6 +598,112 @@ impl MotoClubClient {
         Ok(rx)
     }
 
+    /// Stream garage events over WebSocket.
+    ///
+    /// Connects to `/ws/v1/events?garages=...` and returns a receiver of parsed
+    /// `GarageEvent` messages. Uses the same auth pattern as `stream_logs_ws()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `garages` - Optional list of garage names to filter (empty = all owned)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the WebSocket connection cannot be established.
+    pub async fn stream_events_ws(
+        &self,
+        garages: Option<&[String]>,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<GarageEvent, String>>, ClientError> {
+        // Convert http(s):// to ws(s)://
+        let ws_base = if self.config.base_url.starts_with("https://") {
+            self.config.base_url.replacen("https://", "wss://", 1)
+        } else {
+            self.config.base_url.replacen("http://", "ws://", 1)
+        };
+
+        let mut url = format!("{ws_base}/ws/v1/events");
+        if let Some(names) = garages
+            && !names.is_empty()
+        {
+            use std::fmt::Write;
+            let _ = write!(url, "?garages={}", names.join(","));
+        }
+
+        debug!(url = %url, "connecting to event WebSocket");
+
+        let request = tungstenite::http::Request::builder()
+            .uri(&url)
+            .header("Authorization", self.auth_header())
+            .header("Connection", "Upgrade")
+            .header("Upgrade", "websocket")
+            .header("Sec-WebSocket-Version", "13")
+            .header(
+                "Sec-WebSocket-Key",
+                tungstenite::handshake::client::generate_key(),
+            )
+            .body(())
+            .map_err(|e| ClientError::Server {
+                code: "WEBSOCKET_ERROR".to_string(),
+                message: format!("failed to build WebSocket request: {e}"),
+            })?;
+
+        let tcp_stream = tokio::time::timeout(
+            self.config.timeout,
+            tokio::net::TcpStream::connect(
+                request
+                    .uri()
+                    .authority()
+                    .map_or("localhost:18080", tungstenite::http::uri::Authority::as_str),
+            ),
+        )
+        .await
+        .map_err(|_| ClientError::Unreachable {
+            url: url.clone(),
+            reason: "connection timed out".to_string(),
+        })?
+        .map_err(|e| ClientError::Unreachable {
+            url: url.clone(),
+            reason: e.to_string(),
+        })?;
+
+        let (ws_stream, _response) = tokio_tungstenite::client_async(request, tcp_stream)
+            .await
+            .map_err(|e| ClientError::Unreachable {
+                url: url.clone(),
+                reason: format!("WebSocket handshake failed: {e}"),
+            })?;
+
+        let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+
+        let (tx, rx) = tokio::sync::mpsc::channel(256);
+
+        tokio::spawn(async move {
+            while let Some(msg_result) = ws_receiver.next().await {
+                match msg_result {
+                    Ok(tungstenite::Message::Text(text)) => {
+                        match serde_json::from_str::<GarageEvent>(&text) {
+                            Ok(event) => {
+                                if tx.send(Ok(event)).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                warn!(error = %e, text = %text, "failed to parse event message");
+                            }
+                        }
+                    }
+                    Ok(tungstenite::Message::Ping(data)) => {
+                        let _ = ws_sender.send(tungstenite::Message::Pong(data)).await;
+                    }
+                    Ok(tungstenite::Message::Close(_)) | Err(_) => break,
+                    _ => {}
+                }
+            }
+        });
+
+        Ok(rx)
+    }
+
     /// Send a POST request with JSON body and parse JSON response.
     #[allow(clippy::future_not_send)] // Self is not Sync, but this is an internal method
     async fn post_json<Req, Resp>(&self, url: &str, body: &Req) -> Result<Resp, ClientError>
@@ -880,6 +986,58 @@ struct ApiErrorDetail {
     code: String,
     /// Error message.
     message: String,
+}
+
+/// Event types received from the event WebSocket (`/ws/v1/events`).
+///
+/// Mirrors the server-side `GarageEvent` enum from `moto-club-ws`.
+/// Uses `#[serde(tag = "type")]` to match the server's JSON format.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum GarageEvent {
+    /// TTL approaching expiry.
+    #[serde(rename = "ttl_warning")]
+    TtlWarning {
+        /// Garage name.
+        garage: String,
+        /// Minutes remaining before expiry.
+        minutes_remaining: u32,
+        /// Expiry timestamp (ISO 8601).
+        expires_at: String,
+    },
+    /// Garage state transition.
+    #[serde(rename = "status_change")]
+    StatusChange {
+        /// Garage name.
+        garage: String,
+        /// Previous state.
+        from: String,
+        /// New state.
+        to: String,
+        /// Reason for transition (only on Terminated/Failed).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
+    /// Garage error.
+    #[serde(rename = "error")]
+    Error {
+        /// Garage name.
+        garage: String,
+        /// Error description.
+        message: String,
+    },
+}
+
+impl GarageEvent {
+    /// Get the garage name this event relates to.
+    #[must_use]
+    pub fn garage_name(&self) -> &str {
+        match self {
+            Self::TtlWarning { garage, .. }
+            | Self::StatusChange { garage, .. }
+            | Self::Error { garage, .. } => garage,
+        }
+    }
 }
 
 #[cfg(test)]
