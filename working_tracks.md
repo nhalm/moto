@@ -96,5 +96,4 @@ Read it in full at the start of each iteration.
 
 ## ai-proxy.md v0.5
 
-- Implement local dev key seeding (prompt or MOTO_DEV_*_KEY env vars)
-- Support --no-ai-proxy flag for moto dev up
+(all items completed)

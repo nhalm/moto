@@ -3,9 +3,10 @@
 //! Manages the local development environment (postgres, keybox, moto-club, ai-proxy).
 //! See local-dev.md for the full specification.
 
+use base64::Engine as _;
 use clap::{Args, Subcommand};
 use serde::Serialize;
-use std::io::Write as _;
+use std::io::{IsTerminal, Write as _};
 use std::process::Command as ProcessCommand;
 use std::process::Stdio;
 
@@ -512,6 +513,179 @@ fn ensure_ai_proxy_svid() -> Result<String> {
     Ok("generated".to_string())
 }
 
+/// Provider key definitions for ai-proxy seeding.
+const AI_PROXY_PROVIDERS: &[(&str, &str, &str)] = &[
+    ("anthropic", "MOTO_DEV_ANTHROPIC_KEY", "ANTHROPIC_API_KEY"),
+    ("openai", "MOTO_DEV_OPENAI_KEY", "OPENAI_API_KEY"),
+    ("gemini", "MOTO_DEV_GEMINI_KEY", "GEMINI_API_KEY"),
+];
+
+/// Check which ai-proxy provider keys already exist in keybox.
+fn check_existing_ai_keys(config: &DevConfig) -> Vec<String> {
+    let service_token = match std::fs::read_to_string(".dev/keybox/service-token") {
+        Ok(t) => t.trim().to_string(),
+        Err(_) => return vec![],
+    };
+    let url = format!("http://{}/secrets/service/ai-proxy", config.keybox_api);
+
+    let output = ProcessCommand::new("curl")
+        .args([
+            "-s",
+            "-H",
+            &format!("Authorization: Bearer {service_token}"),
+            "--connect-timeout",
+            "5",
+            &url,
+        ])
+        .output();
+
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        _ => return vec![],
+    };
+
+    let body = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(_) => return vec![],
+    };
+
+    parsed
+        .get("secrets")
+        .and_then(|s| s.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| s.get("name").and_then(|n| n.as_str()).map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Store an ai-proxy provider key in keybox.
+fn store_ai_key(config: &DevConfig, provider: &str, key: &str) -> Result<()> {
+    let service_token = std::fs::read_to_string(".dev/keybox/service-token")
+        .map(|t| t.trim().to_string())
+        .map_err(|e| CliError::general(format!("Failed to read service token: {e}")))?;
+
+    let encoded = base64::engine::general_purpose::STANDARD.encode(key.as_bytes());
+    let body = format!(r#"{{"value":"{encoded}"}}"#);
+    let url = format!(
+        "http://{}/secrets/service/ai-proxy/{provider}",
+        config.keybox_api
+    );
+
+    let output = ProcessCommand::new("curl")
+        .args([
+            "-s",
+            "-X",
+            "POST",
+            "-H",
+            &format!("Authorization: Bearer {service_token}"),
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            &body,
+            "--connect-timeout",
+            "5",
+            &url,
+        ])
+        .output()
+        .map_err(|e| CliError::general(format!("Failed to store {provider} key: {e}")))?;
+
+    if !output.status.success() {
+        return Err(CliError::general(format!(
+            "Failed to store {provider} key in keybox"
+        )));
+    }
+
+    Ok(())
+}
+
+/// Prompt the user for a single API key. Returns None if skipped (empty input).
+fn prompt_api_key(display_name: &str) -> Option<String> {
+    print!("  {display_name}: ");
+    std::io::stdout().flush().ok();
+    let mut input = String::new();
+    if std::io::stdin().read_line(&mut input).is_ok() {
+        let trimmed = input.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("skip") {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    } else {
+        None
+    }
+}
+
+/// Seed ai-proxy provider keys into keybox if they don't exist.
+///
+/// Checks env vars (`MOTO_DEV_ANTHROPIC_KEY`, etc.) first, then prompts
+/// interactively if stdin is a TTY.
+fn seed_ai_proxy_keys(config: &DevConfig, quiet: bool) -> Result<String> {
+    let existing = check_existing_ai_keys(config);
+
+    // Collect keys to seed: from env vars or interactive prompt
+    let mut keys_to_store: Vec<(&str, String)> = Vec::new();
+
+    // First pass: check env vars for all providers
+    let mut need_prompt = false;
+    for &(provider, env_var, _) in AI_PROXY_PROVIDERS {
+        if existing.iter().any(|n| n == provider) {
+            continue; // already in keybox
+        }
+        if let Ok(val) = std::env::var(env_var) {
+            let val = val.trim().to_string();
+            if !val.is_empty() {
+                keys_to_store.push((provider, val));
+                continue;
+            }
+        }
+        need_prompt = true;
+    }
+
+    // Second pass: prompt for any remaining keys if TTY
+    if need_prompt && std::io::stdin().is_terminal() && !quiet {
+        let missing: Vec<_> = AI_PROXY_PROVIDERS
+            .iter()
+            .filter(|&&(provider, _, _)| {
+                !existing.iter().any(|n| n == provider)
+                    && !keys_to_store.iter().any(|(p, _)| *p == provider)
+            })
+            .collect();
+
+        if !missing.is_empty() {
+            println!();
+            println!(
+                "AI provider keys not found in keybox. Enter keys now (or press Enter to skip):"
+            );
+            println!();
+            for &&(provider, _, display_name) in &missing {
+                if let Some(key) = prompt_api_key(display_name) {
+                    keys_to_store.push((provider, key));
+                }
+            }
+            println!();
+        }
+    }
+
+    if keys_to_store.is_empty() {
+        if existing.is_empty() {
+            return Ok("no keys (use MOTO_DEV_*_KEY env vars or --no-ai-proxy)".to_string());
+        }
+        return Ok(format!("{} key(s) already in keybox", existing.len()));
+    }
+
+    // Store keys in keybox
+    let mut stored = 0;
+    for (provider, key) in &keys_to_store {
+        store_ai_key(config, provider, key)?;
+        stored += 1;
+    }
+
+    Ok(format!("stored {stored} key(s) in keybox"))
+}
+
 /// Spawn a cargo subprocess with environment variables.
 fn spawn_subprocess(
     bin: &str,
@@ -618,8 +792,8 @@ async fn dev_up(
     let config = DevConfig::load();
     let quiet = flags.quiet;
     let verbose = flags.verbose;
-    // Total steps: 8 base + ai-proxy (optional) + garage (optional)
-    let total_steps: u8 = 8 + u8::from(!no_ai_proxy) + u8::from(!no_garage);
+    // Total steps: 8 base + ai-proxy key seeding + ai-proxy (both optional) + garage (optional)
+    let total_steps: u8 = 8 + 2 * u8::from(!no_ai_proxy) + u8::from(!no_garage);
 
     // Idempotency: silently kill existing processes on club/keybox/ai-proxy ports
     let quiet_flags = GlobalFlags {
@@ -752,7 +926,21 @@ async fn dev_up(
     }
     step_done(&format!("healthy ({})", config.club_api), quiet);
 
-    // Step 9 (optional): ai-proxy (SVID + spawn)
+    // Step 9 (optional): seed ai-proxy keys into keybox
+    if !no_ai_proxy {
+        step += 1;
+        step_print(step, total_steps, "Seeding AI provider keys...", quiet);
+        let seed_result = seed_ai_proxy_keys(&config, quiet).inspect_err(|_| {
+            if !quiet {
+                println!();
+            }
+            club.start_kill().ok();
+            keybox.start_kill().ok();
+        })?;
+        step_done(&seed_result, quiet);
+    }
+
+    // Step 10 (optional): ai-proxy (SVID + spawn)
     let ai_proxy = if no_ai_proxy {
         None
     } else {
