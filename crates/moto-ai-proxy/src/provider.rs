@@ -184,6 +184,14 @@ impl CustomMapping {
     }
 }
 
+/// Strips the `ft:` prefix from fine-tuned model names.
+///
+/// `OpenAI` fine-tuned models use the format `ft:gpt-4o:org:model:id`.
+/// If the model name starts with `ft:`, returns everything after `ft:`.
+fn strip_ft_prefix(model: &str) -> &str {
+    model.strip_prefix("ft:").unwrap_or(model)
+}
+
 /// Model router: resolves model names to provider info.
 ///
 /// Checks custom mappings first (from `MOTO_AI_PROXY_MODEL_MAP`),
@@ -209,9 +217,11 @@ impl ModelRouter {
 
     /// Resolves a model name to provider info.
     ///
-    /// Checks custom mappings first, then built-in providers.
+    /// Strips `ft:` prefix from fine-tuned model names (e.g., `ft:gpt-4o:org:model:id`)
+    /// before matching. Checks custom mappings first, then built-in providers.
     #[must_use]
     pub fn resolve(&self, model: &str) -> Option<ProviderInfo> {
+        let model = strip_ft_prefix(model);
         let lower = model.to_lowercase();
         for mapping in &self.custom {
             if lower.starts_with(&mapping.prefix) {
@@ -370,5 +380,49 @@ mod tests {
     #[test]
     fn model_router_invalid_json_returns_error() {
         assert!(ModelRouter::new(Some("not json")).is_err());
+    }
+
+    #[test]
+    fn model_router_strips_ft_prefix_for_finetuned_models() {
+        let router = ModelRouter::default();
+
+        // ft:gpt-4o:org:model:id → routes to OpenAI
+        let info = router.resolve("ft:gpt-4o:my-org:custom:abc123").unwrap();
+        assert_eq!(info.name, "openai");
+        assert!(!info.is_anthropic);
+
+        // ft:gpt-4o-mini:org:model:id → routes to OpenAI
+        let info = router.resolve("ft:gpt-4o-mini:org:model:id").unwrap();
+        assert_eq!(info.name, "openai");
+    }
+
+    #[test]
+    fn model_router_ft_prefix_does_not_affect_non_ft_models() {
+        let router = ModelRouter::default();
+
+        // Normal models still work
+        let info = router.resolve("gpt-4o").unwrap();
+        assert_eq!(info.name, "openai");
+
+        let info = router.resolve("claude-sonnet-4-20250514").unwrap();
+        assert_eq!(info.name, "anthropic");
+    }
+
+    #[test]
+    fn model_router_ft_prefix_unknown_base_model() {
+        let router = ModelRouter::default();
+        // ft: with unknown base model → None
+        assert!(router.resolve("ft:unknown-model:org:name:id").is_none());
+    }
+
+    #[test]
+    fn strip_ft_prefix_works() {
+        assert_eq!(
+            strip_ft_prefix("ft:gpt-4o:org:model:id"),
+            "gpt-4o:org:model:id"
+        );
+        assert_eq!(strip_ft_prefix("gpt-4o"), "gpt-4o");
+        assert_eq!(strip_ft_prefix("ft:"), "");
+        assert_eq!(strip_ft_prefix(""), "");
     }
 }

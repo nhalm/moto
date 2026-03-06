@@ -575,3 +575,34 @@ async fn chat_completions_returns_503_for_custom_provider_without_key() {
             .contains("provider not configured")
     );
 }
+
+#[tokio::test]
+async fn chat_completions_routes_finetuned_model_to_openai() {
+    // Fine-tuned model ft:gpt-4o:org:model:id should route to OpenAI.
+    // No OpenAI key configured, so it should return 503 (not 400 "unknown model prefix").
+    let key_store = MultiKeyStore::new();
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::from(
+            r#"{"model": "ft:gpt-4o:my-org:custom:abc123", "messages": [{"role": "user", "content": "Hi"}]}"#,
+        ))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    // Should be 503 (provider not configured), NOT 400 (unknown model prefix).
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(
+        json["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("provider not configured")
+    );
+}
