@@ -627,7 +627,7 @@ Response 200:
 | moto-wgtunnel-conn | ✓ Complete | MagicConn, STUN, endpoint selection |
 | moto-wgtunnel-engine | ✓ Complete | Tunnel management, platform TUN |
 | moto-club-wg | ✓ Complete | IPAM, peers, sessions, DERP |
-| moto-garage-wgtunnel | Partial | Daemon scaffolded; `run()` is a placeholder (see below) |
+| moto-garage-wgtunnel | ✓ Complete | Daemon with WS peer streaming, WireGuard engine integration, reconnect, health |
 | moto-cli-wgtunnel | ✓ Complete | WireGuard engine, direct UDP, DERP relay, ttyd terminal all wired up |
 
 ### Garage Daemon WebSocket Client (Remaining)
