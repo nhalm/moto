@@ -4,3 +4,4 @@
 //! injecting API credentials from keybox so garages never see real API keys.
 
 pub mod config;
+pub mod health;

@@ -9,6 +9,9 @@ use std::path::PathBuf;
 /// Default listen address.
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
 
+/// Default health server listen address (per Engine Contract, port 8081).
+const DEFAULT_HEALTH_BIND_ADDR: &str = "0.0.0.0:8081";
+
 /// Default keybox endpoint.
 const DEFAULT_KEYBOX_URL: &str = "http://keybox.moto-system:8080";
 
@@ -29,6 +32,8 @@ const DEFAULT_GARAGE_CACHE_TTL_SECS: u64 = 60;
 pub struct Config {
     /// Listen address for the proxy server.
     pub bind_addr: SocketAddr,
+    /// Listen address for health endpoints (port 8081 per Engine Contract).
+    pub health_bind_addr: SocketAddr,
     /// Keybox endpoint for fetching API keys.
     pub keybox_url: String,
     /// Path to the ai-proxy SVID JWT file.
@@ -57,6 +62,13 @@ impl Config {
                 ConfigError::Invalid("MOTO_AI_PROXY_BIND_ADDR", "invalid socket address")
             })?;
 
+        let health_bind_addr = env::var("MOTO_AI_PROXY_HEALTH_BIND_ADDR")
+            .unwrap_or_else(|_| DEFAULT_HEALTH_BIND_ADDR.to_string())
+            .parse()
+            .map_err(|_| {
+                ConfigError::Invalid("MOTO_AI_PROXY_HEALTH_BIND_ADDR", "invalid socket address")
+            })?;
+
         let keybox_url =
             env::var("MOTO_AI_PROXY_KEYBOX_URL").unwrap_or_else(|_| DEFAULT_KEYBOX_URL.to_string());
 
@@ -81,6 +93,7 @@ impl Config {
 
         Ok(Self {
             bind_addr,
+            health_bind_addr,
             keybox_url,
             svid_file,
             club_url,

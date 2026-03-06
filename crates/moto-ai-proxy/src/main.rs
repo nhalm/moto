@@ -21,6 +21,7 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use moto_ai_proxy::config::Config;
+use moto_ai_proxy::health;
 
 #[tokio::main]
 async fn main() {
@@ -46,6 +47,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(
         bind_addr = %config.bind_addr,
+        health_bind_addr = %config.health_bind_addr,
         keybox_url = %config.keybox_url,
         club_url = %config.club_url,
         key_cache_ttl_secs = config.key_cache_ttl_secs,
@@ -54,7 +56,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "starting moto-ai-proxy"
     );
 
-    // Placeholder router — health endpoints and proxy routes will be added in later work items
+    // Start health server on port 8081 (per Engine Contract)
+    let health_app = health::health_router();
+    let health_listener = TcpListener::bind(config.health_bind_addr).await?;
+    info!(addr = %config.health_bind_addr, "health server listening");
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(health_listener, health_app).await {
+            error!(error = %e, "health server failed");
+        }
+    });
+
+    // Mark startup complete — SVID loading and key fetch will gate this in later work items
+    health::mark_startup_complete();
+
+    // Placeholder router — proxy routes will be added in later work items
     let app = axum::Router::new();
 
     let listener = TcpListener::bind(config.bind_addr).await?;

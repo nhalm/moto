@@ -612,3 +612,4 @@ WHAT DOES NOT GO HERE:
 ## ai-proxy.md v0.2
 
 - Create moto-ai-proxy crate with binary entrypoint and config loading
+- Add health endpoints (/health/live, /health/ready, /health/startup)
