@@ -51,6 +51,9 @@ fn extract_owner(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiErr
     Ok(token.to_string())
 }
 
+/// Maximum concurrent event WebSocket connections per user.
+const MAX_EVENT_CONNECTIONS_PER_USER: usize = 3;
+
 /// WebSocket upgrade handler for event streaming.
 ///
 /// WS /ws/v1/events?garages=bold-mongoose,quiet-falcon
@@ -62,9 +65,27 @@ async fn events_websocket(
 ) -> Result<axum::response::Response, (StatusCode, Json<ApiError>)> {
     let owner = extract_owner(&headers)?;
 
+    let guard = state
+        .event_connection_tracker
+        .try_acquire(&owner, MAX_EVENT_CONNECTIONS_PER_USER)
+        .ok_or_else(|| {
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ApiError::new(
+                    "CONNECTION_LIMIT",
+                    format!(
+                        "Too many event streaming connections (max {MAX_EVENT_CONNECTIONS_PER_USER})"
+                    ),
+                )),
+            )
+        })?;
+
     tracing::info!(owner = %owner, garages = ?query.garages, "event WebSocket upgrade requested");
 
-    Ok(ws.on_upgrade(move |socket| moto_club_ws::handle_event_socket(socket, owner, query, state)))
+    Ok(ws.on_upgrade(move |socket| async move {
+        moto_club_ws::handle_event_socket(socket, owner, query, state).await;
+        drop(guard);
+    }))
 }
 
 /// Creates the event streaming WebSocket router.

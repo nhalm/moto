@@ -46,7 +46,7 @@ use moto_club_db::DbPool;
 use moto_club_garage::GarageService;
 use moto_club_k8s::GarageK8s;
 use moto_club_wg::{PeerBroadcaster, PeerRegistry, SessionManager};
-use moto_club_ws::EventBroadcaster;
+use moto_club_ws::{ConnectionTracker, EventBroadcaster};
 use moto_k8s::K8sClient;
 use moto_wgtunnel_types::derp::DerpMap;
 
@@ -89,6 +89,10 @@ pub struct AppState {
     /// Keybox health URL for health checks (e.g., `http://keybox:8081`).
     /// When `None`, keybox health check is skipped (for testing/local dev).
     pub keybox_health_url: Option<String>,
+    /// Connection tracker for log streaming WebSocket connections (per garage, max 5).
+    pub log_connection_tracker: Arc<ConnectionTracker>,
+    /// Connection tracker for event streaming WebSocket connections (per user, max 3).
+    pub event_connection_tracker: Arc<ConnectionTracker>,
 }
 
 impl AppState {
@@ -112,6 +116,8 @@ impl AppState {
             garage_k8s: None,
             garage_service: None,
             keybox_health_url: None,
+            log_connection_tracker: Arc::new(ConnectionTracker::new()),
+            event_connection_tracker: Arc::new(ConnectionTracker::new()),
         }
     }
 

@@ -51,6 +51,9 @@ fn extract_owner(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiErr
     Ok(token.to_string())
 }
 
+/// Maximum concurrent log WebSocket connections per garage.
+const MAX_LOG_CONNECTIONS_PER_GARAGE: usize = 5;
+
 /// WebSocket upgrade handler for log streaming.
 ///
 /// WS /ws/v1/garages/{name}/logs?tail=100&follow=false&since=5m
@@ -63,10 +66,26 @@ async fn logs_websocket(
 ) -> Result<axum::response::Response, (StatusCode, Json<ApiError>)> {
     let owner = extract_owner(&headers)?;
 
+    let guard = state
+        .log_connection_tracker
+        .try_acquire(&name, MAX_LOG_CONNECTIONS_PER_GARAGE)
+        .ok_or_else(|| {
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ApiError::new(
+                    "CONNECTION_LIMIT",
+                    format!(
+                        "Too many log streaming connections for garage '{name}' (max {MAX_LOG_CONNECTIONS_PER_GARAGE})"
+                    ),
+                )),
+            )
+        })?;
+
     tracing::info!(garage = %name, owner = %owner, "log WebSocket upgrade requested");
 
-    Ok(ws.on_upgrade(move |socket| {
-        moto_club_ws::handle_log_socket(socket, name, owner, query, state)
+    Ok(ws.on_upgrade(move |socket| async move {
+        moto_club_ws::handle_log_socket(socket, name, owner, query, state).await;
+        drop(guard);
     }))
 }
 
