@@ -64,7 +64,7 @@ Read it in full at the start of each iteration.
 
 ## moto-cron.md v0.3
 
-- Ensure TTL enforcement applies to all non-terminated states: Pending, Initializing, Ready, and Failed
+(all items completed)
 
 ## moto-club-websocket.md v0.2
 

@@ -311,6 +311,73 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    async fn list_expired_includes_all_non_terminated_states() {
+        let pool = test_pool().await;
+        let owner = unique_owner();
+
+        // Create garages with 1-second TTL so they expire immediately
+        let make_input = || CreateGarage {
+            owner: owner.clone(),
+            ttl_seconds: 1,
+            ..create_garage_input()
+        };
+
+        // Create one garage per non-terminated state
+        let pending = garage_repo::create(&pool, make_input()).await.unwrap();
+
+        let initializing = garage_repo::create(&pool, make_input()).await.unwrap();
+        garage_repo::update_status(&pool, initializing.id, GarageStatus::Initializing)
+            .await
+            .unwrap();
+
+        let ready = garage_repo::create(&pool, make_input()).await.unwrap();
+        garage_repo::update_status(&pool, ready.id, GarageStatus::Ready)
+            .await
+            .unwrap();
+
+        let failed = garage_repo::create(&pool, make_input()).await.unwrap();
+        garage_repo::update_status(&pool, failed.id, GarageStatus::Failed)
+            .await
+            .unwrap();
+
+        // Also create a terminated garage — should NOT appear in list_expired
+        let terminated = garage_repo::create(&pool, make_input()).await.unwrap();
+        garage_repo::terminate(&pool, terminated.id, TerminationReason::UserClosed)
+            .await
+            .unwrap();
+
+        // Wait for TTL to expire
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+        let expired = garage_repo::list_expired(&pool).await.unwrap();
+        let expired_ids: std::collections::HashSet<Uuid> = expired.iter().map(|g| g.id).collect();
+
+        // All non-terminated garages should be in the expired list
+        assert!(
+            expired_ids.contains(&pending.id),
+            "Pending garage should be in expired list"
+        );
+        assert!(
+            expired_ids.contains(&initializing.id),
+            "Initializing garage should be in expired list"
+        );
+        assert!(
+            expired_ids.contains(&ready.id),
+            "Ready garage should be in expired list"
+        );
+        assert!(
+            expired_ids.contains(&failed.id),
+            "Failed garage should be in expired list"
+        );
+
+        // Terminated garage should NOT be in the expired list
+        assert!(
+            !expired_ids.contains(&terminated.id),
+            "Terminated garage should NOT be in expired list"
+        );
+    }
+
+    #[tokio::test]
     async fn terminate_already_terminated_returns_not_found() {
         let pool = test_pool().await;
         let input = create_garage_input();
