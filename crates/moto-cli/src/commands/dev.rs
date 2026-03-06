@@ -198,6 +198,9 @@ pub enum DevAction {
         /// Start services only, don't open a garage
         #[arg(long)]
         no_garage: bool,
+        /// Skip ai-proxy (garages use direct API keys)
+        #[arg(long)]
+        no_ai_proxy: bool,
         /// Force rebuild and push the garage container image
         #[arg(long)]
         rebuild_image: bool,
@@ -246,9 +249,10 @@ pub async fn run(cmd: DevCommand, flags: &GlobalFlags) -> Result<()> {
         DevAction::Status => dev_status(flags),
         DevAction::Up {
             no_garage,
+            no_ai_proxy,
             rebuild_image,
             skip_image,
-        } => dev_up(no_garage, rebuild_image, skip_image, flags).await,
+        } => dev_up(no_garage, no_ai_proxy, rebuild_image, skip_image, flags).await,
         DevAction::Down { clean } => dev_down(clean, flags),
     }
 }
@@ -256,9 +260,9 @@ pub async fn run(cmd: DevCommand, flags: &GlobalFlags) -> Result<()> {
 // ── dev up helpers ──────────────────────────────────────────────────────────
 
 /// Print a step header without newline.
-fn step_print(step: u8, msg: &str, quiet: bool) {
+fn step_print(step: u8, total: u8, msg: &str, quiet: bool) {
     if !quiet {
-        print!("[{step}/10] {msg:<30}");
+        print!("[{step}/{total}] {msg:<30}");
         std::io::stdout().flush().ok();
     }
 }
@@ -596,9 +600,10 @@ fn create_garage(config: &DevConfig, owner: Option<&str>) -> Result<String> {
 /// Start the full local dev stack (9-step orchestration).
 ///
 /// See local-dev.md for the full specification.
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::fn_params_excessive_bools)]
 async fn dev_up(
     no_garage: bool,
+    no_ai_proxy: bool,
     rebuild_image: bool,
     skip_image: bool,
     flags: &GlobalFlags,
@@ -613,6 +618,8 @@ async fn dev_up(
     let config = DevConfig::load();
     let quiet = flags.quiet;
     let verbose = flags.verbose;
+    // Total steps: 8 base + ai-proxy (optional) + garage (optional)
+    let total_steps: u8 = 8 + u8::from(!no_ai_proxy) + u8::from(!no_garage);
 
     // Idempotency: silently kill existing processes on club/keybox/ai-proxy ports
     let quiet_flags = GlobalFlags {
@@ -624,11 +631,13 @@ async fn dev_up(
         "club",
         &quiet_flags,
     );
-    stop_port_process(
-        extract_port(&config.ai_proxy_api, "18090"),
-        "ai-proxy",
-        &quiet_flags,
-    );
+    if !no_ai_proxy {
+        stop_port_process(
+            extract_port(&config.ai_proxy_api, "18090"),
+            "ai-proxy",
+            &quiet_flags,
+        );
+    }
     stop_port_process(
         extract_port(&config.keybox_api, "8090"),
         "keybox",
@@ -636,7 +645,8 @@ async fn dev_up(
     );
 
     // Step 1: Prerequisites
-    step_print(1, "Checking prerequisites...", quiet);
+    let mut step: u8 = 1;
+    step_print(step, total_steps, "Checking prerequisites...", quiet);
     check_prerequisites().inspect_err(|_| {
         if !quiet {
             println!();
@@ -652,7 +662,8 @@ async fn dev_up(
     step_done("ok", quiet);
 
     // Step 2: Cluster
-    step_print(2, "Ensuring cluster...", quiet);
+    step += 1;
+    step_print(step, total_steps, "Ensuring cluster...", quiet);
     let cluster_result = ensure_cluster().inspect_err(|_| {
         if !quiet {
             println!();
@@ -661,7 +672,8 @@ async fn dev_up(
     step_done(&cluster_result, quiet);
 
     // Step 3: Image
-    step_print(3, "Checking garage image...", quiet);
+    step += 1;
+    step_print(step, total_steps, "Checking garage image...", quiet);
     let image_result =
         check_or_build_image(&config, skip_image, rebuild_image).inspect_err(|_| {
             if !quiet {
@@ -671,7 +683,8 @@ async fn dev_up(
     step_done(&image_result, quiet);
 
     // Step 4: Postgres
-    step_print(4, "Starting postgres...", quiet);
+    step += 1;
+    step_print(step, total_steps, "Starting postgres...", quiet);
     start_postgres().inspect_err(|_| {
         if !quiet {
             println!();
@@ -680,7 +693,8 @@ async fn dev_up(
     step_done("ready (localhost:5432)", quiet);
 
     // Step 5: Keys
-    step_print(5, "Generating keybox keys...", quiet);
+    step += 1;
+    step_print(step, total_steps, "Generating keybox keys...", quiet);
     let keys_result = ensure_keybox_keys().inspect_err(|_| {
         if !quiet {
             println!();
@@ -689,7 +703,8 @@ async fn dev_up(
     step_done(&keys_result, quiet);
 
     // Step 6: Migrations
-    step_print(6, "Running migrations...", quiet);
+    step += 1;
+    step_print(step, total_steps, "Running migrations...", quiet);
     run_migrations().inspect_err(|_| {
         if !quiet {
             println!();
@@ -698,7 +713,8 @@ async fn dev_up(
     step_done("up to date", quiet);
 
     // Step 7: Keybox
-    step_print(7, "Starting keybox...", quiet);
+    step += 1;
+    step_print(step, total_steps, "Starting keybox...", quiet);
     let mut keybox = spawn_subprocess("moto-keybox-server", &DevConfig::keybox_env(), verbose)
         .inspect_err(|_| {
             if !quiet {
@@ -716,7 +732,8 @@ async fn dev_up(
     step_done(&format!("healthy ({})", config.keybox_api), quiet);
 
     // Step 8: Club
-    step_print(8, "Starting moto-club...", quiet);
+    step += 1;
+    step_print(step, total_steps, "Starting moto-club...", quiet);
     let mut club =
         spawn_subprocess("moto-club", &DevConfig::club_env(), verbose).inspect_err(|_| {
             if !quiet {
@@ -735,43 +752,50 @@ async fn dev_up(
     }
     step_done(&format!("healthy ({})", config.club_api), quiet);
 
-    // Step 9: ai-proxy (SVID + spawn)
-    step_print(9, "Starting ai-proxy...", quiet);
-    let svid_result = ensure_ai_proxy_svid().inspect_err(|_| {
-        if !quiet {
-            println!();
-        }
-        club.start_kill().ok();
-        keybox.start_kill().ok();
-    })?;
-    if verbose >= 2 && !quiet {
-        print!("(svid: {svid_result}) ");
-        std::io::stdout().flush().ok();
-    }
-    let mut ai_proxy = spawn_subprocess("moto-ai-proxy", &DevConfig::ai_proxy_env(), verbose)
-        .inspect_err(|_| {
+    // Step 9 (optional): ai-proxy (SVID + spawn)
+    let ai_proxy = if no_ai_proxy {
+        None
+    } else {
+        step += 1;
+        step_print(step, total_steps, "Starting ai-proxy...", quiet);
+        let svid_result = ensure_ai_proxy_svid().inspect_err(|_| {
             if !quiet {
                 println!();
             }
             club.start_kill().ok();
             keybox.start_kill().ok();
         })?;
-    let ai_proxy_health_url = format!("http://{}/health/ready", config.ai_proxy_health);
-    if let Err(e) = wait_for_health(&ai_proxy_health_url, 30).await {
-        if !quiet {
-            println!();
+        if verbose >= 2 && !quiet {
+            print!("(svid: {svid_result}) ");
+            std::io::stdout().flush().ok();
         }
-        ai_proxy.start_kill().ok();
-        club.start_kill().ok();
-        keybox.start_kill().ok();
-        return Err(e);
-    }
-    step_done(&format!("healthy ({})", config.ai_proxy_api), quiet);
+        let mut proxy = spawn_subprocess("moto-ai-proxy", &DevConfig::ai_proxy_env(), verbose)
+            .inspect_err(|_| {
+                if !quiet {
+                    println!();
+                }
+                club.start_kill().ok();
+                keybox.start_kill().ok();
+            })?;
+        let ai_proxy_health_url = format!("http://{}/health/ready", config.ai_proxy_health);
+        if let Err(e) = wait_for_health(&ai_proxy_health_url, 30).await {
+            if !quiet {
+                println!();
+            }
+            proxy.start_kill().ok();
+            club.start_kill().ok();
+            keybox.start_kill().ok();
+            return Err(e);
+        }
+        step_done(&format!("healthy ({})", config.ai_proxy_api), quiet);
+        Some(proxy)
+    };
 
-    // Step 10: Garage (best effort)
+    // Garage step (optional, best effort)
     let mut garage_name = None;
     if !no_garage {
-        step_print(10, "Opening garage...", quiet);
+        step += 1;
+        step_print(step, total_steps, "Opening garage...", quiet);
         let moto_user = get_moto_user().ok();
         match create_garage(&config, moto_user.as_deref()) {
             Ok(name) => {
@@ -794,7 +818,11 @@ async fn dev_up(
             postgres: "healthy".to_string(),
             keybox: "healthy".to_string(),
             club: "healthy".to_string(),
-            ai_proxy: "healthy".to_string(),
+            ai_proxy: if no_ai_proxy {
+                "skipped".to_string()
+            } else {
+                "healthy".to_string()
+            },
             garage: garage_name.clone(),
         };
         println!("{}", serde_json::to_string_pretty(&json)?);
@@ -805,7 +833,11 @@ async fn dev_up(
         println!("  Postgres:  localhost:5432");
         println!("  Keybox:    {}", config.keybox_api);
         println!("  Club:      {}", config.club_api);
-        println!("  AI Proxy:  {}", config.ai_proxy_api);
+        if no_ai_proxy {
+            println!("  AI Proxy:  skipped (--no-ai-proxy)");
+        } else {
+            println!("  AI Proxy:  {}", config.ai_proxy_api);
+        }
         if let Some(ref name) = garage_name {
             println!("  Garage:    {name}");
         }
@@ -817,42 +849,71 @@ async fn dev_up(
     }
 
     // Wait for Ctrl-C or subprocess death
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            if !quiet {
-                println!();
-                println!("Shutting down...");
+    if let Some(mut ai_proxy) = ai_proxy {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                if !quiet {
+                    println!();
+                    println!("Shutting down...");
+                }
+                ai_proxy.start_kill().ok();
+                club.start_kill().ok();
+                keybox.start_kill().ok();
             }
-            ai_proxy.start_kill().ok();
-            club.start_kill().ok();
-            keybox.start_kill().ok();
+            status = ai_proxy.wait() => {
+                club.start_kill().ok();
+                keybox.start_kill().ok();
+                match status {
+                    Ok(s) => eprintln!("ai-proxy exited unexpectedly (status: {s})"),
+                    Err(e) => eprintln!("ai-proxy exited unexpectedly: {e}"),
+                }
+                return Err(CliError::general("ai-proxy exited unexpectedly"));
+            }
+            status = club.wait() => {
+                ai_proxy.start_kill().ok();
+                keybox.start_kill().ok();
+                match status {
+                    Ok(s) => eprintln!("moto-club exited unexpectedly (status: {s})"),
+                    Err(e) => eprintln!("moto-club exited unexpectedly: {e}"),
+                }
+                return Err(CliError::general("moto-club exited unexpectedly"));
+            }
+            status = keybox.wait() => {
+                ai_proxy.start_kill().ok();
+                club.start_kill().ok();
+                match status {
+                    Ok(s) => eprintln!("keybox exited unexpectedly (status: {s})"),
+                    Err(e) => eprintln!("keybox exited unexpectedly: {e}"),
+                }
+                return Err(CliError::general("keybox exited unexpectedly"));
+            }
         }
-        status = ai_proxy.wait() => {
-            club.start_kill().ok();
-            keybox.start_kill().ok();
-            match status {
-                Ok(s) => eprintln!("ai-proxy exited unexpectedly (status: {s})"),
-                Err(e) => eprintln!("ai-proxy exited unexpectedly: {e}"),
+    } else {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                if !quiet {
+                    println!();
+                    println!("Shutting down...");
+                }
+                club.start_kill().ok();
+                keybox.start_kill().ok();
             }
-            return Err(CliError::general("ai-proxy exited unexpectedly"));
-        }
-        status = club.wait() => {
-            ai_proxy.start_kill().ok();
-            keybox.start_kill().ok();
-            match status {
-                Ok(s) => eprintln!("moto-club exited unexpectedly (status: {s})"),
-                Err(e) => eprintln!("moto-club exited unexpectedly: {e}"),
+            status = club.wait() => {
+                keybox.start_kill().ok();
+                match status {
+                    Ok(s) => eprintln!("moto-club exited unexpectedly (status: {s})"),
+                    Err(e) => eprintln!("moto-club exited unexpectedly: {e}"),
+                }
+                return Err(CliError::general("moto-club exited unexpectedly"));
             }
-            return Err(CliError::general("moto-club exited unexpectedly"));
-        }
-        status = keybox.wait() => {
-            ai_proxy.start_kill().ok();
-            club.start_kill().ok();
-            match status {
-                Ok(s) => eprintln!("keybox exited unexpectedly (status: {s})"),
-                Err(e) => eprintln!("keybox exited unexpectedly: {e}"),
+            status = keybox.wait() => {
+                club.start_kill().ok();
+                match status {
+                    Ok(s) => eprintln!("keybox exited unexpectedly (status: {s})"),
+                    Err(e) => eprintln!("keybox exited unexpectedly: {e}"),
+                }
+                return Err(CliError::general("keybox exited unexpectedly"));
             }
-            return Err(CliError::general("keybox exited unexpectedly"));
         }
     }
 
