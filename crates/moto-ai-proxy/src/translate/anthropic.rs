@@ -205,6 +205,136 @@ pub fn translate_response(anthropic_body: &Value) -> Value {
     Value::Object(openai)
 }
 
+/// A parsed SSE event with its event type and data payload.
+pub struct SseEvent {
+    /// The `event:` field (e.g., `message_start`, `content_block_delta`).
+    pub event_type: String,
+    /// The `data:` field (raw JSON string).
+    pub data: String,
+}
+
+/// Parses a raw SSE event block (lines between double newlines) into an `SseEvent`.
+///
+/// Returns `None` if the block has no `data:` field.
+#[must_use]
+pub fn parse_sse_event(raw: &str) -> Option<SseEvent> {
+    let mut event_type = String::new();
+    let mut data_parts = Vec::new();
+
+    for line in raw.lines() {
+        if let Some(val) = line.strip_prefix("event:") {
+            event_type = val.trim().to_string();
+        } else if let Some(val) = line.strip_prefix("data:") {
+            data_parts.push(val.trim().to_string());
+        }
+    }
+
+    if data_parts.is_empty() {
+        return None;
+    }
+
+    Some(SseEvent {
+        event_type,
+        data: data_parts.join("\n"),
+    })
+}
+
+/// Translates an Anthropic SSE event into an `OpenAI` SSE chunk string.
+///
+/// Returns the raw SSE text to emit (including `data: ` prefix and trailing newlines),
+/// or `None` if the event should be silently dropped.
+///
+/// Mapping:
+/// - `message_start` → initial chunk with `role: "assistant"`
+/// - `content_block_delta` (text) → `choices[0].delta.content`
+/// - `message_delta` (`stop_reason`) → `choices[0].finish_reason`
+/// - `message_stop` → `data: [DONE]`
+/// - Other events (ping, `content_block_start`, `content_block_stop`) → dropped
+#[must_use]
+pub fn translate_streaming_event(event: &SseEvent) -> Option<String> {
+    match event.event_type.as_str() {
+        "message_start" => {
+            // Parse message_start to extract model and id if available.
+            let data: Value = serde_json::from_str(&event.data).ok()?;
+            let message = data.get("message");
+
+            let id = message
+                .and_then(|m| m.get("id"))
+                .and_then(Value::as_str)
+                .unwrap_or("chatcmpl-stream");
+            let model = message
+                .and_then(|m| m.get("model"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+
+            let chunk = serde_json::json!({
+                "id": id,
+                "object": "chat.completion.chunk",
+                "model": model,
+                "choices": [{
+                    "index": 0,
+                    "delta": {"role": "assistant", "content": ""},
+                    "finish_reason": null
+                }]
+            });
+            Some(format!("data: {chunk}\n\n"))
+        }
+        "content_block_delta" => {
+            let data: Value = serde_json::from_str(&event.data).ok()?;
+            let delta = data.get("delta")?;
+
+            let delta_type = delta.get("type").and_then(Value::as_str).unwrap_or("");
+
+            match delta_type {
+                "text_delta" => {
+                    let text = delta.get("text").and_then(Value::as_str).unwrap_or("");
+                    let chunk = serde_json::json!({
+                        "id": "chatcmpl-stream",
+                        "object": "chat.completion.chunk",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": text},
+                            "finish_reason": null
+                        }]
+                    });
+                    Some(format!("data: {chunk}\n\n"))
+                }
+                "input_json_delta" => {
+                    // Tool use argument streaming — will be handled by tool_use translation task.
+                    None
+                }
+                _ => None,
+            }
+        }
+        "message_delta" => {
+            let data: Value = serde_json::from_str(&event.data).ok()?;
+            let delta = data.get("delta")?;
+            let stop_reason = delta.get("stop_reason").and_then(Value::as_str)?;
+
+            let finish_reason = match stop_reason {
+                "end_turn" => "stop",
+                "max_tokens" => "length",
+                "tool_use" => "tool_calls",
+                other => other,
+            };
+
+            let chunk = serde_json::json!({
+                "id": "chatcmpl-stream",
+                "object": "chat.completion.chunk",
+                "choices": [{
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": finish_reason
+                }]
+            });
+            Some(format!("data: {chunk}\n\n"))
+        }
+        "message_stop" => Some("data: [DONE]\n\n".to_string()),
+        // Drop events we don't translate (ping, content_block_start, content_block_stop).
+        _ => None,
+    }
+}
+
 /// Extracts and concatenates text from Anthropic content blocks.
 fn extract_text_content(body: &Value) -> String {
     match body.get("content") {
@@ -518,6 +648,101 @@ mod tests {
 
         let result = translate_response(&anthropic);
         assert!(result.get("usage").is_none());
+    }
+
+    #[test]
+    fn streaming_message_start_translates_to_initial_chunk() {
+        let event = SseEvent {
+            event_type: "message_start".into(),
+            data: r#"{"type":"message_start","message":{"id":"msg_123","model":"claude-sonnet-4-20250514","role":"assistant"}}"#.into(),
+        };
+        let result = translate_streaming_event(&event).unwrap();
+        let parsed: Value =
+            serde_json::from_str(result.strip_prefix("data: ").unwrap().trim()).unwrap();
+        assert_eq!(parsed["object"], "chat.completion.chunk");
+        assert_eq!(parsed["id"], "msg_123");
+        assert_eq!(parsed["model"], "claude-sonnet-4-20250514");
+        assert_eq!(parsed["choices"][0]["delta"]["role"], "assistant");
+        assert!(parsed["choices"][0]["finish_reason"].is_null());
+    }
+
+    #[test]
+    fn streaming_text_delta_translates_to_content_chunk() {
+        let event = SseEvent {
+            event_type: "content_block_delta".into(),
+            data: r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}"#.into(),
+        };
+        let result = translate_streaming_event(&event).unwrap();
+        let parsed: Value =
+            serde_json::from_str(result.strip_prefix("data: ").unwrap().trim()).unwrap();
+        assert_eq!(parsed["choices"][0]["delta"]["content"], "Hello");
+        assert!(parsed["choices"][0]["finish_reason"].is_null());
+    }
+
+    #[test]
+    fn streaming_message_delta_translates_stop_reason() {
+        let event = SseEvent {
+            event_type: "message_delta".into(),
+            data: r#"{"type":"message_delta","delta":{"stop_reason":"end_turn"}}"#.into(),
+        };
+        let result = translate_streaming_event(&event).unwrap();
+        let parsed: Value =
+            serde_json::from_str(result.strip_prefix("data: ").unwrap().trim()).unwrap();
+        assert_eq!(parsed["choices"][0]["finish_reason"], "stop");
+    }
+
+    #[test]
+    fn streaming_message_delta_max_tokens_maps_to_length() {
+        let event = SseEvent {
+            event_type: "message_delta".into(),
+            data: r#"{"type":"message_delta","delta":{"stop_reason":"max_tokens"}}"#.into(),
+        };
+        let result = translate_streaming_event(&event).unwrap();
+        let parsed: Value =
+            serde_json::from_str(result.strip_prefix("data: ").unwrap().trim()).unwrap();
+        assert_eq!(parsed["choices"][0]["finish_reason"], "length");
+    }
+
+    #[test]
+    fn streaming_message_stop_emits_done() {
+        let event = SseEvent {
+            event_type: "message_stop".into(),
+            data: r#"{"type":"message_stop"}"#.into(),
+        };
+        let result = translate_streaming_event(&event).unwrap();
+        assert_eq!(result, "data: [DONE]\n\n");
+    }
+
+    #[test]
+    fn streaming_ping_event_dropped() {
+        let event = SseEvent {
+            event_type: "ping".into(),
+            data: r#"{"type":"ping"}"#.into(),
+        };
+        assert!(translate_streaming_event(&event).is_none());
+    }
+
+    #[test]
+    fn streaming_content_block_start_dropped() {
+        let event = SseEvent {
+            event_type: "content_block_start".into(),
+            data: r#"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#.into(),
+        };
+        assert!(translate_streaming_event(&event).is_none());
+    }
+
+    #[test]
+    fn parse_sse_event_basic() {
+        let raw = "event: message_start\ndata: {\"type\":\"message_start\"}";
+        let event = parse_sse_event(raw).unwrap();
+        assert_eq!(event.event_type, "message_start");
+        assert_eq!(event.data, "{\"type\":\"message_start\"}");
+    }
+
+    #[test]
+    fn parse_sse_event_no_data_returns_none() {
+        let raw = "event: ping";
+        assert!(parse_sse_event(raw).is_none());
     }
 
     #[test]

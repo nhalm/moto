@@ -631,3 +631,4 @@ WHAT DOES NOT GO HERE:
 - Implement unified endpoint (/v1/chat/completions) using OpenAI-compatible format
 - Implement OpenAI → Anthropic request translation (messages, system message extraction, field mapping)
 - Implement Anthropic → OpenAI non-streaming response translation
+- Implement Anthropic → OpenAI streaming SSE response translation (event-by-event)

@@ -7,6 +7,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
+use futures_util::StreamExt;
 use reqwest::Client;
 use secrecy::ExposeSecret;
 use serde_json::Value;
@@ -472,8 +473,11 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
         &start,
     );
 
-    // For non-streaming Anthropic responses, translate back to OpenAI format.
-    if provider == Provider::Anthropic && !is_streaming && result.response.status().is_success() {
+    // For Anthropic responses, translate back to OpenAI format.
+    if provider == Provider::Anthropic && result.response.status().is_success() {
+        if is_streaming {
+            return translate_anthropic_streaming_response(result.response);
+        }
         return translate_anthropic_response(result.response).await;
     }
 
@@ -514,6 +518,72 @@ async fn translate_anthropic_response(response: Response) -> Response {
     resp.headers_mut()
         .insert("content-type", HeaderValue::from_static("application/json"));
     // Preserve any extra headers from the original response (e.g., cache-control).
+    for (name, value) in &headers {
+        if name != "content-type" && name != "content-length" && name != "transfer-encoding" {
+            resp.headers_mut().insert(name.clone(), value.clone());
+        }
+    }
+
+    resp
+}
+
+/// Wraps an Anthropic streaming SSE response, translating each event to `OpenAI` chunk format.
+///
+/// Parses Anthropic SSE events (`message_start`, `content_block_delta`, `message_delta`, `message_stop`)
+/// and emits the equivalent `OpenAI` `chat.completion.chunk` SSE events.
+fn translate_anthropic_streaming_response(response: Response) -> Response {
+    let status = response.status();
+    let headers = response.headers().clone();
+
+    let body_stream = response.into_body().into_data_stream();
+
+    // Buffer partial SSE events across chunks, split on double-newline boundaries.
+    let translated_stream = {
+        let mut buffer = String::new();
+        body_stream.filter_map(move |chunk_result| {
+            let output = match chunk_result {
+                Ok(chunk) => {
+                    let chunk_str = String::from_utf8_lossy(&chunk);
+                    buffer.push_str(&chunk_str);
+
+                    let mut translated_parts = Vec::new();
+
+                    // Process all complete SSE events (delimited by \n\n).
+                    while let Some(boundary) = buffer.find("\n\n") {
+                        let event_block = buffer[..boundary].to_string();
+                        buffer = buffer[boundary + 2..].to_string();
+
+                        if let Some(event) = anthropic_translate::parse_sse_event(&event_block)
+                            && let Some(translated) =
+                                anthropic_translate::translate_streaming_event(&event)
+                        {
+                            translated_parts.push(translated);
+                        }
+                    }
+
+                    if translated_parts.is_empty() {
+                        None
+                    } else {
+                        let combined = translated_parts.join("");
+                        Some(Ok(axum::body::Bytes::from(combined)))
+                    }
+                }
+                Err(e) => Some(Err(e)),
+            };
+            std::future::ready(output)
+        })
+    };
+
+    let body = Body::from_stream(translated_stream);
+
+    let mut resp = Response::new(body);
+    *resp.status_mut() = status;
+    // Set content-type to text/event-stream for OpenAI SSE format.
+    resp.headers_mut().insert(
+        "content-type",
+        HeaderValue::from_static("text/event-stream"),
+    );
+    // Preserve cache-control and other relevant headers.
     for (name, value) in &headers {
         if name != "content-type" && name != "content-length" && name != "transfer-encoding" {
             resp.headers_mut().insert(name.clone(), value.clone());
