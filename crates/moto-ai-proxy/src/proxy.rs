@@ -179,6 +179,17 @@ pub async fn forward_to_provider<K: KeyStore>(
     // Convert upstream response back to axum Response, streaming the body.
     let upstream_status_code = upstream_resp.status().as_u16();
     let status = StatusCode::from_u16(upstream_status_code).unwrap_or(StatusCode::BAD_GATEWAY);
+
+    // Sanitize non-success responses: buffer, extract error message, scrub API keys,
+    // and wrap in OpenAI error format. Raw upstream error bodies are never forwarded.
+    if !upstream_resp.status().is_success() {
+        let sanitized = sanitize_upstream_error(&info.name, upstream_resp, status).await;
+        return ForwardResult {
+            response: sanitized,
+            upstream_status: Some(upstream_status_code),
+        };
+    }
+
     let mut response_headers = HeaderMap::new();
 
     // Forward Content-Type from upstream (text/event-stream for SSE).
@@ -852,6 +863,143 @@ pub fn proxy_router<K: KeyStore + 'static, G: GarageValidator + 'static>(
         .route("/v1/models", axum::routing::get(list_models::<K, G>))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_SIZE))
         .with_state(state)
+}
+
+/// Maximum size for buffering upstream error response bodies (1 MB).
+const MAX_ERROR_BODY_SIZE: usize = 1024 * 1024;
+
+/// Buffers an upstream error response, extracts the error message, scrubs
+/// API key material, and wraps it in `OpenAI` error format.
+///
+/// Raw upstream error bodies are never forwarded directly to garages.
+async fn sanitize_upstream_error(
+    provider: &str,
+    resp: reqwest::Response,
+    status: StatusCode,
+) -> Response {
+    let error_type = if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+        "authentication_error"
+    } else if status.is_client_error() {
+        "invalid_request_error"
+    } else {
+        "server_error"
+    };
+
+    // Try to extract a useful error message from the upstream response body.
+    let message = match resp.bytes().await {
+        Ok(body) if !body.is_empty() && body.len() <= MAX_ERROR_BODY_SIZE => {
+            extract_upstream_error_message(provider, &body)
+        }
+        _ => format!("{provider} returned {status}"),
+    };
+
+    let scrubbed = scrub_api_keys(&message);
+    error_response(status, &scrubbed, error_type)
+}
+
+/// Extracts a human-readable error message from an upstream provider's error body.
+///
+/// Tries to parse as JSON and extract the message from known error formats
+/// (`OpenAI`, Anthropic). Falls back to a generic message if parsing fails.
+fn extract_upstream_error_message(provider: &str, body: &[u8]) -> String {
+    let Ok(json) = serde_json::from_slice::<Value>(body) else {
+        return format!("{provider} error");
+    };
+
+    // OpenAI format: {"error": {"message": "..."}}
+    if let Some(msg) = json
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+    {
+        return msg.to_string();
+    }
+
+    // Anthropic format: {"error": {"message": "..."}} or {"message": "..."}
+    if let Some(msg) = json.get("message").and_then(|m| m.as_str()) {
+        return msg.to_string();
+    }
+
+    format!("{provider} error")
+}
+
+/// Scrubs API key material from a string, replacing recognized key patterns
+/// with `[REDACTED]`.
+///
+/// Recognized patterns:
+/// - `sk-ant-*` (Anthropic API keys)
+/// - `sk-proj-*` (`OpenAI` project-scoped keys)
+/// - `sk-` followed by 20+ alphanumeric/dash/underscore characters
+/// - `AIza*` (Google API keys)
+#[must_use]
+pub fn scrub_api_keys(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        if let Some(skip) = detect_api_key(&chars, i) {
+            result.push_str("[REDACTED]");
+            i += skip;
+        } else {
+            result.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Detects an API key pattern starting at position `i` in the char slice.
+/// Returns `Some(length)` if a key pattern is detected, `None` otherwise.
+fn detect_api_key(chars: &[char], i: usize) -> Option<usize> {
+    let remaining = &chars[i..];
+
+    // Check for sk-ant- (Anthropic)
+    if starts_with_str(remaining, "sk-ant-") {
+        return Some(key_token_len(remaining));
+    }
+
+    // Check for sk-proj- (OpenAI project-scoped)
+    if starts_with_str(remaining, "sk-proj-") {
+        return Some(key_token_len(remaining));
+    }
+
+    // Check for sk- followed by 20+ key characters (generic OpenAI)
+    if starts_with_str(remaining, "sk-") {
+        let len = key_token_len(remaining);
+        if len >= 23 {
+            // sk- + at least 20 chars
+            return Some(len);
+        }
+    }
+
+    // Check for AIza (Google API keys)
+    if starts_with_str(remaining, "AIza") {
+        let len = key_token_len(remaining);
+        if len >= 20 {
+            return Some(len);
+        }
+    }
+
+    None
+}
+
+/// Checks if a char slice starts with the given string.
+fn starts_with_str(chars: &[char], s: &str) -> bool {
+    let prefix: Vec<char> = s.chars().collect();
+    if chars.len() < prefix.len() {
+        return false;
+    }
+    chars[..prefix.len()] == prefix[..]
+}
+
+/// Returns the length of a contiguous API key token (alphanumeric, dash, underscore).
+fn key_token_len(chars: &[char]) -> usize {
+    chars
+        .iter()
+        .take_while(|c| c.is_ascii_alphanumeric() || **c == '-' || **c == '_')
+        .count()
 }
 
 /// Returns a JSON error response in `OpenAI` error format.

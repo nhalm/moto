@@ -96,8 +96,6 @@ Read it in full at the start of each iteration.
 
 ## ai-proxy.md v0.5
 
-- Use garage SVID for auth instead of predictable garage-{id} token
-- Implement error sanitization: wrap all errors in OpenAI error format, scrub API key material
 - Use SecretString (zeroize-on-drop) for cached API keys
 - Implement local dev integration: ai-proxy in moto dev up startup sequence
 - Implement local dev key seeding (prompt or MOTO_DEV_*_KEY env vars)

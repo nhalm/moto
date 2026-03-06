@@ -856,3 +856,138 @@ async fn chat_completions_routes_finetuned_model_to_openai() {
             .contains("provider not configured")
     );
 }
+
+// --- Error sanitization tests ---
+
+#[test]
+fn scrub_api_keys_redacts_anthropic_key() {
+    let input = "Invalid API key: sk-ant-api03-abc123def456ghi789";
+    let scrubbed = proxy::scrub_api_keys(input);
+    assert!(scrubbed.contains("[REDACTED]"));
+    assert!(!scrubbed.contains("sk-ant-"));
+}
+
+#[test]
+fn scrub_api_keys_redacts_openai_project_key() {
+    let input = "Incorrect API key provided: sk-proj-abc123def456ghi789jkl012mno345";
+    let scrubbed = proxy::scrub_api_keys(input);
+    assert!(scrubbed.contains("[REDACTED]"));
+    assert!(!scrubbed.contains("sk-proj-"));
+}
+
+#[test]
+fn scrub_api_keys_redacts_openai_key() {
+    let input = "Incorrect API key provided: sk-abc123def456ghi789jkl012";
+    let scrubbed = proxy::scrub_api_keys(input);
+    assert!(scrubbed.contains("[REDACTED]"));
+    assert!(!scrubbed.contains("sk-abc"));
+}
+
+#[test]
+fn scrub_api_keys_redacts_google_key() {
+    let input = "API key not valid: AIzaSyBabcdef1234567890";
+    let scrubbed = proxy::scrub_api_keys(input);
+    assert!(scrubbed.contains("[REDACTED]"));
+    assert!(!scrubbed.contains("AIza"));
+}
+
+#[test]
+fn scrub_api_keys_preserves_safe_text() {
+    let input = "model not found";
+    assert_eq!(proxy::scrub_api_keys(input), "model not found");
+}
+
+#[test]
+fn scrub_api_keys_short_sk_not_redacted() {
+    // sk- followed by fewer than 20 characters should not be redacted.
+    let input = "sk-short";
+    assert_eq!(proxy::scrub_api_keys(input), "sk-short");
+}
+
+#[test]
+fn scrub_api_keys_multiple_keys() {
+    let input = "keys: sk-ant-api03-key1abc234567890 and sk-proj-key2abc234567890def456ghi789";
+    let scrubbed = proxy::scrub_api_keys(input);
+    assert!(!scrubbed.contains("sk-ant-"));
+    assert!(!scrubbed.contains("sk-proj-"));
+    assert_eq!(scrubbed.matches("[REDACTED]").count(), 2);
+}
+
+/// Starts a mock upstream that returns an error with API key material in the body.
+async fn start_error_upstream(status_code: u16, body: serde_json::Value) -> String {
+    let status = StatusCode::from_u16(status_code).unwrap();
+    let app = axum::Router::new().route(
+        "/v1/messages",
+        axum::routing::post(move || {
+            let body = body.clone();
+            async move { (status, axum::Json(body)).into_response() }
+        }),
+    );
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    format!("http://127.0.0.1:{}/", addr.port())
+}
+
+#[tokio::test]
+async fn forward_to_provider_sanitizes_upstream_error() {
+    let upstream_url = start_error_upstream(
+        401,
+        serde_json::json!({
+            "error": {
+                "message": "Invalid API key: sk-ant-api03-realkey123456789012345",
+                "type": "authentication_error"
+            }
+        }),
+    )
+    .await;
+
+    let client = reqwest::Client::new();
+    let info = crate::provider::ProviderInfo {
+        name: "anthropic".to_string(),
+        upstream_base: upstream_url,
+        auth_header: "x-api-key".to_string(),
+        auth_prefix: String::new(),
+        secret_name: "ai-proxy/anthropic".to_string(),
+        is_anthropic: true,
+        chat_path: "v1/messages".to_string(),
+    };
+
+    let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test-key");
+    let headers = HeaderMap::new();
+
+    let result = proxy::forward_to_provider(
+        &info,
+        axum::http::Method::POST,
+        "v1/messages",
+        None,
+        &headers,
+        Body::from(r#"{"model":"claude-sonnet-4-20250514"}"#),
+        &client,
+        &key_store,
+    )
+    .await;
+
+    assert_eq!(result.response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(result.upstream_status, Some(401));
+
+    let body = axum::body::to_bytes(result.response.into_body(), 4096)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    // Error should be in OpenAI format.
+    assert!(json["error"]["message"].is_string());
+    assert!(json["error"]["type"].is_string());
+    // API key material should be scrubbed.
+    let msg = json["error"]["message"].as_str().unwrap();
+    assert!(
+        !msg.contains("sk-ant-"),
+        "API key should be scrubbed from error message"
+    );
+    assert!(msg.contains("[REDACTED]"));
+}
