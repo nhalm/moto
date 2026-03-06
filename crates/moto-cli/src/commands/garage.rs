@@ -6,8 +6,8 @@
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
 use moto_cli_wgtunnel::{
-    ClientError, ConsoleProgress, CreateGarageRequest, EnterConfig, EnterError, MotoClubClient,
-    MotoClubConfig, TunnelManager, enter_garage,
+    ClientError, ConsoleProgress, CreateGarageRequest, EnterConfig, EnterError, GarageEvent,
+    MotoClubClient, MotoClubConfig, TunnelManager, enter_garage,
 };
 use moto_k8s::{K8sClient, PodLogOptions, PodOps};
 use serde::Serialize;
@@ -737,10 +737,43 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             }
         }
 
-        GarageAction::Watch { garages: _ } => {
-            return Err(CliError::general(
-                "garage watch is not yet implemented.\n\nThis feature is coming soon.",
-            ));
+        GarageAction::Watch { garages } => {
+            let client = create_client(flags, None)?;
+
+            // Print header unless quiet or json
+            if !flags.quiet && !flags.json {
+                if let Some(ref names) = garages {
+                    eprintln!("Watching {}... (Ctrl+C to stop)", names.join(", "));
+                } else {
+                    eprintln!("Watching all garages... (Ctrl+C to stop)");
+                }
+                eprintln!();
+            }
+
+            let mut rx = client
+                .stream_events_ws(garages.as_deref())
+                .await
+                .map_err(client_error_to_cli_error)?;
+
+            let mut stdout = io::stdout().lock();
+            while let Some(result) = rx.recv().await {
+                match result {
+                    Ok(event) => {
+                        if flags.json {
+                            // JSON Lines: one compact JSON object per line
+                            let line = serde_json::to_string(&event)?;
+                            writeln!(stdout, "{line}")?;
+                        } else {
+                            let formatted = format_event(&event);
+                            writeln!(stdout, "{formatted}")?;
+                        }
+                        stdout.flush()?;
+                    }
+                    Err(e) => {
+                        return Err(CliError::general(format!("event stream error: {e}")));
+                    }
+                }
+            }
         }
 
         GarageAction::Extend { name, ttl } => {
@@ -860,6 +893,36 @@ async fn kubectl_exec(namespace: &str, pod_name: &str, flags: &GlobalFlags) -> R
     }
 
     Ok(())
+}
+
+/// Format a garage event for human-readable output.
+fn format_event(event: &GarageEvent) -> String {
+    match event {
+        GarageEvent::StatusChange {
+            garage,
+            from,
+            to,
+            reason,
+        } => {
+            let suffix = reason
+                .as_deref()
+                .map_or(String::new(), |r| format!(" ({r})"));
+            format!("[{garage}] Status: {from} \u{2192} {to}{suffix}")
+        }
+        GarageEvent::TtlWarning {
+            garage,
+            minutes_remaining,
+            expires_at,
+        } => {
+            let expires_display = format_expires_at(expires_at);
+            format!(
+                "[{garage}] TTL warning: {minutes_remaining} minutes remaining (expires {expires_display})"
+            )
+        }
+        GarageEvent::Error { garage, message } => {
+            format!("[{garage}] Error: {message}")
+        }
+    }
 }
 
 /// Truncate a string to a maximum length, adding "..." if truncated

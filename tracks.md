@@ -605,3 +605,5 @@ WHAT DOES NOT GO HERE:
 ## moto-cli.md v0.14
 
 - Add `Watch` variant to `GarageAction` enum with `--garages` option (comma-separated names, optional)
+- Add `stream_events_ws()` method to `MotoClubClient`: connect to `/ws/v1/events?garages=...` WebSocket, same auth pattern as `stream_logs_ws()`, return channel of parsed GarageEvent messages
+- Implement `watch` command handler: connect via `stream_events_ws()`, format events for human output (e.g. `[garage-name] Status: From → To`), support `--json` for JSON Lines output (one event per line)
