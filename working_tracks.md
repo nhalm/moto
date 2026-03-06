@@ -76,7 +76,7 @@ Read it in full at the start of each iteration.
 
 ## moto-wgtunnel.md v0.10
 
-- [ ] Update health endpoint to reflect WebSocket connection status (`moto_club_connected`) and WireGuard tunnel status (`wireguard`)
+(all items completed)
 
 ## moto-cli.md v0.14
 
