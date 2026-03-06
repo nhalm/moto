@@ -578,3 +578,4 @@ WHAT DOES NOT GO HERE:
 - Implement log streaming WebSocket endpoint: /ws/v1/garages/{name}/logs with tail, follow, since query params
 - Implement K8s pod log stream integration: historical lines first, then follow if requested, eof on pod terminate
 - Implement event streaming WebSocket endpoint: /ws/v1/events with garages query param filter
+- Implement TTL warning events in reconciler: emit ttl_warning at 15 and 5 minutes before expiry
