@@ -84,7 +84,6 @@ Read it in full at the start of each iteration.
 
 ## ai-proxy.md v0.2
 
-- Implement path-based provider routing (Anthropic, OpenAI, Gemini upstreams)
 - Implement keybox secret injection via SVID authentication (spiffe://moto.local/service/ai-proxy)
 - Implement garage identity validation via moto-club API
 - Implement streaming SSE pass-through (chunked transfer, flush immediately, no buffering)
