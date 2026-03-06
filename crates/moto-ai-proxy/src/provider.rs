@@ -101,6 +101,34 @@ impl Provider {
     }
 }
 
+impl Provider {
+    /// Allowed path prefixes for passthrough routes.
+    ///
+    /// Requests to paths outside this allowlist are rejected with 403 to prevent
+    /// garages from accessing admin/billing endpoints on provider APIs.
+    #[must_use]
+    pub const fn allowed_passthrough_prefixes(self) -> &'static [&'static str] {
+        match self {
+            Self::Anthropic => &["/v1/messages", "/v1/complete"],
+            Self::OpenAi => &["/v1/chat/", "/v1/models", "/v1/embeddings"],
+            Self::Gemini => &["/v1beta/", "/v1/"],
+        }
+    }
+
+    /// Returns true if the given path is allowed for passthrough on this provider.
+    #[must_use]
+    pub fn is_path_allowed(self, path: &str) -> bool {
+        let normalized = if path.starts_with('/') {
+            path.to_string()
+        } else {
+            format!("/{path}")
+        };
+        self.allowed_passthrough_prefixes()
+            .iter()
+            .any(|prefix| normalized.starts_with(prefix))
+    }
+}
+
 impl std::fmt::Display for Provider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name())
@@ -413,6 +441,50 @@ mod tests {
         let router = ModelRouter::default();
         // ft: with unknown base model → None
         assert!(router.resolve("ft:unknown-model:org:name:id").is_none());
+    }
+
+    #[test]
+    fn anthropic_allows_messages_path() {
+        assert!(Provider::Anthropic.is_path_allowed("/v1/messages"));
+        assert!(Provider::Anthropic.is_path_allowed("/v1/messages/batch"));
+    }
+
+    #[test]
+    fn anthropic_allows_complete_path() {
+        assert!(Provider::Anthropic.is_path_allowed("/v1/complete"));
+    }
+
+    #[test]
+    fn anthropic_blocks_admin_paths() {
+        assert!(!Provider::Anthropic.is_path_allowed("/v1/organizations"));
+        assert!(!Provider::Anthropic.is_path_allowed("/v1/billing"));
+        assert!(!Provider::Anthropic.is_path_allowed("/admin"));
+    }
+
+    #[test]
+    fn openai_allows_chat_and_models() {
+        assert!(Provider::OpenAi.is_path_allowed("/v1/chat/completions"));
+        assert!(Provider::OpenAi.is_path_allowed("/v1/models"));
+        assert!(Provider::OpenAi.is_path_allowed("/v1/embeddings"));
+    }
+
+    #[test]
+    fn openai_blocks_admin_paths() {
+        assert!(!Provider::OpenAi.is_path_allowed("/v1/organizations"));
+        assert!(!Provider::OpenAi.is_path_allowed("/v1/billing"));
+        assert!(!Provider::OpenAi.is_path_allowed("/dashboard"));
+    }
+
+    #[test]
+    fn gemini_allows_api_paths() {
+        assert!(Provider::Gemini.is_path_allowed("/v1beta/models"));
+        assert!(Provider::Gemini.is_path_allowed("/v1/models"));
+    }
+
+    #[test]
+    fn is_path_allowed_normalizes_leading_slash() {
+        assert!(Provider::Anthropic.is_path_allowed("v1/messages"));
+        assert!(!Provider::Anthropic.is_path_allowed("v1/organizations"));
     }
 
     #[test]

@@ -696,6 +696,93 @@ async fn chat_completions_no_provider_header_on_unknown_model() {
 }
 
 #[tokio::test]
+async fn passthrough_anthropic_allows_messages_path() {
+    let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/passthrough/anthropic/v1/messages")
+        .header("content-type", "application/json")
+        .header("x-api-key", "garage-abc123")
+        .body(Body::from(
+            r#"{"model":"claude-sonnet-4-20250514","messages":[]}"#,
+        ))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    // Should NOT be 403 — path is allowed. It will fail upstream (502) but that's fine.
+    assert_ne!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn passthrough_anthropic_blocks_disallowed_path() {
+    let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/passthrough/anthropic/v1/organizations")
+        .header("x-api-key", "garage-abc123")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["message"], "path not allowed");
+    assert_eq!(json["error"]["type"], "forbidden");
+}
+
+#[tokio::test]
+async fn passthrough_openai_blocks_disallowed_path() {
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/passthrough/openai/v1/billing/usage")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["message"], "path not allowed");
+    assert_eq!(json["error"]["type"], "forbidden");
+}
+
+#[tokio::test]
+async fn passthrough_blocked_path_includes_moto_headers() {
+    let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/passthrough/anthropic/admin/something")
+        .header("x-api-key", "garage-abc123")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    assert!(resp.headers().get("x-moto-request-id").is_some());
+    assert_eq!(
+        resp.headers()
+            .get("x-moto-provider")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "anthropic"
+    );
+}
+
+#[tokio::test]
 async fn chat_completions_routes_finetuned_model_to_openai() {
     // Fine-tuned model ft:gpt-4o:org:model:id should route to OpenAI.
     // No OpenAI key configured, so it should return 503 (not 400 "unknown model prefix").

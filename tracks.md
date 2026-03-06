@@ -648,3 +648,5 @@ WHAT DOES NOT GO HERE:
 
 - Implement fine-tuned model name handling (strip ft: prefix before matching)
 - Add X-Moto-Request-Id response header (correlation ID)
+- Add X-Moto-Provider response header (provider that handled request)
+- Implement passthrough path allowlist (block admin/billing endpoints, return 403 for disallowed paths)

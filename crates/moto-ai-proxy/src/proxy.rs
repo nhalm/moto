@@ -235,6 +235,25 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
     let method_str = method.to_string();
     let path = uri.path().to_string();
 
+    // Check passthrough path allowlist before auth (fail fast on disallowed paths).
+    if !provider.is_path_allowed(remaining) {
+        let mut resp = error_response(StatusCode::FORBIDDEN, "path not allowed", "forbidden");
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+        tracing::info!(
+            request_id = %request_id,
+            garage_id = "",
+            provider = %info.name,
+            mode = "passthrough",
+            method = %method_str,
+            path = %path,
+            status = 403u16,
+            duration_ms = duration_ms,
+            "request completed"
+        );
+        inject_moto_headers(&mut resp, &request_id, Some(&info.name));
+        return resp;
+    }
+
     let garage_id = match validate_garage_auth(headers, state.garage_validator.as_ref()).await {
         Ok(id) => id,
         Err(resp) => {
