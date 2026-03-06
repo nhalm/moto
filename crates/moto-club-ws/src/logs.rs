@@ -34,6 +34,9 @@ const fn default_tail() -> i64 {
     100
 }
 
+/// Maximum number of messages to buffer before dropping.
+const LOG_BUFFER_CAPACITY: usize = 256;
+
 /// Message types sent over the log WebSocket.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(tag = "type")]
@@ -57,6 +60,14 @@ pub enum LogMessage {
     Eof {
         /// Reason for stream end (e.g., `complete` or `pod_terminated`).
         reason: String,
+    },
+    /// Messages were dropped due to client backpressure.
+    #[serde(rename = "dropped")]
+    Dropped {
+        /// Number of messages dropped.
+        count: usize,
+        /// Human-readable description.
+        message: String,
     },
 }
 
@@ -228,6 +239,10 @@ pub async fn handle_log_socket<C: LogStreamingContext>(
 }
 
 /// Stream log lines from a K8s log stream to the WebSocket client.
+///
+/// Uses a bounded buffer (`LOG_BUFFER_CAPACITY` = 256) between the K8s log producer
+/// and the WebSocket consumer. If the client is too slow to consume messages, the
+/// oldest undelivered messages are dropped and the client receives a `dropped` notification.
 async fn stream_logs(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     receiver: &mut futures_util::stream::SplitStream<WebSocket>,
@@ -235,7 +250,11 @@ async fn stream_logs(
     garage_name: &str,
     follow: bool,
 ) {
+    use std::collections::VecDeque;
+
     let mut log_stream = std::pin::pin!(log_stream);
+    let mut buffer: VecDeque<String> = VecDeque::new();
+    let mut dropped_count: usize = 0;
 
     loop {
         tokio::select! {
@@ -246,15 +265,19 @@ async fn stream_logs(
                             timestamp: chrono::Utc::now().to_rfc3339(),
                             line: line.trim_end().to_string(),
                         };
-                        if let Ok(json) = serde_json::to_string(&log_msg)
-                            && sender.send(Message::Text(json.into())).await.is_err()
-                        {
-                            tracing::debug!(garage = %garage_name, "log WebSocket send failed, closing");
-                            break;
+                        if let Ok(json) = serde_json::to_string(&log_msg) {
+                            // Buffer the message; drop oldest if at capacity
+                            if buffer.len() >= LOG_BUFFER_CAPACITY {
+                                buffer.pop_front();
+                                dropped_count += 1;
+                            }
+                            buffer.push_back(json);
                         }
                     }
                     Some(Err(e)) => {
                         tracing::debug!(garage = %garage_name, error = %e, "log stream error");
+                        // Flush buffer before sending error
+                        flush_buffer(sender, &mut buffer, &mut dropped_count, garage_name).await;
                         let error_msg = LogMessage::Error {
                             message: format!("Pod log error: {e}"),
                         };
@@ -264,6 +287,8 @@ async fn stream_logs(
                         break;
                     }
                     None => {
+                        // Flush buffer before sending EOF
+                        flush_buffer(sender, &mut buffer, &mut dropped_count, garage_name).await;
                         let reason = if follow { "pod_terminated" } else { "complete" };
                         let eof_msg = LogMessage::Eof {
                             reason: reason.to_string(),
@@ -273,6 +298,12 @@ async fn stream_logs(
                         }
                         break;
                     }
+                }
+            }
+            // Drain buffer to the WebSocket when there are pending messages
+            () = tokio::task::yield_now(), if !buffer.is_empty() => {
+                if flush_buffer(sender, &mut buffer, &mut dropped_count, garage_name).await {
+                    break;
                 }
             }
             result = receiver.next() => {
@@ -295,6 +326,41 @@ async fn stream_logs(
             }
         }
     }
+}
+
+/// Flush buffered log messages to the WebSocket, sending a dropped notification first
+/// if any messages were dropped. Returns `true` if the WebSocket send failed (connection broken).
+async fn flush_buffer(
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    buffer: &mut std::collections::VecDeque<String>,
+    dropped_count: &mut usize,
+    garage_name: &str,
+) -> bool {
+    // Send dropped notification if any messages were dropped
+    if *dropped_count > 0 {
+        let count = *dropped_count;
+        let dropped_msg = LogMessage::Dropped {
+            count,
+            message: format!("client too slow, {count} lines dropped"),
+        };
+        if let Ok(json) = serde_json::to_string(&dropped_msg)
+            && sender.send(Message::Text(json.into())).await.is_err()
+        {
+            tracing::debug!(garage = %garage_name, "log WebSocket send failed, closing");
+            return true;
+        }
+        *dropped_count = 0;
+    }
+
+    // Drain the buffer
+    while let Some(json) = buffer.pop_front() {
+        if sender.send(Message::Text(json.into())).await.is_err() {
+            tracing::debug!(garage = %garage_name, "log WebSocket send failed, closing");
+            return true;
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -360,6 +426,18 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains(r#""type":"eof""#));
         assert!(json.contains(r#""reason":"pod_terminated""#));
+    }
+
+    #[test]
+    fn dropped_message_serialization() {
+        let msg = LogMessage::Dropped {
+            count: 42,
+            message: "client too slow, 42 lines dropped".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"dropped""#));
+        assert!(json.contains(r#""count":42"#));
+        assert!(json.contains(r#""message":"client too slow, 42 lines dropped""#));
     }
 
     #[test]

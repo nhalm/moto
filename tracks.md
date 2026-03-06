@@ -581,3 +581,8 @@ WHAT DOES NOT GO HERE:
 - Implement TTL warning events in reconciler: emit ttl_warning at 15 and 5 minutes before expiry
 - Implement status_change events on garage state transitions (from garage service and reconciler)
 - Implement error events from reconciler (pod failures, crash loops)
+- Update CLI to prefer WebSocket for log streaming, fall back to direct K8s API
+
+## moto-club-websocket.md v0.3
+
+- Add dropped message type for log backpressure: buffer up to 256 messages, drop oldest and notify client

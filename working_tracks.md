@@ -68,12 +68,11 @@ Read it in full at the start of each iteration.
 
 ## moto-club-websocket.md v0.2
 
-- Update CLI to prefer WebSocket for log streaming, fall back to direct K8s API
+(all items completed)
 
 ## moto-club-websocket.md v0.3
 
 - Add owner-based auth (same as REST API) to log and event streaming endpoints
 - Add garage state validation for log streaming: reject Pending and Terminated, allow Initializing/Ready/Failed
-- Add dropped message type for log backpressure: buffer up to 256 messages, drop oldest and notify client
 - Add connection limits: max 5 concurrent log WS connections per garage, max 3 event WS connections per user
 - Add reason field to status_change events on transitions to Terminated or Failed (values from TerminationReason enum)

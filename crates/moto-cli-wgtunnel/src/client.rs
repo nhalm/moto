@@ -479,6 +479,7 @@ impl MotoClubClient {
     /// # Errors
     ///
     /// Returns an error if the WebSocket connection cannot be established.
+    #[allow(clippy::too_many_lines)]
     pub async fn stream_logs_ws(
         &self,
         garage_name: &str,
@@ -573,6 +574,13 @@ impl MotoClubClient {
                                 }
                                 Some("eof") => {
                                     break;
+                                }
+                                Some("dropped") => {
+                                    let msg = value
+                                        .get("message")
+                                        .and_then(|m| m.as_str())
+                                        .unwrap_or("messages dropped");
+                                    let _ = tx.send(Ok(format!("[warning: {msg}]\n"))).await;
                                 }
                                 _ => {}
                             }
