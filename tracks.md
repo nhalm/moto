@@ -598,3 +598,4 @@ WHAT DOES NOT GO HERE:
 ## moto-wgtunnel.md v0.10
 
 - Implement WebSocket client connection in daemon: read K8s SA token from `/var/run/secrets/kubernetes.io/serviceaccount/token`, connect to `peer_stream_url()` with Bearer auth, parse incoming PeerEvent JSON messages
+- Implement reconnect logic: exponential backoff (1s, 2s, 4s, 8s, cap 30s) on WebSocket disconnect, log warning on each attempt, server re-sends full peer list on reconnect
