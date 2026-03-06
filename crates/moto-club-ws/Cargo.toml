@@ -28,6 +28,10 @@ serde_json = { workspace = true }
 # Logging
 tracing = { workspace = true }
 
+# Time
+chrono = { workspace = true }
+
 # Internal crates
 moto-club-wg = { workspace = true }
+moto-k8s = { workspace = true }
 moto-wgtunnel-types = { workspace = true }

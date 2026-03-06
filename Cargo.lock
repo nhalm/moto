@@ -2210,8 +2210,10 @@ name = "moto-club-ws"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
  "futures-util",
  "moto-club-wg",
+ "moto-k8s",
  "moto-wgtunnel-types",
  "serde",
  "serde_json",

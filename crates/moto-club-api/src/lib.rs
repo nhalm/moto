@@ -33,6 +33,7 @@
 
 pub mod garages;
 pub mod health;
+pub mod logs_ws;
 pub mod metrics;
 pub mod postgres_stores;
 pub mod wg;
@@ -147,8 +148,54 @@ impl AppState {
 }
 
 use moto_club_wg::{RegisteredDevice, Session};
-use moto_club_ws::PeerStreamingContext;
+use moto_club_ws::logs::{GarageInfo, LogStreamError};
+use moto_club_ws::{LogStreamingContext, PeerStreamingContext};
+use moto_k8s::{LogStream, PodLogOptions, PodOps};
 use moto_wgtunnel_types::WgPublicKey;
+
+impl LogStreamingContext for AppState {
+    async fn resolve_garage(&self, name: &str, owner: &str) -> Result<GarageInfo, LogStreamError> {
+        use moto_club_db::garage_repo;
+
+        let garage = garage_repo::get_by_name(&self.db_pool, name)
+            .await
+            .map_err(|e| match e {
+                moto_club_db::DbError::NotFound { .. } => {
+                    LogStreamError::NotFound(format!("garage '{name}' not found"))
+                }
+                _ => LogStreamError::Internal(format!("database error: {e}")),
+            })?;
+
+        if garage.owner != owner {
+            return Err(LogStreamError::NotOwned(format!(
+                "garage '{name}' is owned by another user"
+            )));
+        }
+
+        Ok(GarageInfo {
+            namespace: garage.namespace,
+            status: garage.status.to_string(),
+        })
+    }
+
+    async fn stream_pod_logs(
+        &self,
+        namespace: &str,
+        options: &PodLogOptions,
+    ) -> Result<LogStream, LogStreamError> {
+        let Some(ref garage_k8s) = self.garage_k8s else {
+            return Err(LogStreamError::Internal(
+                "K8s client not configured".to_string(),
+            ));
+        };
+
+        garage_k8s
+            .client()
+            .stream_pod_logs(namespace, None, options)
+            .await
+            .map_err(|e| LogStreamError::Kubernetes(e.to_string()))
+    }
+}
 
 impl PeerStreamingContext for AppState {
     fn list_sessions_for_garage(&self, garage_id: &str) -> Result<Vec<Session>, String> {
@@ -179,6 +226,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(health::router())
         .merge(garages::router())
+        .merge(logs_ws::router())
         .merge(wg::router())
         .layer(middleware::from_fn(metrics::record_http_metrics))
         .with_state(state)
