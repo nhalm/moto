@@ -677,6 +677,17 @@ async fn delete_garage(
             )
         })?;
 
+    // Emit status_change event for user-initiated close
+    state.event_broadcaster.broadcast(
+        &garage.owner,
+        moto_club_ws::events::GarageEvent::StatusChange {
+            garage: garage.name.clone(),
+            from: garage.status.to_string(),
+            to: moto_club_db::GarageStatus::Terminated.to_string(),
+            reason: Some("user_closed".to_string()),
+        },
+    );
+
     // Close all active sessions and broadcast peer removals
     let garage_id_str = garage.id.to_string();
     match state.session_manager.on_garage_terminated(&garage_id_str) {

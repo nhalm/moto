@@ -2137,6 +2137,7 @@ dependencies = [
  "moto-club-db",
  "moto-club-k8s",
  "moto-club-types",
+ "moto-club-ws",
  "moto-k8s",
  "rand 0.9.2",
  "reqwest",

@@ -3,6 +3,8 @@
 //! Coordinates between the database layer and Kubernetes to manage
 //! garage lifecycles.
 
+use std::sync::Arc;
+
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -19,6 +21,7 @@ use moto_club_k8s::{
     GarageWorkspacePvcOps,
 };
 use moto_club_types::GarageId;
+use moto_club_ws::events::{EventBroadcaster, GarageEvent};
 
 use crate::keybox::{KeyboxClient, KeyboxError};
 use crate::lifecycle::{GarageLifecycle, LifecycleError};
@@ -129,6 +132,7 @@ pub struct GarageService {
     db: DbPool,
     k8s: GarageK8s,
     keybox: Option<KeyboxClient>,
+    event_broadcaster: Option<Arc<EventBroadcaster>>,
 }
 
 impl GarageService {
@@ -139,6 +143,7 @@ impl GarageService {
             db,
             k8s,
             keybox: None,
+            event_broadcaster: None,
         }
     }
 
@@ -153,7 +158,15 @@ impl GarageService {
             db,
             k8s,
             keybox: Some(keybox),
+            event_broadcaster: None,
         }
+    }
+
+    /// Sets the event broadcaster for emitting `status_change` events.
+    #[must_use]
+    pub fn with_event_broadcaster(mut self, broadcaster: Arc<EventBroadcaster>) -> Self {
+        self.event_broadcaster = Some(broadcaster);
+        self
     }
 
     /// Creates a new garage.
@@ -385,6 +398,19 @@ impl GarageService {
         // Mark as terminated in database first
         let terminated =
             garage_repo::terminate(&self.db, garage.id, TerminationReason::UserClosed).await?;
+
+        // Emit status_change event
+        if let Some(ref broadcaster) = self.event_broadcaster {
+            broadcaster.broadcast(
+                owner,
+                GarageEvent::StatusChange {
+                    garage: garage.name.clone(),
+                    from: garage.status.to_string(),
+                    to: GarageStatus::Terminated.to_string(),
+                    reason: Some("user_closed".to_string()),
+                },
+            );
+        }
 
         // Delete K8s namespace (this cascades to all resources)
         let garage_id = GarageId::from_uuid(garage.id);

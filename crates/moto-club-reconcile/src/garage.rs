@@ -117,11 +117,33 @@ impl GarageReconciler {
         }
     }
 
-    /// Sets the event broadcaster for emitting TTL warning events.
+    /// Sets the event broadcaster for emitting TTL warning and status change events.
     #[must_use]
     pub fn with_event_broadcaster(mut self, broadcaster: Arc<EventBroadcaster>) -> Self {
         self.event_broadcaster = Some(broadcaster);
         self
+    }
+
+    /// Broadcasts a `status_change` event if an event broadcaster is configured.
+    fn emit_status_change(
+        &self,
+        owner: &str,
+        garage_name: &str,
+        from: GarageStatus,
+        to: GarageStatus,
+        reason: Option<&str>,
+    ) {
+        if let Some(ref broadcaster) = self.event_broadcaster {
+            broadcaster.broadcast(
+                owner,
+                GarageEvent::StatusChange {
+                    garage: garage_name.to_string(),
+                    from: from.to_string(),
+                    to: to.to_string(),
+                    reason: reason.map(String::from),
+                },
+            );
+        }
     }
 
     /// Runs the reconciliation loop continuously.
@@ -271,6 +293,13 @@ impl GarageReconciler {
                             "garage terminated: namespace_missing"
                         );
                         stats.terminated += 1;
+                        self.emit_status_change(
+                            &garage.owner,
+                            &garage.name,
+                            garage.status,
+                            GarageStatus::Terminated,
+                            Some("namespace_missing"),
+                        );
                     }
                     Err(e) => {
                         warn!(garage_id = %id_str, error = %e, "failed to terminate garage");
@@ -355,6 +384,13 @@ impl GarageReconciler {
                     "garage terminated: pod_lost (pod succeeded)"
                 );
                 stats.terminated += 1;
+                self.emit_status_change(
+                    &garage.owner,
+                    &garage.name,
+                    garage.status,
+                    GarageStatus::Terminated,
+                    Some("pod_lost"),
+                );
                 return Ok(());
             }
             GaragePodStatus::Unknown => {
@@ -371,6 +407,13 @@ impl GarageReconciler {
                     "garage terminated: pod_lost (pod not found)"
                 );
                 stats.terminated += 1;
+                self.emit_status_change(
+                    &garage.owner,
+                    &garage.name,
+                    garage.status,
+                    GarageStatus::Terminated,
+                    Some("pod_lost"),
+                );
                 return Ok(());
             }
         };
@@ -385,6 +428,19 @@ impl GarageReconciler {
             );
             garage_repo::update_status(&self.db, uuid, new_status).await?;
             stats.updated += 1;
+
+            let reason = if new_status == GarageStatus::Failed {
+                Some("error")
+            } else {
+                None
+            };
+            self.emit_status_change(
+                &garage.owner,
+                &garage.name,
+                garage.status,
+                new_status,
+                reason,
+            );
         }
 
         Ok(())
@@ -503,6 +559,13 @@ impl GarageReconciler {
                         "garage expired, terminated"
                     );
                     stats.ttl_expired += 1;
+                    self.emit_status_change(
+                        &garage.owner,
+                        &garage.name,
+                        garage.status,
+                        GarageStatus::Terminated,
+                        Some("ttl_expired"),
+                    );
                 }
                 Err(e) => {
                     warn!(
