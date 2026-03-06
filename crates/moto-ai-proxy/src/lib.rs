@@ -9,6 +9,7 @@ pub mod health;
 pub mod keys;
 pub mod provider;
 pub mod proxy;
+pub mod translate;
 
 #[cfg(test)]
 mod proxy_test;

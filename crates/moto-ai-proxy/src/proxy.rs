@@ -9,11 +9,13 @@ use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use reqwest::Client;
 use secrecy::ExposeSecret;
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::auth::{self, AuthError, GarageValidator};
 use crate::keys::KeyStore;
 use crate::provider::Provider;
+use crate::translate::anthropic as anthropic_translate;
 
 /// Maximum request body size (10 MB).
 const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024;
@@ -126,12 +128,16 @@ pub async fn forward_to_provider<K: KeyStore>(
         req = req.header("accept", v);
     }
 
-    // Forward anthropic-version header for Anthropic passthrough.
-    if provider == Provider::Anthropic
-        && let Some(av) = headers.get("anthropic-version")
-        && let Ok(v) = av.to_str()
-    {
-        req = req.header("anthropic-version", v);
+    // Forward anthropic-version header for Anthropic requests.
+    // Use the client-provided value if present, otherwise default to a known version.
+    if provider == Provider::Anthropic {
+        if let Some(av) = headers.get("anthropic-version")
+            && let Ok(v) = av.to_str()
+        {
+            req = req.header("anthropic-version", v);
+        } else {
+            req = req.header("anthropic-version", "2023-06-01");
+        }
     }
 
     // Stream the body through via reqwest's body wrapper.
@@ -322,12 +328,52 @@ pub async fn passthrough_gemini<K: KeyStore, G: GarageValidator>(
     .await
 }
 
+/// Resolves the provider from the request body's `model` field and prepares
+/// the body for forwarding, translating if needed (e.g., Anthropic).
+fn resolve_and_translate(body: &Bytes) -> Result<(Provider, String, Body), Box<Response>> {
+    let model = serde_json::from_slice::<Value>(body)
+        .ok()
+        .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from));
+
+    let Some(model) = model else {
+        return Err(Box::new(error_response(
+            StatusCode::BAD_REQUEST,
+            "missing or invalid 'model' field in request body",
+            "invalid_request_error",
+        )));
+    };
+
+    let Some(provider) = Provider::from_model(&model) else {
+        return Err(Box::new(error_response(
+            StatusCode::BAD_REQUEST,
+            "unknown model prefix, cannot determine provider",
+            "invalid_request_error",
+        )));
+    };
+
+    // Translate request body for Anthropic; other providers use OpenAI format natively.
+    let forwarded_body = if provider == Provider::Anthropic {
+        let openai_value: Value = serde_json::from_slice(body).map_err(|_| {
+            Box::new(error_response(
+                StatusCode::BAD_REQUEST,
+                "invalid JSON in request body",
+                "invalid_request_error",
+            ))
+        })?;
+        let anthropic_value = anthropic_translate::translate_request(&openai_value);
+        Body::from(anthropic_value.to_string())
+    } else {
+        Body::from(body.clone())
+    };
+
+    Ok((provider, model, forwarded_body))
+}
+
 /// Handler for `POST /v1/chat/completions` — unified endpoint.
 ///
 /// Reads the request body, extracts the `model` field, and routes to the
 /// correct provider. For `OpenAI` and Gemini, the request is forwarded directly
-/// (both support OpenAI-compatible format). Anthropic requires translation
-/// (handled by the translation layer when implemented).
+/// (both support OpenAI-compatible format). Anthropic requires translation.
 pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
     State(state): State<ProxyState<K, G>>,
     uri: Uri,
@@ -341,98 +387,96 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
     let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
         Ok(id) => id,
         Err(resp) => {
-            let status = resp.status().as_u16();
-            let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
-            tracing::info!(
-                request_id = %request_id,
-                garage_id = "",
-                mode = "unified",
-                method = "POST",
-                path = %path,
-                status = status,
-                duration_ms = duration_ms,
-                "request completed"
+            log_request(
+                &request_id,
+                "",
+                None,
+                "unified",
+                "POST",
+                &path,
+                resp.status().as_u16(),
+                None,
+                &start,
             );
             return resp;
         }
     };
 
-    // Parse the model field from the request body.
-    let model = serde_json::from_slice::<serde_json::Value>(&body)
-        .ok()
-        .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from));
-
-    let Some(model) = model else {
-        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
-        tracing::info!(
-            request_id = %request_id,
-            garage_id = %garage_id,
-            mode = "unified",
-            method = "POST",
-            path = %path,
-            status = 400u16,
-            duration_ms = duration_ms,
-            "request completed"
-        );
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "missing or invalid 'model' field in request body",
-            "invalid_request_error",
-        );
-    };
-
-    let Some(provider) = Provider::from_model(&model) else {
-        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
-        tracing::info!(
-            request_id = %request_id,
-            garage_id = %garage_id,
-            model = %model,
-            mode = "unified",
-            method = "POST",
-            path = %path,
-            status = 400u16,
-            duration_ms = duration_ms,
-            "request completed"
-        );
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "unknown model prefix, cannot determine provider",
-            "invalid_request_error",
-        );
+    let (provider, model, forwarded_body) = match resolve_and_translate(&body) {
+        Ok(resolved) => resolved,
+        Err(resp) => {
+            log_request(
+                &request_id,
+                &garage_id,
+                None,
+                "unified",
+                "POST",
+                &path,
+                resp.status().as_u16(),
+                None,
+                &start,
+            );
+            return *resp;
+        }
     };
 
     let upstream_path = provider.unified_chat_path();
 
-    // Forward the buffered body to the upstream provider.
+    // Forward the body to the upstream provider.
     let result = forward_to_provider(
         provider,
         Method::POST,
         upstream_path,
         uri.query(),
         &headers,
-        Body::from(body),
+        forwarded_body,
         &state.client,
         state.key_store.as_ref(),
     )
     .await;
 
     let status = result.response.status().as_u16();
+    log_request(
+        &request_id,
+        &garage_id,
+        Some(&model),
+        "unified",
+        "POST",
+        &path,
+        status,
+        result.upstream_status,
+        &start,
+    );
+
+    result.response
+}
+
+/// Emits a canonical log line for a unified endpoint request.
+#[allow(clippy::too_many_arguments)]
+fn log_request(
+    request_id: &Uuid,
+    garage_id: &str,
+    model: Option<&str>,
+    mode: &str,
+    method: &str,
+    path: &str,
+    status: u16,
+    upstream_status: Option<u16>,
+    start: &Instant,
+) {
     let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
     tracing::info!(
         request_id = %request_id,
         garage_id = %garage_id,
-        provider = %provider,
-        model = %model,
-        mode = "unified",
-        method = "POST",
-        path = %path,
+        model = model.unwrap_or(""),
+        mode = mode,
+        method = method,
+        path = path,
         status = status,
-        upstream_status = result.upstream_status,
+        upstream_status = upstream_status,
         duration_ms = duration_ms,
         "request completed"
     );
-
-    result.response
 }
 
 /// Builds the proxy router with passthrough routes and garage auth.
