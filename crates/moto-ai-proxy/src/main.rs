@@ -22,6 +22,7 @@ use tracing_subscriber::EnvFilter;
 
 use moto_ai_proxy::config::Config;
 use moto_ai_proxy::health;
+use moto_ai_proxy::proxy;
 
 #[tokio::main]
 async fn main() {
@@ -69,8 +70,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Mark startup complete — SVID loading and key fetch will gate this in later work items
     health::mark_startup_complete();
 
-    // Placeholder router — proxy routes will be added in later work items
-    let app = axum::Router::new();
+    // Build HTTP client for upstream requests
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()?;
+
+    // Build proxy router with passthrough routes
+    let app = proxy::proxy_router(client);
 
     let listener = TcpListener::bind(config.bind_addr).await?;
     info!(addr = %config.bind_addr, "moto-ai-proxy listening");

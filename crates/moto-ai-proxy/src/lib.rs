@@ -5,3 +5,5 @@
 
 pub mod config;
 pub mod health;
+pub mod provider;
+pub mod proxy;
