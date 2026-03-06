@@ -567,3 +567,7 @@ WHAT DOES NOT GO HERE:
 - Log each termination: garage_id, garage_name, reason=ttl_expired
 - On namespace deletion failure after DB termination, log warning and continue (orphan cleanup catches it next cycle)
 - Continue to next expired garage on individual failure (don't fail the batch)
+
+## moto-cron.md v0.3
+
+- Add WHERE status != 'terminated' guard to garage_repo::terminate() to prevent overwriting concurrent user-initiated close

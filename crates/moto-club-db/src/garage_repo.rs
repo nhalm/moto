@@ -236,7 +236,7 @@ pub async fn update_status(pool: &DbPool, id: Uuid, status: GarageStatus) -> DbR
 ///
 /// # Errors
 ///
-/// Returns `DbError::NotFound` if the garage doesn't exist.
+/// Returns `DbError::NotFound` if the garage doesn't exist or is already terminated.
 pub async fn terminate(pool: &DbPool, id: Uuid, reason: TerminationReason) -> DbResult<Garage> {
     let now = Utc::now();
 
@@ -244,7 +244,7 @@ pub async fn terminate(pool: &DbPool, id: Uuid, reason: TerminationReason) -> Db
         r"
         UPDATE garages
         SET status = $1, updated_at = $2, terminated_at = $3, termination_reason = $4
-        WHERE id = $5
+        WHERE id = $5 AND status != 'terminated'
         RETURNING *
         ",
     )

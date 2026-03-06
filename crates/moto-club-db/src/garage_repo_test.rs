@@ -309,4 +309,28 @@ mod integration_tests {
             })
         ));
     }
+
+    #[tokio::test]
+    async fn terminate_already_terminated_returns_not_found() {
+        let pool = test_pool().await;
+        let input = create_garage_input();
+        let id = input.id;
+
+        garage_repo::create(&pool, input).await.unwrap();
+
+        // First terminate succeeds
+        garage_repo::terminate(&pool, id, TerminationReason::UserClosed)
+            .await
+            .unwrap();
+
+        // Second terminate returns NotFound (already terminated)
+        let result = garage_repo::terminate(&pool, id, TerminationReason::TtlExpired).await;
+        assert!(matches!(
+            result,
+            Err(DbError::NotFound {
+                entity: "garage",
+                ..
+            })
+        ));
+    }
 }

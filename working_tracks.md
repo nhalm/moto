@@ -64,7 +64,6 @@ Read it in full at the start of each iteration.
 
 ## moto-cron.md v0.3
 
-- Add WHERE status != 'terminated' guard to garage_repo::terminate() to prevent overwriting concurrent user-initiated close
 - Ensure TTL enforcement applies to all non-terminated states: Pending, Initializing, Ready, and Failed
 
 ## moto-club-websocket.md v0.2
