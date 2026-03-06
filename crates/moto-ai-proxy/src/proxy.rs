@@ -56,7 +56,8 @@ impl<K: KeyStore + 'static, G: GarageValidator + 'static> Clone for ProxyState<K
 
 /// Validates the garage identity from request headers.
 ///
-/// Extracts the auth token, parses the garage ID, and validates via the garage validator.
+/// Extracts the auth token, decodes the SVID JWT to get the garage ID,
+/// and validates via the garage validator.
 async fn validate_garage_auth<G: GarageValidator>(
     headers: &HeaderMap,
     validator: &G,
@@ -66,10 +67,8 @@ async fn validate_garage_auth<G: GarageValidator>(
         error_response(err.status_code(), &err.message(), err.error_type())
     })?;
 
-    let garage_id = auth::extract_garage_id(&token).ok_or_else(|| {
-        let err = AuthError::InvalidToken;
-        error_response(err.status_code(), &err.message(), err.error_type())
-    })?;
+    let garage_id = auth::extract_garage_id(&token)
+        .map_err(|err| error_response(err.status_code(), &err.message(), err.error_type()))?;
 
     validator
         .validate_garage(&garage_id)

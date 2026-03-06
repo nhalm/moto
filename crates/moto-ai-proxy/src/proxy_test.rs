@@ -10,10 +10,15 @@ use secrecy::{ExposeSecret, SecretString};
 use tokio_stream::wrappers::ReceiverStream;
 use tower::ServiceExt;
 
-use crate::auth::{AuthError, GarageValidator};
+use crate::auth::{self, AuthError, GarageValidator};
 use crate::keys::KeyStore;
 use crate::provider::{ModelRouter, Provider};
 use crate::proxy;
+
+/// Helper to build a test SVID JWT for a garage.
+fn garage_svid(id: &str) -> String {
+    auth::build_test_svid("garage", id, 900)
+}
 
 /// Mock key store that returns pre-configured keys.
 struct MockKeyStore {
@@ -128,7 +133,7 @@ async fn streaming_sse_passthrough_forwards_events_unchanged() {
     let mut headers = HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
     headers.insert("accept", "text/event-stream".parse().unwrap());
-    headers.insert("x-api-key", "garage-abc123".parse().unwrap());
+    headers.insert("x-api-key", garage_svid("abc123").parse().unwrap());
 
     // Override the upstream base by making the request directly to our mock.
     // We'll use forward_to_provider but need to point at our mock.
@@ -320,7 +325,10 @@ async fn chat_completions_returns_400_for_missing_model() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::from(r#"{"messages": []}"#))
         .unwrap();
 
@@ -342,7 +350,10 @@ async fn chat_completions_returns_400_for_unknown_model() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::from(r#"{"model": "mistral-large", "messages": []}"#))
         .unwrap();
 
@@ -370,7 +381,10 @@ async fn chat_completions_returns_503_for_unconfigured_provider() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::from(r#"{"model": "gpt-4o", "messages": []}"#))
         .unwrap();
 
@@ -413,7 +427,10 @@ async fn responses_include_x_moto_request_id_header() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::from(r#"{"model": "unknown-model", "messages": []}"#))
         .unwrap();
 
@@ -441,7 +458,10 @@ async fn list_models_includes_x_moto_request_id_header() {
     let req = Request::builder()
         .method("GET")
         .uri("/v1/models")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::empty())
         .unwrap();
 
@@ -488,7 +508,10 @@ async fn chat_completions_returns_503_for_unconfigured_gemini() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::from(
             r#"{"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": "Hi"}]}"#,
         ))
@@ -531,7 +554,10 @@ async fn list_models_returns_anthropic_models_when_configured() {
     let req = Request::builder()
         .method("GET")
         .uri("/v1/models")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::empty())
         .unwrap();
 
@@ -557,7 +583,10 @@ async fn list_models_returns_empty_when_no_keys() {
     let req = Request::builder()
         .method("GET")
         .uri("/v1/models")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::empty())
         .unwrap();
 
@@ -585,7 +614,10 @@ async fn chat_completions_routes_custom_model_prefix() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::from(
             r#"{"model": "mistral-large", "messages": [{"role": "user", "content": "Hi"}]}"#,
         ))
@@ -608,7 +640,10 @@ async fn chat_completions_returns_503_for_custom_provider_without_key() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::from(
             r#"{"model": "mistral-large", "messages": [{"role": "user", "content": "Hi"}]}"#,
         ))
@@ -637,7 +672,10 @@ async fn chat_completions_includes_x_moto_provider_header() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::from(
             r#"{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]}"#,
         ))
@@ -683,7 +721,10 @@ async fn chat_completions_no_provider_header_on_unknown_model() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::from(r#"{"model": "unknown-model", "messages": []}"#))
         .unwrap();
 
@@ -704,7 +745,7 @@ async fn passthrough_anthropic_allows_messages_path() {
         .method("POST")
         .uri("/passthrough/anthropic/v1/messages")
         .header("content-type", "application/json")
-        .header("x-api-key", "garage-abc123")
+        .header("x-api-key", &garage_svid("abc123"))
         .body(Body::from(
             r#"{"model":"claude-sonnet-4-20250514","messages":[]}"#,
         ))
@@ -723,7 +764,7 @@ async fn passthrough_anthropic_blocks_disallowed_path() {
     let req = Request::builder()
         .method("GET")
         .uri("/passthrough/anthropic/v1/organizations")
-        .header("x-api-key", "garage-abc123")
+        .header("x-api-key", &garage_svid("abc123"))
         .body(Body::empty())
         .unwrap();
 
@@ -744,7 +785,10 @@ async fn passthrough_openai_blocks_disallowed_path() {
     let req = Request::builder()
         .method("GET")
         .uri("/passthrough/openai/v1/billing/usage")
-        .header("authorization", "Bearer garage-abc123")
+        .header(
+            "authorization",
+            &format!("Bearer {}", garage_svid("abc123")),
+        )
         .body(Body::empty())
         .unwrap();
 
@@ -765,7 +809,7 @@ async fn passthrough_blocked_path_includes_moto_headers() {
     let req = Request::builder()
         .method("GET")
         .uri("/passthrough/anthropic/admin/something")
-        .header("x-api-key", "garage-abc123")
+        .header("x-api-key", &garage_svid("abc123"))
         .body(Body::empty())
         .unwrap();
 
@@ -793,7 +837,7 @@ async fn chat_completions_routes_finetuned_model_to_openai() {
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", "Bearer garage-abc123")
+        .header("authorization", &format!("Bearer {}", garage_svid("abc123")))
         .body(Body::from(
             r#"{"model": "ft:gpt-4o:my-org:custom:abc123", "messages": [{"role": "user", "content": "Hi"}]}"#,
         ))

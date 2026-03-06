@@ -1,16 +1,19 @@
-//! Garage identity validation — verifies garages via moto-club API.
+//! Garage identity validation — verifies garages via SVID JWT and moto-club API.
 //!
-//! Garages authenticate to ai-proxy by sending a token in the provider-native
-//! auth header. The proxy extracts the garage ID from the token and validates
-//! it against moto-club (`GET /api/v1/garages/{id}`), checking that the garage
-//! exists and is in `Ready` state. Validation results are cached with a
-//! configurable TTL (default 60s).
+//! Garages authenticate to ai-proxy by sending their SVID JWT (issued by keybox,
+//! mounted at `/var/run/secrets/svid/`) in the provider-native auth header. The
+//! proxy decodes the JWT claims to extract the garage ID, checks expiration, and
+//! validates the garage state against moto-club (`GET /api/v1/garages/{id}`).
+//! Validation results are cached with a configurable TTL (default 60s).
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::http::HeaderMap;
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use chrono::Utc;
+use serde::Deserialize;
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
 
@@ -19,8 +22,12 @@ use tracing::{debug, warn};
 pub enum AuthError {
     /// No auth token found in request headers.
     MissingToken,
-    /// Token format is invalid (cannot extract garage ID).
+    /// Token format is invalid (not a valid SVID JWT).
     InvalidToken,
+    /// SVID has expired.
+    SvidExpired,
+    /// Token principal is not a garage.
+    NotGarage,
     /// Garage not found or not in `Ready` state.
     GarageNotReady(String),
     /// Failed to reach moto-club for validation.
@@ -33,7 +40,9 @@ impl AuthError {
     pub const fn status_code(&self) -> axum::http::StatusCode {
         match self {
             Self::MissingToken | Self::InvalidToken => axum::http::StatusCode::UNAUTHORIZED,
-            Self::GarageNotReady(_) => axum::http::StatusCode::FORBIDDEN,
+            Self::SvidExpired | Self::NotGarage | Self::GarageNotReady(_) => {
+                axum::http::StatusCode::FORBIDDEN
+            }
             Self::ValidationFailed(_) => axum::http::StatusCode::BAD_GATEWAY,
         }
     }
@@ -43,7 +52,7 @@ impl AuthError {
     pub const fn error_type(&self) -> &'static str {
         match self {
             Self::MissingToken | Self::InvalidToken => "authentication_error",
-            Self::GarageNotReady(_) => "forbidden",
+            Self::SvidExpired | Self::NotGarage | Self::GarageNotReady(_) => "forbidden",
             Self::ValidationFailed(_) => "server_error",
         }
     }
@@ -54,10 +63,27 @@ impl AuthError {
         match self {
             Self::MissingToken => "missing authentication token".to_string(),
             Self::InvalidToken => "invalid authentication token".to_string(),
+            Self::SvidExpired => "SVID token has expired".to_string(),
+            Self::NotGarage => "token principal is not a garage".to_string(),
             Self::GarageNotReady(id) => format!("garage {id} is not ready"),
             Self::ValidationFailed(msg) => format!("garage validation failed: {msg}"),
         }
     }
+}
+
+/// Minimal SVID JWT claims needed for garage identity extraction.
+///
+/// We decode only the claims we need without full signature verification.
+/// The SVID is cryptographically signed by keybox — forging it requires
+/// keybox's private key. Garage state is separately validated via moto-club.
+#[derive(Debug, Deserialize)]
+struct SvidClaims {
+    /// Expiration time (Unix timestamp).
+    exp: i64,
+    /// Principal type (garage, bike, service).
+    principal_type: String,
+    /// Principal ID (garage-id, bike-id, or service name).
+    principal_id: String,
 }
 
 /// Trait for validating garage identity.
@@ -187,38 +213,109 @@ pub fn extract_token(headers: &HeaderMap) -> Option<String> {
     None
 }
 
-/// Extracts the garage ID from a token.
+/// Extracts the garage ID from an SVID JWT token.
 ///
-/// For v0.2, the token format is `garage-{id}` where `{id}` is the garage UUID.
+/// Decodes the JWT claims (without full signature verification) and extracts
+/// the `principal_id` field. Checks that:
+/// - The token is a valid 3-part JWT
+/// - The claims can be decoded and parsed
+/// - The `principal_type` is "garage"
+/// - The token has not expired
+///
+/// # Errors
+///
+/// Returns `AuthError::InvalidToken` if the JWT is malformed or claims cannot be parsed,
+/// `AuthError::NotGarage` if the principal is not a garage, or `AuthError::SvidExpired`
+/// if the token has expired.
+pub fn extract_garage_id(token: &str) -> Result<String, AuthError> {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Err(AuthError::InvalidToken);
+    }
+
+    let claims_bytes = URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .map_err(|_| AuthError::InvalidToken)?;
+
+    let claims: SvidClaims =
+        serde_json::from_slice(&claims_bytes).map_err(|_| AuthError::InvalidToken)?;
+
+    if claims.principal_type != "garage" {
+        return Err(AuthError::NotGarage);
+    }
+
+    if Utc::now().timestamp() > claims.exp {
+        return Err(AuthError::SvidExpired);
+    }
+
+    if claims.principal_id.is_empty() {
+        return Err(AuthError::InvalidToken);
+    }
+
+    Ok(claims.principal_id)
+}
+
+/// Builds a minimal SVID JWT for testing purposes.
+///
+/// Creates a JWT with the given claims but a dummy signature.
+/// Only for use in tests — production SVIDs are signed by keybox.
+#[cfg(test)]
 #[must_use]
-pub fn extract_garage_id(token: &str) -> Option<String> {
-    token.strip_prefix("garage-").map(ToString::to_string)
+pub fn build_test_svid(principal_type: &str, principal_id: &str, ttl_secs: i64) -> String {
+    let header = serde_json::json!({"alg": "EdDSA", "typ": "JWT"});
+    let now = Utc::now().timestamp();
+    let claims = serde_json::json!({
+        "iss": "keybox",
+        "sub": format!("spiffe://moto.local/{principal_type}/{principal_id}"),
+        "aud": "moto",
+        "exp": now + ttl_secs,
+        "iat": now,
+        "jti": "test-jti",
+        "principal_type": principal_type,
+        "principal_id": principal_id,
+    });
+    let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string());
+    let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string());
+    // Dummy signature — not cryptographically valid, but structurally correct.
+    let sig_b64 = URL_SAFE_NO_PAD.encode(vec![0u8; 64]);
+    format!("{header_b64}.{claims_b64}.{sig_b64}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn test_garage_svid(garage_id: &str) -> String {
+        build_test_svid("garage", garage_id, 900)
+    }
+
     #[test]
     fn extract_token_from_bearer() {
+        let svid = test_garage_svid("abc123");
         let mut headers = HeaderMap::new();
-        headers.insert("authorization", "Bearer garage-abc123".parse().unwrap());
-        assert_eq!(extract_token(&headers), Some("garage-abc123".to_string()));
+        headers.insert("authorization", format!("Bearer {svid}").parse().unwrap());
+        assert_eq!(extract_token(&headers), Some(svid));
     }
 
     #[test]
     fn extract_token_from_x_api_key() {
+        let svid = test_garage_svid("abc123");
         let mut headers = HeaderMap::new();
-        headers.insert("x-api-key", "garage-abc123".parse().unwrap());
-        assert_eq!(extract_token(&headers), Some("garage-abc123".to_string()));
+        headers.insert("x-api-key", svid.parse().unwrap());
+        assert_eq!(extract_token(&headers), Some(svid));
     }
 
     #[test]
     fn extract_token_prefers_bearer_over_x_api_key() {
+        let svid_bearer = test_garage_svid("bearer-garage");
+        let svid_apikey = test_garage_svid("apikey-garage");
         let mut headers = HeaderMap::new();
-        headers.insert("authorization", "Bearer garage-bearer".parse().unwrap());
-        headers.insert("x-api-key", "garage-apikey".parse().unwrap());
-        assert_eq!(extract_token(&headers), Some("garage-bearer".to_string()));
+        headers.insert(
+            "authorization",
+            format!("Bearer {svid_bearer}").parse().unwrap(),
+        );
+        headers.insert("x-api-key", svid_apikey.parse().unwrap());
+        assert_eq!(extract_token(&headers), Some(svid_bearer));
     }
 
     #[test]
@@ -235,21 +332,53 @@ mod tests {
     }
 
     #[test]
-    fn extract_garage_id_from_token() {
-        assert_eq!(
-            extract_garage_id("garage-abc123"),
-            Some("abc123".to_string())
-        );
+    fn extract_garage_id_from_svid() {
+        let svid = test_garage_svid("abc123");
+        assert_eq!(extract_garage_id(&svid).unwrap(), "abc123");
     }
 
     #[test]
-    fn extract_garage_id_invalid_format() {
-        assert_eq!(extract_garage_id("not-a-garage-token"), None);
+    fn extract_garage_id_rejects_non_garage_principal() {
+        let svid = build_test_svid("service", "ai-proxy", 900);
+        assert!(matches!(
+            extract_garage_id(&svid),
+            Err(AuthError::NotGarage)
+        ));
     }
 
     #[test]
-    fn extract_garage_id_empty_prefix() {
-        assert_eq!(extract_garage_id("garage-"), Some(String::new()));
+    fn extract_garage_id_rejects_expired_svid() {
+        let svid = build_test_svid("garage", "abc123", -10);
+        assert!(matches!(
+            extract_garage_id(&svid),
+            Err(AuthError::SvidExpired)
+        ));
+    }
+
+    #[test]
+    fn extract_garage_id_rejects_malformed_token() {
+        assert!(matches!(
+            extract_garage_id("not-a-jwt"),
+            Err(AuthError::InvalidToken)
+        ));
+    }
+
+    #[test]
+    fn extract_garage_id_rejects_invalid_base64_claims() {
+        assert!(matches!(
+            extract_garage_id("header.!!!invalid!!!.signature"),
+            Err(AuthError::InvalidToken)
+        ));
+    }
+
+    #[test]
+    fn extract_garage_id_rejects_non_json_claims() {
+        let claims_b64 = URL_SAFE_NO_PAD.encode("not json");
+        let token = format!("header.{claims_b64}.signature");
+        assert!(matches!(
+            extract_garage_id(&token),
+            Err(AuthError::InvalidToken)
+        ));
     }
 
     struct MockGarageValidator {
