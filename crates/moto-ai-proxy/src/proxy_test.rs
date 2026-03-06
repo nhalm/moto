@@ -430,3 +430,66 @@ async fn chat_completions_returns_503_for_unconfigured_gemini() {
             .contains("provider not configured")
     );
 }
+
+#[tokio::test]
+async fn list_models_returns_401_without_auth() {
+    let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/v1/models")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn list_models_returns_anthropic_models_when_configured() {
+    // Only Anthropic key configured — should return static Claude model list.
+    let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/v1/models")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(resp.into_body(), 65536).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["object"], "list");
+
+    let data = json["data"].as_array().unwrap();
+    assert!(!data.is_empty());
+    let ids: Vec<&str> = data.iter().filter_map(|m| m["id"].as_str()).collect();
+    assert!(ids.iter().any(|id| id.starts_with("claude-")));
+    assert!(ids.iter().all(|m| m.starts_with("claude-")));
+}
+
+#[tokio::test]
+async fn list_models_returns_empty_when_no_keys() {
+    let key_store = MultiKeyStore::new();
+    let app = build_test_router(key_store);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/v1/models")
+        .header("authorization", "Bearer garage-abc123")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(resp.into_body(), 65536).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["object"], "list");
+    assert_eq!(json["data"].as_array().unwrap().len(), 0);
+}

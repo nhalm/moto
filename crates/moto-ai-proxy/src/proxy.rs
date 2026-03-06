@@ -18,6 +18,13 @@ use crate::keys::KeyStore;
 use crate::provider::Provider;
 use crate::translate::anthropic as anthropic_translate;
 
+/// Known models to return for Anthropic (no public /v1/models endpoint).
+const ANTHROPIC_KNOWN_MODELS: &[&str] = &[
+    "claude-opus-4-20250514",
+    "claude-sonnet-4-20250514",
+    "claude-haiku-4-20250414",
+];
+
 /// Maximum request body size (10 MB).
 const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024;
 
@@ -621,6 +628,147 @@ fn log_request(
     );
 }
 
+/// Fetches the model list from a single provider's API.
+///
+/// For `OpenAI` and Gemini (which have `/v1/models`-compatible endpoints), fetches
+/// from upstream. For Anthropic (no public models endpoint), returns a static
+/// list of known models.
+async fn fetch_provider_models<K: KeyStore>(
+    provider: Provider,
+    client: &Client,
+    key_store: &K,
+) -> Vec<Value> {
+    let Some(api_key) = key_store.get_key(provider).await else {
+        return Vec::new();
+    };
+
+    // Anthropic doesn't have a public /v1/models endpoint — return known models.
+    if provider == Provider::Anthropic {
+        return ANTHROPIC_KNOWN_MODELS
+            .iter()
+            .map(|id| {
+                serde_json::json!({
+                    "id": id,
+                    "object": "model",
+                    "owned_by": "anthropic",
+                })
+            })
+            .collect();
+    }
+
+    // For OpenAI and Gemini, fetch from their models endpoint.
+    let models_path = match provider {
+        Provider::OpenAi => "v1/models",
+        Provider::Gemini => "v1beta/openai/models",
+        Provider::Anthropic => unreachable!(),
+    };
+
+    let url = format!("{}{}", provider.upstream_base(), models_path);
+    let req = client.get(&url).header(
+        provider.auth_header(),
+        provider.auth_value(api_key.expose_secret()),
+    );
+
+    let resp = match tokio::time::timeout(FIRST_BYTE_TIMEOUT, req.send()).await {
+        Ok(Ok(r)) if r.status().is_success() => r,
+        Ok(Ok(r)) => {
+            tracing::warn!(provider = %provider, status = %r.status(), "failed to fetch models from provider");
+            return Vec::new();
+        }
+        Ok(Err(e)) => {
+            tracing::warn!(provider = %provider, error = %e, "failed to fetch models from provider");
+            return Vec::new();
+        }
+        Err(_) => {
+            tracing::warn!(provider = %provider, "timeout fetching models from provider");
+            return Vec::new();
+        }
+    };
+
+    let body: Value = match resp.json().await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(provider = %provider, error = %e, "failed to parse models response");
+            return Vec::new();
+        }
+    };
+
+    // OpenAI format: {"data": [{"id": "...", "object": "model", ...}]}
+    body.get("data")
+        .and_then(|d| d.as_array())
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Handler for `GET /v1/models` — returns merged model list from all configured providers.
+pub async fn list_models<K: KeyStore, G: GarageValidator>(
+    State(state): State<ProxyState<K, G>>,
+    uri: Uri,
+    headers: HeaderMap,
+) -> Response {
+    let request_id = Uuid::now_v7();
+    let start = Instant::now();
+    let path = uri.path().to_string();
+
+    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
+        Ok(id) => id,
+        Err(resp) => {
+            log_request(
+                &request_id,
+                "",
+                None,
+                "unified",
+                "GET",
+                &path,
+                resp.status().as_u16(),
+                None,
+                &start,
+            );
+            return resp;
+        }
+    };
+
+    // Fetch models from all providers in parallel.
+    let (anthropic, openai, gemini) = tokio::join!(
+        fetch_provider_models(Provider::Anthropic, &state.client, state.key_store.as_ref()),
+        fetch_provider_models(Provider::OpenAi, &state.client, state.key_store.as_ref()),
+        fetch_provider_models(Provider::Gemini, &state.client, state.key_store.as_ref()),
+    );
+
+    let mut all_models = Vec::new();
+    all_models.extend(anthropic);
+    all_models.extend(openai);
+    all_models.extend(gemini);
+
+    let response_body = serde_json::json!({
+        "object": "list",
+        "data": all_models,
+    });
+
+    let status = StatusCode::OK;
+    log_request(
+        &request_id,
+        &garage_id,
+        None,
+        "unified",
+        "GET",
+        &path,
+        status.as_u16(),
+        None,
+        &start,
+    );
+
+    (
+        status,
+        [(
+            axum::http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        )],
+        response_body.to_string(),
+    )
+        .into_response()
+}
+
 /// Builds the proxy router with passthrough routes and garage auth.
 pub fn proxy_router<K: KeyStore + 'static, G: GarageValidator + 'static>(
     client: Client,
@@ -649,6 +797,7 @@ pub fn proxy_router<K: KeyStore + 'static, G: GarageValidator + 'static>(
             "/v1/chat/completions",
             axum::routing::post(chat_completions::<K, G>),
         )
+        .route("/v1/models", axum::routing::get(list_models::<K, G>))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_SIZE))
         .with_state(state)
 }
