@@ -63,8 +63,11 @@ pub const K8S_SA_TOKEN_PATH: &str = "/var/run/secrets/kubernetes.io/serviceaccou
 /// Default health check port.
 pub const DEFAULT_HEALTH_PORT: u16 = 8080;
 
-/// Default WebSocket reconnect delay.
-pub const DEFAULT_RECONNECT_DELAY: Duration = Duration::from_secs(5);
+/// Initial WebSocket reconnect delay.
+pub const RECONNECT_INITIAL_DELAY: Duration = Duration::from_secs(1);
+
+/// Maximum WebSocket reconnect delay (cap for exponential backoff).
+pub const RECONNECT_MAX_DELAY: Duration = Duration::from_secs(30);
 
 /// Default `WireGuard` timer tick interval.
 pub const DEFAULT_TIMER_TICK: Duration = Duration::from_secs(1);
@@ -578,6 +581,32 @@ impl Daemon {
             .map_err(|e| DaemonError::WebSocket(format!("failed to parse PeerEvent: {e}")))
     }
 
+    /// Compute the reconnect delay for a given attempt using exponential backoff.
+    ///
+    /// Starts at 1s and doubles each attempt, capped at 30s:
+    /// attempt 0 → 1s, attempt 1 → 2s, attempt 2 → 4s, attempt 3 → 8s, ...
+    #[must_use]
+    pub fn reconnect_delay(attempt: u32) -> Duration {
+        let multiplier = 1u64.checked_shl(attempt).unwrap_or(u64::MAX);
+        let delay_secs = RECONNECT_INITIAL_DELAY.as_secs().saturating_mul(multiplier);
+        Duration::from_secs(delay_secs.min(RECONNECT_MAX_DELAY.as_secs()))
+    }
+
+    /// Clear peer state in preparation for a WebSocket reconnect.
+    ///
+    /// On reconnect, the server re-sends the full peer list as add events,
+    /// so we clear local state to avoid stale entries.
+    fn clear_peers_for_reconnect(&mut self) {
+        let count = self.peers.len();
+        self.peers.clear();
+        self.wg_tunnels.clear();
+        self.health.set_active_peers(0);
+
+        if count > 0 {
+            tracing::info!(cleared_peers = count, "cleared peer state for reconnect");
+        }
+    }
+
     /// Run the main daemon event loop.
     ///
     /// Performs the following steps:
@@ -586,7 +615,8 @@ impl Daemon {
     /// 3. Initialize `WireGuard` tunnel engine (ready to accept peers)
     /// 4. Connect to peer streaming WebSocket at `peer_stream_url()`
     /// 5. Loop: receive `PeerEvent` messages, handle Ping/Pong, timer ticks
-    /// 6. On SIGTERM: close WebSocket, tear down tunnel, exit cleanly
+    /// 6. On WebSocket disconnect: reconnect with exponential backoff
+    /// 7. On SIGTERM: close WebSocket, tear down tunnel, exit cleanly
     ///
     /// # Errors
     ///
@@ -623,99 +653,151 @@ impl Daemon {
         // events arrive from the WebSocket stream.
         self.health.set_wireguard_state(WireGuardState::Up);
 
-        // Step 4: Connect to peer streaming WebSocket.
-        let mut ws_stream = self.connect_peer_stream().await?;
-        self.health.set_moto_club_connected(true);
-
-        let peer_stream_url = self.config.peer_stream_url();
-        tracing::info!(
-            garage_id = %self.config.garage_id,
-            peer_stream_url = %peer_stream_url,
-            "daemon running — entering event loop"
-        );
-
-        // Step 5: Main event loop
         let mut shutdown_rx = self.shutdown_rx.clone();
         let mut timer_tick = tokio::time::interval(DEFAULT_TIMER_TICK);
         let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
             .map_err(|e| DaemonError::Config(format!("failed to register SIGTERM handler: {e}")))?;
 
-        loop {
-            tokio::select! {
-                // SIGTERM
-                _ = sigterm.recv() => {
-                    tracing::info!("SIGTERM received, shutting down");
-                    break;
-                }
+        // Outer reconnect loop: connect to WebSocket, run event loop, reconnect on disconnect
+        let mut reconnect_attempt: u32 = 0;
 
-                // Programmatic shutdown via watch channel
-                _ = shutdown_rx.changed() => {
-                    if *shutdown_rx.borrow() {
-                        tracing::info!("shutdown signal received");
-                        break;
+        'reconnect: loop {
+            // Step 4: Connect to peer streaming WebSocket (with reconnect backoff)
+            if reconnect_attempt > 0 {
+                let delay = Self::reconnect_delay(reconnect_attempt - 1);
+                tracing::warn!(
+                    attempt = reconnect_attempt,
+                    delay_secs = delay.as_secs(),
+                    "reconnecting to peer stream WebSocket"
+                );
+
+                // Wait for backoff delay, but respect shutdown signals
+                tokio::select! {
+                    () = tokio::time::sleep(delay) => {}
+                    _ = sigterm.recv() => {
+                        tracing::info!("SIGTERM received during reconnect backoff, shutting down");
+                        break 'reconnect;
                     }
-                }
-
-                // WireGuard timer tick — keepalive and handshake management
-                _ = timer_tick.tick() => {
-                    for (key, tunnel) in &mut self.wg_tunnels {
-                        if let Err(e) = tunnel.update_timers() {
-                            tracing::warn!(
-                                peer = %key,
-                                error = %e,
-                                "WireGuard timer tick failed"
-                            );
+                    _ = shutdown_rx.changed() => {
+                        if *shutdown_rx.borrow() {
+                            tracing::info!("shutdown signal received during reconnect backoff");
+                            break 'reconnect;
                         }
                     }
                 }
 
-                // WebSocket messages from peer stream
-                msg = ws_stream.next() => {
-                    match msg {
-                        Some(Ok(tungstenite::Message::Text(text))) => {
-                            match Self::parse_peer_event(&text) {
-                                Ok(action) => self.handle_peer_action(action),
-                                Err(e) => {
-                                    tracing::warn!(
-                                        error = %e,
-                                        text = %text,
-                                        "failed to parse peer event"
-                                    );
-                                }
+                // Clear peer state before reconnect — server will re-send full peer list
+                self.clear_peers_for_reconnect();
+            }
+
+            let ws_stream = match self.connect_peer_stream().await {
+                Ok(stream) => {
+                    reconnect_attempt = 0;
+                    self.health.set_moto_club_connected(true);
+                    stream
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        attempt = reconnect_attempt,
+                        error = %e,
+                        "failed to connect to peer stream WebSocket"
+                    );
+                    self.health.set_moto_club_connected(false);
+                    reconnect_attempt = reconnect_attempt.saturating_add(1);
+                    continue 'reconnect;
+                }
+            };
+
+            let peer_stream_url = self.config.peer_stream_url();
+            tracing::info!(
+                garage_id = %self.config.garage_id,
+                peer_stream_url = %peer_stream_url,
+                "daemon running — entering event loop"
+            );
+
+            // Step 5: Inner event loop — process messages until disconnect
+            let mut ws_stream = ws_stream;
+
+            loop {
+                tokio::select! {
+                    // SIGTERM
+                    _ = sigterm.recv() => {
+                        tracing::info!("SIGTERM received, shutting down");
+                        break 'reconnect;
+                    }
+
+                    // Programmatic shutdown via watch channel
+                    _ = shutdown_rx.changed() => {
+                        if *shutdown_rx.borrow() {
+                            tracing::info!("shutdown signal received");
+                            break 'reconnect;
+                        }
+                    }
+
+                    // WireGuard timer tick — keepalive and handshake management
+                    _ = timer_tick.tick() => {
+                        for (key, tunnel) in &mut self.wg_tunnels {
+                            if let Err(e) = tunnel.update_timers() {
+                                tracing::warn!(
+                                    peer = %key,
+                                    error = %e,
+                                    "WireGuard timer tick failed"
+                                );
                             }
                         }
-                        Some(Ok(tungstenite::Message::Ping(data))) => {
-                            tracing::trace!("received WebSocket ping");
-                            // Pong is sent automatically by tungstenite
-                            let _ = data;
-                        }
-                        Some(Ok(tungstenite::Message::Pong(_))) => {
-                            tracing::trace!("received WebSocket pong");
-                        }
-                        Some(Ok(tungstenite::Message::Close(_))) => {
-                            tracing::warn!("peer stream WebSocket closed by server");
-                            self.health.set_moto_club_connected(false);
-                            break;
-                        }
-                        Some(Ok(_)) => {
-                            // Binary or other message types — ignore
-                        }
-                        Some(Err(e)) => {
-                            tracing::warn!(error = %e, "peer stream WebSocket error");
-                            self.health.set_moto_club_connected(false);
-                            break;
-                        }
-                        None => {
-                            tracing::warn!("peer stream WebSocket stream ended");
-                            self.health.set_moto_club_connected(false);
-                            break;
+                    }
+
+                    // WebSocket messages from peer stream
+                    msg = ws_stream.next() => {
+                        match msg {
+                            Some(Ok(tungstenite::Message::Text(text))) => {
+                                match Self::parse_peer_event(&text) {
+                                    Ok(action) => self.handle_peer_action(action),
+                                    Err(e) => {
+                                        tracing::warn!(
+                                            error = %e,
+                                            text = %text,
+                                            "failed to parse peer event"
+                                        );
+                                    }
+                                }
+                            }
+                            Some(Ok(tungstenite::Message::Ping(data))) => {
+                                tracing::trace!("received WebSocket ping");
+                                // Pong is sent automatically by tungstenite
+                                let _ = data;
+                            }
+                            Some(Ok(tungstenite::Message::Pong(_))) => {
+                                tracing::trace!("received WebSocket pong");
+                            }
+                            Some(Ok(tungstenite::Message::Close(_))) => {
+                                tracing::warn!("peer stream WebSocket closed by server");
+                                self.health.set_moto_club_connected(false);
+                                reconnect_attempt = reconnect_attempt.saturating_add(1);
+                                continue 'reconnect;
+                            }
+                            Some(Ok(_)) => {
+                                // Binary or other message types — ignore
+                            }
+                            Some(Err(e)) => {
+                                tracing::warn!(error = %e, "peer stream WebSocket error");
+                                self.health.set_moto_club_connected(false);
+                                reconnect_attempt = reconnect_attempt.saturating_add(1);
+                                continue 'reconnect;
+                            }
+                            None => {
+                                tracing::warn!("peer stream WebSocket stream ended");
+                                self.health.set_moto_club_connected(false);
+                                reconnect_attempt = reconnect_attempt.saturating_add(1);
+                                continue 'reconnect;
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Step 6: Graceful shutdown
+        // Step 7: Graceful shutdown
         tracing::info!("shutting down — cleaning up tunnels");
 
         // Clear all WireGuard peer tunnels
@@ -1045,6 +1127,49 @@ mod tests {
     fn parse_peer_event_invalid() {
         let result = Daemon::parse_peer_event("not json");
         assert!(matches!(result, Err(DaemonError::WebSocket(_))));
+    }
+
+    #[test]
+    fn reconnect_delay_exponential_backoff() {
+        assert_eq!(Daemon::reconnect_delay(0), Duration::from_secs(1));
+        assert_eq!(Daemon::reconnect_delay(1), Duration::from_secs(2));
+        assert_eq!(Daemon::reconnect_delay(2), Duration::from_secs(4));
+        assert_eq!(Daemon::reconnect_delay(3), Duration::from_secs(8));
+        assert_eq!(Daemon::reconnect_delay(4), Duration::from_secs(16));
+        assert_eq!(Daemon::reconnect_delay(5), Duration::from_secs(30)); // capped
+        assert_eq!(Daemon::reconnect_delay(10), Duration::from_secs(30)); // still capped
+        assert_eq!(Daemon::reconnect_delay(u32::MAX), Duration::from_secs(30)); // overflow-safe
+    }
+
+    #[test]
+    fn clear_peers_for_reconnect_clears_state() {
+        let config = test_config();
+        let mut daemon = Daemon::new(config).unwrap();
+
+        // Add some peers
+        for i in 0..3 {
+            let peer_key = WgPrivateKey::generate().public_key();
+            let peer_info = PeerInfo::new(peer_key, OverlayIp::client(i));
+            daemon.handle_peer_action(PeerAction::add(peer_info));
+        }
+        assert_eq!(daemon.peer_count(), 3);
+        assert_eq!(daemon.health.active_peers(), 3);
+
+        // Clear for reconnect
+        daemon.clear_peers_for_reconnect();
+
+        assert_eq!(daemon.peer_count(), 0);
+        assert_eq!(daemon.health.active_peers(), 0);
+    }
+
+    #[test]
+    fn clear_peers_for_reconnect_noop_when_empty() {
+        let config = test_config();
+        let mut daemon = Daemon::new(config).unwrap();
+
+        // Should not panic or error on empty state
+        daemon.clear_peers_for_reconnect();
+        assert_eq!(daemon.peer_count(), 0);
     }
 
     #[test]
