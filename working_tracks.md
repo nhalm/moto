@@ -90,7 +90,6 @@ Read it in full at the start of each iteration.
 - Implement garage validation caching (default 60s)
 - Add bike engine deployment config (bike.toml, K8s Deployment/Service/ServiceAccount in moto-system)
 - Add configuration parsing for all MOTO_AI_PROXY_* env vars
-- Add request timeouts (connect 10s, first byte 30s, idle 120s, total 600s)
 - Add structured canonical logging with request_id, garage_id, provider, duration_ms
 
 ## ai-proxy.md v0.3

@@ -616,3 +616,4 @@ WHAT DOES NOT GO HERE:
 - Implement path-based provider routing (Anthropic, OpenAI, Gemini upstreams)
 - Implement keybox secret injection via SVID authentication (spiffe://moto.local/service/ai-proxy)
 - Add request size limit (10 MB max request body)
+- Add request timeouts (connect 10s, first byte 30s, idle 120s, total 600s)
