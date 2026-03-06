@@ -12,6 +12,7 @@ moto-wgtunnel-engine.workspace = true
 moto-wgtunnel-types.workspace = true
 
 axum.workspace = true
+futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

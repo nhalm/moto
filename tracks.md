@@ -111,6 +111,10 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+## moto-wgtunnel v0.10
+
+- Implement daemon `run()` event loop: register with moto-club, spawn health HTTP server (axum), init WireGuard tunnel engine (per-peer Tunnel map), main tokio::select! loop with SIGTERM + timer ticks + shutdown channel, graceful cleanup
+
 ## moto-wgtunnel v0.9
 
 - moto-wgtunnel-types crate: keys.rs, ip.rs, peer.rs, derp.rs
@@ -590,3 +594,7 @@ WHAT DOES NOT GO HERE:
 - Add owner-based auth (same as REST API) to log and event streaming endpoints
 - Add garage state validation for log streaming: reject Pending and Terminated, allow Initializing/Ready/Failed
 - Add reason field to status_change events on transitions to Terminated or Failed (values from TerminationReason enum)
+
+## moto-wgtunnel.md v0.10
+
+- Implement WebSocket client connection in daemon: read K8s SA token from `/var/run/secrets/kubernetes.io/serviceaccount/token`, connect to `peer_stream_url()` with Bearer auth, parse incoming PeerEvent JSON messages

@@ -2239,6 +2239,7 @@ name = "moto-garage-wgtunnel"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "futures-util",
  "moto-wgtunnel-engine",
  "moto-wgtunnel-types",
  "serde",

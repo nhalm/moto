@@ -45,8 +45,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
+use tokio_tungstenite::tungstenite;
 
 use moto_wgtunnel_engine::tunnel::Tunnel;
 use moto_wgtunnel_types::keys::{WgPrivateKey, WgPublicKey};
@@ -54,6 +56,9 @@ use moto_wgtunnel_types::peer::PeerAction;
 
 use crate::health::{self, HealthCheck, WireGuardState};
 use crate::register::{GarageRegistrar, RegistrationConfig, RegistrationResponse};
+
+/// Path to the K8s service account token.
+pub const K8S_SA_TOKEN_PATH: &str = "/var/run/secrets/kubernetes.io/serviceaccount/token";
 
 /// Default health check port.
 pub const DEFAULT_HEALTH_PORT: u16 = 8080;
@@ -491,6 +496,88 @@ impl Daemon {
         count
     }
 
+    /// Read the K8s service account token from the standard path.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the token file cannot be read.
+    pub fn read_k8s_token() -> Result<String> {
+        Self::read_k8s_token_from(K8S_SA_TOKEN_PATH)
+    }
+
+    /// Read the K8s service account token from a specific path.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the token file cannot be read.
+    pub fn read_k8s_token_from(path: &str) -> Result<String> {
+        let token = std::fs::read_to_string(path).map_err(|e| {
+            DaemonError::Config(format!("failed to read K8s SA token from {path}: {e}"))
+        })?;
+        let token = token.trim().to_string();
+        if token.is_empty() {
+            return Err(DaemonError::Config(format!(
+                "K8s SA token at {path} is empty"
+            )));
+        }
+        Ok(token)
+    }
+
+    /// Connect to the peer streaming WebSocket.
+    ///
+    /// Connects to `peer_stream_url()` with Bearer auth using the configured
+    /// auth token. Returns a WebSocket stream that yields peer event messages.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the WebSocket connection fails.
+    pub async fn connect_peer_stream(
+        &self,
+    ) -> Result<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+    > {
+        let url = self.config.peer_stream_url();
+
+        let request = tungstenite::http::Request::builder()
+            .uri(&url)
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.auth_token),
+            )
+            .header("Host", extract_host(&url))
+            .header("Connection", "Upgrade")
+            .header("Upgrade", "websocket")
+            .header("Sec-WebSocket-Version", "13")
+            .header(
+                "Sec-WebSocket-Key",
+                tungstenite::handshake::client::generate_key(),
+            )
+            .body(())
+            .map_err(|e| DaemonError::WebSocket(format!("failed to build request: {e}")))?;
+
+        tracing::debug!(url = %url, "connecting to peer stream WebSocket");
+
+        let (ws_stream, _response) = tokio_tungstenite::connect_async(request)
+            .await
+            .map_err(|e| DaemonError::WebSocket(format!("failed to connect: {e}")))?;
+
+        tracing::info!(url = %url, "connected to peer stream WebSocket");
+
+        Ok(ws_stream)
+    }
+
+    /// Parse a WebSocket text message as a `PeerAction`.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the message cannot be parsed as JSON `PeerAction`.
+    pub fn parse_peer_event(text: &str) -> Result<PeerAction> {
+        serde_json::from_str::<PeerAction>(text)
+            .map_err(|e| DaemonError::WebSocket(format!("failed to parse PeerEvent: {e}")))
+    }
+
     /// Run the main daemon event loop.
     ///
     /// Performs the following steps:
@@ -505,6 +592,7 @@ impl Daemon {
     ///
     /// Returns error if the daemon encounters a fatal error during startup
     /// or an unrecoverable error in the event loop.
+    #[allow(clippy::too_many_lines)]
     pub async fn run(&mut self) -> Result<()> {
         // Step 1: Register with moto-club
         if self.registration.is_none() {
@@ -536,10 +624,7 @@ impl Daemon {
         self.health.set_wireguard_state(WireGuardState::Up);
 
         // Step 4: Connect to peer streaming WebSocket.
-        // The WebSocket client implementation (auth, parsing) is handled by
-        // connect_peer_stream(). For now we set the connected flag and prepare
-        // the event loop — the actual WebSocket client will be wired in by the
-        // "Implement WebSocket client connection" work item.
+        let mut ws_stream = self.connect_peer_stream().await?;
         self.health.set_moto_club_connected(true);
 
         let peer_stream_url = self.config.peer_stream_url();
@@ -584,15 +669,49 @@ impl Daemon {
                     }
                 }
 
-                // WebSocket messages will be selected here once the
-                // WebSocket client is wired in. The pattern will be:
-                //
-                //   Some(msg) = ws_stream.next() => {
-                //       match parse PeerAction from msg {
-                //           Ok(action) => self.handle_peer_action(action),
-                //           Err(e) => log warning,
-                //       }
-                //   }
+                // WebSocket messages from peer stream
+                msg = ws_stream.next() => {
+                    match msg {
+                        Some(Ok(tungstenite::Message::Text(text))) => {
+                            match Self::parse_peer_event(&text) {
+                                Ok(action) => self.handle_peer_action(action),
+                                Err(e) => {
+                                    tracing::warn!(
+                                        error = %e,
+                                        text = %text,
+                                        "failed to parse peer event"
+                                    );
+                                }
+                            }
+                        }
+                        Some(Ok(tungstenite::Message::Ping(data))) => {
+                            tracing::trace!("received WebSocket ping");
+                            // Pong is sent automatically by tungstenite
+                            let _ = data;
+                        }
+                        Some(Ok(tungstenite::Message::Pong(_))) => {
+                            tracing::trace!("received WebSocket pong");
+                        }
+                        Some(Ok(tungstenite::Message::Close(_))) => {
+                            tracing::warn!("peer stream WebSocket closed by server");
+                            self.health.set_moto_club_connected(false);
+                            break;
+                        }
+                        Some(Ok(_)) => {
+                            // Binary or other message types — ignore
+                        }
+                        Some(Err(e)) => {
+                            tracing::warn!(error = %e, "peer stream WebSocket error");
+                            self.health.set_moto_club_connected(false);
+                            break;
+                        }
+                        None => {
+                            tracing::warn!("peer stream WebSocket stream ended");
+                            self.health.set_moto_club_connected(false);
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -611,6 +730,21 @@ impl Daemon {
 
         Ok(())
     }
+}
+
+/// Extract the host (with port) from a WebSocket URL for the Host header.
+fn extract_host(url: &str) -> String {
+    // Strip scheme prefix
+    let without_scheme = url
+        .strip_prefix("wss://")
+        .or_else(|| url.strip_prefix("ws://"))
+        .unwrap_or(url);
+    // Take everything before the first '/'
+    without_scheme
+        .split('/')
+        .next()
+        .unwrap_or(without_scheme)
+        .to_string()
 }
 
 #[cfg(test)]
@@ -854,5 +988,83 @@ mod tests {
 
         let err = DaemonError::Shutdown;
         assert!(err.to_string().contains("shutdown"));
+    }
+
+    #[test]
+    fn read_k8s_token_from_nonexistent_file() {
+        let result = Daemon::read_k8s_token_from("/nonexistent/path/token");
+        assert!(matches!(result, Err(DaemonError::Config(_))));
+    }
+
+    #[test]
+    fn read_k8s_token_from_temp_file() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("moto-test-sa-token");
+        std::fs::write(&path, "my-test-token\n").unwrap();
+
+        let result = Daemon::read_k8s_token_from(path.to_str().unwrap());
+        assert_eq!(result.unwrap(), "my-test-token");
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn read_k8s_token_from_empty_file() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("moto-test-sa-token-empty");
+        std::fs::write(&path, "").unwrap();
+
+        let result = Daemon::read_k8s_token_from(path.to_str().unwrap());
+        assert!(matches!(result, Err(DaemonError::Config(_))));
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn parse_peer_event_add() {
+        let peer_key = WgPrivateKey::generate().public_key();
+        let peer_info = PeerInfo::new(peer_key, OverlayIp::client(1));
+        let action = PeerAction::add(peer_info);
+        let json = serde_json::to_string(&action).unwrap();
+
+        let parsed = Daemon::parse_peer_event(&json).unwrap();
+        assert!(matches!(parsed, PeerAction::Add(_)));
+    }
+
+    #[test]
+    fn parse_peer_event_remove() {
+        let peer_key = WgPrivateKey::generate().public_key();
+        let action = PeerAction::remove(peer_key);
+        let json = serde_json::to_string(&action).unwrap();
+
+        let parsed = Daemon::parse_peer_event(&json).unwrap();
+        assert!(matches!(parsed, PeerAction::Remove { .. }));
+    }
+
+    #[test]
+    fn parse_peer_event_invalid() {
+        let result = Daemon::parse_peer_event("not json");
+        assert!(matches!(result, Err(DaemonError::WebSocket(_))));
+    }
+
+    #[test]
+    fn extract_host_wss() {
+        assert_eq!(
+            super::extract_host("wss://moto-club.example.com/internal/wg/garages/g1/peers"),
+            "moto-club.example.com"
+        );
+    }
+
+    #[test]
+    fn extract_host_ws_with_port() {
+        assert_eq!(
+            super::extract_host("ws://localhost:8080/internal/wg/garages/g1/peers"),
+            "localhost:8080"
+        );
+    }
+
+    #[test]
+    fn extract_host_no_scheme() {
+        assert_eq!(super::extract_host("example.com/path"), "example.com");
     }
 }
