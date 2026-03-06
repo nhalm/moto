@@ -2016,6 +2016,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "moto-ai-proxy"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "moto-cli"
 version = "0.1.0"
 dependencies = [

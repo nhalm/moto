@@ -1,0 +1,27 @@
+[package]
+name = "moto-ai-proxy"
+description = "AI provider reverse proxy — injects API credentials from keybox"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "moto-ai-proxy"
+path = "src/main.rs"
+
+[dependencies]
+axum.workspace = true
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["json"] }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

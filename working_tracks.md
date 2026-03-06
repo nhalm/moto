@@ -80,4 +80,51 @@ Read it in full at the start of each iteration.
 
 ## moto-cli.md v0.14
 
-- [ ] Implement reconnect logic in watch: backoff (1s, 2s, 4s, cap 10s), fetch current state via REST on reconnect before resuming WebSocket
+(all items completed)
+
+## ai-proxy.md v0.2
+
+- Implement path-based provider routing (Anthropic, OpenAI, Gemini upstreams)
+- Implement keybox secret injection via SVID authentication (spiffe://moto.local/service/ai-proxy)
+- Implement garage identity validation via moto-club API
+- Implement streaming SSE pass-through (chunked transfer, flush immediately, no buffering)
+- Implement API key caching with configurable TTL (default 5 min)
+- Implement garage validation caching (default 60s)
+- Add bike engine deployment config (bike.toml, K8s Deployment/Service/ServiceAccount in moto-system)
+- Add health endpoints (/health/live, /health/ready, /health/startup)
+- Add configuration parsing for all MOTO_AI_PROXY_* env vars
+- Add request timeouts (connect 10s, first byte 30s, idle 120s, total 600s)
+- Add request size limit (10 MB max request body)
+- Add structured canonical logging with request_id, garage_id, provider, duration_ms
+
+## ai-proxy.md v0.3
+
+- Implement unified endpoint (/v1/chat/completions) using OpenAI-compatible format
+- Implement OpenAI → Anthropic request translation (messages, system message extraction, field mapping)
+- Implement Anthropic → OpenAI non-streaming response translation
+- Implement Anthropic → OpenAI streaming SSE response translation (event-by-event)
+- Implement tool use translation between OpenAI and Anthropic formats
+- Implement Gemini routing via OpenAI-compat mode (no translation, auth injection only)
+- Implement passthrough routes (/passthrough/anthropic/, /passthrough/openai/, /passthrough/gemini/)
+
+## ai-proxy.md v0.4
+
+- Implement model-based auto-routing: inspect model field and route to correct provider
+- Support all provider keys stored simultaneously (no single-backend limitation)
+- Remove MOTO_AI_PROXY_BACKEND env var (routing is automatic)
+- Add MOTO_AI_PROXY_MODEL_MAP support for custom model prefix → provider mappings
+- Return 503 per-provider when a provider key is missing (other providers still work)
+- Add /v1/models endpoint returning merged model list from all configured providers
+
+## ai-proxy.md v0.5
+
+- Use garage SVID for auth instead of predictable garage-{id} token
+- Implement passthrough path allowlist (block admin/billing endpoints, return 403 for disallowed paths)
+- Implement error sanitization: wrap all errors in OpenAI error format, scrub API key material
+- Use SecretString (zeroize-on-drop) for cached API keys
+- Add X-Moto-Request-Id response header (correlation ID)
+- Add X-Moto-Provider response header (provider that handled request)
+- Implement local dev integration: ai-proxy in moto dev up startup sequence
+- Implement local dev key seeding (prompt or MOTO_DEV_*_KEY env vars)
+- Support --no-ai-proxy flag for moto dev up
+- Implement fine-tuned model name handling (strip ft: prefix before matching)
