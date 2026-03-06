@@ -65,8 +65,8 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | Spec | Status | Description |
 |------|--------|-------------|
 | [moto-throttle](moto-throttle.md) | Bare Frame | Rate limiting middleware |
-| [moto-cron](moto-cron.md) | Bare Frame | Scheduled tasks (TTL cleanup), K8s CronJobs |
-| [moto-club-websocket](moto-club-websocket.md) | Bare Frame | WebSocket streaming for logs/events |
+| [moto-cron](moto-cron.md) | Wrenching | TTL enforcement in reconciler, scheduled cleanup |
+| [moto-club-websocket](moto-club-websocket.md) | Wrenching | WebSocket streaming for peers, logs, events |
 | [ai-proxy](ai-proxy.md) | Bare Frame | AI provider gateway, injects secrets |
 | [audit-logging](audit-logging.md) | Bare Frame | Compliance and audit trails |
 | [vault-storage](vault-storage.md) | Bare Frame | Encrypted storage layer |

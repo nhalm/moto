@@ -887,12 +887,12 @@ For each garage in DB with status != Terminated:
      - Set termination_reason = "namespace_missing"
 ```
 
-**Note:** TTL enforcement (closing expired garages) is NOT done here. That's handled by moto-cron, which calls the DELETE endpoint.
+**Note:** TTL enforcement (closing expired garages) is NOT done here. That's handled by TTL enforcement in the reconciler (see [moto-cron.md](moto-cron.md)), which calls `garage_repo::terminate()` directly.
 
 **Session expiry:**
 - `GET /api/v1/wg/garages/{id}/peers` filters out expired sessions (checks `expires_at < now`)
 - Expired sessions remain in database but are effectively inactive
-- moto-cron periodically cleans up expired session records (sets `closed_at`, increments `peer_version`)
+- Expired session record cleanup is deferred (see [moto-cron.md](moto-cron.md))
 - When a garage is terminated, all its sessions are automatically closed
 
 ### WireGuard Coordination
