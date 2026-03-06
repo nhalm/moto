@@ -1,6 +1,7 @@
 //! Core proxy logic — forwards requests to upstream AI providers.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::body::Body;
 use axum::extract::{DefaultBodyLimit, Path, State};
@@ -14,6 +15,9 @@ use crate::provider::Provider;
 
 /// Maximum request body size (10 MB).
 const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024;
+
+/// Time to first response byte from upstream (30s).
+const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Shared state for proxy handlers.
 pub struct ProxyState<K: KeyStore + 'static> {
@@ -92,13 +96,22 @@ pub async fn forward_to_provider<K: KeyStore>(
     // Stream the body through via reqwest's body wrapper.
     req = req.body(reqwest::Body::wrap_stream(body.into_data_stream()));
 
-    let upstream_resp = match req.send().await {
-        Ok(r) => r,
-        Err(e) => {
+    // First-byte timeout: time to receive response headers from upstream.
+    let upstream_resp = match tokio::time::timeout(FIRST_BYTE_TIMEOUT, req.send()).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
             tracing::error!(provider = %provider, error = %e, "upstream request failed");
             return error_response(
                 StatusCode::BAD_GATEWAY,
                 &format!("upstream error: {provider}"),
+                "server_error",
+            );
+        }
+        Err(_) => {
+            tracing::error!(provider = %provider, "upstream first byte timeout ({}s)", FIRST_BYTE_TIMEOUT.as_secs());
+            return error_response(
+                StatusCode::GATEWAY_TIMEOUT,
+                &format!("upstream timeout: {provider}"),
                 "server_error",
             );
         }

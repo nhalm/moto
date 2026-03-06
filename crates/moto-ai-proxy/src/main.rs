@@ -90,9 +90,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Mark startup complete — SVID is loaded (or will be retried on first request).
     health::mark_startup_complete();
 
-    // Build HTTP client for upstream requests
+    // Build HTTP client for upstream requests with timeouts per spec:
+    // - Connect: 10s (TCP connection to upstream)
+    // - Read/idle: 120s (max time between response chunks for streaming)
+    // - Total: 600s (max total request duration, 10 min)
+    // - First byte: 30s (handled in proxy.rs via tokio::time::timeout)
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
+        .read_timeout(Duration::from_secs(120))
+        .timeout(Duration::from_secs(600))
         .build()?;
 
     // Build proxy router with passthrough routes and key injection
