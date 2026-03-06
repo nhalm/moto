@@ -1,7 +1,7 @@
 //! Core proxy logic — forwards requests to upstream AI providers.
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::body::Body;
 use axum::extract::{DefaultBodyLimit, Path, State};
@@ -9,6 +9,7 @@ use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use reqwest::Client;
 use secrecy::ExposeSecret;
+use uuid::Uuid;
 
 use crate::auth::{self, AuthError, GarageValidator};
 use crate::keys::KeyStore;
@@ -65,6 +66,14 @@ async fn validate_garage_auth<G: GarageValidator>(
     Ok(garage_id)
 }
 
+/// Result of forwarding a request to an upstream provider.
+pub struct ForwardResult {
+    /// The HTTP response to return to the client.
+    pub response: Response,
+    /// The upstream HTTP status code, if a response was received.
+    pub upstream_status: Option<u16>,
+}
+
 /// Forwards a request to the given provider's upstream, rewriting the path
 /// and injecting the real API key from keybox.
 #[allow(clippy::too_many_arguments)]
@@ -77,14 +86,17 @@ pub async fn forward_to_provider<K: KeyStore>(
     body: Body,
     client: &Client,
     key_store: &K,
-) -> Response {
+) -> ForwardResult {
     // Fetch the API key for this provider.
     let Some(api_key) = key_store.get_key(provider).await else {
-        return error_response(
-            StatusCode::SERVICE_UNAVAILABLE,
-            &format!("provider not configured: {provider}"),
-            "server_error",
-        );
+        return ForwardResult {
+            response: error_response(
+                StatusCode::SERVICE_UNAVAILABLE,
+                &format!("provider not configured: {provider}"),
+                "server_error",
+            ),
+            upstream_status: None,
+        };
     };
 
     let base = provider.upstream_base();
@@ -130,25 +142,31 @@ pub async fn forward_to_provider<K: KeyStore>(
         Ok(Ok(r)) => r,
         Ok(Err(e)) => {
             tracing::error!(provider = %provider, error = %e, "upstream request failed");
-            return error_response(
-                StatusCode::BAD_GATEWAY,
-                &format!("upstream error: {provider}"),
-                "server_error",
-            );
+            return ForwardResult {
+                response: error_response(
+                    StatusCode::BAD_GATEWAY,
+                    &format!("upstream error: {provider}"),
+                    "server_error",
+                ),
+                upstream_status: None,
+            };
         }
         Err(_) => {
             tracing::error!(provider = %provider, "upstream first byte timeout ({}s)", FIRST_BYTE_TIMEOUT.as_secs());
-            return error_response(
-                StatusCode::GATEWAY_TIMEOUT,
-                &format!("upstream timeout: {provider}"),
-                "server_error",
-            );
+            return ForwardResult {
+                response: error_response(
+                    StatusCode::GATEWAY_TIMEOUT,
+                    &format!("upstream timeout: {provider}"),
+                    "server_error",
+                ),
+                upstream_status: None,
+            };
         }
     };
 
     // Convert upstream response back to axum Response, streaming the body.
-    let status =
-        StatusCode::from_u16(upstream_resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let upstream_status_code = upstream_resp.status().as_u16();
+    let status = StatusCode::from_u16(upstream_status_code).unwrap_or(StatusCode::BAD_GATEWAY);
     let mut response_headers = HeaderMap::new();
 
     // Forward Content-Type from upstream.
@@ -166,7 +184,75 @@ pub async fn forward_to_provider<K: KeyStore>(
     *resp.status_mut() = status;
     *resp.headers_mut() = response_headers;
 
-    resp
+    ForwardResult {
+        response: resp,
+        upstream_status: Some(upstream_status_code),
+    }
+}
+
+/// Shared passthrough handler — validates auth, forwards to provider, emits canonical log.
+async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
+    provider: Provider,
+    state: &ProxyState<K, G>,
+    method: Method,
+    uri: &Uri,
+    headers: &HeaderMap,
+    remaining: &str,
+    body: Body,
+) -> Response {
+    let request_id = Uuid::now_v7();
+    let start = Instant::now();
+    let method_str = method.to_string();
+    let path = uri.path().to_string();
+
+    let garage_id = match validate_garage_auth(headers, state.garage_validator.as_ref()).await {
+        Ok(id) => id,
+        Err(resp) => {
+            let status = resp.status().as_u16();
+            let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+            tracing::info!(
+                request_id = %request_id,
+                garage_id = "",
+                provider = %provider,
+                mode = "passthrough",
+                method = %method_str,
+                path = %path,
+                status = status,
+                duration_ms = duration_ms,
+                "request completed"
+            );
+            return resp;
+        }
+    };
+
+    let result = forward_to_provider(
+        provider,
+        method,
+        remaining,
+        uri.query(),
+        headers,
+        body,
+        &state.client,
+        state.key_store.as_ref(),
+    )
+    .await;
+
+    let status = result.response.status().as_u16();
+    let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+    tracing::info!(
+        request_id = %request_id,
+        garage_id = %garage_id,
+        provider = %provider,
+        mode = "passthrough",
+        method = %method_str,
+        path = %path,
+        status = status,
+        upstream_status = result.upstream_status,
+        duration_ms = duration_ms,
+        "request completed"
+    );
+
+    result.response
 }
 
 /// Handler for `/passthrough/anthropic/*path`.
@@ -178,20 +264,14 @@ pub async fn passthrough_anthropic<K: KeyStore, G: GarageValidator>(
     Path(remaining): Path<String>,
     body: Body,
 ) -> Response {
-    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
-        Ok(id) => id,
-        Err(resp) => return resp,
-    };
-    tracing::debug!(garage_id = %garage_id, provider = "anthropic", "garage authenticated");
-    forward_to_provider(
+    handle_passthrough(
         Provider::Anthropic,
+        &state,
         method,
-        &remaining,
-        uri.query(),
+        &uri,
         &headers,
+        &remaining,
         body,
-        &state.client,
-        state.key_store.as_ref(),
     )
     .await
 }
@@ -205,20 +285,14 @@ pub async fn passthrough_openai<K: KeyStore, G: GarageValidator>(
     Path(remaining): Path<String>,
     body: Body,
 ) -> Response {
-    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
-        Ok(id) => id,
-        Err(resp) => return resp,
-    };
-    tracing::debug!(garage_id = %garage_id, provider = "openai", "garage authenticated");
-    forward_to_provider(
+    handle_passthrough(
         Provider::OpenAi,
+        &state,
         method,
-        &remaining,
-        uri.query(),
+        &uri,
         &headers,
+        &remaining,
         body,
-        &state.client,
-        state.key_store.as_ref(),
     )
     .await
 }
@@ -232,20 +306,14 @@ pub async fn passthrough_gemini<K: KeyStore, G: GarageValidator>(
     Path(remaining): Path<String>,
     body: Body,
 ) -> Response {
-    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
-        Ok(id) => id,
-        Err(resp) => return resp,
-    };
-    tracing::debug!(garage_id = %garage_id, provider = "gemini", "garage authenticated");
-    forward_to_provider(
+    handle_passthrough(
         Provider::Gemini,
+        &state,
         method,
-        &remaining,
-        uri.query(),
+        &uri,
         &headers,
+        &remaining,
         body,
-        &state.client,
-        state.key_store.as_ref(),
     )
     .await
 }

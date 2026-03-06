@@ -620,3 +620,4 @@ WHAT DOES NOT GO HERE:
 - Add bike engine deployment config (bike.toml, K8s Deployment/Service/ServiceAccount in moto-system)
 - Implement garage identity validation via moto-club API
 - Implement garage validation caching (default 60s)
+- Add structured canonical logging with request_id, garage_id, provider, duration_ms
