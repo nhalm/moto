@@ -76,7 +76,6 @@ Read it in full at the start of each iteration.
 
 ## moto-wgtunnel.md v0.10
 
-- [ ] Replace `handle_peer_action()` placeholders: `PeerAction::Add` calls engine to add WireGuard peer with public_key + allowed_ip; `PeerAction::Remove` calls engine to remove peer by public_key
 - [ ] Update health endpoint to reflect WebSocket connection status (`moto_club_connected`) and WireGuard tunnel status (`wireguard`)
 
 ## moto-cli.md v0.14
