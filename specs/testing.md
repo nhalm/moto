@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.6 |
+| Version | 0.7 |
 | Status | Ripping |
-| Last Updated | 2026-03-02 |
+| Last Updated | 2026-03-07 |
 
 ## Overview
 
@@ -47,6 +47,7 @@ Smoke tests verify services work as deployed. They run against a live k3d cluste
 
 **Makefile targets:**
 - `smoke-keybox` — port-forwards keybox, runs `infra/smoke-test-keybox.sh`, cleans up
+- `smoke-ai-proxy` — port-forwards ai-proxy, runs `infra/smoke-test-ai-proxy.sh`, cleans up
 
 ### Keybox Smoke Tests (`infra/smoke-test-keybox.sh`)
 
@@ -68,7 +69,34 @@ Requires: k3d cluster running with keybox deployed. Service token read from `.de
 
 **Cleanup:** Delete any secrets created during the test run.
 
+### AI Proxy Smoke Tests (`infra/smoke-test-ai-proxy.sh`)
+
+Requires: k3d cluster running with ai-proxy, keybox, and moto-club deployed. At least one AI provider key seeded in keybox (`ai-proxy/anthropic`).
+
+**Passthrough route:**
+- `POST /passthrough/anthropic/v1/messages` with valid SVID returns `200` (or upstream provider response)
+- `POST /passthrough/anthropic/v1/messages` without auth returns `401`
+- `POST /passthrough/anthropic/admin/billing` returns `403` (path allowlist enforcement)
+
+**Unified endpoint:**
+- `POST /v1/chat/completions` with `model: claude-sonnet-4-20250514` routes to Anthropic and returns `200`
+- `POST /v1/chat/completions` with unknown model prefix returns `400`
+- `POST /v1/chat/completions` without auth returns `401`
+
+**Health endpoints:**
+- `GET /health/live` returns `200`
+- `GET /health/ready` returns `200`
+
+**Provider key missing:**
+- If `ai-proxy/openai` key is not seeded, a request for `gpt-4o` returns `503` with `provider not configured`
+
+**Cleanup:** No persistent state created (ai-proxy is stateless).
+
 ## Changelog
+
+### v0.7 (2026-03-07)
+- Add ai-proxy smoke tests: passthrough auth/allowlist, unified endpoint routing, health endpoints, missing provider key.
+- Add `smoke-ai-proxy` Makefile target.
 
 ### v0.6 (2026-03-02)
 - Add smoke test section: convention for service-level smoke tests against k3d deployments.

@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.19 |
+| Version | 0.20 |
 | Status | Ripping |
-| Last Updated | 2026-03-04 |
+| Last Updated | 2026-03-07 |
 
 ## Overview
 
@@ -143,6 +143,7 @@ test-integration:    # Fresh database cycle: test-db-up + test-db-migrate + inte
 test-all:            # Every test: unit + integration + ignored (K8s) — no test left behind
 test-ci:             # For CI: assumes database already running, runs unit + integration tests
 smoke-keybox:        # Smoke test keybox in k3d (port-forward, test, cleanup)
+smoke-ai-proxy:      # Smoke test ai-proxy in k3d (port-forward, test, cleanup)
 ```
 
 `test-all` runs every test in the project:
@@ -198,6 +199,9 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 - Keep names short but clear
 
 ## Changelog
+
+### v0.20 (2026-03-07)
+- Add `smoke-ai-proxy` to Testing Targets (port-forward + smoke test against k3d ai-proxy)
 
 ### v0.19 (2026-03-04)
 - Fix `dev-down` description: "Stop postgres only" (was "Stop all services and database" — matched Makefile fix from local-dev.md v0.9 but spec was never updated)
