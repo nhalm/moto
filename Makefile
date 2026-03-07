@@ -6,7 +6,7 @@
 .PHONY: build-bike test-bike
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
-.PHONY: test-db-up test-db-down test-db-migrate test-integration test-all smoke-keybox
+.PHONY: test-db-up test-db-down test-db-migrate test-integration test-all smoke-keybox smoke-ai-proxy
 .PHONY: dev dev-cluster dev-cluster-down dev-up dev-down dev-clean
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
 .PHONY: deploy-images deploy-secrets deploy-system deploy-status deploy
@@ -245,6 +245,25 @@ smoke-keybox: ## Smoke test keybox in k3d (port-forward, test, cleanup)
 	KEYBOX_URL=http://localhost:18090 ./infra/smoke-test-keybox.sh; \
 	status=$$?; \
 	kill $$PF_PID 2>/dev/null || true; \
+	exit $$status
+
+smoke-ai-proxy: ## Smoke test ai-proxy in k3d (port-forward, test, cleanup)
+	@kubectl -n moto-system port-forward svc/moto-ai-proxy 18091:8080 >/dev/null 2>&1 & \
+	PF_API=$$!; \
+	kubectl -n moto-system port-forward svc/moto-ai-proxy 18092:8081 >/dev/null 2>&1 & \
+	PF_HEALTH=$$!; \
+	kubectl -n moto-system port-forward svc/moto-keybox 18090:8080 >/dev/null 2>&1 & \
+	PF_KEYBOX=$$!; \
+	kubectl -n moto-system port-forward svc/moto-club 18093:8080 >/dev/null 2>&1 & \
+	PF_CLUB=$$!; \
+	sleep 2; \
+	AI_PROXY_URL=http://localhost:18091 \
+	AI_PROXY_HEALTH_URL=http://localhost:18092 \
+	KEYBOX_URL=http://localhost:18090 \
+	CLUB_URL=http://localhost:18093 \
+	./infra/smoke-test-ai-proxy.sh; \
+	status=$$?; \
+	kill $$PF_API $$PF_HEALTH $$PF_KEYBOX $$PF_CLUB 2>/dev/null || true; \
 	exit $$status
 
 ##@ Local Dev

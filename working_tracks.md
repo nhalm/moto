@@ -100,8 +100,8 @@ Read it in full at the start of each iteration.
 
 ## testing.md v0.7
 
-- [ ] Add `smoke-ai-proxy` Makefile target: port-forward ai-proxy, run `infra/smoke-test-ai-proxy.sh`, clean up
+(all items completed)
 
 ## makefile.md v0.20
 
-- [ ] Add `smoke-ai-proxy` target to Makefile (port-forward ai-proxy service, run smoke test script, kill port-forward on exit)
+(all items completed)

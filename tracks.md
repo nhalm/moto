@@ -663,3 +663,11 @@ WHAT DOES NOT GO HERE:
 - Implement local dev integration: ai-proxy in moto dev up startup sequence
 - Support --no-ai-proxy flag for moto dev up
 - Implement local dev key seeding (prompt or MOTO_DEV_*_KEY env vars)
+
+## makefile.md v0.20
+
+- Add `smoke-ai-proxy` target to Makefile (port-forward ai-proxy service, run smoke test script, kill port-forward on exit)
+
+## testing.md v0.7
+
+- Add `smoke-ai-proxy` Makefile target: port-forward ai-proxy, run `infra/smoke-test-ai-proxy.sh`, clean up
