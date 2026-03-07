@@ -100,8 +100,6 @@ Read it in full at the start of each iteration.
 
 ## testing.md v0.7
 
-- [ ] Revert `crates/moto-ai-proxy/tests/smoke_test.rs` (already deleted — confirm no leftover references in Cargo.toml or CI)
-- [ ] Create `infra/smoke-test-ai-proxy.sh` following the keybox pattern: passthrough auth (200/401), path allowlist (403), unified endpoint routing (200/400), health endpoints (200), missing provider (503)
 - [ ] Add `smoke-ai-proxy` Makefile target: port-forward ai-proxy, run `infra/smoke-test-ai-proxy.sh`, clean up
 
 ## makefile.md v0.20

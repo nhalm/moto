@@ -533,6 +533,13 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+## testing.md v0.7
+
+- Confirmed `crates/moto-ai-proxy/tests/smoke_test.rs` already deleted with no leftover references in Cargo.toml or CI
+- Created `infra/smoke-test-ai-proxy.sh` following keybox pattern: passthrough auth (200/401), path allowlist (403), unified endpoint routing (200/400), health endpoints (200), missing provider (503)
+
+---
+
 ## makefile.md v0.19
 
 - (spec-only) Fix `dev-down` description to "Stop postgres only"
