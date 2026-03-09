@@ -30,6 +30,7 @@ use moto_ai_proxy::provider::ModelRouter;
 use moto_ai_proxy::proxy;
 
 use moto_keybox_client::{KeyboxClient, KeyboxConfig, SvidCache};
+use moto_throttle::{PrincipalType, ThrottleConfig, ThrottleLayer};
 
 #[tokio::main]
 async fn main() {
@@ -114,8 +115,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let model_router = ModelRouter::new(config.model_map.as_deref())
         .map_err(|e| format!("invalid MOTO_AI_PROXY_MODEL_MAP: {e}"))?;
 
+    // Configure rate limiting: throttle layer sits before auth (outermost layer)
+    // so unauthenticated floods are rate-limited before reaching auth validation.
+    let throttle_config = ThrottleConfig::new()
+        .override_path("/health/", PrincipalType::Garage, 0, 0)
+        .build();
+    let throttle_layer = ThrottleLayer::new(throttle_config);
+    let _cleanup_handle = throttle_layer.spawn_cleanup();
+
     // Build proxy router with passthrough routes, key injection, and garage auth
-    let app = proxy::proxy_router(client, key_store, garage_validator, model_router);
+    let app = proxy::proxy_router(client, key_store, garage_validator, model_router)
+        .layer(throttle_layer);
 
     let listener = TcpListener::bind(config.bind_addr).await?;
     info!(addr = %config.bind_addr, "moto-ai-proxy listening");

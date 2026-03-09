@@ -17,6 +17,7 @@ base64.workspace = true
 chrono = { workspace = true, features = ["serde"] }
 futures-util.workspace = true
 moto-keybox-client.workspace = true
+moto-throttle.workspace = true
 reqwest = { workspace = true, features = ["stream"] }
 secrecy.workspace = true
 serde = { workspace = true, features = ["derive"] }

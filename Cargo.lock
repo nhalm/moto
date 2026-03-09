@@ -2024,6 +2024,7 @@ dependencies = [
  "chrono",
  "futures-util",
  "moto-keybox-client",
+ "moto-throttle",
  "reqwest",
  "secrecy",
  "serde",
