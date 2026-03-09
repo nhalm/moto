@@ -125,6 +125,9 @@ impl AuditEventBuilder {
     }
 
     /// Build the audit event with auto-generated ID and current timestamp.
+    ///
+    /// Metadata is sanitized before inclusion — any keys matching known sensitive
+    /// patterns (secrets, tokens, API keys, request/response bodies) are redacted.
     #[must_use]
     pub fn build(self) -> AuditEvent {
         AuditEvent {
@@ -137,9 +140,69 @@ impl AuditEventBuilder {
             resource_type: self.resource_type,
             resource_id: self.resource_id,
             outcome: self.outcome,
-            metadata: self.metadata,
+            metadata: sanitize_metadata(self.metadata),
             client_ip: self.client_ip,
             timestamp: Utc::now(),
         }
     }
+}
+
+/// Keys that must never appear in audit metadata because they may contain
+/// sensitive data (secret values, API keys, tokens, request/response bodies,
+/// passwords, or credential material).
+const SENSITIVE_KEY_PATTERNS: &[&str] = &[
+    "secret",
+    "password",
+    "passwd",
+    "credential",
+    "api_key",
+    "apikey",
+    "token",
+    "bearer",
+    "authorization",
+    "body",
+    "request_body",
+    "response_body",
+    "prompt",
+    "completion",
+    "content",
+    "plaintext",
+    "private_key",
+    "key_material",
+];
+
+/// Sanitize metadata by redacting values for keys that match sensitive patterns.
+///
+/// Operates recursively on nested objects. Array elements that are objects are
+/// also sanitized. Non-object metadata is returned as-is.
+pub fn sanitize_metadata(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let sanitized = map
+                .into_iter()
+                .map(|(key, val)| {
+                    if is_sensitive_key(&key) {
+                        (key, serde_json::Value::String("[REDACTED]".to_string()))
+                    } else {
+                        (key, sanitize_metadata(val))
+                    }
+                })
+                .collect();
+            serde_json::Value::Object(sanitized)
+        }
+        serde_json::Value::Array(arr) => {
+            let sanitized = arr.into_iter().map(sanitize_metadata).collect();
+            serde_json::Value::Array(sanitized)
+        }
+        other => other,
+    }
+}
+
+/// Check if a key name matches any sensitive pattern (case-insensitive).
+#[must_use]
+pub fn is_sensitive_key(key: &str) -> bool {
+    let lower = key.to_lowercase();
+    SENSITIVE_KEY_PATTERNS
+        .iter()
+        .any(|pattern| lower.contains(pattern))
 }

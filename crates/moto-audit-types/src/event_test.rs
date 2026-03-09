@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use crate::{AuditEvent, AuditEventBuilder};
+use crate::{is_sensitive_key, sanitize_metadata};
 
 #[test]
 fn builder_creates_event_with_defaults() {
@@ -93,4 +94,117 @@ fn json_output_matches_spec_format() {
     assert!(json_val.get("metadata").is_some());
     assert!(json_val.get("client_ip").is_some());
     assert!(json_val.get("timestamp").is_some());
+}
+
+#[test]
+fn sensitive_keys_are_detected() {
+    let sensitive = [
+        "secret_value",
+        "api_key",
+        "apiKey",
+        "token",
+        "bearer_token",
+        "authorization",
+        "password",
+        "request_body",
+        "response_body",
+        "prompt",
+        "completion",
+        "content",
+        "private_key",
+        "key_material",
+        "credential",
+        "plaintext",
+    ];
+    for key in sensitive {
+        assert!(is_sensitive_key(key), "{key} should be sensitive");
+    }
+}
+
+#[test]
+fn safe_keys_are_not_flagged() {
+    let safe = [
+        "provider",
+        "model",
+        "mode",
+        "duration_ms",
+        "upstream_status",
+        "garage_name",
+        "branch",
+        "ttl_seconds",
+        "reason",
+        "from",
+        "to",
+        "owner",
+        "previous_status",
+        "termination_reason",
+    ];
+    for key in safe {
+        assert!(!is_sensitive_key(key), "{key} should not be sensitive");
+    }
+}
+
+#[test]
+fn sanitize_redacts_sensitive_keys() {
+    let metadata = json!({
+        "provider": "anthropic",
+        "api_key": "sk-ant-12345",
+        "model": "claude-sonnet-4-20250514"
+    });
+    let result = sanitize_metadata(metadata);
+
+    assert_eq!(result["provider"], "anthropic");
+    assert_eq!(result["api_key"], "[REDACTED]");
+    assert_eq!(result["model"], "claude-sonnet-4-20250514");
+}
+
+#[test]
+fn sanitize_handles_nested_objects() {
+    let metadata = json!({
+        "outer": {
+            "safe_field": "ok",
+            "secret_value": "should-be-redacted"
+        }
+    });
+    let result = sanitize_metadata(metadata);
+
+    assert_eq!(result["outer"]["safe_field"], "ok");
+    assert_eq!(result["outer"]["secret_value"], "[REDACTED]");
+}
+
+#[test]
+fn sanitize_handles_arrays() {
+    let metadata = json!({
+        "items": [
+            {"name": "ok", "token": "abc123"},
+            {"name": "also-ok"}
+        ]
+    });
+    let result = sanitize_metadata(metadata);
+
+    assert_eq!(result["items"][0]["name"], "ok");
+    assert_eq!(result["items"][0]["token"], "[REDACTED]");
+    assert_eq!(result["items"][1]["name"], "also-ok");
+}
+
+#[test]
+fn sanitize_preserves_non_object_metadata() {
+    let metadata = json!("just a string");
+    let result = sanitize_metadata(metadata);
+    assert_eq!(result, json!("just a string"));
+}
+
+#[test]
+fn builder_sanitizes_metadata_on_build() {
+    let event = AuditEventBuilder::new("test_event", "test-service", "test")
+        .metadata(json!({
+            "safe": "value",
+            "secret_value": "should-be-redacted",
+            "api_key": "sk-12345"
+        }))
+        .build();
+
+    assert_eq!(event.metadata["safe"], "value");
+    assert_eq!(event.metadata["secret_value"], "[REDACTED]");
+    assert_eq!(event.metadata["api_key"], "[REDACTED]");
 }

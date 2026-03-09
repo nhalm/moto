@@ -9,4 +9,4 @@ mod event;
 #[cfg(test)]
 mod event_test;
 
-pub use event::{AuditEvent, AuditEventBuilder};
+pub use event::{AuditEvent, AuditEventBuilder, is_sensitive_key, sanitize_metadata};
