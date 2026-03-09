@@ -2023,6 +2023,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "futures-util",
+ "moto-audit-types",
  "moto-keybox-client",
  "moto-throttle",
  "reqwest",

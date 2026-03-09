@@ -13,6 +13,7 @@ use secrecy::ExposeSecret;
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::audit;
 use crate::auth::{self, AuthError, GarageValidator};
 use crate::keys::KeyStore;
 use crate::provider::{ModelRouter, Provider, ProviderInfo};
@@ -230,6 +231,7 @@ fn inject_moto_headers(response: &mut Response, request_id: &Uuid, provider: Opt
 }
 
 /// Shared passthrough handler — validates auth, forwards to provider, emits canonical log.
+#[allow(clippy::too_many_lines)]
 async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
     provider: Provider,
     state: &ProxyState<K, G>,
@@ -260,6 +262,15 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
             duration_ms = duration_ms,
             "request completed"
         );
+        audit::log_ai_request_denied(
+            &request_id,
+            "",
+            "path not allowed",
+            Some(&info.name),
+            "passthrough",
+            &start,
+            headers,
+        );
         inject_moto_headers(&mut resp, &request_id, Some(&info.name));
         return resp;
     }
@@ -279,6 +290,15 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
                 status = status,
                 duration_ms = duration_ms,
                 "request completed"
+            );
+            audit::log_ai_request_denied(
+                &request_id,
+                "",
+                "auth failed",
+                Some(&info.name),
+                "passthrough",
+                &start,
+                headers,
             );
             let mut resp = resp;
             inject_moto_headers(&mut resp, &request_id, Some(&info.name));
@@ -312,6 +332,31 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
         duration_ms = duration_ms,
         "request completed"
     );
+
+    // Emit audit event: provider_error for non-success upstream, ai_request for success.
+    if result.response.status().is_success() {
+        audit::log_ai_request(
+            &request_id,
+            &garage_id,
+            &info.name,
+            None,
+            "passthrough",
+            result.upstream_status,
+            &start,
+            headers,
+        );
+    } else {
+        audit::log_provider_error(
+            &request_id,
+            &garage_id,
+            &info.name,
+            None,
+            "passthrough",
+            result.upstream_status.unwrap_or(status),
+            &start,
+            headers,
+        );
+    }
 
     let mut resp = result.response;
     inject_moto_headers(&mut resp, &request_id, Some(&info.name));
@@ -451,6 +496,7 @@ fn resolve_and_translate(
 /// Reads the request body, extracts the `model` field, and routes to the
 /// correct provider. For `OpenAI` and Gemini, the request is forwarded directly
 /// (both support OpenAI-compatible format). Anthropic requires translation.
+#[allow(clippy::too_many_lines)]
 pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
     State(state): State<ProxyState<K, G>>,
     uri: Uri,
@@ -475,6 +521,15 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
                 None,
                 &start,
             );
+            audit::log_ai_request_denied(
+                &request_id,
+                "",
+                "auth failed",
+                None,
+                "unified",
+                &start,
+                &headers,
+            );
             let mut resp = resp;
             inject_moto_headers(&mut resp, &request_id, None);
             return resp;
@@ -494,6 +549,15 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
                 resp.status().as_u16(),
                 None,
                 &start,
+            );
+            audit::log_ai_request_denied(
+                &request_id,
+                &garage_id,
+                "invalid request",
+                None,
+                "unified",
+                &start,
+                &headers,
             );
             let mut resp = *resp;
             inject_moto_headers(&mut resp, &request_id, None);
@@ -532,6 +596,31 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
         result.upstream_status,
         &start,
     );
+
+    // Emit audit event: provider_error for non-success upstream, ai_request for success.
+    if result.response.status().is_success() {
+        audit::log_ai_request(
+            &request_id,
+            &garage_id,
+            &provider_name,
+            Some(&model),
+            "unified",
+            result.upstream_status,
+            &start,
+            &headers,
+        );
+    } else {
+        audit::log_provider_error(
+            &request_id,
+            &garage_id,
+            &provider_name,
+            Some(&model),
+            "unified",
+            result.upstream_status.unwrap_or(status),
+            &start,
+            &headers,
+        );
+    }
 
     // For Anthropic responses, translate back to OpenAI format.
     let mut resp = if info.is_anthropic && result.response.status().is_success() {

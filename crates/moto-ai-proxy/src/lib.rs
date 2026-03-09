@@ -3,6 +3,7 @@
 //! Routes requests from garages to AI providers (Anthropic, `OpenAI`, Gemini),
 //! injecting API credentials from keybox so garages never see real API keys.
 
+pub mod audit;
 pub mod auth;
 pub mod config;
 pub mod health;

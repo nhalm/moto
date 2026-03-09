@@ -16,6 +16,7 @@ axum.workspace = true
 base64.workspace = true
 chrono = { workspace = true, features = ["serde"] }
 futures-util.workspace = true
+moto-audit-types.workspace = true
 moto-keybox-client.workspace = true
 moto-throttle.workspace = true
 reqwest = { workspace = true, features = ["stream"] }
