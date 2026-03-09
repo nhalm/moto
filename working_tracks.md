@@ -14,7 +14,6 @@ Read it in full at the start of each iteration.
 
 - Ensure audit logging is best-effort: failures must not block primary operations
 - Ensure sensitive data is never logged (secret values, API keys, tokens, request/response bodies)
-- Add GET /api/v1/audit/logs endpoint on moto-club with query filters (service, event_type, principal_id, resource_type, since, until, limit, offset)
 - Implement fan-out: moto-club queries own table and keybox /audit/logs in parallel, merges by timestamp, graceful degradation if keybox unreachable
 - Auth: service token only for audit query endpoint
 

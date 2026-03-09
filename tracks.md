@@ -700,3 +700,4 @@ WHAT DOES NOT GO HERE:
 - Implement AuditLogger for moto-club: log garage_created, garage_terminated, garage_state_changed, ttl_enforced, auth_failed events from handlers and reconciler
 - Implement ai-proxy structured audit log: emit newline-delimited JSON to stdout for ai_request, ai_request_denied, provider_error events (including token counts in metadata when available)
 - Add audit log retention tasks to moto-cron reconciler (keybox 90 days, moto-club 30 days)
+- Add GET /api/v1/audit/logs endpoint on moto-club with query filters (service, event_type, principal_id, resource_type, since, until, limit, offset)
