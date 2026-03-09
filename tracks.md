@@ -678,3 +678,5 @@ WHAT DOES NOT GO HERE:
 - Implement ThrottleLayer as tower middleware that extracts principal and checks token bucket
 - Implement principal extraction: JWT claim parsing from Authorization/x-api-key headers, service token detection, fallback to Unknown tier with client IP key
 - Implement bucket cleanup: evict buckets not accessed within TTL (default 10 min), periodic sweep (default 60 sec)
+- Support env var configuration (MOTO_THROTTLE_*_RPM, *_BURST, *_CLEANUP_INTERVAL_SECS, *_BUCKET_TTL_SECS)
+- Implement rate limit tiers: garage (120 RPM, burst 20), bike (300, 50), service (1000, 100), unknown (30, 5)
