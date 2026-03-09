@@ -169,7 +169,7 @@ mod tests {
         );
 
         let migrations: Vec<_> = MIGRATIONS.iter().collect();
-        assert_eq!(migrations.len(), 3, "should have exactly three migrations");
+        assert_eq!(migrations.len(), 4, "should have exactly four migrations");
         // sqlx converts underscores to spaces in descriptions
         assert!(
             migrations[0].description.contains("initial"),
