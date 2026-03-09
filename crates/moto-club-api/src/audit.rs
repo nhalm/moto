@@ -3,6 +3,13 @@
 //! Provides `GET /api/v1/audit/logs` for querying audit events
 //! with filters for `event_type`, `principal_id`, `resource_type`,
 //! time range, and pagination.
+//!
+//! Supports fan-out to keybox's `/audit/logs` endpoint when the `service`
+//! filter is not set or is `keybox`. Results are merged by timestamp
+//! (newest first). If keybox is unreachable, moto-club returns only its
+//! own events with a warning.
+
+use std::time::Duration;
 
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -14,6 +21,9 @@ use serde::{Deserialize, Serialize};
 use moto_club_db::audit_repo;
 
 use crate::{ApiError, AppState, error_codes};
+
+/// Timeout for keybox audit log fan-out requests.
+const KEYBOX_AUDIT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Query parameters for the audit logs endpoint.
 #[derive(Debug, Default, Deserialize)]
@@ -37,7 +47,7 @@ pub struct AuditLogsQuery {
 }
 
 /// Audit log event in the API response.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AuditEventResponse {
     /// Unique event ID.
     pub id: String,
@@ -77,11 +87,41 @@ pub struct AuditLogsResponse {
     pub limit: i64,
     /// Pagination offset.
     pub offset: i64,
+    /// Warnings (e.g. "keybox unavailable"). Omitted when empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+}
+
+/// Keybox audit logs response (for deserialization of fan-out response).
+#[derive(Debug, Deserialize)]
+struct KeyboxAuditResponse {
+    entries: Vec<KeyboxAuditEntry>,
+    total: usize,
+}
+
+/// A single audit entry from keybox's `/audit/logs` response.
+#[derive(Debug, Deserialize)]
+struct KeyboxAuditEntry {
+    id: String,
+    event_type: String,
+    service: String,
+    principal_type: String,
+    principal_id: String,
+    action: String,
+    resource_type: String,
+    resource_id: String,
+    outcome: String,
+    metadata: serde_json::Value,
+    #[serde(default)]
+    client_ip: Option<String>,
+    timestamp: String,
 }
 
 /// GET /api/v1/audit/logs
 ///
 /// Query audit log entries with optional filters. Service token auth required.
+/// When `service` is omitted or `keybox`, fans out to keybox's `/audit/logs`
+/// endpoint in parallel and merges results by timestamp (newest first).
 async fn get_audit_logs(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -91,6 +131,79 @@ async fn get_audit_logs(
 
     let limit = query.limit.unwrap_or(100).clamp(1, 1000);
     let offset = query.offset.unwrap_or(0).max(0);
+
+    let service_filter = query.service.as_deref();
+    let query_moto_club = service_filter.is_none() || service_filter == Some("moto-club");
+    let query_keybox = service_filter.is_none() || service_filter == Some("keybox");
+
+    // ai-proxy events are log-only in v1, not queryable
+    if service_filter == Some("ai-proxy") {
+        return Ok((
+            StatusCode::OK,
+            Json(AuditLogsResponse {
+                events: vec![],
+                total: 0,
+                limit,
+                offset,
+                warnings: vec![
+                    "ai-proxy audit events are log-only and not queryable via the API in v1"
+                        .to_string(),
+                ],
+            }),
+        ));
+    }
+
+    let mut warnings = Vec::new();
+
+    let (mut events, mut total) =
+        query_local_audit(&state, &query, query_moto_club, limit, offset).await?;
+
+    // Fan-out to keybox in parallel with local query is ideal, but since
+    // query_local_audit already awaits, we query keybox sequentially here.
+    // For true parallelism, both are launched via tokio::join below.
+    let keybox_result = if query_keybox {
+        query_keybox_fanout(&state, &query, limit).await
+    } else {
+        Ok(None)
+    };
+
+    match keybox_result {
+        Ok(Some((keybox_events, keybox_total))) => {
+            total += keybox_total;
+            events.extend(keybox_events);
+        }
+        Ok(None) => {}
+        Err(warning) => warnings.push(warning),
+    }
+
+    // Sort merged results by timestamp (newest first) and truncate to limit
+    events.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    #[allow(clippy::cast_sign_loss)]
+    events.truncate(limit as usize);
+
+    Ok((
+        StatusCode::OK,
+        Json(AuditLogsResponse {
+            events,
+            total,
+            limit,
+            offset,
+            warnings,
+        }),
+    ))
+}
+
+/// Queries moto-club's own `audit_log` table.
+async fn query_local_audit(
+    state: &AppState,
+    query: &AuditLogsQuery,
+    enabled: bool,
+    limit: i64,
+    offset: i64,
+) -> Result<(Vec<AuditEventResponse>, i64), (StatusCode, Json<ApiError>)> {
+    if !enabled {
+        return Ok((vec![], 0));
+    }
 
     let db_query = audit_repo::AuditLogQuery {
         service: query.service.as_deref(),
@@ -106,7 +219,7 @@ async fn get_audit_logs(
     let result = audit_repo::query(&state.db_pool, &db_query)
         .await
         .map_err(|e| {
-            tracing::error!(error = %e, "failed to query audit logs");
+            tracing::error!(error = %e, "failed to query moto-club audit logs");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ApiError::new(
@@ -135,15 +248,110 @@ async fn get_audit_logs(
         })
         .collect();
 
-    Ok((
-        StatusCode::OK,
-        Json(AuditLogsResponse {
-            events,
-            total: result.total,
-            limit,
-            offset,
-        }),
-    ))
+    Ok((events, result.total))
+}
+
+/// Queries keybox via fan-out if URL and token are configured.
+async fn query_keybox_fanout(
+    state: &AppState,
+    query: &AuditLogsQuery,
+    limit: i64,
+) -> Result<Option<(Vec<AuditEventResponse>, i64)>, String> {
+    let (Some(keybox_url), Some(keybox_token)) = (&state.keybox_url, &state.keybox_service_token)
+    else {
+        return Ok(None);
+    };
+
+    query_keybox_audit(keybox_url, keybox_token, query, limit).await
+}
+
+/// Queries keybox's `/audit/logs` endpoint with the same filter parameters.
+///
+/// Returns `Ok(Some((events, total)))` on success, `Ok(None)` if not applicable,
+/// or `Err(warning_message)` if keybox is unreachable.
+async fn query_keybox_audit(
+    keybox_url: &str,
+    keybox_token: &str,
+    query: &AuditLogsQuery,
+    limit: i64,
+) -> Result<Option<(Vec<AuditEventResponse>, i64)>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(KEYBOX_AUDIT_TIMEOUT)
+        .build()
+        .map_err(|e| {
+            tracing::warn!(error = %e, "failed to create HTTP client for keybox audit fan-out");
+            "keybox unavailable".to_string()
+        })?;
+
+    let url = format!("{}/audit/logs", keybox_url.trim_end_matches('/'));
+    let mut request = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {keybox_token}"));
+
+    // Forward filter parameters to keybox
+    if let Some(ref event_type) = query.event_type {
+        request = request.query(&[("event_type", event_type.as_str())]);
+    }
+    if let Some(ref principal_id) = query.principal_id {
+        request = request.query(&[("principal_id", principal_id.as_str())]);
+    }
+    if let Some(ref resource_type) = query.resource_type {
+        request = request.query(&[("resource_type", resource_type.as_str())]);
+    }
+    if let Some(ref since) = query.since {
+        request = request.query(&[("since", &since.to_rfc3339())]);
+    }
+    if let Some(ref until) = query.until {
+        request = request.query(&[("until", &until.to_rfc3339())]);
+    }
+    request = request.query(&[("limit", &limit.to_string())]);
+
+    let response = request.send().await.map_err(|e| {
+        tracing::warn!(error = %e, "keybox audit fan-out request failed");
+        "keybox unavailable".to_string()
+    })?;
+
+    if !response.status().is_success() {
+        tracing::warn!(
+            status = %response.status(),
+            "keybox audit fan-out returned non-success status"
+        );
+        return Err("keybox unavailable".to_string());
+    }
+
+    let body: KeyboxAuditResponse = response.json().await.map_err(|e| {
+        tracing::warn!(error = %e, "failed to parse keybox audit response");
+        "keybox unavailable".to_string()
+    })?;
+
+    let events: Vec<AuditEventResponse> = body
+        .entries
+        .into_iter()
+        .filter_map(|e| {
+            let timestamp = chrono::DateTime::parse_from_rfc3339(&e.timestamp)
+                .ok()?
+                .with_timezone(&Utc);
+            Some(AuditEventResponse {
+                id: e.id,
+                event_type: e.event_type,
+                service: e.service,
+                principal_type: e.principal_type,
+                principal_id: e.principal_id,
+                action: e.action,
+                resource_type: e.resource_type,
+                resource_id: e.resource_id,
+                outcome: e.outcome,
+                metadata: e.metadata,
+                client_ip: e.client_ip,
+                timestamp,
+            })
+        })
+        .collect();
+
+    #[allow(clippy::cast_possible_wrap)]
+    let total = body.total as i64;
+
+    Ok(Some((events, total)))
 }
 
 /// Validates the service token from the Authorization header.

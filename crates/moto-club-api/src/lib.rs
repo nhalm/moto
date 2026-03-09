@@ -90,6 +90,11 @@ pub struct AppState {
     /// Keybox health URL for health checks (e.g., `http://keybox:8081`).
     /// When `None`, keybox health check is skipped (for testing/local dev).
     pub keybox_health_url: Option<String>,
+    /// Keybox API URL for audit log fan-out queries (e.g., `http://keybox:8080`).
+    /// When `None`, audit fan-out to keybox is skipped.
+    pub keybox_url: Option<String>,
+    /// Keybox service token for authenticated API calls (audit fan-out).
+    pub keybox_service_token: Option<String>,
     /// Connection tracker for log streaming WebSocket connections (per garage, max 5).
     pub log_connection_tracker: Arc<ConnectionTracker>,
     /// Connection tracker for event streaming WebSocket connections (per user, max 3).
@@ -120,6 +125,8 @@ impl AppState {
             garage_k8s: None,
             garage_service: None,
             keybox_health_url: None,
+            keybox_url: None,
+            keybox_service_token: None,
             log_connection_tracker: Arc::new(ConnectionTracker::new()),
             event_connection_tracker: Arc::new(ConnectionTracker::new()),
             service_token: None,
@@ -158,6 +165,20 @@ impl AppState {
     #[must_use]
     pub fn with_keybox_health_url(mut self, keybox_health_url: String) -> Self {
         self.keybox_health_url = Some(keybox_health_url);
+        self
+    }
+
+    /// Sets the keybox API URL for audit log fan-out queries.
+    #[must_use]
+    pub fn with_keybox_url(mut self, url: String) -> Self {
+        self.keybox_url = Some(url);
+        self
+    }
+
+    /// Sets the keybox service token for authenticated audit fan-out.
+    #[must_use]
+    pub fn with_keybox_service_token(mut self, token: String) -> Self {
+        self.keybox_service_token = Some(token);
         self
     }
 

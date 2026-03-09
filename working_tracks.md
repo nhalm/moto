@@ -14,5 +14,4 @@ Read it in full at the start of each iteration.
 
 - Ensure audit logging is best-effort: failures must not block primary operations
 - Ensure sensitive data is never logged (secret values, API keys, tokens, request/response bodies)
-- Implement fan-out: moto-club queries own table and keybox /audit/logs in parallel, merges by timestamp, graceful degradation if keybox unreachable
 

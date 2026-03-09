@@ -372,6 +372,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         info!("keybox URL not configured, health checks will skip keybox");
     }
 
+    // Add keybox URL and service token for audit log fan-out
+    if let (Some(url), Some(token)) = (&config.keybox_url, &config.keybox_service_token) {
+        info!(keybox_url = %url, "audit log fan-out to keybox enabled");
+        state = state
+            .with_keybox_url(url.clone())
+            .with_keybox_service_token(token.clone());
+    } else {
+        info!("keybox URL or service token not configured, audit fan-out disabled");
+    }
+
     let app = router(state.clone());
 
     // Create health server router for K8s probes (port 8081)

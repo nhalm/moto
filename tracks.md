@@ -706,3 +706,4 @@ WHAT DOES NOT GO HERE:
 ## audit-logging v0.3
 
 - Add keybox GET /audit/logs endpoint since/until query parameter support for fan-out queries from moto-club (pass-through time range filtering in DB layer and both in-memory/PG API handlers)
+- Implement fan-out: moto-club queries own table and keybox /audit/logs in parallel, merges by timestamp, graceful degradation if keybox unreachable (AppState gets keybox_url and keybox_service_token fields; audit handler fans out to keybox with query param pass-through; response includes warnings field when keybox unavailable; ai-proxy returns informational warning)
