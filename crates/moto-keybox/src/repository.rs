@@ -216,7 +216,7 @@ impl SecretRepository {
         self.secrets.insert(key, stored);
 
         // Audit
-        self.audit(claims, AuditEventType::Created, Some(&metadata));
+        self.audit(claims, AuditEventType::SecretCreated, Some(&metadata));
 
         Ok(metadata)
     }
@@ -302,7 +302,7 @@ impl SecretRepository {
         let metadata = stored.metadata.clone();
 
         // Audit
-        self.audit(claims, AuditEventType::Accessed, Some(&metadata));
+        self.audit(claims, AuditEventType::SecretAccessed, Some(&metadata));
 
         Ok(plaintext)
     }
@@ -413,7 +413,7 @@ impl SecretRepository {
         let metadata = stored.metadata.clone();
 
         // Audit
-        self.audit(claims, AuditEventType::Updated, Some(&metadata));
+        self.audit(claims, AuditEventType::SecretUpdated, Some(&metadata));
 
         Ok(metadata)
     }
@@ -489,7 +489,7 @@ impl SecretRepository {
         self.secrets.remove(&key);
 
         // Audit
-        self.audit(claims, AuditEventType::Deleted, Some(&metadata));
+        self.audit(claims, AuditEventType::SecretDeleted, Some(&metadata));
 
         Ok(())
     }
@@ -639,14 +639,62 @@ impl SecretRepository {
         event_type: AuditEventType,
         metadata: Option<&SecretMetadata>,
     ) {
+        let (action, resource_type, resource_id) = match event_type {
+            AuditEventType::SecretAccessed => (
+                "read",
+                "secret",
+                metadata
+                    .map(|m| format!("{}/{}", m.scope, m.name))
+                    .unwrap_or_default(),
+            ),
+            AuditEventType::SecretCreated => (
+                "create",
+                "secret",
+                metadata
+                    .map(|m| format!("{}/{}", m.scope, m.name))
+                    .unwrap_or_default(),
+            ),
+            AuditEventType::SecretUpdated => (
+                "update",
+                "secret",
+                metadata
+                    .map(|m| format!("{}/{}", m.scope, m.name))
+                    .unwrap_or_default(),
+            ),
+            AuditEventType::SecretDeleted => (
+                "delete",
+                "secret",
+                metadata
+                    .map(|m| format!("{}/{}", m.scope, m.name))
+                    .unwrap_or_default(),
+            ),
+            AuditEventType::DekRotated => (
+                "rotate",
+                "secret",
+                metadata
+                    .map(|m| format!("{}/{}", m.scope, m.name))
+                    .unwrap_or_default(),
+            ),
+            AuditEventType::SvidIssued => ("create", "svid", claims.sub.clone()),
+            AuditEventType::AuthFailed => ("auth_fail", "token", String::new()),
+            AuditEventType::AccessDenied => (
+                "auth_fail",
+                "secret",
+                metadata
+                    .map(|m| format!("{}/{}", m.scope, m.name))
+                    .unwrap_or_default(),
+            ),
+        };
+
         let entry = AuditEntry {
             id: Uuid::now_v7(),
             event_type,
-            principal_type: Some(claims.principal_type),
-            principal_id: Some(claims.principal_id.clone()),
-            spiffe_id: Some(claims.sub.clone()),
-            secret_scope: metadata.map(|m| m.scope),
-            secret_name: metadata.map(|m| m.name.clone()),
+            principal_type: claims.principal_type,
+            principal_id: claims.sub.clone(),
+            action: action.to_string(),
+            resource_type: resource_type.to_string(),
+            resource_id,
+            outcome: "success".to_string(),
             timestamp: Utc::now(),
         };
         self.audit_log.push(entry);
@@ -1026,10 +1074,10 @@ mod tests {
 
         let log = repo.audit_log();
         assert_eq!(log.len(), 4);
-        assert_eq!(log[0].event_type, AuditEventType::Created);
-        assert_eq!(log[1].event_type, AuditEventType::Accessed);
-        assert_eq!(log[2].event_type, AuditEventType::Updated);
-        assert_eq!(log[3].event_type, AuditEventType::Deleted);
+        assert_eq!(log[0].event_type, AuditEventType::SecretCreated);
+        assert_eq!(log[1].event_type, AuditEventType::SecretAccessed);
+        assert_eq!(log[2].event_type, AuditEventType::SecretUpdated);
+        assert_eq!(log[3].event_type, AuditEventType::SecretDeleted);
     }
 
     #[test]
@@ -1041,10 +1089,9 @@ mod tests {
             .unwrap();
 
         let entry = &repo.audit_log()[0];
-        assert_eq!(entry.principal_id, Some("moto-club".to_string()));
-        assert!(entry.spiffe_id.as_ref().unwrap().contains("moto-club"));
-        assert_eq!(entry.secret_scope, Some(Scope::Global));
-        assert_eq!(entry.secret_name, Some("test".to_string()));
+        assert!(entry.principal_id.contains("moto-club"));
+        assert_eq!(entry.resource_type, "secret");
+        assert_eq!(entry.resource_id, "global/test");
     }
 
     #[test]
@@ -1058,7 +1105,7 @@ mod tests {
         let log = repo.audit_log();
         assert_eq!(log.len(), 1);
         assert_eq!(log[0].event_type, AuditEventType::SvidIssued);
-        assert_eq!(log[0].principal_id, Some("test-bike".to_string()));
+        assert_eq!(log[0].principal_id, "spiffe://moto.local/bike/test-bike");
     }
 
     #[test]

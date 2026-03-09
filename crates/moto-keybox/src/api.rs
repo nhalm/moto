@@ -313,28 +313,32 @@ pub struct AuditLogsResponse {
     pub total: usize,
 }
 
-/// An audit log entry in API responses.
+/// An audit log entry in API responses (unified schema).
 #[derive(Debug, Clone, Serialize)]
 pub struct AuditEntryResponse {
     /// Unique identifier.
     pub id: String,
-    /// The type of event.
+    /// Event category.
     pub event_type: AuditEventType,
-    /// The principal type (if applicable).
+    /// Which service produced the event.
+    pub service: String,
+    /// Principal type.
+    pub principal_type: PrincipalType,
+    /// SPIFFE ID or service name.
+    pub principal_id: String,
+    /// What happened.
+    pub action: String,
+    /// What was acted on.
+    pub resource_type: String,
+    /// Identifier of the resource.
+    pub resource_id: String,
+    /// Result: success, denied, or error.
+    pub outcome: String,
+    /// Service-specific metadata.
+    pub metadata: serde_json::Value,
+    /// Source IP.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub principal_type: Option<PrincipalType>,
-    /// The principal ID (if applicable).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub principal_id: Option<String>,
-    /// The SPIFFE ID (if applicable).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub spiffe_id: Option<String>,
-    /// The secret scope (if applicable).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub secret_scope: Option<Scope>,
-    /// The secret name (if applicable).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub secret_name: Option<String>,
+    pub client_ip: Option<String>,
     /// When the event occurred (RFC 3339).
     pub timestamp: String,
 }
@@ -344,11 +348,15 @@ impl From<&AuditEntry> for AuditEntryResponse {
         Self {
             id: entry.id.to_string(),
             event_type: entry.event_type,
+            service: "keybox".to_string(),
             principal_type: entry.principal_type,
             principal_id: entry.principal_id.clone(),
-            spiffe_id: entry.spiffe_id.clone(),
-            secret_scope: entry.secret_scope,
-            secret_name: entry.secret_name.clone(),
+            action: entry.action.clone(),
+            resource_type: entry.resource_type.clone(),
+            resource_id: entry.resource_id.clone(),
+            outcome: entry.outcome.clone(),
+            metadata: serde_json::Value::Object(serde_json::Map::new()),
+            client_ip: None,
             timestamp: entry.timestamp.to_rfc3339(),
         }
     }
@@ -381,8 +389,10 @@ pub struct AuditLogsQuery {
     pub event_type: Option<String>,
     /// Filter by principal ID.
     pub principal_id: Option<String>,
-    /// Filter by secret name.
-    pub secret_name: Option<String>,
+    /// Filter by resource type.
+    pub resource_type: Option<String>,
+    /// Filter by resource ID.
+    pub resource_id: Option<String>,
     /// Maximum number of entries to return (default 100).
     pub limit: Option<usize>,
     /// Number of entries to skip (for pagination).
@@ -1123,10 +1133,10 @@ async fn get_audit_logs(
             // Filter by event type
             if let Some(ref event_type_str) = query.event_type {
                 let matches = match event_type_str.as_str() {
-                    "accessed" => e.event_type == AuditEventType::Accessed,
-                    "created" => e.event_type == AuditEventType::Created,
-                    "updated" => e.event_type == AuditEventType::Updated,
-                    "deleted" => e.event_type == AuditEventType::Deleted,
+                    "secret_accessed" => e.event_type == AuditEventType::SecretAccessed,
+                    "secret_created" => e.event_type == AuditEventType::SecretCreated,
+                    "secret_updated" => e.event_type == AuditEventType::SecretUpdated,
+                    "secret_deleted" => e.event_type == AuditEventType::SecretDeleted,
                     "svid_issued" => e.event_type == AuditEventType::SvidIssued,
                     "auth_failed" => e.event_type == AuditEventType::AuthFailed,
                     "access_denied" => e.event_type == AuditEventType::AccessDenied,
@@ -1140,14 +1150,14 @@ async fn get_audit_logs(
 
             // Filter by principal ID
             if let Some(ref pid) = query.principal_id
-                && e.principal_id.as_ref() != Some(pid)
+                && &e.principal_id != pid
             {
                 return false;
             }
 
-            // Filter by secret name
-            if let Some(ref name) = query.secret_name
-                && e.secret_name.as_ref() != Some(name)
+            // Filter by resource type
+            if let Some(ref rt) = query.resource_type
+                && &e.resource_type != rt
             {
                 return false;
             }
@@ -1457,11 +1467,10 @@ mod tests {
         let resp = AuditEntryResponse::from(&entry);
 
         assert_eq!(resp.event_type, AuditEventType::SvidIssued);
-        assert_eq!(resp.principal_type, Some(PrincipalType::Garage));
-        assert_eq!(resp.principal_id, Some("test-garage".to_string()));
-        assert!(resp.spiffe_id.is_some());
-        assert!(resp.secret_scope.is_none());
-        assert!(resp.secret_name.is_none());
+        assert_eq!(resp.principal_type, PrincipalType::Garage);
+        assert_eq!(resp.principal_id, "spiffe://moto.local/garage/test-garage");
+        assert_eq!(resp.resource_type, "svid");
+        assert_eq!(resp.action, "create");
     }
 
     #[test]
@@ -1476,7 +1485,7 @@ mod tests {
 
         assert!(json.contains(r#""event_type":"svid_issued""#));
         assert!(json.contains(r#""total":1"#));
-        assert!(json.contains(r#""principal_id":"moto-club""#));
+        assert!(json.contains(r#""principal_id":"spiffe://moto.local/service/moto-club""#));
     }
 
     #[test]
@@ -1486,24 +1495,27 @@ mod tests {
         let resp = AuditEntryResponse::from(&entry);
 
         assert_eq!(resp.event_type, AuditEventType::AccessDenied);
-        assert_eq!(resp.secret_scope, Some(Scope::Global));
-        assert_eq!(resp.secret_name, Some("crypto/master-key".to_string()));
+        assert_eq!(resp.resource_type, "secret");
+        assert_eq!(resp.resource_id, "global/crypto/master-key");
+        assert_eq!(resp.outcome, "denied");
     }
 
     #[test]
     fn audit_logs_query_deserialize() {
         let query: AuditLogsQuery = serde_json::from_str(
             r#"{
-            "event_type": "accessed",
+            "event_type": "secret_accessed",
             "principal_id": "my-garage",
+            "resource_type": "secret",
             "limit": 50,
             "offset": 10
         }"#,
         )
         .unwrap();
 
-        assert_eq!(query.event_type, Some("accessed".to_string()));
+        assert_eq!(query.event_type, Some("secret_accessed".to_string()));
         assert_eq!(query.principal_id, Some("my-garage".to_string()));
+        assert_eq!(query.resource_type, Some("secret".to_string()));
         assert_eq!(query.limit, Some(50));
         assert_eq!(query.offset, Some(10));
     }

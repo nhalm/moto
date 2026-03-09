@@ -12,8 +12,8 @@
 #![allow(clippy::cast_sign_loss)]
 
 use moto_keybox_db::{
-    AuditEventType as DbAuditEventType, DbPool, PrincipalType as DbPrincipalType, Scope as DbScope,
-    audit_repo, secret_repo,
+    AuditEventType as DbAuditEventType, DbPool, InsertAuditEntry, PrincipalType as DbPrincipalType,
+    Scope as DbScope, audit_repo, secret_repo,
 };
 
 use crate::abac::{Action, PolicyEngine};
@@ -176,7 +176,7 @@ impl PgSecretRepository {
         .map_err(|e| db_error(&e))?;
 
         // Audit
-        self.audit(claims, AuditEventType::Created, Some(&metadata))
+        self.audit(claims, AuditEventType::SecretCreated, Some(&metadata))
             .await;
 
         // Build result metadata
@@ -294,7 +294,7 @@ impl PgSecretRepository {
         let plaintext = dek.decrypt(&encrypted_value)?;
 
         // Audit
-        self.audit(claims, AuditEventType::Accessed, Some(&metadata))
+        self.audit(claims, AuditEventType::SecretAccessed, Some(&metadata))
             .await;
 
         Ok(plaintext)
@@ -448,7 +448,7 @@ impl PgSecretRepository {
         };
 
         // Audit
-        self.audit(claims, AuditEventType::Updated, Some(&result))
+        self.audit(claims, AuditEventType::SecretUpdated, Some(&result))
             .await;
 
         Ok(result)
@@ -540,7 +540,7 @@ impl PgSecretRepository {
             .map_err(|e| db_error(&e))?;
 
         // Audit
-        self.audit(claims, AuditEventType::Deleted, Some(&metadata))
+        self.audit(claims, AuditEventType::SecretDeleted, Some(&metadata))
             .await;
 
         Ok(())
@@ -730,18 +730,22 @@ impl PgSecretRepository {
         metadata: Option<&SecretMetadata>,
     ) {
         let db_event_type = to_db_audit_event_type(event_type);
-        let db_principal_type = Some(to_db_principal_type(claims.principal_type));
+        let (action, resource_type, resource_id) = audit_fields_for_event(event_type, metadata);
 
-        let result = audit_repo::insert_audit_entry(
-            &self.pool,
-            db_event_type,
-            db_principal_type,
-            Some(&claims.principal_id),
-            Some(&claims.sub),
-            metadata.map(|m| to_db_scope(m.scope)),
-            metadata.map(|m| m.name.as_str()),
-        )
-        .await;
+        let entry = InsertAuditEntry {
+            event_type: db_event_type,
+            service: "keybox",
+            principal_type: to_db_principal_type(claims.principal_type),
+            principal_id: &claims.sub,
+            action,
+            resource_type,
+            resource_id: &resource_id,
+            outcome: "success",
+            metadata: serde_json::Value::Object(serde_json::Map::new()),
+            client_ip: None,
+        };
+
+        let result = audit_repo::insert_audit_entry(&self.pool, &entry).await;
 
         if let Err(e) = result {
             tracing::warn!(error = %e, "failed to insert audit log entry");
@@ -750,16 +754,20 @@ impl PgSecretRepository {
 
     /// Adds an audit entry directly (for events outside CRUD operations).
     pub async fn add_audit_entry(&self, entry: &crate::types::AuditEntry) {
-        let result = audit_repo::insert_audit_entry(
-            &self.pool,
-            to_db_audit_event_type(entry.event_type),
-            entry.principal_type.map(to_db_principal_type),
-            entry.principal_id.as_deref(),
-            entry.spiffe_id.as_deref(),
-            entry.secret_scope.map(to_db_scope),
-            entry.secret_name.as_deref(),
-        )
-        .await;
+        let insert = InsertAuditEntry {
+            event_type: to_db_audit_event_type(entry.event_type),
+            service: "keybox",
+            principal_type: to_db_principal_type(entry.principal_type),
+            principal_id: &entry.principal_id,
+            action: &entry.action,
+            resource_type: &entry.resource_type,
+            resource_id: &entry.resource_id,
+            outcome: &entry.outcome,
+            metadata: serde_json::Value::Object(serde_json::Map::new()),
+            client_ip: None,
+        };
+
+        let result = audit_repo::insert_audit_entry(&self.pool, &insert).await;
 
         if let Err(e) = result {
             tracing::warn!(error = %e, "failed to insert audit log entry");
@@ -811,14 +819,35 @@ const fn to_db_principal_type(pt: PrincipalType) -> DbPrincipalType {
 
 const fn to_db_audit_event_type(et: AuditEventType) -> DbAuditEventType {
     match et {
-        AuditEventType::Accessed => DbAuditEventType::Accessed,
-        AuditEventType::Created => DbAuditEventType::Created,
-        AuditEventType::Updated => DbAuditEventType::Updated,
-        AuditEventType::Deleted => DbAuditEventType::Deleted,
+        AuditEventType::SecretAccessed => DbAuditEventType::SecretAccessed,
+        AuditEventType::SecretCreated => DbAuditEventType::SecretCreated,
+        AuditEventType::SecretUpdated => DbAuditEventType::SecretUpdated,
+        AuditEventType::SecretDeleted => DbAuditEventType::SecretDeleted,
         AuditEventType::SvidIssued => DbAuditEventType::SvidIssued,
         AuditEventType::AuthFailed => DbAuditEventType::AuthFailed,
         AuditEventType::AccessDenied => DbAuditEventType::AccessDenied,
         AuditEventType::DekRotated => DbAuditEventType::DekRotated,
+    }
+}
+
+/// Returns (action, `resource_type`, `resource_id`) for an audit event.
+fn audit_fields_for_event(
+    event_type: AuditEventType,
+    metadata: Option<&SecretMetadata>,
+) -> (&'static str, &'static str, String) {
+    let resource_id = metadata
+        .map(|m| format!("{}/{}", m.scope, m.name))
+        .unwrap_or_default();
+
+    match event_type {
+        AuditEventType::SecretAccessed => ("read", "secret", resource_id),
+        AuditEventType::SecretCreated => ("create", "secret", resource_id),
+        AuditEventType::SecretUpdated => ("update", "secret", resource_id),
+        AuditEventType::SecretDeleted => ("delete", "secret", resource_id),
+        AuditEventType::DekRotated => ("rotate", "secret", resource_id),
+        AuditEventType::SvidIssued => ("create", "svid", resource_id),
+        AuditEventType::AuthFailed => ("auth_fail", "token", resource_id),
+        AuditEventType::AccessDenied => ("auth_fail", "secret", resource_id),
     }
 }
 

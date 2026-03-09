@@ -27,12 +27,18 @@
 //! // Log an audit entry
 //! audit_repo::insert_audit_entry(
 //!     &pool,
-//!     AuditEventType::Created,
-//!     Some(PrincipalType::Service),
-//!     Some("moto-club"),
-//!     Some("spiffe://moto.local/service/moto-club"),
-//!     Some(Scope::Global),
-//!     Some("ai/anthropic"),
+//!     &InsertAuditEntry {
+//!         event_type: AuditEventType::SecretCreated,
+//!         service: "keybox",
+//!         principal_type: PrincipalType::Service,
+//!         principal_id: "spiffe://moto.local/service/moto-club",
+//!         action: "create",
+//!         resource_type: "secret",
+//!         resource_id: "global/ai/anthropic",
+//!         outcome: "success",
+//!         metadata: serde_json::json!({}),
+//!         client_ip: None,
+//!     },
 //! ).await?;
 //! ```
 
@@ -42,7 +48,7 @@ pub mod secret_repo;
 
 use thiserror::Error;
 
-pub use audit_repo::AuditLogQuery;
+pub use audit_repo::{AuditLogQuery, InsertAuditEntry};
 pub use models::{
     AuditEventType, AuditLogEntry, EncryptedDek, ParseAuditEventTypeError, ParsePrincipalTypeError,
     ParseScopeError, PrincipalType, Scope, Secret, SecretVersion,
@@ -167,24 +173,29 @@ CREATE TABLE IF NOT EXISTS secret_versions (
     UNIQUE(secret_id, version)
 );
 
--- Audit log
+-- Audit log (unified schema)
 CREATE TABLE IF NOT EXISTS audit_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_type TEXT NOT NULL,   -- accessed, created, deleted, etc.
-    principal_type TEXT,
-    principal_id TEXT,
-    spiffe_id TEXT,
-    secret_scope TEXT,
-    secret_name TEXT,
+    event_type TEXT NOT NULL,
+    service TEXT NOT NULL DEFAULT 'keybox',
+    principal_type TEXT NOT NULL,
+    principal_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    resource_id TEXT NOT NULL,
+    outcome TEXT NOT NULL DEFAULT 'success',
+    metadata JSONB NOT NULL DEFAULT '{}',
+    client_ip TEXT,
     timestamp TIMESTAMPTZ NOT NULL DEFAULT now()
-    -- NO secret values ever logged
 );
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_secrets_scope ON secrets(scope);
 CREATE INDEX IF NOT EXISTS idx_secrets_service ON secrets(service) WHERE service IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
-CREATE INDEX IF NOT EXISTS idx_audit_log_spiffe_id ON audit_log(spiffe_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_principal ON audit_log(principal_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_event_type ON audit_log(event_type);
+CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id);
 ";
 
 #[cfg(test)]
@@ -226,11 +237,15 @@ mod tests {
 
         // Check the initial migration exists
         let migrations: Vec<_> = MIGRATIONS.iter().collect();
-        assert_eq!(migrations.len(), 1, "should have exactly one migration");
+        assert_eq!(migrations.len(), 2, "should have two migrations");
         // sqlx converts underscores to spaces in descriptions
         assert!(
             migrations[0].description.contains("initial"),
             "first migration should be initial schema"
+        );
+        assert!(
+            migrations[1].description.contains("audit"),
+            "second migration should be audit log unified schema"
         );
     }
 }

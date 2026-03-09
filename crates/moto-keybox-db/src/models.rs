@@ -55,18 +55,19 @@ pub struct ParseScopeError(String);
 /// Audit event type in the database.
 ///
 /// Maps to the `event_type` TEXT column in the `audit_log` table.
+/// Uses unified naming convention from the audit-logging spec.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "text", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum AuditEventType {
     /// A secret was accessed (read).
-    Accessed,
+    SecretAccessed,
     /// A secret was created.
-    Created,
+    SecretCreated,
     /// A secret was updated.
-    Updated,
+    SecretUpdated,
     /// A secret was deleted.
-    Deleted,
+    SecretDeleted,
     /// An SVID was issued.
     SvidIssued,
     /// Authentication failed.
@@ -80,10 +81,10 @@ pub enum AuditEventType {
 impl std::fmt::Display for AuditEventType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            Self::Accessed => "accessed",
-            Self::Created => "created",
-            Self::Updated => "updated",
-            Self::Deleted => "deleted",
+            Self::SecretAccessed => "secret_accessed",
+            Self::SecretCreated => "secret_created",
+            Self::SecretUpdated => "secret_updated",
+            Self::SecretDeleted => "secret_deleted",
             Self::SvidIssued => "svid_issued",
             Self::AuthFailed => "auth_failed",
             Self::AccessDenied => "access_denied",
@@ -98,10 +99,10 @@ impl std::str::FromStr for AuditEventType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "accessed" => Ok(Self::Accessed),
-            "created" => Ok(Self::Created),
-            "updated" => Ok(Self::Updated),
-            "deleted" => Ok(Self::Deleted),
+            "secret_accessed" => Ok(Self::SecretAccessed),
+            "secret_created" => Ok(Self::SecretCreated),
+            "secret_updated" => Ok(Self::SecretUpdated),
+            "secret_deleted" => Ok(Self::SecretDeleted),
             "svid_issued" => Ok(Self::SvidIssued),
             "auth_failed" => Ok(Self::AuthFailed),
             "access_denied" => Ok(Self::AccessDenied),
@@ -225,24 +226,32 @@ pub struct EncryptedDek {
 
 /// An audit log entry from the database.
 ///
-/// Maps to the `audit_log` table schema.
+/// Maps to the unified `audit_log` table schema.
 /// Contains access and security events (no secret values).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromRow)]
 pub struct AuditLogEntry {
     /// Unique identifier (UUID).
     pub id: Uuid,
-    /// The type of event.
+    /// Event category (e.g. `secret_accessed`, `svid_issued`).
     pub event_type: AuditEventType,
-    /// The principal type (if applicable).
-    pub principal_type: Option<PrincipalType>,
-    /// The principal ID (if applicable).
-    pub principal_id: Option<String>,
-    /// The SPIFFE ID (if applicable).
-    pub spiffe_id: Option<String>,
-    /// The secret scope (if applicable).
-    pub secret_scope: Option<Scope>,
-    /// The secret name (if applicable).
-    pub secret_name: Option<String>,
+    /// Which service produced the event.
+    pub service: String,
+    /// Principal type: garage, bike, service, or anonymous.
+    pub principal_type: PrincipalType,
+    /// SPIFFE ID or service name.
+    pub principal_id: String,
+    /// What happened (create, read, delete, `auth_fail`, etc.).
+    pub action: String,
+    /// What was acted on (secret, svid, token, etc.).
+    pub resource_type: String,
+    /// Identifier of the resource.
+    pub resource_id: String,
+    /// Result: success, denied, or error.
+    pub outcome: String,
+    /// Service-specific additional context (no sensitive data).
+    pub metadata: serde_json::Value,
+    /// Source IP from request headers or socket addr.
+    pub client_ip: Option<String>,
     /// When the event occurred.
     pub timestamp: DateTime<Utc>,
 }
@@ -278,10 +287,13 @@ mod tests {
 
     #[test]
     fn audit_event_type_display() {
-        assert_eq!(AuditEventType::Accessed.to_string(), "accessed");
-        assert_eq!(AuditEventType::Created.to_string(), "created");
-        assert_eq!(AuditEventType::Updated.to_string(), "updated");
-        assert_eq!(AuditEventType::Deleted.to_string(), "deleted");
+        assert_eq!(
+            AuditEventType::SecretAccessed.to_string(),
+            "secret_accessed"
+        );
+        assert_eq!(AuditEventType::SecretCreated.to_string(), "secret_created");
+        assert_eq!(AuditEventType::SecretUpdated.to_string(), "secret_updated");
+        assert_eq!(AuditEventType::SecretDeleted.to_string(), "secret_deleted");
         assert_eq!(AuditEventType::SvidIssued.to_string(), "svid_issued");
         assert_eq!(AuditEventType::AuthFailed.to_string(), "auth_failed");
         assert_eq!(AuditEventType::AccessDenied.to_string(), "access_denied");
@@ -291,8 +303,8 @@ mod tests {
     #[test]
     fn audit_event_type_parse() {
         assert_eq!(
-            "accessed".parse::<AuditEventType>().unwrap(),
-            AuditEventType::Accessed
+            "secret_accessed".parse::<AuditEventType>().unwrap(),
+            AuditEventType::SecretAccessed
         );
         assert_eq!(
             "svid_issued".parse::<AuditEventType>().unwrap(),

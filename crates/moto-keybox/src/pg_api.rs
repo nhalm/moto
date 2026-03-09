@@ -766,7 +766,8 @@ async fn get_audit_logs(
     let db_query = AuditLogQuery {
         event_type: query.event_type.and_then(|s| s.parse().ok()),
         principal_id: query.principal_id,
-        secret_name: query.secret_name,
+        resource_type: query.resource_type,
+        resource_id: query.resource_id,
         limit: query.limit.and_then(|l| i64::try_from(l).ok()),
         offset: query.offset.and_then(|o| i64::try_from(o).ok()),
     };
@@ -787,11 +788,15 @@ async fn get_audit_logs(
             .map(|e| AuditEntryResponse {
                 id: e.id.to_string(),
                 event_type: from_db_audit_event_type(e.event_type),
-                principal_type: e.principal_type.map(from_db_principal_type),
+                service: e.service.clone(),
+                principal_type: from_db_principal_type(e.principal_type),
                 principal_id: e.principal_id.clone(),
-                spiffe_id: e.spiffe_id.clone(),
-                secret_scope: e.secret_scope.map(from_db_scope),
-                secret_name: e.secret_name.clone(),
+                action: e.action.clone(),
+                resource_type: e.resource_type.clone(),
+                resource_id: e.resource_id.clone(),
+                outcome: e.outcome.clone(),
+                metadata: e.metadata.clone(),
+                client_ip: e.client_ip.clone(),
                 timestamp: e.timestamp.to_rfc3339(),
             })
             .collect(),
@@ -866,14 +871,6 @@ async fn rotate_dek(
 // Type conversions
 // =============================================================================
 
-const fn from_db_scope(scope: moto_keybox_db::Scope) -> Scope {
-    match scope {
-        moto_keybox_db::Scope::Global => Scope::Global,
-        moto_keybox_db::Scope::Service => Scope::Service,
-        moto_keybox_db::Scope::Instance => Scope::Instance,
-    }
-}
-
 const fn from_db_principal_type(pt: moto_keybox_db::PrincipalType) -> PrincipalType {
     match pt {
         moto_keybox_db::PrincipalType::Garage => PrincipalType::Garage,
@@ -884,10 +881,10 @@ const fn from_db_principal_type(pt: moto_keybox_db::PrincipalType) -> PrincipalT
 
 const fn from_db_audit_event_type(et: moto_keybox_db::AuditEventType) -> AuditEventType {
     match et {
-        moto_keybox_db::AuditEventType::Accessed => AuditEventType::Accessed,
-        moto_keybox_db::AuditEventType::Created => AuditEventType::Created,
-        moto_keybox_db::AuditEventType::Updated => AuditEventType::Updated,
-        moto_keybox_db::AuditEventType::Deleted => AuditEventType::Deleted,
+        moto_keybox_db::AuditEventType::SecretAccessed => AuditEventType::SecretAccessed,
+        moto_keybox_db::AuditEventType::SecretCreated => AuditEventType::SecretCreated,
+        moto_keybox_db::AuditEventType::SecretUpdated => AuditEventType::SecretUpdated,
+        moto_keybox_db::AuditEventType::SecretDeleted => AuditEventType::SecretDeleted,
         moto_keybox_db::AuditEventType::SvidIssued => AuditEventType::SvidIssued,
         moto_keybox_db::AuditEventType::AuthFailed => AuditEventType::AuthFailed,
         moto_keybox_db::AuditEventType::AccessDenied => AuditEventType::AccessDenied,

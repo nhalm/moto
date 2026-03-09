@@ -261,18 +261,18 @@ impl SecretMetadata {
     }
 }
 
-/// An audit log event type.
+/// An audit log event type using unified naming.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuditEventType {
     /// A secret was accessed (read).
-    Accessed,
+    SecretAccessed,
     /// A secret was created.
-    Created,
+    SecretCreated,
     /// A secret was updated.
-    Updated,
+    SecretUpdated,
     /// A secret was deleted.
-    Deleted,
+    SecretDeleted,
     /// An SVID was issued.
     SvidIssued,
     /// Authentication failed.
@@ -286,10 +286,10 @@ pub enum AuditEventType {
 impl fmt::Display for AuditEventType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Accessed => write!(f, "accessed"),
-            Self::Created => write!(f, "created"),
-            Self::Updated => write!(f, "updated"),
-            Self::Deleted => write!(f, "deleted"),
+            Self::SecretAccessed => write!(f, "secret_accessed"),
+            Self::SecretCreated => write!(f, "secret_created"),
+            Self::SecretUpdated => write!(f, "secret_updated"),
+            Self::SecretDeleted => write!(f, "secret_deleted"),
             Self::SvidIssued => write!(f, "svid_issued"),
             Self::AuthFailed => write!(f, "auth_failed"),
             Self::AccessDenied => write!(f, "access_denied"),
@@ -298,39 +298,42 @@ impl fmt::Display for AuditEventType {
     }
 }
 
-/// An entry in the audit log.
+/// An entry in the audit log (unified schema).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditEntry {
     /// Unique identifier.
     pub id: Uuid,
-    /// The type of event.
+    /// Event category.
     pub event_type: AuditEventType,
-    /// The principal type (if applicable).
-    pub principal_type: Option<PrincipalType>,
-    /// The principal ID (if applicable).
-    pub principal_id: Option<String>,
-    /// The SPIFFE ID (if applicable).
-    pub spiffe_id: Option<String>,
-    /// The secret scope (if applicable).
-    pub secret_scope: Option<Scope>,
-    /// The secret name (if applicable).
-    pub secret_name: Option<String>,
+    /// Principal type: garage, bike, service, or anonymous.
+    pub principal_type: PrincipalType,
+    /// SPIFFE ID or service name.
+    pub principal_id: String,
+    /// What happened (create, read, delete, `auth_fail`, etc.).
+    pub action: String,
+    /// What was acted on (secret, svid, token, etc.).
+    pub resource_type: String,
+    /// Identifier of the resource.
+    pub resource_id: String,
+    /// Result: success, denied, or error.
+    pub outcome: String,
     /// When the event occurred.
     pub timestamp: DateTime<Utc>,
 }
 
 impl AuditEntry {
-    /// Creates a new audit entry for an access event.
+    /// Creates a new audit entry for a secret access event.
     #[must_use]
-    pub fn access(spiffe_id: &SpiffeId, scope: Scope, name: impl Into<String>) -> Self {
+    pub fn secret_accessed(spiffe_id: &SpiffeId, scope: Scope, name: impl Into<String>) -> Self {
         Self {
             id: Uuid::now_v7(),
-            event_type: AuditEventType::Accessed,
-            principal_type: Some(spiffe_id.principal_type),
-            principal_id: Some(spiffe_id.id.clone()),
-            spiffe_id: Some(spiffe_id.to_uri()),
-            secret_scope: Some(scope),
-            secret_name: Some(name.into()),
+            event_type: AuditEventType::SecretAccessed,
+            principal_type: spiffe_id.principal_type,
+            principal_id: spiffe_id.to_uri(),
+            action: "read".to_string(),
+            resource_type: "secret".to_string(),
+            resource_id: format!("{scope}/{}", name.into()),
+            outcome: "success".to_string(),
             timestamp: Utc::now(),
         }
     }
@@ -341,11 +344,12 @@ impl AuditEntry {
         Self {
             id: Uuid::now_v7(),
             event_type: AuditEventType::SvidIssued,
-            principal_type: Some(spiffe_id.principal_type),
-            principal_id: Some(spiffe_id.id.clone()),
-            spiffe_id: Some(spiffe_id.to_uri()),
-            secret_scope: None,
-            secret_name: None,
+            principal_type: spiffe_id.principal_type,
+            principal_id: spiffe_id.to_uri(),
+            action: "create".to_string(),
+            resource_type: "svid".to_string(),
+            resource_id: spiffe_id.to_uri(),
+            outcome: "success".to_string(),
             timestamp: Utc::now(),
         }
     }
@@ -356,11 +360,12 @@ impl AuditEntry {
         Self {
             id: Uuid::now_v7(),
             event_type: AuditEventType::AuthFailed,
-            principal_type: None,
-            principal_id: None,
-            spiffe_id: None,
-            secret_scope: None,
-            secret_name: Some(reason.into()), // Store reason in secret_name field
+            principal_type: PrincipalType::Service,
+            principal_id: String::new(),
+            action: "auth_fail".to_string(),
+            resource_type: "token".to_string(),
+            resource_id: reason.into(),
+            outcome: "denied".to_string(),
             timestamp: Utc::now(),
         }
     }
@@ -371,11 +376,12 @@ impl AuditEntry {
         Self {
             id: Uuid::now_v7(),
             event_type: AuditEventType::AccessDenied,
-            principal_type: Some(spiffe_id.principal_type),
-            principal_id: Some(spiffe_id.id.clone()),
-            spiffe_id: Some(spiffe_id.to_uri()),
-            secret_scope: Some(scope),
-            secret_name: Some(name.into()),
+            principal_type: spiffe_id.principal_type,
+            principal_id: spiffe_id.to_uri(),
+            action: "auth_fail".to_string(),
+            resource_type: "secret".to_string(),
+            resource_id: format!("{scope}/{}", name.into()),
+            outcome: "denied".to_string(),
             timestamp: Utc::now(),
         }
     }
@@ -502,10 +508,13 @@ mod tests {
 
     #[test]
     fn audit_event_type_display() {
-        assert_eq!(AuditEventType::Accessed.to_string(), "accessed");
-        assert_eq!(AuditEventType::Created.to_string(), "created");
-        assert_eq!(AuditEventType::Updated.to_string(), "updated");
-        assert_eq!(AuditEventType::Deleted.to_string(), "deleted");
+        assert_eq!(
+            AuditEventType::SecretAccessed.to_string(),
+            "secret_accessed"
+        );
+        assert_eq!(AuditEventType::SecretCreated.to_string(), "secret_created");
+        assert_eq!(AuditEventType::SecretUpdated.to_string(), "secret_updated");
+        assert_eq!(AuditEventType::SecretDeleted.to_string(), "secret_deleted");
         assert_eq!(AuditEventType::SvidIssued.to_string(), "svid_issued");
         assert_eq!(AuditEventType::AuthFailed.to_string(), "auth_failed");
         assert_eq!(AuditEventType::AccessDenied.to_string(), "access_denied");
@@ -513,14 +522,15 @@ mod tests {
     }
 
     #[test]
-    fn audit_entry_access() {
+    fn audit_entry_secret_accessed() {
         let spiffe = SpiffeId::garage("test123");
-        let entry = AuditEntry::access(&spiffe, Scope::Global, "ai/anthropic");
-        assert_eq!(entry.event_type, AuditEventType::Accessed);
-        assert_eq!(entry.principal_type, Some(PrincipalType::Garage));
-        assert_eq!(entry.principal_id, Some("test123".to_string()));
-        assert_eq!(entry.secret_scope, Some(Scope::Global));
-        assert_eq!(entry.secret_name, Some("ai/anthropic".to_string()));
+        let entry = AuditEntry::secret_accessed(&spiffe, Scope::Global, "ai/anthropic");
+        assert_eq!(entry.event_type, AuditEventType::SecretAccessed);
+        assert_eq!(entry.principal_type, PrincipalType::Garage);
+        assert_eq!(entry.principal_id, "spiffe://moto.local/garage/test123");
+        assert_eq!(entry.resource_type, "secret");
+        assert_eq!(entry.resource_id, "global/ai/anthropic");
+        assert_eq!(entry.outcome, "success");
     }
 
     #[test]
@@ -528,22 +538,20 @@ mod tests {
         let spiffe = SpiffeId::bike("bike-456");
         let entry = AuditEntry::svid_issued(&spiffe);
         assert_eq!(entry.event_type, AuditEventType::SvidIssued);
-        assert_eq!(entry.principal_type, Some(PrincipalType::Bike));
-        assert_eq!(entry.principal_id, Some("bike-456".to_string()));
-        assert!(entry.secret_scope.is_none());
-        assert!(entry.secret_name.is_none());
+        assert_eq!(entry.principal_type, PrincipalType::Bike);
+        assert_eq!(entry.principal_id, "spiffe://moto.local/bike/bike-456");
+        assert_eq!(entry.resource_type, "svid");
+        assert_eq!(entry.action, "create");
     }
 
     #[test]
     fn audit_entry_auth_failed() {
         let entry = AuditEntry::auth_failed("Invalid token signature");
         assert_eq!(entry.event_type, AuditEventType::AuthFailed);
-        assert!(entry.principal_type.is_none());
-        assert!(entry.spiffe_id.is_none());
-        assert_eq!(
-            entry.secret_name,
-            Some("Invalid token signature".to_string())
-        );
+        assert_eq!(entry.action, "auth_fail");
+        assert_eq!(entry.resource_type, "token");
+        assert_eq!(entry.resource_id, "Invalid token signature");
+        assert_eq!(entry.outcome, "denied");
     }
 
     #[test]
@@ -551,9 +559,13 @@ mod tests {
         let spiffe = SpiffeId::service("untrusted-service");
         let entry = AuditEntry::access_denied(&spiffe, Scope::Global, "crypto/master-key");
         assert_eq!(entry.event_type, AuditEventType::AccessDenied);
-        assert_eq!(entry.principal_type, Some(PrincipalType::Service));
-        assert_eq!(entry.principal_id, Some("untrusted-service".to_string()));
-        assert_eq!(entry.secret_scope, Some(Scope::Global));
-        assert_eq!(entry.secret_name, Some("crypto/master-key".to_string()));
+        assert_eq!(entry.principal_type, PrincipalType::Service);
+        assert_eq!(
+            entry.principal_id,
+            "spiffe://moto.local/service/untrusted-service"
+        );
+        assert_eq!(entry.resource_type, "secret");
+        assert_eq!(entry.resource_id, "global/crypto/master-key");
+        assert_eq!(entry.outcome, "denied");
     }
 }
