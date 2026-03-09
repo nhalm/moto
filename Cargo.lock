@@ -2038,6 +2038,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moto-audit-types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "moto-cli"
 version = "0.1.0"
 dependencies = [

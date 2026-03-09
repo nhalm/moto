@@ -110,6 +110,7 @@ moto-club-ws = { path = "crates/moto-club-ws" }
 moto-test-utils = { path = "crates/moto-test-utils" }
 moto-ai-proxy = { path = "crates/moto-ai-proxy" }
 moto-throttle = { path = "crates/moto-throttle" }
+moto-audit-types = { path = "crates/moto-audit-types" }
 
 [profile.release]
 lto = true
