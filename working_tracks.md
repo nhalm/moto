@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## audit-logging v0.2
 
-- Implement ai-proxy structured audit log: emit newline-delimited JSON to stdout for ai_request, ai_request_denied, provider_error events (including token counts in metadata when available)
 - Ensure audit logging is best-effort: failures must not block primary operations
 - Ensure sensitive data is never logged (secret values, API keys, tokens, request/response bodies)
 - Add GET /api/v1/audit/logs endpoint on moto-club with query filters (service, event_type, principal_id, resource_type, since, until, limit, offset)
