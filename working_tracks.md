@@ -12,6 +12,5 @@ Read it in full at the start of each iteration.
 
 ## audit-logging v0.2
 
-- Ensure audit logging is best-effort: failures must not block primary operations
 - Ensure sensitive data is never logged (secret values, API keys, tokens, request/response bodies)
 
