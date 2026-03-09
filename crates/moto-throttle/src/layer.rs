@@ -97,9 +97,8 @@ where
         Box::pin(async move {
             let path = request.uri().path().to_string();
 
-            // Extract principal from request (basic: Unknown with IP fallback).
-            // Full extraction (JWT, service token) is implemented separately.
-            let principal = extract_principal(&request);
+            // Extract principal from request (JWT, service token, or IP fallback).
+            let principal = extract_principal(&request, config.service_token());
 
             // Look up effective tier config for this principal + path.
             let Some(tier) = config.lookup(principal.principal_type, &path) else {
@@ -167,21 +166,96 @@ where
 
 /// Extract principal from a request.
 ///
-/// This is the basic fallback: returns Unknown with the client IP as key.
-/// Full JWT and service token extraction is added in the principal extraction work item.
-fn extract_principal(request: &Request<Body>) -> Principal {
-    // Try X-Forwarded-For first, then fall back to "unknown".
-    let ip = request
-        .headers()
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map_or_else(|| "unknown".to_string(), |s| s.trim().to_string());
+/// Extraction order per spec:
+/// 1. `Authorization: Bearer {token}` — attempt JWT parse for `principal_type` + `principal_id`
+/// 2. `x-api-key: {token}` — same JWT parse attempt
+/// 3. If token is not a valid JWT, check if it matches the service token
+/// 4. Fallback: Unknown tier with client IP as key
+pub fn extract_principal(request: &Request<Body>, service_token: Option<&str>) -> Principal {
+    // Try Authorization header first, then x-api-key.
+    let token = extract_bearer_token(request).or_else(|| extract_api_key(request));
 
+    if let Some(token) = token {
+        // Try JWT parse first.
+        if let Some(principal) = parse_jwt_principal(token) {
+            return principal;
+        }
+
+        // Not a valid JWT — check if it's a service token.
+        if let Some(svc_token) = service_token
+            && token == svc_token
+        {
+            return Principal {
+                principal_type: PrincipalType::Service,
+                key: "service-token".to_string(),
+            };
+        }
+    }
+
+    // Fallback: Unknown with client IP.
+    let ip = client_ip(request);
     Principal {
         principal_type: PrincipalType::Unknown,
         key: ip,
     }
+}
+
+/// Extract bearer token from the Authorization header.
+fn extract_bearer_token(request: &Request<Body>) -> Option<&str> {
+    request
+        .headers()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+}
+
+/// Extract token from the x-api-key header.
+fn extract_api_key(request: &Request<Body>) -> Option<&str> {
+    request
+        .headers()
+        .get("x-api-key")
+        .and_then(|v| v.to_str().ok())
+}
+
+/// Attempt to parse a JWT token (without signature validation) and extract
+/// `principal_type` and `principal_id` claims.
+fn parse_jwt_principal(token: &str) -> Option<Principal> {
+    use base64::Engine;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+    // JWT format: header.payload.signature
+    let parts: Vec<&str> = token.splitn(3, '.').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+
+    let payload = URL_SAFE_NO_PAD.decode(parts[1]).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&payload).ok()?;
+
+    let principal_type_str = claims.get("principal_type")?.as_str()?;
+    let principal_id = claims.get("principal_id")?.as_str()?;
+
+    let principal_type = match principal_type_str {
+        "garage" => PrincipalType::Garage,
+        "bike" => PrincipalType::Bike,
+        "service" => PrincipalType::Service,
+        _ => return None,
+    };
+
+    Some(Principal {
+        principal_type,
+        key: principal_id.to_string(),
+    })
+}
+
+/// Extract client IP from X-Forwarded-For header or fall back to "unknown".
+fn client_ip(request: &Request<Body>) -> String {
+    request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map_or_else(|| "unknown".to_string(), |s| s.trim().to_string())
 }
 
 /// Inject rate limit headers into a response.

@@ -8,6 +8,8 @@ mod layer;
 mod token_bucket;
 
 #[cfg(test)]
+mod layer_test;
+#[cfg(test)]
 mod token_bucket_test;
 
 pub use config::{PrincipalType, ThrottleConfig, TierConfig};

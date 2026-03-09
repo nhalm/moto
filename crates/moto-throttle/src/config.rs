@@ -45,6 +45,9 @@ struct OverrideKey {
 pub struct ThrottleConfig {
     tiers: HashMap<PrincipalType, TierConfig>,
     overrides: HashMap<OverrideKey, TierConfig>,
+    /// Service token value for distinguishing service tokens from JWTs.
+    /// Read from `MOTO_KEYBOX_SERVICE_TOKEN` or `MOTO_KEYBOX_SERVICE_TOKEN_FILE`.
+    service_token: Option<String>,
 }
 
 impl ThrottleConfig {
@@ -75,9 +78,12 @@ impl ThrottleConfig {
         );
         tiers.insert(PrincipalType::Unknown, TierConfig { rpm: 30, burst: 5 });
 
+        let service_token = Self::read_service_token();
+
         Self {
             tiers,
             overrides: HashMap::new(),
+            service_token,
         }
     }
 
@@ -126,6 +132,29 @@ impl ThrottleConfig {
 
         // Fall back to tier default.
         self.tiers.get(&principal_type).copied()
+    }
+
+    /// Returns the configured service token, if any.
+    pub(crate) fn service_token(&self) -> Option<&str> {
+        self.service_token.as_deref()
+    }
+
+    /// Read service token from env vars.
+    fn read_service_token() -> Option<String> {
+        if let Ok(token) = std::env::var("MOTO_KEYBOX_SERVICE_TOKEN")
+            && !token.is_empty()
+        {
+            return Some(token);
+        }
+        if let Ok(path) = std::env::var("MOTO_KEYBOX_SERVICE_TOKEN_FILE")
+            && let Ok(token) = std::fs::read_to_string(&path)
+        {
+            let trimmed = token.trim().to_string();
+            if !trimmed.is_empty() {
+                return Some(trimmed);
+            }
+        }
+        None
     }
 }
 
