@@ -2,11 +2,15 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.15 |
+| Version | 0.16 |
 | Status | Ripping |
 | Last Updated | 2026-03-09 |
 
 ## Changelog
+
+### v0.16 (2026-03-09)
+- Audit log schema migration: existing `audit_log` table must be migrated to the unified schema defined in [audit-logging.md](audit-logging.md). Migration adds `service`, `action`, `resource_type`, `resource_id`, `outcome`, `metadata`, `client_ip` columns and maps existing columns (`spiffe_id` → `principal_id`, `secret_scope` → `resource_type`, `secret_name` → `resource_id`). Spec-level schema updated below to reflect the target state.
+- Add `GET /audit/logs` query parameters and response format (consumed by moto-club fan-out, see audit-logging.md).
 
 ### v0.15 (2026-03-09)
 - Document known ABAC limitation: garages can read ai-proxy secrets directly from keybox, bypassing credential injection. Acceptable for v1 (garages are developer environments). Add future item for tightening.
@@ -403,9 +407,19 @@ GET  /secrets/instance/{id}      - List secrets for a specific instance
 
 **Admin:**
 ```
-GET  /audit/logs                 - Query audit logs
+GET  /audit/logs                 - Query audit logs (see below)
 POST /admin/rotate-dek/{name}    - Rotate a secret's DEK
 ```
+
+**Audit log query:**
+
+```
+GET /audit/logs?event_type=secret_accessed&principal_id=spiffe://moto.local/garage/abc&since=2026-03-01T00:00:00Z&limit=100
+```
+
+Query parameters: `event_type`, `principal_id`, `resource_type`, `since` (ISO 8601), `until` (ISO 8601), `limit` (default 100, max 1000), `offset`. All optional — omitting all returns recent events.
+
+Response matches the audit event schema from [audit-logging.md](audit-logging.md). This endpoint is consumed by moto-club's fan-out query (`GET /api/v1/audit/logs`).
 
 ### Endpoint Authorization
 
@@ -572,15 +586,19 @@ CREATE TABLE encrypted_deks (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Audit log
+-- Audit log (unified schema per audit-logging.md)
 CREATE TABLE audit_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_type TEXT NOT NULL,   -- accessed, created, deleted, etc.
+    event_type TEXT NOT NULL,
+    service TEXT NOT NULL DEFAULT 'keybox',
     principal_type TEXT,
     principal_id TEXT,
-    spiffe_id TEXT,
-    secret_scope TEXT,
-    secret_name TEXT,
+    action TEXT,
+    resource_type TEXT,
+    resource_id TEXT,
+    outcome TEXT,
+    metadata JSONB,
+    client_ip TEXT,
     timestamp TIMESTAMPTZ NOT NULL DEFAULT now()
     -- NO secret values ever logged
 );
@@ -589,7 +607,9 @@ CREATE TABLE audit_log (
 CREATE INDEX idx_secrets_scope ON secrets(scope);
 CREATE INDEX idx_secrets_service ON secrets(service) WHERE service IS NOT NULL;
 CREATE INDEX idx_audit_log_timestamp ON audit_log(timestamp);
-CREATE INDEX idx_audit_log_spiffe_id ON audit_log(spiffe_id);
+CREATE INDEX idx_audit_log_principal ON audit_log(principal_id);
+CREATE INDEX idx_audit_log_event_type ON audit_log(event_type);
+CREATE INDEX idx_audit_log_resource ON audit_log(resource_type, resource_id);
 ```
 
 ### Secret Size Limits

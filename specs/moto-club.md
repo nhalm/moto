@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 2.6 |
+| Version | 2.7 |
 | Status | Ripping |
-| Last Updated | 2026-03-04 |
+| Last Updated | 2026-03-09 |
 
 ## Overview
 
@@ -720,6 +720,50 @@ Response 200:
 - Initial DERP map is provided during session/garage registration; this endpoint is for manual refresh
 - DERP clients handle failover automatically if a server is unreachable
 
+#### Audit Logs
+
+##### Query Audit Logs
+
+```
+GET /api/v1/audit/logs?service=keybox&event_type=secret_accessed&since=2026-03-01T00:00:00Z&limit=100
+Authorization: Bearer <service-token>
+
+Response 200:
+{
+  "events": [
+    {
+      "id": "...",
+      "event_type": "secret_accessed",
+      "service": "keybox",
+      "principal_type": "garage",
+      "principal_id": "spiffe://moto.local/garage/abc123",
+      "action": "read",
+      "resource_type": "secret",
+      "resource_id": "global/ai/anthropic",
+      "outcome": "success",
+      "metadata": {},
+      "timestamp": "2026-03-09T12:00:00Z"
+    }
+  ],
+  "total": 42,
+  "limit": 100,
+  "offset": 0,
+  "warnings": []
+}
+```
+
+**Auth:** Service token required. Garages and bikes cannot query audit logs.
+
+**Query parameters:** `service` (filter by `keybox` or `moto-club`), `event_type`, `principal_id`, `resource_type`, `since` (ISO 8601), `until` (ISO 8601), `limit` (default 100, max 1000), `offset`. All optional.
+
+**Fan-out behavior:** When `service` is omitted, moto-club queries its own `audit_log` table and keybox's `GET /audit/logs` endpoint in parallel, merges results by timestamp (newest first), and truncates to `limit`. All filter parameters are forwarded to keybox. If keybox is unreachable, returns moto-club events only with `"warnings": ["keybox unavailable"]`.
+
+**ai-proxy events** are not queryable via this endpoint in v1 (ai-proxy writes to structured logs only, no database).
+
+**Error codes:** `403 FORBIDDEN` (not a service token), `400 VALIDATION_ERROR` (invalid query parameters).
+
+See [audit-logging.md](audit-logging.md) for the full audit event schema and event types.
+
 #### Health/Info
 
 ##### Health Check
@@ -1245,6 +1289,10 @@ Identity system will replace config-based owner identity:
 - Service accounts for internal services
 
 ## Changelog
+
+### v2.7 (2026-03-09)
+- Add `GET /api/v1/audit/logs` endpoint for querying audit events across services (fan-out to keybox). Service token auth only. See [audit-logging.md](audit-logging.md).
+- moto-club writes audit events to its own `audit_log` table for garage lifecycle events (`garage_created`, `garage_terminated`, `garage_state_changed`, `ttl_enforced`, `auth_failed`). Audit logging is best-effort (must not block primary operations).
 
 ### v2.6 (2026-03-05)
 - Fix: `/api/v1/info` example `websocket` field: `false` → `true` (code returns true since v1.4)

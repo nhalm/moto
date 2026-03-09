@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
+| Version | 0.4 |
 | Status | Ripping |
-| Last Updated | 2026-03-06 |
+| Last Updated | 2026-03-09 |
 
 ## Overview
 
@@ -62,6 +62,26 @@ New step:
 3. TTL enforcement — list_expired(limit 10) + terminate + delete namespace
 ```
 
+### Audit log retention
+
+The reconciler enforces retention on audit log tables. This runs as a new step after TTL enforcement:
+
+```
+4. Audit log retention — delete rows older than configured retention period
+```
+
+**Targets:**
+- **moto-club** `audit_log` table: delete rows where `timestamp < now() - 30 days`
+- **keybox** `audit_log` table: moto-club calls keybox's audit log cleanup endpoint (or keybox runs its own retention internally). Keybox retention is 90 days.
+
+**Properties:**
+- Runs once per reconcile cycle (every 30 seconds), but the DELETE is cheap when there's nothing to clean up
+- Deletes in batches (at most 1000 rows per cycle) to avoid long-running transactions
+- Logs: `info service=moto-club rows_deleted=42 retention_days=30 "audit log retention cleanup"`
+- If deletion fails, log a warning and continue — retention is best-effort and will catch up on the next cycle
+
+**Note:** Keybox manages its own retention (90-day period). moto-club does not reach into keybox's database directly. Keybox should add a similar retention step to its own startup or periodic task. See [audit-logging.md](audit-logging.md).
+
 ### Deferred: WireGuard session cleanup
 
 moto-club.md mentions moto-cron cleaning up expired WireGuard session records. This is deferred to a future version — session cleanup is not blocking and can be addressed separately.
@@ -90,6 +110,9 @@ No new env vars required. Uses existing:
 - [moto-club-websocket.md](moto-club-websocket.md) — TTL warning events (future)
 
 ## Changelog
+
+### v0.4 (2026-03-09)
+- Add audit log retention task to reconciler. Deletes moto-club audit rows older than 30 days. Keybox manages its own 90-day retention. Batched deletes (1000 per cycle), best-effort. See [audit-logging.md](audit-logging.md).
 
 ### v0.3 (2026-03-06)
 - Fix: `terminate()` needs `WHERE status != 'terminated'` guard to prevent overwriting concurrent user-initiated close
