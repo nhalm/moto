@@ -2,11 +2,14 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.14 |
+| Version | 0.15 |
 | Status | Ripping |
-| Last Updated | 2026-03-04 |
+| Last Updated | 2026-03-09 |
 
 ## Changelog
+
+### v0.15 (2026-03-09)
+- Document known ABAC limitation: garages can read ai-proxy secrets directly from keybox, bypassing credential injection. Acceptable for v1 (garages are developer environments). Add future item for tightening.
 
 ### v0.14 (2026-03-05)
 - Fix: Components table now lists all 5 crates with correct types. `moto-keybox` is a library (not the server binary). Add `moto-keybox-server` (bin) and `moto-keybox-db` (lib).
@@ -311,6 +314,8 @@ resource.scope == "service"
 **Policy storage:** Policies are hardcoded in Rust for MVP. Future: load from config file for flexibility.
 
 **Design note:** Garages have broad read access (any global or service secret) because they are developer environments. Bikes are more restricted — they can only read their own service's secrets (enforced via the `service` claim in the SVID). No principal can write to scopes they don't own.
+
+**Known limitation:** Garages can read service secrets like `ai-proxy/anthropic` directly from keybox, bypassing ai-proxy's credential injection and audit trail. This is acceptable for v1 because: (1) garages are developer environments with broad access by design, (2) ai-proxy is opt-in (garages can still reach AI providers directly via the internet), (3) the NetworkPolicy does not block direct AI API egress yet. Future: restrict garage ABAC with a secret name deny-list or move ai-proxy secrets to a restricted scope that garages cannot read.
 
 ### Secret Types
 
@@ -672,3 +677,4 @@ The following items are deferred to Phase 2:
 - **Master key versioning**: Support multiple KEK versions for gradual master key rotation
 - **Request logging/metrics**: HTTP request metrics middleware (method, path, status, duration)
 - **Rate limiting**: See moto-throttle.md spec
+- **Garage ABAC tightening**: Restrict garage read access to exclude service secrets like `ai-proxy/*` (prevent bypassing ai-proxy credential injection)
