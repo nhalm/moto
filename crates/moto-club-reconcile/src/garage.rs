@@ -13,7 +13,9 @@ use tokio::time::interval;
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
-use moto_club_db::{DbPool, GarageStatus, TerminationReason, garage_repo, wg_garage_repo};
+use moto_club_db::{
+    DbPool, GarageStatus, TerminationReason, audit_repo, garage_repo, wg_garage_repo,
+};
 use moto_club_k8s::{
     GarageK8s, GarageNamespaceOps, GaragePodOps, GaragePodStatus, GaragePostgresOps, GarageRedisOps,
 };
@@ -482,6 +484,27 @@ impl GarageReconciler {
                 new_status,
                 reason,
             );
+
+            // Audit log: garage_state_changed (best-effort)
+            audit_repo::log_event(
+                &self.db,
+                audit_repo::InsertAuditEntry {
+                    event_type: "garage_state_changed",
+                    principal_type: "service",
+                    principal_id: "moto-club-reconciler",
+                    action: "update",
+                    resource_type: "garage",
+                    resource_id: id_str,
+                    outcome: "success",
+                    metadata: serde_json::json!({
+                        "garage_name": garage.name,
+                        "from": garage.status.to_string(),
+                        "to": new_status.to_string(),
+                    }),
+                    client_ip: None,
+                },
+            )
+            .await;
         }
 
         Ok(())
@@ -714,6 +737,27 @@ impl GarageReconciler {
                         GarageStatus::Terminated,
                         Some("ttl_expired"),
                     );
+
+                    // Audit log: ttl_enforced (best-effort)
+                    audit_repo::log_event(
+                        &self.db,
+                        audit_repo::InsertAuditEntry {
+                            event_type: "ttl_enforced",
+                            principal_type: "service",
+                            principal_id: "moto-club-reconciler",
+                            action: "delete",
+                            resource_type: "garage",
+                            resource_id: &id_str,
+                            outcome: "success",
+                            metadata: serde_json::json!({
+                                "garage_name": garage.name,
+                                "owner": garage.owner,
+                                "previous_status": garage.status.to_string(),
+                            }),
+                            client_ip: None,
+                        },
+                    )
+                    .await;
                 }
                 Err(e) => {
                     warn!(

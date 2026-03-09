@@ -16,6 +16,7 @@ moto-club-ws.workspace = true
 moto-k8s.workspace = true
 
 chrono.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 thiserror.workspace = true

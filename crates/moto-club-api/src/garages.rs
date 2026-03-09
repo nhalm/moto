@@ -22,7 +22,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{ApiError, AppState, error_codes};
-use moto_club_db::{DbError, Garage, GarageStatus, TerminationReason, garage_repo};
+use moto_club_db::{
+    DbError, DbPool, Garage, GarageStatus, TerminationReason, audit_repo, garage_repo,
+};
 use moto_club_garage::{
     CreateGarageInput, DEFAULT_TTL_SECONDS, GarageServiceError, MAX_TTL_SECONDS, MIN_TTL_SECONDS,
 };
@@ -181,6 +183,20 @@ fn extract_owner(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiErr
     Ok(token.to_string())
 }
 
+/// Extracts the owner and logs an `auth_failed` audit event on failure (best-effort).
+async fn extract_owner_with_audit(
+    headers: &HeaderMap,
+    pool: &DbPool,
+) -> Result<String, (StatusCode, Json<ApiError>)> {
+    match extract_owner(headers) {
+        Ok(owner) => Ok(owner),
+        Err(e) => {
+            audit_auth_failed(pool, &e.1.error.message).await;
+            Err(e)
+        }
+    }
+}
+
 /// Generate a random 4-character alphanumeric suffix for name collision retries.
 fn generate_random_suffix() -> String {
     use rand::Rng;
@@ -253,7 +269,7 @@ async fn create_garage(
     headers: HeaderMap,
     Json(req): Json<CreateGarageRequest>,
 ) -> impl IntoResponse {
-    let owner = extract_owner(&headers)?;
+    let owner = extract_owner_with_audit(&headers, &state.db_pool).await?;
 
     // If GarageService is available, use it for full K8s integration
     if let Some(ref garage_service) = state.garage_service {
@@ -272,6 +288,8 @@ async fn create_garage(
             .create(&owner, input)
             .await
             .map_err(map_garage_service_error)?;
+
+        audit_garage_created(&state.db_pool, &owner, &garage).await;
 
         return Ok((StatusCode::CREATED, Json(GarageResponse::from(garage))));
     }
@@ -345,7 +363,10 @@ async fn create_garage(
         };
 
         match garage_repo::create(&state.db_pool, input).await {
-            Ok(garage) => return Ok((StatusCode::CREATED, Json(GarageResponse::from(garage)))),
+            Ok(garage) => {
+                audit_garage_created(&state.db_pool, &owner, &garage).await;
+                return Ok((StatusCode::CREATED, Json(GarageResponse::from(garage))));
+            }
             Err(DbError::AlreadyExists { .. }) if auto_generated => {
                 tracing::debug!(name = %name, "auto-generated name collision, will retry");
                 last_error = Some(name.clone());
@@ -629,7 +650,7 @@ async fn delete_garage(
     headers: HeaderMap,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    let owner = extract_owner(&headers)?;
+    let owner = extract_owner_with_audit(&headers, &state.db_pool).await?;
 
     let garage = garage_repo::get_by_name(&state.db_pool, &name)
         .await
@@ -676,6 +697,9 @@ async fn delete_garage(
                 Json(ApiError::new(error_codes::DATABASE_ERROR, "Database error")),
             )
         })?;
+
+    // Audit log: garage_terminated (best-effort)
+    audit_garage_terminated(&state.db_pool, &owner, &garage).await;
 
     // Emit status_change event for user-initiated close
     state.event_broadcaster.broadcast(
@@ -847,6 +871,70 @@ async fn extend_garage_ttl(
     };
 
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
+}
+
+/// Logs a `garage_created` audit event (best-effort).
+async fn audit_garage_created(pool: &DbPool, owner: &str, garage: &Garage) {
+    audit_repo::log_event(
+        pool,
+        audit_repo::InsertAuditEntry {
+            event_type: "garage_created",
+            principal_type: "service",
+            principal_id: owner,
+            action: "create",
+            resource_type: "garage",
+            resource_id: &garage.id.to_string(),
+            outcome: "success",
+            metadata: serde_json::json!({
+                "garage_name": garage.name,
+                "branch": garage.branch,
+                "ttl_seconds": garage.ttl_seconds,
+            }),
+            client_ip: None,
+        },
+    )
+    .await;
+}
+
+/// Logs a `garage_terminated` audit event (best-effort).
+async fn audit_garage_terminated(pool: &DbPool, owner: &str, garage: &Garage) {
+    audit_repo::log_event(
+        pool,
+        audit_repo::InsertAuditEntry {
+            event_type: "garage_terminated",
+            principal_type: "service",
+            principal_id: owner,
+            action: "delete",
+            resource_type: "garage",
+            resource_id: &garage.id.to_string(),
+            outcome: "success",
+            metadata: serde_json::json!({
+                "garage_name": garage.name,
+                "termination_reason": "user_closed",
+            }),
+            client_ip: None,
+        },
+    )
+    .await;
+}
+
+/// Logs an `auth_failed` audit event (best-effort).
+async fn audit_auth_failed(pool: &DbPool, reason: &str) {
+    audit_repo::log_event(
+        pool,
+        audit_repo::InsertAuditEntry {
+            event_type: "auth_failed",
+            principal_type: "anonymous",
+            principal_id: "unknown",
+            action: "auth_fail",
+            resource_type: "request",
+            resource_id: "",
+            outcome: "denied",
+            metadata: serde_json::json!({ "reason": reason }),
+            client_ip: None,
+        },
+    )
+    .await;
 }
 
 /// Creates the garage router.

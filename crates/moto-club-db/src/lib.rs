@@ -29,6 +29,7 @@
 //! let garage = garage_repo::get_by_id(&pool, garage.id).await?;
 //! ```
 
+pub mod audit_repo;
 pub mod garage_repo;
 pub mod models;
 pub mod wg_device_repo;
