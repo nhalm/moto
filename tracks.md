@@ -689,6 +689,7 @@ WHAT DOES NOT GO HERE:
 ## moto-throttle v0.3
 
 - Handle malformed JWTs gracefully: invalid base64 or missing claims falls through to service token / unknown tier
+- Ensure ThrottleLayer sits before auth layer in middleware stack ordering
 
 ## audit-logging v0.2
 

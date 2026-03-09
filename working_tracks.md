@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## moto-throttle v0.3
-
-- Ensure ThrottleLayer sits before auth layer in middleware stack ordering
-
 ## audit-logging v0.2
 
 - Migrate keybox audit_log table to unified schema (map spiffe_id, secret_scope, secret_name to new fields; add service, action, resource_type, resource_id, outcome, metadata, client_ip columns)
