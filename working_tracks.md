@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## audit-logging v0.2
 
-- Implement AuditLogger for keybox: log secret_accessed, secret_created, secret_updated, secret_deleted, dek_rotated, svid_issued, auth_failed events
 - Implement AuditLogger for moto-club: log garage_created, garage_terminated, garage_state_changed, ttl_enforced, auth_failed events from handlers and reconciler
 - Implement ai-proxy structured audit log: emit newline-delimited JSON to stdout for ai_request, ai_request_denied, provider_error events (including token counts in metadata when available)
 - Ensure audit logging is best-effort: failures must not block primary operations
