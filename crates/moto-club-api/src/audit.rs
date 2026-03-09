@@ -87,8 +87,7 @@ async fn get_audit_logs(
     headers: HeaderMap,
     Query(query): Query<AuditLogsQuery>,
 ) -> Result<(StatusCode, Json<AuditLogsResponse>), (StatusCode, Json<ApiError>)> {
-    // Auth: require a bearer token (service token enforcement is a separate work item)
-    let _token = extract_bearer_token(&headers)?;
+    validate_service_token(&headers, state.service_token.as_ref())?;
 
     let limit = query.limit.unwrap_or(100).clamp(1, 1000);
     let offset = query.offset.unwrap_or(0).max(0);
@@ -147,8 +146,16 @@ async fn get_audit_logs(
     ))
 }
 
-/// Extract bearer token from Authorization header.
-fn extract_bearer_token(headers: &HeaderMap) -> Result<String, (StatusCode, Json<ApiError>)> {
+/// Validates the service token from the Authorization header.
+///
+/// Uses constant-time comparison to prevent timing attacks.
+/// Returns `Ok(())` if the token matches the configured service token.
+pub(crate) fn validate_service_token(
+    headers: &HeaderMap,
+    expected_token: Option<&String>,
+) -> Result<(), (StatusCode, Json<ApiError>)> {
+    use subtle::ConstantTimeEq;
+
     let auth_header = headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
@@ -156,7 +163,7 @@ fn extract_bearer_token(headers: &HeaderMap) -> Result<String, (StatusCode, Json
             (
                 StatusCode::UNAUTHORIZED,
                 Json(ApiError::new(
-                    "UNAUTHORIZED",
+                    error_codes::UNAUTHORIZED,
                     "Missing Authorization header",
                 )),
             )
@@ -169,23 +176,40 @@ fn extract_bearer_token(headers: &HeaderMap) -> Result<String, (StatusCode, Json
             (
                 StatusCode::UNAUTHORIZED,
                 Json(ApiError::new(
-                    "UNAUTHORIZED",
+                    error_codes::UNAUTHORIZED,
                     "Invalid Authorization header format, expected 'Bearer <token>'",
                 )),
             )
         })?;
 
-    if token.is_empty() {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ApiError::new("UNAUTHORIZED", "Empty Bearer token")),
-        ));
-    }
+    let expected = expected_token.ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError::new(
+                error_codes::SERVICE_TOKEN_NOT_CONFIGURED,
+                "Service token not configured on server",
+            )),
+        )
+    })?;
 
-    Ok(token.to_string())
+    if token.as_bytes().ct_eq(expected.as_bytes()).into() {
+        Ok(())
+    } else {
+        Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                error_codes::FORBIDDEN,
+                "Invalid service token",
+            )),
+        ))
+    }
 }
 
 /// Router for audit log endpoints.
 pub fn router() -> Router<AppState> {
     Router::new().route("/api/v1/audit/logs", get(get_audit_logs))
 }
+
+#[cfg(test)]
+#[path = "audit_test.rs"]
+mod tests;

@@ -23,6 +23,7 @@
 //! - `MOTO_CLUB_KEYBOX_URL`: Keybox API URL (required for garage SVID issuance)
 //! - `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE`: File containing hex service token for keybox auth
 //! - `MOTO_CLUB_KEYBOX_HEALTH_URL`: Keybox health endpoint (defaults to `KEYBOX_URL` port 8081)
+//! - `MOTO_CLUB_SERVICE_TOKEN_FILE`: File containing service token for admin API auth (audit endpoint)
 //! - `KUBECONFIG`: Path to kubeconfig file (auto-detected in-cluster)
 //! - `RUST_LOG`: Log filter (default: `moto_club=info`)
 
@@ -90,6 +91,9 @@ struct Config {
     /// Keybox service token for authentication (read from file).
     /// Configured via `MOTO_CLUB_KEYBOX_SERVICE_TOKEN_FILE`.
     keybox_service_token: Option<String>,
+    /// Service token for admin API authentication (audit endpoint).
+    /// Configured via `MOTO_CLUB_SERVICE_TOKEN_FILE`.
+    service_token: Option<String>,
 }
 
 impl Config {
@@ -159,6 +163,23 @@ impl Config {
             None
         };
 
+        // MOTO_CLUB_SERVICE_TOKEN_FILE: read service token for admin API auth.
+        let service_token = if let Ok(path) = env::var("MOTO_CLUB_SERVICE_TOKEN_FILE") {
+            let token = std::fs::read_to_string(&path).map_err(|_| {
+                ConfigError::Invalid("MOTO_CLUB_SERVICE_TOKEN_FILE", "cannot read file")
+            })?;
+            let token = token.trim().to_string();
+            if token.is_empty() {
+                return Err(ConfigError::Invalid(
+                    "MOTO_CLUB_SERVICE_TOKEN_FILE",
+                    "file is empty",
+                ));
+            }
+            Some(token)
+        } else {
+            None
+        };
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -169,6 +190,7 @@ impl Config {
             keybox_url,
             keybox_health_url,
             keybox_service_token,
+            service_token,
         })
     }
 }
@@ -333,6 +355,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     .with_k8s_client(k8s_client)
     .with_garage_k8s(api_garage_k8s)
     .with_garage_service(garage_service);
+
+    // Add service token for admin API auth (audit endpoint) if configured
+    if let Some(ref token) = config.service_token {
+        info!("service token configured for audit endpoint auth");
+        state = state.with_service_token(token.clone());
+    } else {
+        info!("service token not configured, audit endpoint will reject all requests");
+    }
 
     // Add keybox health URL for health checks if configured
     if let Some(ref health_url) = config.keybox_health_url {

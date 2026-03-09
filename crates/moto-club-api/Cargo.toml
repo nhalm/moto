@@ -56,6 +56,9 @@ uuid = { workspace = true }
 # HTTP client for health checks
 reqwest = { workspace = true }
 
+# Constant-time comparison for service token validation
+subtle = { workspace = true }
+
 # Internal crates
 moto-club-db = { workspace = true }
 moto-club-garage = { workspace = true }

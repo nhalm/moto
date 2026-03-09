@@ -94,6 +94,9 @@ pub struct AppState {
     pub log_connection_tracker: Arc<ConnectionTracker>,
     /// Connection tracker for event streaming WebSocket connections (per user, max 3).
     pub event_connection_tracker: Arc<ConnectionTracker>,
+    /// Service token for admin authentication (static shared token).
+    /// When `None`, service token validation is not available.
+    pub service_token: Option<String>,
 }
 
 impl AppState {
@@ -119,6 +122,7 @@ impl AppState {
             keybox_health_url: None,
             log_connection_tracker: Arc::new(ConnectionTracker::new()),
             event_connection_tracker: Arc::new(ConnectionTracker::new()),
+            service_token: None,
         }
     }
 
@@ -154,6 +158,13 @@ impl AppState {
     #[must_use]
     pub fn with_keybox_health_url(mut self, keybox_health_url: String) -> Self {
         self.keybox_health_url = Some(keybox_health_url);
+        self
+    }
+
+    /// Sets the service token for admin authentication.
+    #[must_use]
+    pub fn with_service_token(mut self, token: impl Into<String>) -> Self {
+        self.service_token = Some(token.into());
         self
     }
 
@@ -356,6 +367,12 @@ pub mod error_codes {
     pub const INVALID_TOKEN: &str = "INVALID_TOKEN";
     /// Pod not running in expected garage namespace.
     pub const NAMESPACE_MISMATCH: &str = "NAMESPACE_MISMATCH";
+    /// Missing or invalid Authorization header.
+    pub const UNAUTHORIZED: &str = "UNAUTHORIZED";
+    /// Operation requires service token.
+    pub const FORBIDDEN: &str = "FORBIDDEN";
+    /// Service token not configured on server.
+    pub const SERVICE_TOKEN_NOT_CONFIGURED: &str = "SERVICE_TOKEN_NOT_CONFIGURED";
 }
 
 #[cfg(test)]
