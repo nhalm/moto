@@ -671,3 +671,7 @@ WHAT DOES NOT GO HERE:
 ## testing.md v0.7
 
 - Add `smoke-ai-proxy` Makefile target: port-forward ai-proxy, run `infra/smoke-test-ai-proxy.sh`, clean up
+
+## moto-throttle v0.2
+
+- Create moto-throttle crate with token bucket algorithm (capacity = burst, refill = RPM/60 tokens/sec, continuous refill)

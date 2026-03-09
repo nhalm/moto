@@ -2382,6 +2382,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "moto-throttle"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "moto-wgtunnel-conn"
 version = "0.1.0"
 dependencies = [
