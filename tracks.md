@@ -697,3 +697,4 @@ WHAT DOES NOT GO HERE:
 - Create audit_log table migration for moto-club database with indexes (timestamp, principal_id, event_type, resource_type+resource_id)
 - Migrate keybox audit_log table to unified schema (map spiffe_id, secret_scope, secret_name to new fields; add service, action, resource_type, resource_id, outcome, metadata, client_ip columns)
 - Implement AuditLogger for keybox: log secret_accessed, secret_created, secret_updated, secret_deleted, dek_rotated, svid_issued, auth_failed events
+- Implement AuditLogger for moto-club: log garage_created, garage_terminated, garage_state_changed, ttl_enforced, auth_failed events from handlers and reconciler
