@@ -838,6 +838,14 @@ async fn get_audit_logs(
         principal_id: query.principal_id,
         resource_type: query.resource_type,
         resource_id: query.resource_id,
+        since: query
+            .since
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc)),
+        until: query
+            .until
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc)),
         limit: query.limit.and_then(|l| i64::try_from(l).ok()),
         offset: query.offset.and_then(|o| i64::try_from(o).ok()),
     };

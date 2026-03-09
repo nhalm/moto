@@ -702,3 +702,7 @@ WHAT DOES NOT GO HERE:
 - Add audit log retention tasks to moto-cron reconciler (keybox 90 days, moto-club 30 days)
 - Add GET /api/v1/audit/logs endpoint on moto-club with query filters (service, event_type, principal_id, resource_type, since, until, limit, offset)
 - Auth: service token only for audit query endpoint (constant-time comparison, MOTO_CLUB_SERVICE_TOKEN_FILE env var)
+
+## audit-logging v0.3
+
+- Add keybox GET /audit/logs endpoint since/until query parameter support for fan-out queries from moto-club (pass-through time range filtering in DB layer and both in-memory/PG API handlers)

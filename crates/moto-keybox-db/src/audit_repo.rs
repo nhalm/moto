@@ -3,6 +3,8 @@
 //! Provides operations for inserting and querying audit log entries
 //! using the unified audit schema.
 
+use chrono::{DateTime, Utc};
+
 use crate::{AuditEventType, AuditLogEntry, DbPool, DbResult, PrincipalType};
 
 /// Parameters for inserting an audit log entry.
@@ -73,6 +75,10 @@ pub struct AuditLogQuery {
     pub resource_type: Option<String>,
     /// Filter by resource ID.
     pub resource_id: Option<String>,
+    /// Events after this timestamp.
+    pub since: Option<DateTime<Utc>>,
+    /// Events before this timestamp.
+    pub until: Option<DateTime<Utc>>,
     /// Maximum number of entries to return.
     pub limit: Option<i64>,
     /// Number of entries to skip.
@@ -98,14 +104,18 @@ pub async fn list_audit_entries(
           AND ($2::text IS NULL OR principal_id = $2)
           AND ($3::text IS NULL OR resource_type = $3)
           AND ($4::text IS NULL OR resource_id = $4)
+          AND ($5::timestamptz IS NULL OR timestamp >= $5)
+          AND ($6::timestamptz IS NULL OR timestamp <= $6)
         ORDER BY timestamp DESC
-        LIMIT $5 OFFSET $6
+        LIMIT $7 OFFSET $8
         ",
     )
     .bind(query.event_type.map(|e| e.to_string()))
     .bind(query.principal_id.as_deref())
     .bind(query.resource_type.as_deref())
     .bind(query.resource_id.as_deref())
+    .bind(query.since)
+    .bind(query.until)
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
@@ -127,12 +137,16 @@ pub async fn count_audit_entries(pool: &DbPool, query: &AuditLogQuery) -> DbResu
           AND ($2::text IS NULL OR principal_id = $2)
           AND ($3::text IS NULL OR resource_type = $3)
           AND ($4::text IS NULL OR resource_id = $4)
+          AND ($5::timestamptz IS NULL OR timestamp >= $5)
+          AND ($6::timestamptz IS NULL OR timestamp <= $6)
         ",
     )
     .bind(query.event_type.map(|e| e.to_string()))
     .bind(query.principal_id.as_deref())
     .bind(query.resource_type.as_deref())
     .bind(query.resource_id.as_deref())
+    .bind(query.since)
+    .bind(query.until)
     .fetch_one(pool)
     .await?;
 

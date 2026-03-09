@@ -16,6 +16,3 @@ Read it in full at the start of each iteration.
 - Ensure sensitive data is never logged (secret values, API keys, tokens, request/response bodies)
 - Implement fan-out: moto-club queries own table and keybox /audit/logs in parallel, merges by timestamp, graceful degradation if keybox unreachable
 
-## audit-logging v0.3
-
-- Add keybox GET /audit/logs endpoint for fan-out queries from moto-club (with query parameter pass-through)

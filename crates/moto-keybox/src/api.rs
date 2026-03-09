@@ -393,6 +393,10 @@ pub struct AuditLogsQuery {
     pub resource_type: Option<String>,
     /// Filter by resource ID.
     pub resource_id: Option<String>,
+    /// Events after this timestamp (ISO 8601).
+    pub since: Option<String>,
+    /// Events before this timestamp (ISO 8601).
+    pub until: Option<String>,
     /// Maximum number of entries to return (default 100).
     pub limit: Option<usize>,
     /// Number of entries to skip (for pagination).
@@ -1158,6 +1162,22 @@ async fn get_audit_logs(
             // Filter by resource type
             if let Some(ref rt) = query.resource_type
                 && &e.resource_type != rt
+            {
+                return false;
+            }
+
+            // Filter by since (events after this timestamp)
+            if let Some(ref since_str) = query.since
+                && let Ok(since) = chrono::DateTime::parse_from_rfc3339(since_str)
+                && e.timestamp < since.with_timezone(&chrono::Utc)
+            {
+                return false;
+            }
+
+            // Filter by until (events before this timestamp)
+            if let Some(ref until_str) = query.until
+                && let Ok(until) = chrono::DateTime::parse_from_rfc3339(until_str)
+                && e.timestamp > until.with_timezone(&chrono::Utc)
             {
                 return false;
             }
