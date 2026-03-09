@@ -31,6 +31,7 @@
 //! axum::serve(listener, app).await?;
 //! ```
 
+pub mod audit;
 pub mod events_ws;
 pub mod garages;
 pub mod health;
@@ -260,6 +261,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(health::router())
         .merge(garages::router())
+        .merge(audit::router())
         .merge(logs_ws::router())
         .merge(events_ws::router())
         .merge(wg::router())

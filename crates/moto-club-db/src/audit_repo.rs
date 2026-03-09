@@ -117,6 +117,126 @@ pub async fn delete_expired(pool: &DbPool, retention_days: i32, batch_size: i64)
     Ok(result.rows_affected())
 }
 
+/// Query parameters for listing audit log entries.
+#[derive(Debug, Default)]
+pub struct AuditLogQuery<'a> {
+    /// Filter by service (e.g. `moto-club`).
+    pub service: Option<&'a str>,
+    /// Filter by event type.
+    pub event_type: Option<&'a str>,
+    /// Filter by principal ID.
+    pub principal_id: Option<&'a str>,
+    /// Filter by resource type.
+    pub resource_type: Option<&'a str>,
+    /// Events after this timestamp.
+    pub since: Option<DateTime<Utc>>,
+    /// Events before this timestamp.
+    pub until: Option<DateTime<Utc>>,
+    /// Maximum number of results (default 100, max 1000).
+    pub limit: i64,
+    /// Pagination offset.
+    pub offset: i64,
+}
+
+/// Result of an audit log query including total count.
+#[derive(Debug, Serialize)]
+pub struct AuditLogQueryResult {
+    /// Matching audit log entries.
+    pub events: Vec<AuditLogEntry>,
+    /// Total number of matching entries (before limit/offset).
+    pub total: i64,
+}
+
+/// Queries audit log entries with optional filters.
+///
+/// Returns entries sorted by timestamp descending (newest first).
+///
+/// # Errors
+///
+/// Returns an error if the query fails.
+pub async fn query(pool: &DbPool, q: &AuditLogQuery<'_>) -> DbResult<AuditLogQueryResult> {
+    // Build WHERE clauses dynamically
+    let mut conditions = Vec::new();
+    let mut param_idx = 0u32;
+
+    if q.service.is_some() {
+        param_idx += 1;
+        conditions.push(format!("service = ${param_idx}"));
+    }
+    if q.event_type.is_some() {
+        param_idx += 1;
+        conditions.push(format!("event_type = ${param_idx}"));
+    }
+    if q.principal_id.is_some() {
+        param_idx += 1;
+        conditions.push(format!("principal_id = ${param_idx}"));
+    }
+    if q.resource_type.is_some() {
+        param_idx += 1;
+        conditions.push(format!("resource_type = ${param_idx}"));
+    }
+    if q.since.is_some() {
+        param_idx += 1;
+        conditions.push(format!("timestamp >= ${param_idx}"));
+    }
+    if q.until.is_some() {
+        param_idx += 1;
+        conditions.push(format!("timestamp <= ${param_idx}"));
+    }
+
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+
+    let limit_idx = param_idx + 1;
+    let offset_idx = param_idx + 2;
+
+    let count_sql = format!("SELECT COUNT(*) as count FROM audit_log {where_clause}");
+    let query_sql = format!(
+        "SELECT * FROM audit_log {where_clause} ORDER BY timestamp DESC LIMIT ${limit_idx} OFFSET ${offset_idx}"
+    );
+
+    // Build count query
+    let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+    let mut data_query = sqlx::query_as::<_, AuditLogEntry>(&query_sql);
+
+    // Bind filter params to both queries in the same order
+    if let Some(v) = q.service {
+        count_query = count_query.bind(v);
+        data_query = data_query.bind(v);
+    }
+    if let Some(v) = q.event_type {
+        count_query = count_query.bind(v);
+        data_query = data_query.bind(v);
+    }
+    if let Some(v) = q.principal_id {
+        count_query = count_query.bind(v);
+        data_query = data_query.bind(v);
+    }
+    if let Some(v) = q.resource_type {
+        count_query = count_query.bind(v);
+        data_query = data_query.bind(v);
+    }
+    if let Some(v) = q.since {
+        count_query = count_query.bind(v);
+        data_query = data_query.bind(v);
+    }
+    if let Some(v) = q.until {
+        count_query = count_query.bind(v);
+        data_query = data_query.bind(v);
+    }
+
+    // Bind limit and offset to data query only
+    data_query = data_query.bind(q.limit).bind(q.offset);
+
+    let total = count_query.fetch_one(pool).await?;
+    let events = data_query.fetch_all(pool).await?;
+
+    Ok(AuditLogQueryResult { events, total })
+}
+
 /// Logs an audit event best-effort. Failures are logged as warnings but never block.
 pub async fn log_event(pool: &DbPool, entry: InsertAuditEntry<'_>) {
     if let Err(e) = insert(pool, &entry).await {
