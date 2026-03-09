@@ -1,10 +1,13 @@
+use std::time::Duration;
+
 use axum::body::Body;
 use axum::extract::Request;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
 use crate::config::PrincipalType;
-use crate::layer::extract_principal;
+use crate::layer::{evict_expired_buckets, extract_principal};
+use crate::token_bucket::TokenBucket;
 
 /// Helper to build a JWT token (unsigned) with given claims.
 fn make_jwt(claims: &serde_json::Value) -> String {
@@ -162,4 +165,52 @@ fn non_bearer_auth_ignored() {
     let principal = extract_principal(&req, None);
     assert_eq!(principal.principal_type, PrincipalType::Unknown);
     assert_eq!(principal.key, "10.0.0.5");
+}
+
+#[tokio::test]
+async fn evict_removes_idle_buckets() {
+    tokio::time::pause();
+
+    let store = std::sync::Mutex::new(std::collections::HashMap::new());
+    store
+        .lock()
+        .unwrap()
+        .insert("active".to_string(), TokenBucket::new(10, 60));
+    store
+        .lock()
+        .unwrap()
+        .insert("idle".to_string(), TokenBucket::new(10, 60));
+
+    // Advance time past TTL so both buckets appear idle.
+    tokio::time::advance(Duration::from_secs(700)).await;
+
+    // Access the "active" bucket to refresh its last_access.
+    store.lock().unwrap().get_mut("active").unwrap().check();
+
+    // Evict with a 10 min TTL — "idle" should be removed, "active" should remain.
+    evict_expired_buckets(&store, Duration::from_secs(600));
+
+    let s = store.lock().unwrap();
+    assert_eq!(s.len(), 1);
+    assert!(s.contains_key("active"));
+    assert!(!s.contains_key("idle"));
+    drop(s);
+}
+
+#[tokio::test]
+async fn evict_keeps_all_when_none_expired() {
+    let store = std::sync::Mutex::new(std::collections::HashMap::new());
+    store
+        .lock()
+        .unwrap()
+        .insert("a".to_string(), TokenBucket::new(10, 60));
+    store
+        .lock()
+        .unwrap()
+        .insert("b".to_string(), TokenBucket::new(10, 60));
+
+    // No time advanced — nothing should be evicted.
+    evict_expired_buckets(&store, Duration::from_secs(600));
+
+    assert_eq!(store.lock().unwrap().len(), 2);
 }

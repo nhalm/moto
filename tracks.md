@@ -676,3 +676,5 @@ WHAT DOES NOT GO HERE:
 
 - Create moto-throttle crate with token bucket algorithm (capacity = burst, refill = RPM/60 tokens/sec, continuous refill)
 - Implement ThrottleLayer as tower middleware that extracts principal and checks token bucket
+- Implement principal extraction: JWT claim parsing from Authorization/x-api-key headers, service token detection, fallback to Unknown tier with client IP key
+- Implement bucket cleanup: evict buckets not accessed within TTL (default 10 min), periodic sweep (default 60 sec)

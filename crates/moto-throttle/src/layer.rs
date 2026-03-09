@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use axum::body::Body;
 use axum::extract::Request;
@@ -11,6 +12,12 @@ use tower::{Layer, Service};
 
 use crate::config::{PrincipalType, ThrottleConfig};
 use crate::token_bucket::{CheckResult, TokenBucket};
+
+/// Default bucket TTL: evict buckets not accessed within this duration.
+const DEFAULT_BUCKET_TTL: Duration = Duration::from_secs(600);
+
+/// Default cleanup interval: how often to sweep for expired buckets.
+const DEFAULT_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
 
 /// Extracted principal identity used as the rate limit key.
 #[derive(Debug, Clone)]
@@ -48,6 +55,31 @@ impl ThrottleLayer {
     #[must_use]
     pub fn bucket_store(&self) -> Arc<Mutex<HashMap<String, TokenBucket>>> {
         Arc::clone(&self.buckets)
+    }
+
+    /// Spawn a background task that periodically evicts idle buckets.
+    ///
+    /// Buckets not accessed within `ttl` are removed. The sweep runs every
+    /// `interval`. Uses defaults of 10 min TTL and 60 sec interval.
+    #[must_use]
+    pub fn spawn_cleanup(&self) -> tokio::task::JoinHandle<()> {
+        self.spawn_cleanup_with(DEFAULT_BUCKET_TTL, DEFAULT_CLEANUP_INTERVAL)
+    }
+
+    /// Spawn a cleanup task with custom TTL and sweep interval.
+    #[must_use]
+    pub fn spawn_cleanup_with(
+        &self,
+        ttl: Duration,
+        interval: Duration,
+    ) -> tokio::task::JoinHandle<()> {
+        let buckets = Arc::clone(&self.buckets);
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(interval).await;
+                evict_expired_buckets(&buckets, ttl);
+            }
+        })
     }
 }
 
@@ -256,6 +288,17 @@ fn client_ip(request: &Request<Body>) -> String {
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.split(',').next())
         .map_or_else(|| "unknown".to_string(), |s| s.trim().to_string())
+}
+
+/// Evict buckets that haven't been accessed within the given TTL.
+pub fn evict_expired_buckets(buckets: &Mutex<HashMap<String, TokenBucket>>, ttl: Duration) {
+    let mut store = buckets.lock().expect("bucket store lock poisoned");
+    let before = store.len();
+    store.retain(|_, bucket| bucket.last_access().elapsed() < ttl);
+    let evicted = before - store.len();
+    if evicted > 0 {
+        tracing::debug!(evicted, remaining = store.len(), "bucket cleanup sweep");
+    }
 }
 
 /// Inject rate limit headers into a response.

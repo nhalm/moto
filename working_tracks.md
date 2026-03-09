@@ -12,12 +12,10 @@ Read it in full at the start of each iteration.
 
 ## moto-throttle v0.2
 
-- Implement principal extraction: JWT claim parsing from Authorization/x-api-key headers, service token detection, fallback to Unknown tier with client IP key
 - Implement rate limit tiers: garage (120 RPM, burst 20), bike (300, 50), service (1000, 100), unknown (30, 5)
 - Implement per-endpoint path overrides (override_path config, 0 = no limit)
 - Add response headers on all responses: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
 - Return 429 with JSON error body and Retry-After header when rate limited
-- Implement bucket cleanup: evict buckets not accessed within TTL (default 10 min), periodic sweep (default 60 sec)
 - Support env var configuration (MOTO_THROTTLE_*_RPM, *_BURST, *_CLEANUP_INTERVAL_SECS, *_BUCKET_TTL_SECS)
 - Read service token from MOTO_KEYBOX_SERVICE_TOKEN / MOTO_KEYBOX_SERVICE_TOKEN_FILE for service token detection
 - Log warn on 429 with principal_id, principal_type, path, rpm_limit, retry_after_secs
