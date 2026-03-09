@@ -703,6 +703,7 @@ WHAT DOES NOT GO HERE:
 - Add GET /api/v1/audit/logs endpoint on moto-club with query filters (service, event_type, principal_id, resource_type, since, until, limit, offset)
 - Auth: service token only for audit query endpoint (constant-time comparison, MOTO_CLUB_SERVICE_TOKEN_FILE env var)
 - Ensure audit logging is best-effort: failures must not block primary operations
+- Ensure sensitive data is never logged (secret values, API keys, tokens, request/response bodies)
 
 ## audit-logging v0.3
 

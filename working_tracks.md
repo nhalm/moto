@@ -10,7 +10,3 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## audit-logging v0.2
-
-- Ensure sensitive data is never logged (secret values, API keys, tokens, request/response bodies)
-
