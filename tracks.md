@@ -675,3 +675,4 @@ WHAT DOES NOT GO HERE:
 ## moto-throttle v0.2
 
 - Create moto-throttle crate with token bucket algorithm (capacity = burst, refill = RPM/60 tokens/sec, continuous refill)
+- Implement ThrottleLayer as tower middleware that extracts principal and checks token bucket

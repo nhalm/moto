@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## moto-throttle v0.2
 
-- Implement ThrottleLayer as tower middleware that extracts principal and checks token bucket
 - Implement principal extraction: JWT claim parsing from Authorization/x-api-key headers, service token detection, fallback to Unknown tier with client IP key
 - Implement rate limit tiers: garage (120 RPM, burst 20), bike (300, 50), service (1000, 100), unknown (30, 5)
 - Implement per-endpoint path overrides (override_path config, 0 = no limit)
