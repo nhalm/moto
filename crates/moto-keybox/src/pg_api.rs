@@ -12,7 +12,10 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use moto_keybox_db::{AuditLogQuery, DbPool, audit_repo};
+use moto_keybox_db::{
+    AuditEventType as DbAuditEventType, AuditLogQuery, DbPool, InsertAuditEntry,
+    PrincipalType as DbPrincipalType, audit_repo,
+};
 
 use crate::Error;
 use crate::abac::PolicyEngine;
@@ -85,6 +88,29 @@ impl PgAppState {
             &SpiffeId::service(&self.admin_service),
             crate::svid::DEFAULT_SVID_TTL_SECS,
         )
+    }
+}
+
+/// Log an `auth_failed` audit event (best-effort).
+///
+/// Called when SVID validation or service token validation fails.
+/// Never blocks the response — failures are logged as warnings.
+async fn audit_auth_failed(pool: &DbPool, reason: &str) {
+    let entry = InsertAuditEntry {
+        event_type: DbAuditEventType::AuthFailed,
+        service: "keybox",
+        principal_type: DbPrincipalType::Service,
+        principal_id: "",
+        action: "auth_fail",
+        resource_type: "token",
+        resource_id: reason,
+        outcome: "denied",
+        metadata: serde_json::Value::Object(serde_json::Map::new()),
+        client_ip: None,
+    };
+
+    if let Err(e) = audit_repo::insert_audit_entry(pool, &entry).await {
+        tracing::warn!(error = %e, "failed to insert auth_failed audit entry");
     }
 }
 
@@ -362,15 +388,20 @@ async fn issue_garage_svid(
     headers: HeaderMap,
     Json(req): Json<IssueGarageSvidRequest>,
 ) -> impl IntoResponse {
-    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
-        (
+    if validate_service_token(&headers, state.service_token.as_ref()).is_err() {
+        audit_auth_failed(
+            state.repository.pool(),
+            "invalid service token for issue_garage_svid",
+        )
+        .await;
+        return Err((
             StatusCode::FORBIDDEN,
             Json(ApiError::new(
                 error_codes::FORBIDDEN,
                 "Operation requires service token",
             )),
-        )
-    })?;
+        ));
+    }
 
     let spiffe_id = SpiffeId::garage(&req.garage_id);
     let claims = SvidClaims::new(&spiffe_id, GARAGE_SVID_TTL_SECS);
@@ -420,7 +451,13 @@ async fn get_secret(
     let claims = if validate_service_token(&headers, state.service_token.as_ref()).is_ok() {
         state.service_token_claims()
     } else {
-        extract_svid_enforcing_pod_uid(&headers, &state.svid_validator)?
+        match extract_svid_enforcing_pod_uid(&headers, &state.svid_validator) {
+            Ok(c) => c,
+            Err(e) => {
+                audit_auth_failed(state.repository.pool(), "invalid or expired SVID").await;
+                return Err(e);
+            }
+        }
     };
     let scope = parse_scope(&scope_str)?;
 
@@ -494,15 +531,20 @@ async fn set_secret(
     Path((scope_str, name)): Path<(String, String)>,
     Json(req): Json<SetSecretRequest>,
 ) -> impl IntoResponse {
-    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
-        (
+    if validate_service_token(&headers, state.service_token.as_ref()).is_err() {
+        audit_auth_failed(
+            state.repository.pool(),
+            "invalid service token for set_secret",
+        )
+        .await;
+        return Err((
             StatusCode::FORBIDDEN,
             Json(ApiError::new(
                 error_codes::FORBIDDEN,
                 "Operation requires service token",
             )),
-        )
-    })?;
+        ));
+    }
     let claims = state.service_token_claims();
     let scope = parse_scope(&scope_str)?;
 
@@ -615,15 +657,20 @@ async fn delete_secret(
     headers: HeaderMap,
     Path((scope_str, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
-        (
+    if validate_service_token(&headers, state.service_token.as_ref()).is_err() {
+        audit_auth_failed(
+            state.repository.pool(),
+            "invalid service token for delete_secret",
+        )
+        .await;
+        return Err((
             StatusCode::FORBIDDEN,
             Json(ApiError::new(
                 error_codes::FORBIDDEN,
                 "Operation requires service token",
             )),
-        )
-    })?;
+        ));
+    }
     let claims = state.service_token_claims();
     let scope = parse_scope(&scope_str)?;
 
@@ -677,7 +724,13 @@ async fn list_secrets(
     let claims = if validate_service_token(&headers, state.service_token.as_ref()).is_ok() {
         state.service_token_claims()
     } else {
-        extract_svid(&headers, &state.svid_validator)?
+        match extract_svid(&headers, &state.svid_validator) {
+            Ok(c) => c,
+            Err(e) => {
+                audit_auth_failed(state.repository.pool(), "invalid or expired SVID").await;
+                return Err(e);
+            }
+        }
     };
     let scope = parse_scope(&scope_str)?;
 
@@ -704,7 +757,13 @@ async fn list_service_secrets(
     let claims = if validate_service_token(&headers, state.service_token.as_ref()).is_ok() {
         state.service_token_claims()
     } else {
-        extract_svid(&headers, &state.svid_validator)?
+        match extract_svid(&headers, &state.svid_validator) {
+            Ok(c) => c,
+            Err(e) => {
+                audit_auth_failed(state.repository.pool(), "invalid or expired SVID").await;
+                return Err(e);
+            }
+        }
     };
 
     let secrets = state.repository.list_service(&claims, &service).await;
@@ -730,7 +789,13 @@ async fn list_instance_secrets(
     let claims = if validate_service_token(&headers, state.service_token.as_ref()).is_ok() {
         state.service_token_claims()
     } else {
-        extract_svid(&headers, &state.svid_validator)?
+        match extract_svid(&headers, &state.svid_validator) {
+            Ok(c) => c,
+            Err(e) => {
+                audit_auth_failed(state.repository.pool(), "invalid or expired SVID").await;
+                return Err(e);
+            }
+        }
     };
 
     let secrets = state.repository.list_instance(&claims, &instance_id).await;
@@ -753,15 +818,20 @@ async fn get_audit_logs(
     headers: HeaderMap,
     Query(query): Query<AuditLogsQuery>,
 ) -> impl IntoResponse {
-    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
-        (
+    if validate_service_token(&headers, state.service_token.as_ref()).is_err() {
+        audit_auth_failed(
+            state.repository.pool(),
+            "invalid service token for audit_logs",
+        )
+        .await;
+        return Err((
             StatusCode::FORBIDDEN,
             Json(ApiError::new(
                 error_codes::FORBIDDEN,
                 "Operation requires service token",
             )),
-        )
-    })?;
+        ));
+    }
 
     let db_query = AuditLogQuery {
         event_type: query.event_type.and_then(|s| s.parse().ok()),
@@ -815,15 +885,20 @@ async fn rotate_dek(
     Path(name): Path<String>,
     Query(query): Query<RotateDekQuery>,
 ) -> impl IntoResponse {
-    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
-        (
+    if validate_service_token(&headers, state.service_token.as_ref()).is_err() {
+        audit_auth_failed(
+            state.repository.pool(),
+            "invalid service token for rotate_dek",
+        )
+        .await;
+        return Err((
             StatusCode::FORBIDDEN,
             Json(ApiError::new(
                 error_codes::FORBIDDEN,
                 "Operation requires service token",
             )),
-        )
-    })?;
+        ));
+    }
     let claims = state.service_token_claims();
 
     let scope_str = query.scope.as_deref().unwrap_or("global");
