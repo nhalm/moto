@@ -197,6 +197,51 @@ async fn evict_removes_idle_buckets() {
     drop(s);
 }
 
+#[test]
+fn default_config_has_correct_tier_defaults() {
+    // When no env vars are set, ThrottleConfig::new() uses hardcoded defaults.
+    // (Env var overrides are tested via integration; here we verify the defaults.)
+    let config = crate::config::ThrottleConfig::new();
+
+    let garage = config.lookup(PrincipalType::Garage, "/test").unwrap();
+    assert_eq!(garage.rpm, 120);
+    assert_eq!(garage.burst, 20);
+
+    let bike = config.lookup(PrincipalType::Bike, "/test").unwrap();
+    assert_eq!(bike.rpm, 300);
+    assert_eq!(bike.burst, 50);
+
+    let service = config.lookup(PrincipalType::Service, "/test").unwrap();
+    assert_eq!(service.rpm, 1000);
+    assert_eq!(service.burst, 100);
+
+    let unknown = config.lookup(PrincipalType::Unknown, "/test").unwrap();
+    assert_eq!(unknown.rpm, 30);
+    assert_eq!(unknown.burst, 5);
+}
+
+#[test]
+fn tier_builder_overrides_defaults() {
+    // The .tier() builder method overrides defaults (same mechanism env vars use).
+    let config = crate::config::ThrottleConfig::new()
+        .tier(PrincipalType::Garage, 200, 40)
+        .tier(PrincipalType::Service, 500, 100)
+        .build();
+
+    let garage = config.lookup(PrincipalType::Garage, "/test").unwrap();
+    assert_eq!(garage.rpm, 200);
+    assert_eq!(garage.burst, 40);
+
+    let service = config.lookup(PrincipalType::Service, "/test").unwrap();
+    assert_eq!(service.rpm, 500);
+    assert_eq!(service.burst, 100);
+
+    // Bike unchanged.
+    let bike = config.lookup(PrincipalType::Bike, "/test").unwrap();
+    assert_eq!(bike.rpm, 300);
+    assert_eq!(bike.burst, 50);
+}
+
 #[tokio::test]
 async fn evict_keeps_all_when_none_expired() {
     let store = std::sync::Mutex::new(std::collections::HashMap::new());

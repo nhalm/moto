@@ -52,14 +52,17 @@ pub struct ThrottleConfig {
 
 impl ThrottleConfig {
     /// Create a new config builder with default tier settings.
+    ///
+    /// Env vars (`MOTO_THROTTLE_*_RPM`, `MOTO_THROTTLE_*_BURST`) override
+    /// programmatic defaults when set.
     #[must_use]
     pub fn new() -> Self {
         let mut tiers = HashMap::new();
         tiers.insert(
             PrincipalType::Garage,
             TierConfig {
-                rpm: 120,
-                burst: 20,
+                rpm: env_u32("MOTO_THROTTLE_GARAGE_RPM").unwrap_or(120),
+                burst: env_u32("MOTO_THROTTLE_GARAGE_BURST").unwrap_or(20),
             },
         );
         tiers.insert(
@@ -72,11 +75,17 @@ impl ThrottleConfig {
         tiers.insert(
             PrincipalType::Service,
             TierConfig {
-                rpm: 1000,
-                burst: 100,
+                rpm: env_u32("MOTO_THROTTLE_SERVICE_RPM").unwrap_or(1000),
+                burst: env_u32("MOTO_THROTTLE_SERVICE_BURST").unwrap_or(100),
             },
         );
-        tiers.insert(PrincipalType::Unknown, TierConfig { rpm: 30, burst: 5 });
+        tiers.insert(
+            PrincipalType::Unknown,
+            TierConfig {
+                rpm: env_u32("MOTO_THROTTLE_UNKNOWN_RPM").unwrap_or(30),
+                burst: env_u32("MOTO_THROTTLE_UNKNOWN_BURST").unwrap_or(5),
+            },
+        );
 
         let service_token = Self::read_service_token();
 
@@ -162,4 +171,14 @@ impl Default for ThrottleConfig {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Read a `u32` from an environment variable, returning `None` if unset or invalid.
+fn env_u32(name: &str) -> Option<u32> {
+    std::env::var(name).ok()?.parse().ok()
+}
+
+/// Read a `u64` from an environment variable, returning `None` if unset or invalid.
+pub fn env_u64(name: &str) -> Option<u64> {
+    std::env::var(name).ok()?.parse().ok()
 }

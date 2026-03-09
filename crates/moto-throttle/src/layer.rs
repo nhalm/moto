@@ -10,7 +10,7 @@ use axum::extract::Request;
 use axum::response::Response;
 use tower::{Layer, Service};
 
-use crate::config::{PrincipalType, ThrottleConfig};
+use crate::config::{PrincipalType, ThrottleConfig, env_u64};
 use crate::token_bucket::{CheckResult, TokenBucket};
 
 /// Default bucket TTL: evict buckets not accessed within this duration.
@@ -60,10 +60,16 @@ impl ThrottleLayer {
     /// Spawn a background task that periodically evicts idle buckets.
     ///
     /// Buckets not accessed within `ttl` are removed. The sweep runs every
-    /// `interval`. Uses defaults of 10 min TTL and 60 sec interval.
+    /// `interval`. Reads `MOTO_THROTTLE_BUCKET_TTL_SECS` and
+    /// `MOTO_THROTTLE_CLEANUP_INTERVAL_SECS` env vars, falling back to
+    /// defaults of 10 min TTL and 60 sec interval.
     #[must_use]
     pub fn spawn_cleanup(&self) -> tokio::task::JoinHandle<()> {
-        self.spawn_cleanup_with(DEFAULT_BUCKET_TTL, DEFAULT_CLEANUP_INTERVAL)
+        let ttl = env_u64("MOTO_THROTTLE_BUCKET_TTL_SECS")
+            .map_or(DEFAULT_BUCKET_TTL, Duration::from_secs);
+        let interval = env_u64("MOTO_THROTTLE_CLEANUP_INTERVAL_SECS")
+            .map_or(DEFAULT_CLEANUP_INTERVAL, Duration::from_secs);
+        self.spawn_cleanup_with(ttl, interval)
     }
 
     /// Spawn a cleanup task with custom TTL and sweep interval.
