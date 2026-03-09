@@ -680,3 +680,7 @@ WHAT DOES NOT GO HERE:
 - Implement bucket cleanup: evict buckets not accessed within TTL (default 10 min), periodic sweep (default 60 sec)
 - Support env var configuration (MOTO_THROTTLE_*_RPM, *_BURST, *_CLEANUP_INTERVAL_SECS, *_BUCKET_TTL_SECS)
 - Implement rate limit tiers: garage (120 RPM, burst 20), bike (300, 50), service (1000, 100), unknown (30, 5)
+
+## audit-logging v0.2
+
+- Create shared audit event schema (id, event_type, service, principal_type, principal_id, action, resource_type, resource_id, outcome, metadata JSONB, client_ip, timestamp)
