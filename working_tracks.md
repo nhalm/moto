@@ -17,7 +17,6 @@ Read it in full at the start of each iteration.
 - Add GET /api/v1/audit/logs endpoint on moto-club with query filters (service, event_type, principal_id, resource_type, since, until, limit, offset)
 - Implement fan-out: moto-club queries own table and keybox /audit/logs in parallel, merges by timestamp, graceful degradation if keybox unreachable
 - Auth: service token only for audit query endpoint
-- Add audit log retention tasks to moto-cron reconciler (keybox 90 days, moto-club 30 days)
 
 ## audit-logging v0.3
 

@@ -77,6 +77,8 @@ pub struct ReconcileStats {
     pub ttl_expired: usize,
     /// Number of TTL warning events emitted.
     pub ttl_warnings: usize,
+    /// Number of audit log rows deleted by retention cleanup.
+    pub audit_retention_deleted: u64,
     /// Number of errors encountered.
     pub errors: usize,
 }
@@ -183,6 +185,7 @@ impl GarageReconciler {
                         || stats.orphans > 0
                         || stats.ttl_expired > 0
                         || stats.ttl_warnings > 0
+                        || stats.audit_retention_deleted > 0
                     {
                         info!(
                             checked = stats.checked,
@@ -192,6 +195,7 @@ impl GarageReconciler {
                             ttl_warnings = stats.ttl_warnings,
                             orphans = stats.orphans,
                             orphans_deleted = stats.orphans_deleted,
+                            audit_retention_deleted = stats.audit_retention_deleted,
                             "reconciliation complete"
                         );
                     } else {
@@ -213,6 +217,7 @@ impl GarageReconciler {
     /// # Errors
     ///
     /// Returns an error if K8s or DB operations fail critically.
+    #[allow(clippy::too_many_lines)]
     #[instrument(skip(self), name = "reconcile")]
     pub async fn reconcile_once(&self) -> Result<ReconcileStats, ReconcileError> {
         let mut stats = ReconcileStats::default();
@@ -335,6 +340,9 @@ impl GarageReconciler {
 
         // Step 6: TTL enforcement — terminate expired garages and delete namespaces
         self.enforce_ttl(&mut stats).await;
+
+        // Step 7: Audit log retention — delete rows older than 30 days
+        self.enforce_audit_retention(&mut stats).await;
 
         Ok(stats)
     }
@@ -779,6 +787,44 @@ impl GarageReconciler {
                     error = %e,
                     "failed to delete namespace for expired garage, orphan cleanup will retry"
                 );
+            }
+        }
+    }
+}
+
+/// Retention period for moto-club audit log entries (days).
+const AUDIT_RETENTION_DAYS: i32 = 30;
+
+/// Maximum number of audit log rows to delete per reconcile cycle.
+const AUDIT_RETENTION_BATCH_SIZE: i64 = 1000;
+
+impl GarageReconciler {
+    /// Enforces audit log retention by deleting rows older than the configured retention period.
+    ///
+    /// Deletes at most `AUDIT_RETENTION_BATCH_SIZE` rows per cycle to avoid
+    /// long-running transactions. Best-effort: failures are logged and skipped.
+    async fn enforce_audit_retention(&self, stats: &mut ReconcileStats) {
+        match audit_repo::delete_expired(&self.db, AUDIT_RETENTION_DAYS, AUDIT_RETENTION_BATCH_SIZE)
+            .await
+        {
+            Ok(rows_deleted) => {
+                if rows_deleted > 0 {
+                    info!(
+                        service = "moto-club",
+                        rows_deleted = rows_deleted,
+                        retention_days = AUDIT_RETENTION_DAYS,
+                        "audit log retention cleanup"
+                    );
+                }
+                stats.audit_retention_deleted = rows_deleted;
+            }
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    retention_days = AUDIT_RETENTION_DAYS,
+                    "failed to enforce audit log retention, will retry next cycle"
+                );
+                stats.errors += 1;
             }
         }
     }

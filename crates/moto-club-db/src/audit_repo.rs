@@ -89,6 +89,34 @@ pub async fn insert(pool: &DbPool, entry: &InsertAuditEntry<'_>) -> DbResult<Aud
     Ok(row)
 }
 
+/// Deletes audit log entries older than the given number of days.
+///
+/// Deletes at most `batch_size` rows per call to avoid long-running transactions.
+/// Returns the number of rows deleted.
+///
+/// # Errors
+///
+/// Returns an error if the delete query fails.
+pub async fn delete_expired(pool: &DbPool, retention_days: i32, batch_size: i64) -> DbResult<u64> {
+    let result = sqlx::query(
+        r"
+        DELETE FROM audit_log
+        WHERE id IN (
+            SELECT id FROM audit_log
+            WHERE timestamp < now() - make_interval(days => $1)
+            ORDER BY timestamp ASC
+            LIMIT $2
+        )
+        ",
+    )
+    .bind(retention_days)
+    .bind(batch_size)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
 /// Logs an audit event best-effort. Failures are logged as warnings but never block.
 pub async fn log_event(pool: &DbPool, entry: InsertAuditEntry<'_>) {
     if let Err(e) = insert(pool, &entry).await {
