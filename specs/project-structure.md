@@ -174,7 +174,9 @@ moto/
 ├── Makefile
 ├── flake.nix
 ├── rust-toolchain.toml
-└── tracks.md                         # Implementation log
+├── specd_work_list.md                # Remaining work items
+├── specd_history.md                  # Done log
+└── specd_review.md                   # Items needing human review
 ```
 
 ---

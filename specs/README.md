@@ -9,13 +9,13 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 **Workflow:**
 1. **Spec phase** - We work through a spec until it's right
 2. **Loop phase** - `loop.sh` runs agents that implement the spec
-3. **Tracks** - [tracks.md](../tracks.md) tracks Implemented vs Remaining for each spec
+3. **Tracking** - [specd_work_list.md](../specd_work_list.md) for remaining work, [specd_history.md](../specd_history.md) for completed items
 
 **Agents have autonomy** on implementation. The spec steers direction, the agent decides the code.
 
 **Status is human-controlled.** Agents NEVER change spec status. Only humans move specs between states (Bare Frame → Wrenching → Ready to Rip → Ripping).
 
-**tracks.md:** Tracks what's Implemented vs Remaining for each spec. See instructions in that file.
+**specd_work_list.md:** Contains remaining work items. **specd_history.md:** Archive of completed work. See AGENTS.md for details.
 
 **Future items:** Items marked with `(future)` are for reference only. Do not implement them - they belong to a later phase or another spec.
 

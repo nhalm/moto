@@ -1,0 +1,19 @@
+{
+  "version": "0.1.0",
+  "checksums": {
+    "loop.sh": "9da9d3529abb4f031ea59de30c53748d48b17ba71b2d0f93317a352d2b5bad41",
+    ".claude/commands/specd/implement.md": "5e9908756b339c221f3b26f7df28889fc841c7680ba1b415f4b235643445ba0d",
+    ".claude/commands/specd/audit.md": "62782fb5a74e61cc5767fc86ee527bf273dac21bbc43ae19c8aadf3fa92b2e93",
+    ".claude/commands/specd/full-audit.md": "dba26feadf564e26a0c5694ec970173f73fc4b7d7ebe75dca29ac0427d3bfcfa",
+    ".claude/commands/specd/review-intake.md": "e607127c6cd356a56717d0b3c001b77ab985c88b918f974149e3daa0dc27c99f",
+    ".claude/commands/specd/setup.md": "f16c7e059084cdac6e5a53f70351affb909d777a3945bdf23ff257af8af9e455",
+    ".claude/commands/specd/plan.md": "449bac2f1ee8bef00bfeb4f238073252625674ead7c07b7b3b09705cfe420ece",
+    "CLAUDE.md": "954ec5dad7eaf581ad4bfa090369b244ac0120b43722ef2efff5ba89fc52046f",
+    "AGENTS.md": "520be7791414b5529bfebe7e46816a2e09b3f750108a3f365cdeafb12ced9310",
+    "specs/README.md": "8d0aa716b74b08944fb1b9a150f88b42d10197c1b8930d58fe8c3e4324402cb6",
+    "specs/example-spec.md": "37feec81d697c959fe93cc64c45ab6de0c459ef651092cf78bfb278ab72b6332",
+    "specd_history.md": "bcd213bfca64035912ff97e2d456d8a15c2d995f97d8ed081bffdfbbe06f86c7",
+    "specd_review.md": "4040b477394444b6ec88c862391e05f39e663168ef5fe34cf029f89a7fc1b22c",
+    "specd_work_list.md": "bf037ef08cfafc613988cece4fa11d6aaca82bb8daf8788f94d35981e4c73d51"
+  }
+}

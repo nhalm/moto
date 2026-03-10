@@ -5,25 +5,36 @@
 **Specs are prescriptive, not descriptive.** The spec defines what code MUST do.
 
 - **Spec is source of truth.** If code contradicts the spec, the code is wrong — refactor it.
-- **Read the full spec on version changes.** When the spec version is newer than tracks.md, re-read the entire spec — not just the changelog. The changelog summarizes what changed, but context lives in the full spec.
+- **Read the full spec on version changes.** When the spec version is newer than specd_history.md, re-read the entire spec — not just the changelog. The changelog summarizes what changed, but context lives in the full spec.
 - **Don't build on broken foundations.** If existing code uses the wrong model (e.g., wrong ID scheme, wrong data flow), fix it first. Don't add new features on top of incorrect code.
 - **Spec index:** `specs/README.md` lists all specifications organized by phase. Only specs with status "Ready to Rip" should be implemented.
 - **Changelogs are immutable.** When creating new changelog entries, old entries never change.
 
-## working_tracks.md (Remaining Work)
+## Loop System
 
-working_tracks.md contains all remaining work items. **Read it in full** at the start of each iteration — it is kept small. Pick an unblocked item, implement it, then move it to tracks.md.
+The autonomous loop is defined in `loop.sh`. Commands live in `.claude/commands/`:
 
-## tracks.md (Done Log)
+| Command          | Purpose                                                                        |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `/specd:implement`     | Pick one unblocked work item, implement it, validate, record completion        |
+| `/specd:audit`         | 3-phase spec-vs-code audit. Writes findings to specd_work_list.md and specd_review.md |
+| `/specd:review-intake` | Process specd_review.md items into specd_work_list.md                                 |
 
-tracks.md is the archive of completed work. It does NOT contain remaining items — those live in working_tracks.md.
+## specd_work_list.md (Remaining Work)
 
-**Never read tracks.md in full — it exceeds context limits.** Use targeted reads:
+The single execution queue for all work — spec implementations, audit findings, and promoted review items. **Read it in full** at the start of each iteration — it is kept small. Pick an unblocked item, implement it, then move it to specd_history.md.
 
-1. **Find your section:** `Grep` for `## <your-spec>` to get the line number
-2. **Read your section:** `Read` with `offset` and `limit` (typically 30-50 lines) starting from that line number
-3. **Write updates:** Use `Edit` to modify only your section — never rewrite the file
-4. **After completing a work item:** Move it from working_tracks.md to tracks.md under the matching spec version section
+## specd_history.md (Done Log)
+
+specd_history.md is the archive of completed work in reverse chronological order (newest first). It does NOT contain remaining items — those live in specd_work_list.md.
+
+Each entry is a single line: `- **spec-name v0.1 (YYYY-MM-DD):** description`. New entries go at the top of the file, below the header comment.
+
+**Never read specd_history.md in full — it can get large.** Use `Grep` to search for specific specs or dates when checking for duplicates.
+
+## specd_review.md (Human Decisions)
+
+Ambiguous findings from audits that need human judgment. Items sit here until the human reviews them. On next loop start, `/specd:review-intake` promotes remaining items to specd_work_list.md (human deletes items they disagree with before restarting).
 
 ## Build & Test
 

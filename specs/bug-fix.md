@@ -8,7 +8,7 @@ spec's heading. Fix one per iteration. Delete the item from this file after
 fixing and committing.
 
 Items marked `(blocked: ...)` can't be fixed until their dependency resolves —
-same convention as tracks.md.
+same convention as specd_work_list.md.
 
 ---
 
