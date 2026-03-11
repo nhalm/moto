@@ -1,12 +1,37 @@
 #!/usr/bin/env bash
 set -e
 
-# Block secrets
+# Block secrets by filename
 if git diff --cached --name-only | grep -qE '\.(pem|key)$|\.env'; then
     echo "ERROR: Sensitive files detected"
     echo "FIX: git reset HEAD <filename>"
     exit 1
 fi
+
+# Block secrets by content patterns
+SECRET_PATTERNS=(
+    'sk-ant-'              # Anthropic API keys
+    'sk-proj-'             # Anthropic project keys
+    'sk-live-'             # Stripe live keys
+    'AKIA[0-9A-Z]{16}'     # AWS access keys
+    'ghp_[a-zA-Z0-9]{36}'  # GitHub personal access tokens
+    'gho_[a-zA-Z0-9]{36}'  # GitHub OAuth tokens
+    'xoxb-[0-9]+-[0-9]+-[a-zA-Z0-9]+'  # Slack bot tokens
+    'xoxp-[0-9]+-[0-9]+-[a-zA-Z0-9]+'  # Slack user tokens
+    '-----BEGIN.*PRIVATE KEY-----'      # Private keys
+    '[A-Za-z0-9+/]{64,}={0,2}'          # Long base64 strings (potential keys)
+)
+
+# Scan only added lines (exclude removals and hook file itself)
+STAGED_ADDITIONS=$(git diff --cached -- ':!.githooks/pre-commit' | grep '^+' | grep -v '^+++')
+for pattern in "${SECRET_PATTERNS[@]}"; do
+    if echo "$STAGED_ADDITIONS" | grep -qE "$pattern"; then
+        echo "ERROR: Potential secret detected in staged content"
+        echo "Pattern matched: $pattern"
+        echo "FIX: Remove the secret and run: git reset HEAD <filename>"
+        exit 1
+    fi
+done
 
 # Rust formatting and linting (if Rust files changed)
 if git diff --cached --name-only | grep -qE '\.(rs)$|Cargo\.'; then
