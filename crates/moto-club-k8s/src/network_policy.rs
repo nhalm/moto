@@ -2,8 +2,8 @@
 //!
 //! Creates the garage-isolation `NetworkPolicy` per garage-isolation.md spec:
 //! - Deny all ingress (`WireGuard` tunnel bypasses at pod level)
-//! - Allow egress: DNS, keybox, same-namespace (postgres/redis), internet
-//! - Block: cluster internal networks, cloud metadata, `WireGuard` range
+//! - Allow egress: DNS, keybox, same-namespace (postgres/redis), internet (IPv4 + IPv6)
+//! - Block: cluster internal networks, cloud metadata, `WireGuard` range, link-local, loopback
 
 use std::future::Future;
 
@@ -182,23 +182,38 @@ fn build_same_namespace_egress_rule() -> NetworkPolicyEgressRule {
     }
 }
 
-/// Internet egress rule: allows 0.0.0.0/0 except internal/reserved ranges.
+/// Internet egress rule: allows 0.0.0.0/0 and `::/0` except internal/reserved ranges.
 fn build_internet_egress_rule() -> NetworkPolicyEgressRule {
     NetworkPolicyEgressRule {
-        to: Some(vec![NetworkPolicyPeer {
-            ip_block: Some(IPBlock {
-                cidr: "0.0.0.0/0".to_string(),
-                except: Some(vec![
-                    "10.0.0.0/8".to_string(),     // Private (cluster internal)
-                    "172.16.0.0/12".to_string(),  // Private (cluster internal)
-                    "192.168.0.0/16".to_string(), // Private (cluster internal)
-                    "100.64.0.0/10".to_string(),  // CGNAT / WireGuard range
-                    "169.254.0.0/16".to_string(), // Link-local / cloud metadata
-                    "127.0.0.0/8".to_string(),    // Loopback
-                ]),
-            }),
-            ..Default::default()
-        }]),
+        to: Some(vec![
+            // IPv4 internet access
+            NetworkPolicyPeer {
+                ip_block: Some(IPBlock {
+                    cidr: "0.0.0.0/0".to_string(),
+                    except: Some(vec![
+                        "10.0.0.0/8".to_string(),     // Private (cluster internal)
+                        "172.16.0.0/12".to_string(),  // Private (cluster internal)
+                        "192.168.0.0/16".to_string(), // Private (cluster internal)
+                        "100.64.0.0/10".to_string(),  // CGNAT / WireGuard range
+                        "169.254.0.0/16".to_string(), // Link-local / cloud metadata
+                        "127.0.0.0/8".to_string(),    // Loopback
+                    ]),
+                }),
+                ..Default::default()
+            },
+            // IPv6 internet access
+            NetworkPolicyPeer {
+                ip_block: Some(IPBlock {
+                    cidr: "::/0".to_string(),
+                    except: Some(vec![
+                        "fd00::/8".to_string(),  // ULA / WireGuard overlay
+                        "::1/128".to_string(),   // Loopback
+                        "fe80::/10".to_string(), // Link-local
+                    ]),
+                }),
+                ..Default::default()
+            },
+        ]),
         ports: None, // Allow all ports to internet
     }
 }
@@ -323,23 +338,32 @@ mod tests {
         let rule = build_internet_egress_rule();
 
         let peers = rule.to.as_ref().unwrap();
-        assert_eq!(peers.len(), 1);
+        assert_eq!(peers.len(), 2); // IPv4 + IPv6
 
-        let peer = &peers[0];
-        let ip_block = peer.ip_block.as_ref().unwrap();
+        // Check IPv4 peer
+        let ipv4_peer = &peers[0];
+        let ipv4_block = ipv4_peer.ip_block.as_ref().unwrap();
+        assert_eq!(ipv4_block.cidr, "0.0.0.0/0");
 
-        // CIDR should be 0.0.0.0/0
-        assert_eq!(ip_block.cidr, "0.0.0.0/0");
+        let ipv4_except = ipv4_block.except.as_ref().unwrap();
+        assert_eq!(ipv4_except.len(), 6);
+        assert!(ipv4_except.contains(&"10.0.0.0/8".to_string()));
+        assert!(ipv4_except.contains(&"172.16.0.0/12".to_string()));
+        assert!(ipv4_except.contains(&"192.168.0.0/16".to_string()));
+        assert!(ipv4_except.contains(&"100.64.0.0/10".to_string())); // WireGuard range
+        assert!(ipv4_except.contains(&"169.254.0.0/16".to_string())); // Cloud metadata
+        assert!(ipv4_except.contains(&"127.0.0.0/8".to_string())); // Loopback
 
-        // Check except list
-        let except = ip_block.except.as_ref().unwrap();
-        assert_eq!(except.len(), 6);
-        assert!(except.contains(&"10.0.0.0/8".to_string()));
-        assert!(except.contains(&"172.16.0.0/12".to_string()));
-        assert!(except.contains(&"192.168.0.0/16".to_string()));
-        assert!(except.contains(&"100.64.0.0/10".to_string())); // WireGuard range
-        assert!(except.contains(&"169.254.0.0/16".to_string())); // Cloud metadata
-        assert!(except.contains(&"127.0.0.0/8".to_string())); // Loopback
+        // Check IPv6 peer
+        let ipv6_peer = &peers[1];
+        let ipv6_block = ipv6_peer.ip_block.as_ref().unwrap();
+        assert_eq!(ipv6_block.cidr, "::/0");
+
+        let ipv6_except = ipv6_block.except.as_ref().unwrap();
+        assert_eq!(ipv6_except.len(), 3);
+        assert!(ipv6_except.contains(&"fd00::/8".to_string())); // ULA / WireGuard overlay
+        assert!(ipv6_except.contains(&"::1/128".to_string())); // Loopback
+        assert!(ipv6_except.contains(&"fe80::/10".to_string())); // Link-local
 
         // No port restriction for internet
         assert!(rule.ports.is_none());
