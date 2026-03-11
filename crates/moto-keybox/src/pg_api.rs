@@ -99,7 +99,7 @@ async fn audit_auth_failed(pool: &DbPool, reason: &str) {
     let entry = InsertAuditEntry {
         event_type: DbAuditEventType::AuthFailed,
         service: "keybox",
-        principal_type: DbPrincipalType::Service,
+        principal_type: DbPrincipalType::Anonymous,
         principal_id: "",
         action: "auth_fail",
         resource_type: "token",
