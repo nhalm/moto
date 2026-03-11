@@ -326,6 +326,28 @@ impl GarageReconciler {
                             GarageStatus::Terminated,
                             Some("namespace_missing"),
                         );
+
+                        // Audit log: garage_terminated (best-effort)
+                        audit_repo::log_event(
+                            &self.db,
+                            audit_repo::InsertAuditEntry {
+                                event_type: "garage_terminated",
+                                principal_type: "service",
+                                principal_id: "moto-club",
+                                action: "delete",
+                                resource_type: "garage",
+                                resource_id: &id_str,
+                                outcome: "success",
+                                metadata: serde_json::json!({
+                                    "garage_name": garage.name,
+                                    "owner": garage.owner,
+                                    "previous_status": garage.status.to_string(),
+                                    "termination_reason": "namespace_missing",
+                                }),
+                                client_ip: None,
+                            },
+                        )
+                        .await;
                     }
                     Err(e) => {
                         warn!(garage_id = %id_str, error = %e, "failed to terminate garage");
@@ -430,6 +452,30 @@ impl GarageReconciler {
                     GarageStatus::Terminated,
                     Some("pod_lost"),
                 );
+
+                // Audit log: garage_terminated (best-effort)
+                audit_repo::log_event(
+                    &self.db,
+                    audit_repo::InsertAuditEntry {
+                        event_type: "garage_terminated",
+                        principal_type: "service",
+                        principal_id: "moto-club",
+                        action: "delete",
+                        resource_type: "garage",
+                        resource_id: id_str,
+                        outcome: "success",
+                        metadata: serde_json::json!({
+                            "garage_name": garage.name,
+                            "owner": garage.owner,
+                            "previous_status": garage.status.to_string(),
+                            "termination_reason": "pod_lost",
+                            "pod_status": "succeeded",
+                        }),
+                        client_ip: None,
+                    },
+                )
+                .await;
+
                 return Ok(());
             }
             GaragePodStatus::Unknown => {
@@ -453,6 +499,30 @@ impl GarageReconciler {
                     GarageStatus::Terminated,
                     Some("pod_lost"),
                 );
+
+                // Audit log: garage_terminated (best-effort)
+                audit_repo::log_event(
+                    &self.db,
+                    audit_repo::InsertAuditEntry {
+                        event_type: "garage_terminated",
+                        principal_type: "service",
+                        principal_id: "moto-club",
+                        action: "delete",
+                        resource_type: "garage",
+                        resource_id: id_str,
+                        outcome: "success",
+                        metadata: serde_json::json!({
+                            "garage_name": garage.name,
+                            "owner": garage.owner,
+                            "previous_status": garage.status.to_string(),
+                            "termination_reason": "pod_lost",
+                            "pod_status": "not_found",
+                        }),
+                        client_ip: None,
+                    },
+                )
+                .await;
+
                 return Ok(());
             }
         };
