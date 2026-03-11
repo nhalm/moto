@@ -747,6 +747,7 @@ impl PgSecretRepository {
     ) {
         let db_event_type = to_db_audit_event_type(event_type);
         let (action, resource_type, resource_id) = audit_fields_for_event(event_type, metadata);
+        let outcome = outcome_for_event(event_type);
 
         let entry = InsertAuditEntry {
             event_type: db_event_type,
@@ -756,7 +757,7 @@ impl PgSecretRepository {
             action,
             resource_type,
             resource_id: &resource_id,
-            outcome: "success",
+            outcome,
             metadata: serde_json::Value::Object(serde_json::Map::new()),
             client_ip: None,
         };
@@ -865,6 +866,13 @@ fn audit_fields_for_event(
         AuditEventType::SvidIssued => ("create", "svid", resource_id),
         AuditEventType::AuthFailed => ("auth_fail", "token", resource_id),
         AuditEventType::AccessDenied => ("deny", "secret", resource_id),
+    }
+}
+
+const fn outcome_for_event(event_type: AuditEventType) -> &'static str {
+    match event_type {
+        AuditEventType::AccessDenied | AuditEventType::AuthFailed => "denied",
+        _ => "success",
     }
 }
 
