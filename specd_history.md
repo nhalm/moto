@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **audit-logging v0.5 (2026-03-11):** Fix keybox `audit_auth_failed` in `crates/moto-keybox/src/pg_api.rs` to use `DbPrincipalType::Anonymous` instead of `DbPrincipalType::Service` for auth failure events
+- **audit-logging v0.5 (2026-03-11):** Add `Anonymous` variant to keybox `PrincipalType` enum in `crates/moto-keybox-db/src/models.rs` and update `Display` impl; update `from_db_principal_type` in `crates/moto-keybox/src/pg_api.rs` to map the new variant
 - **audit-logging v0.4 (2026-03-11):** Fix moto-club garage audit events to use `principal_type: "service"` with `principal_id: "moto-club"` and add `"requested_by": username` to metadata for user-initiated operations (garage create/terminate), per spec requirement that `principal_id` must be SPIFFE ID or service name.
 - **audit-logging v0.4 (2026-03-11):** Add keybox 90-day audit retention to moto-cron reconciler: `moto-keybox-db::audit_repo::delete_expired` exists but nothing calls it. Add a reconciler step that calls it with 90-day retention (previously marked complete in error).
 - **audit-logging v0.4 (2026-03-11):** Add `limit` and `offset` fields to keybox `AuditLogsResponse` in `crates/moto-keybox/src/api.rs` so direct keybox audit queries support proper pagination.
