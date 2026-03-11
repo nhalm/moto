@@ -32,10 +32,12 @@
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use tokio::net::TcpListener;
 use tokio::signal;
-use tracing::{error, info};
+use tokio::time::interval;
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use moto_keybox::{
@@ -214,6 +216,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|e| format!("failed to run migrations: {e}"))?;
         info!("database migrations complete");
 
+        // Start audit retention task in background
+        let audit_pool = pool.clone();
+        tokio::spawn(async move {
+            run_audit_retention_task(audit_pool).await;
+        });
+        info!("audit log retention task started");
+
         Some(pool)
     } else {
         None
@@ -291,6 +300,53 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!("moto-keybox shutdown complete");
 
     Ok(())
+}
+
+/// Retention period for keybox audit log entries (days).
+const AUDIT_RETENTION_DAYS: i32 = 90;
+
+/// Maximum number of audit log rows to delete per reconcile cycle.
+const AUDIT_RETENTION_BATCH_SIZE: i64 = 1000;
+
+/// Interval between audit retention cleanup cycles.
+const AUDIT_RETENTION_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Runs periodic audit log retention cleanup.
+///
+/// Deletes audit log entries older than `AUDIT_RETENTION_DAYS` in batches
+/// of at most `AUDIT_RETENTION_BATCH_SIZE` rows per cycle.
+async fn run_audit_retention_task(pool: moto_keybox_db::DbPool) {
+    let mut ticker = interval(AUDIT_RETENTION_INTERVAL);
+
+    loop {
+        ticker.tick().await;
+
+        match moto_keybox_db::audit_repo::delete_expired(
+            &pool,
+            AUDIT_RETENTION_DAYS,
+            AUDIT_RETENTION_BATCH_SIZE,
+        )
+        .await
+        {
+            Ok(rows_deleted) => {
+                if rows_deleted > 0 {
+                    info!(
+                        service = "keybox",
+                        rows_deleted = rows_deleted,
+                        retention_days = AUDIT_RETENTION_DAYS,
+                        "audit log retention cleanup"
+                    );
+                }
+            }
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    retention_days = AUDIT_RETENTION_DAYS,
+                    "failed to enforce audit log retention, will retry next cycle"
+                );
+            }
+        }
+    }
 }
 
 /// Waits for SIGTERM (Unix) or Ctrl+C to initiate graceful shutdown.

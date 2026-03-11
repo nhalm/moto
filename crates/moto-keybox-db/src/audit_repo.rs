@@ -153,6 +153,34 @@ pub async fn count_audit_entries(pool: &DbPool, query: &AuditLogQuery) -> DbResu
     Ok(row.0)
 }
 
+/// Deletes audit log entries older than the specified retention period.
+///
+/// Deletes at most `batch_size` rows per call to avoid long-running transactions.
+/// Returns the number of rows deleted.
+///
+/// # Errors
+///
+/// Returns an error if the delete operation fails.
+pub async fn delete_expired(pool: &DbPool, retention_days: i32, batch_size: i64) -> DbResult<u64> {
+    let result = sqlx::query(
+        r"
+        DELETE FROM audit_log
+        WHERE id IN (
+            SELECT id FROM audit_log
+            WHERE timestamp < now() - make_interval(days => $1)
+            ORDER BY timestamp ASC
+            LIMIT $2
+        )
+        ",
+    )
+    .bind(retention_days)
+    .bind(batch_size)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
 #[cfg(test)]
 #[path = "audit_repo_test.rs"]
 mod audit_repo_test;
