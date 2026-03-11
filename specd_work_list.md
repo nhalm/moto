@@ -14,10 +14,6 @@ Read it in full at the start of each iteration.
 
 - Scope moto-club K8s RBAC: replace cluster-wide `secrets` permission with namespace-scoped access. moto-club should NOT be able to read secrets in `moto-system`. Options: create per-garage Roles dynamically, or exclude `moto-system` namespace.
 
-## garage-isolation v0.5 (compliance HIGH-4)
-
-- Add `automount_service_account_token: Some(false)` to postgres and redis pod specs in `crates/moto-club-k8s/src/supporting_services.rs` `build_postgres_deployment()` and `build_redis_deployment()`
-
 ## audit-logging v0.3
 
 - Parallelize audit fan-out: use `tokio::join!` to query local audit_log and keybox `/audit/logs` concurrently in `crates/moto-club-api/src/audit.rs`

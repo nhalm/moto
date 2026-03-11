@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **garage-isolation v0.5 (2026-03-11):** Add `automount_service_account_token: Some(false)` to postgres and redis pod specs in `crates/moto-club-k8s/src/supporting_services.rs` `build_postgres_deployment()` and `build_redis_deployment()`
 - **keybox v0.16 (2026-03-11):** Restrict garage access to service-scoped secrets in `crates/moto-keybox/src/abac.rs` `evaluate_service()` — garages should NOT be able to read `ai-proxy/*` secrets directly. Add a deny-list for sensitive service prefixes or require explicit grant.
 - **garage-isolation v0.5 (2026-03-11):** Add IPv6 NetworkPolicy rules in `crates/moto-club-k8s/src/network_policy.rs` — mirror all IPv4 egress rules with IPv6 equivalents. Block `fd00::/8` (ULA/WireGuard overlay), `::1/128` (loopback), `fe80::/10` (link-local).
 - **ai-proxy v0.5 (2026-03-11):** Verify Ed25519 SVID signature in `crates/moto-ai-proxy/src/auth.rs` `extract_garage_id()` — load keybox's public verifying key at startup, verify signature before trusting claims. A forged JWT MUST be rejected.
