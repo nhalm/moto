@@ -96,6 +96,12 @@ impl PgAppState {
 /// Called when SVID validation or service token validation fails.
 /// Never blocks the response — failures are logged as warnings.
 async fn audit_auth_failed(pool: &DbPool, reason: &str) {
+    let mut metadata = serde_json::Map::new();
+    metadata.insert(
+        "reason".to_string(),
+        serde_json::Value::String(reason.to_string()),
+    );
+
     let entry = InsertAuditEntry {
         event_type: DbAuditEventType::AuthFailed,
         service: "keybox",
@@ -103,9 +109,9 @@ async fn audit_auth_failed(pool: &DbPool, reason: &str) {
         principal_id: "",
         action: "auth_fail",
         resource_type: "token",
-        resource_id: reason,
+        resource_id: "",
         outcome: "denied",
-        metadata: serde_json::Value::Object(serde_json::Map::new()),
+        metadata: serde_json::Value::Object(metadata),
         client_ip: None,
     };
 
