@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **container-system v1.5 (2026-03-11):** Add Cosign image signing to the Nix build pipeline or Makefile: after `make push-*` targets, sign the image with `cosign sign`. Generate a cosign keypair stored in `.dev/cosign/` (gitignored). Add `make sign-images` target.
+- **makefile v0.20 (2026-03-11):** Create `.github/workflows/ci.yml` GitHub Actions workflow: trigger on push to main and PRs. Steps: checkout, install Nix, `make ci`, `make audit`. Use `ubuntu-latest` runner. Cache cargo registry and target dir.
 - **audit-logging v0.6 (2026-03-11):** Create a matching SQL migration for moto-keybox-db with the same INSERT-only `audit_writer` role pattern on keybox's `audit_log` table
 - **moto-club v2.7 (2026-03-11):** Add `leases` resource (`coordination.k8s.io` API group, verbs: `get, create, update`) to the moto-club ClusterRole in `infra/k8s/moto-system/club.yaml`
 - **moto-club v2.7 (2026-03-11):** Implement leader election for the reconciler using K8s Lease API in `crates/moto-club-reconcile/`. Create a `LeaderElector` that acquires/renews a Lease in the `moto-system` namespace. Only the leader runs `reconcile_once()`. Use 15s lease duration, 10s renew deadline, 2s retry period. On leadership loss, stop reconciling until re-elected.
