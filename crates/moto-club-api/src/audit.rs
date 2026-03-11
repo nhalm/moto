@@ -326,13 +326,23 @@ async fn query_keybox_audit(
         "keybox unavailable".to_string()
     })?;
 
+    let original_count = body.entries.len();
     let events: Vec<AuditEventResponse> = body
         .entries
         .into_iter()
         .filter_map(|e| {
-            let timestamp = chrono::DateTime::parse_from_rfc3339(&e.timestamp)
-                .ok()?
-                .with_timezone(&Utc);
+            let timestamp = match chrono::DateTime::parse_from_rfc3339(&e.timestamp) {
+                Ok(ts) => ts.with_timezone(&Utc),
+                Err(parse_err) => {
+                    tracing::warn!(
+                        event_id = %e.id,
+                        timestamp = %e.timestamp,
+                        error = %parse_err,
+                        "keybox audit event has invalid timestamp, skipping"
+                    );
+                    return None;
+                }
+            };
             Some(AuditEventResponse {
                 id: e.id,
                 event_type: e.event_type,
@@ -350,10 +360,25 @@ async fn query_keybox_audit(
         })
         .collect();
 
-    #[allow(clippy::cast_possible_wrap)]
-    let total = body.total as i64;
+    let parsed_count = events.len();
+    if parsed_count < original_count {
+        tracing::warn!(
+            original = original_count,
+            parsed = parsed_count,
+            dropped = original_count - parsed_count,
+            "some keybox audit events were dropped due to timestamp parse errors"
+        );
+    }
 
-    Ok(Some((events, total)))
+    // Adjust total to reflect actual parsed events, not the original count.
+    // If keybox returned N events but M failed to parse, we must reduce the
+    // total by M to maintain pagination correctness.
+    #[allow(clippy::cast_possible_wrap)]
+    let dropped = (original_count - parsed_count) as i64;
+    #[allow(clippy::cast_possible_wrap)]
+    let adjusted_total = (body.total as i64).saturating_sub(dropped);
+
+    Ok(Some((events, adjusted_total)))
 }
 
 /// Validates the service token from the Authorization header.
