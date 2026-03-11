@@ -155,17 +155,19 @@ async fn get_audit_logs(
 
     let mut warnings = Vec::new();
 
-    let (mut events, mut total) =
-        query_local_audit(&state, &query, query_moto_club, limit, offset).await?;
+    // Query local audit log and keybox in parallel
+    let (local_result, keybox_result) = tokio::join!(
+        query_local_audit(&state, &query, query_moto_club, limit, offset),
+        async {
+            if query_keybox {
+                query_keybox_fanout(&state, &query, limit).await
+            } else {
+                Ok(None)
+            }
+        }
+    );
 
-    // Fan-out to keybox in parallel with local query is ideal, but since
-    // query_local_audit already awaits, we query keybox sequentially here.
-    // For true parallelism, both are launched via tokio::join below.
-    let keybox_result = if query_keybox {
-        query_keybox_fanout(&state, &query, limit).await
-    } else {
-        Ok(None)
-    };
+    let (mut events, mut total) = local_result?;
 
     match keybox_result {
         Ok(Some((keybox_events, keybox_total))) => {
