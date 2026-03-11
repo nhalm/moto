@@ -1,0 +1,30 @@
+# PodDisruptionBudgets for moto-system services
+# Ensures high availability during voluntary disruptions (node drains, rolling updates)
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: moto-keybox
+  namespace: moto-system
+  labels:
+    app.kubernetes.io/part-of: moto
+    app.kubernetes.io/component: moto-keybox
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: moto-keybox
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: moto-club
+  namespace: moto-system
+  labels:
+    app.kubernetes.io/part-of: moto
+    app.kubernetes.io/component: moto-club
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: moto-club

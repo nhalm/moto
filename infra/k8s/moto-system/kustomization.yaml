@@ -7,3 +7,4 @@ resources:
   - keybox.yaml
   - club.yaml
   - ai-proxy.yaml
+  - pdb.yaml
