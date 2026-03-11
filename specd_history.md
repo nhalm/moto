@@ -22,6 +22,10 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **audit-logging v0.6 (2026-03-11):** Emit `access_denied` audit events from `PgSecretRepository` when ABAC policy denies access. Currently, `policy.evaluate()` and `policy.can_read()` return `Err(AccessDenied)` which propagates via `?` before any audit call. Each ABAC check in `create_with_context`, `get_with_context`, `update_with_context`, and `delete_with_context` must catch the error, log the `access_denied` audit event, then re-return the error. File: `crates/moto-keybox/src/pg_repository.rs`
+- **audit-logging v0.6 (2026-03-11):** Fix `access_denied` action value from `"auth_fail"` to `"deny"` in `audit_fields_for_event()` at `crates/moto-keybox/src/pg_repository.rs:851` and in `AuditEntry::access_denied()` at `crates/moto-keybox/src/types.rs:384`
+- **audit-logging v0.6 (2026-03-11):** Fix `AuditEntry::auth_failed()` helper at `crates/moto-keybox/src/types.rs:362-373`: change `principal_type` from `PrincipalType::Service` to `PrincipalType::Anonymous`, and move `reason` from `resource_id` to `metadata` field (add metadata field to `AuditEntry` struct if needed). Update corresponding test at line 553.
+- **audit-logging v0.6 (2026-03-11):** Fix fan-out query logic in `crates/moto-club-api/src/audit.rs` to handle `offset` correctly: query each service with `offset+limit` rows (not forwarding offset), merge results by timestamp, then apply offset to the merged set
 - **audit-logging v0.6 (2026-03-11):** Add integration tests in `crates/moto-club-api/src/audit.rs` for offset parameter in fan-out queries to verify correct pagination across multiple services
 - **audit-logging v0.5 (2026-03-11):** Fix keybox `audit_auth_failed` in `crates/moto-keybox/src/pg_api.rs` to store the failure reason in `metadata` (e.g. `{"reason": "..."}`) instead of `resource_id`; set `resource_id` to empty string or omit
 - **audit-logging v0.5 (2026-03-11):** Fix keybox `audit_auth_failed` in `crates/moto-keybox/src/pg_api.rs` to use `DbPrincipalType::Anonymous` instead of `DbPrincipalType::Service` for auth failure events
