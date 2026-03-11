@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **audit-logging v0.6 (2026-03-11):** Add integration tests in `crates/moto-club-api/src/audit.rs` for offset parameter in fan-out queries to verify correct pagination across multiple services
 - **audit-logging v0.5 (2026-03-11):** Fix keybox `audit_auth_failed` in `crates/moto-keybox/src/pg_api.rs` to store the failure reason in `metadata` (e.g. `{"reason": "..."}`) instead of `resource_id`; set `resource_id` to empty string or omit
 - **audit-logging v0.5 (2026-03-11):** Fix keybox `audit_auth_failed` in `crates/moto-keybox/src/pg_api.rs` to use `DbPrincipalType::Anonymous` instead of `DbPrincipalType::Service` for auth failure events
 - **audit-logging v0.5 (2026-03-11):** Add `Anonymous` variant to keybox `PrincipalType` enum in `crates/moto-keybox-db/src/models.rs` and update `Display` impl; update `from_db_principal_type` in `crates/moto-keybox/src/pg_api.rs` to map the new variant
