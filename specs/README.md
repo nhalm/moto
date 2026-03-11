@@ -68,6 +68,6 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [moto-cron](moto-cron.md) | Ripping | TTL enforcement in reconciler, scheduled cleanup |
 | [moto-club-websocket](moto-club-websocket.md) | Ripping | WebSocket streaming for peers, logs, events |
 | [ai-proxy](ai-proxy.md) | Ripping | AI provider gateway, injects secrets |
-| [audit-logging](audit-logging.md) | Ready to Rip | Compliance and audit trails |
+| [audit-logging](audit-logging.md) | Ripping | Compliance and audit trails |
 | [compliance](compliance.md) | Ripping | SOC 2 compliance requirements and control mapping |
 
