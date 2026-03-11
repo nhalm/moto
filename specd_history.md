@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **service-deploy v0.7 (2026-03-11):** Scope moto-club K8s RBAC: replace cluster-wide `secrets` permission with namespace-scoped access. moto-club should NOT be able to read secrets in `moto-system`. Options: create per-garage Roles dynamically, or exclude `moto-system` namespace.
 - **garage-isolation v0.5 (2026-03-11):** Add `automount_service_account_token: Some(false)` to postgres and redis pod specs in `crates/moto-club-k8s/src/supporting_services.rs` `build_postgres_deployment()` and `build_redis_deployment()`
 - **keybox v0.16 (2026-03-11):** Restrict garage access to service-scoped secrets in `crates/moto-keybox/src/abac.rs` `evaluate_service()` — garages should NOT be able to read `ai-proxy/*` secrets directly. Add a deny-list for sensitive service prefixes or require explicit grant.
 - **garage-isolation v0.5 (2026-03-11):** Add IPv6 NetworkPolicy rules in `crates/moto-club-k8s/src/network_policy.rs` — mirror all IPv4 egress rules with IPv6 equivalents. Block `fd00::/8` (ULA/WireGuard overlay), `::1/128` (loopback), `fe80::/10` (link-local).

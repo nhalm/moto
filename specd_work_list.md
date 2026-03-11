@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## service-deploy v0.7 (compliance HIGH-3)
-
-- Scope moto-club K8s RBAC: replace cluster-wide `secrets` permission with namespace-scoped access. moto-club should NOT be able to read secrets in `moto-system`. Options: create per-garage Roles dynamically, or exclude `moto-system` namespace.
-
 ## audit-logging v0.3
 
 - Parallelize audit fan-out: use `tokio::join!` to query local audit_log and keybox `/audit/logs` concurrently in `crates/moto-club-api/src/audit.rs`
