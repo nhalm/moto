@@ -16,7 +16,6 @@ Read it in full at the start of each iteration.
 
 ## moto-club v2.7 (compliance: leader election)
 
-- Implement leader election for the reconciler using K8s Lease API in `crates/moto-club-reconcile/`. Create a `LeaderElector` that acquires/renews a Lease in the `moto-system` namespace. Only the leader runs `reconcile_once()`. Use 15s lease duration, 10s renew deadline, 2s retry period. On leadership loss, stop reconciling until re-elected.
 - Add `leases` resource (`coordination.k8s.io` API group, verbs: `get, create, update`) to the moto-club ClusterRole in `infra/k8s/moto-system/club.yaml`
 
 ## makefile v0.20 (compliance: CI/CD pipeline)
