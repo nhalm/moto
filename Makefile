@@ -6,6 +6,7 @@
 .PHONY: build-bike test-bike
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
+.PHONY: cosign-keygen sign-images sign-garage sign-club sign-keybox
 .PHONY: test-db-up test-db-down test-db-migrate test-integration test-all smoke-keybox smoke-ai-proxy
 .PHONY: dev dev-cluster dev-cluster-down dev-up dev-down dev-clean
 .PHONY: dev-db-up dev-db-down dev-db-migrate dev-keybox-init dev-keybox dev-club dev-garage-image
@@ -208,6 +209,55 @@ registry-stop: ## Stop and remove local registry
 	@echo "Stopping local registry..."
 	@docker stop moto-registry 2>/dev/null && docker rm moto-registry 2>/dev/null && echo "Registry stopped and removed." || \
 		echo "Registry not running or already removed."
+
+##@ Image Signing
+
+cosign-keygen: ## Generate cosign keypair in .dev/cosign/ (idempotent)
+	@if [ -f .dev/cosign/cosign.key ] && [ -f .dev/cosign/cosign.pub ]; then \
+		echo "Cosign keypair already exists in .dev/cosign/"; \
+	else \
+		if ! command -v cosign &>/dev/null; then \
+			echo "Error: cosign is not installed. Install with 'brew install cosign' or 'nix-shell -p cosign'"; \
+			exit 1; \
+		fi; \
+		mkdir -p .dev/cosign && \
+		cd .dev/cosign && \
+		COSIGN_PASSWORD="" cosign generate-key-pair && \
+		chmod 600 cosign.key && \
+		echo "Cosign keypair generated in .dev/cosign/"; \
+	fi
+
+sign-garage: cosign-keygen ## Sign moto-garage images in registry
+	@if ! command -v cosign &>/dev/null; then \
+		echo "Error: cosign is not installed. Install with 'brew install cosign' or 'nix-shell -p cosign'"; \
+		exit 1; \
+	fi
+	@echo "Signing $(REGISTRY)/moto-garage:latest and $(REGISTRY)/moto-garage:$(SHA)..."
+	cosign sign --yes --key .dev/cosign/cosign.key $(REGISTRY)/moto-garage:latest
+	cosign sign --yes --key .dev/cosign/cosign.key $(REGISTRY)/moto-garage:$(SHA)
+	@echo "Images signed successfully."
+
+sign-club: cosign-keygen ## Sign moto-club images in registry
+	@if ! command -v cosign &>/dev/null; then \
+		echo "Error: cosign is not installed. Install with 'brew install cosign' or 'nix-shell -p cosign'"; \
+		exit 1; \
+	fi
+	@echo "Signing $(REGISTRY)/moto-club:latest and $(REGISTRY)/moto-club:$(SHA)..."
+	cosign sign --yes --key .dev/cosign/cosign.key $(REGISTRY)/moto-club:latest
+	cosign sign --yes --key .dev/cosign/cosign.key $(REGISTRY)/moto-club:$(SHA)
+	@echo "Images signed successfully."
+
+sign-keybox: cosign-keygen ## Sign moto-keybox images in registry
+	@if ! command -v cosign &>/dev/null; then \
+		echo "Error: cosign is not installed. Install with 'brew install cosign' or 'nix-shell -p cosign'"; \
+		exit 1; \
+	fi
+	@echo "Signing $(REGISTRY)/moto-keybox:latest and $(REGISTRY)/moto-keybox:$(SHA)..."
+	cosign sign --yes --key .dev/cosign/cosign.key $(REGISTRY)/moto-keybox:latest
+	cosign sign --yes --key .dev/cosign/cosign.key $(REGISTRY)/moto-keybox:$(SHA)
+	@echo "Images signed successfully."
+
+sign-images: sign-garage sign-club sign-keybox ## Sign all moto images in registry
 
 ##@ Testing
 
