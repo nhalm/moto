@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **audit-logging v0.4 (2026-03-11):** Add keybox 90-day audit retention to moto-cron reconciler: `moto-keybox-db::audit_repo::delete_expired` exists but nothing calls it. Add a reconciler step that calls it with 90-day retention (previously marked complete in error).
 - **audit-logging v0.4 (2026-03-11):** Add `limit` and `offset` fields to keybox `AuditLogsResponse` in `crates/moto-keybox/src/api.rs` so direct keybox audit queries support proper pagination.
 - **audit-logging v0.4 (2026-03-11):** Fix silent event loss in keybox fan-out: when timestamp parsing fails in `crates/moto-club-api/src/audit.rs` `filter_map`, events are silently dropped but `total` still counts them, breaking pagination. Either log and skip with adjusted total, or propagate parse errors as warnings.
 - **audit-logging v0.3 (2026-03-11):** Add keybox 90-day audit log retention task to moto-cron reconciler (batch delete keybox audit rows older than 90 days, same pattern as moto-club 30-day retention)
