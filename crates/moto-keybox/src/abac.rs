@@ -53,6 +53,10 @@ pub enum Action {
     List,
 }
 
+/// Service prefixes that garages are denied access to.
+/// This prevents bypassing credential injection and audit trails.
+const GARAGE_DENIED_SERVICES: &[&str] = &["ai-proxy"];
+
 impl std::fmt::Display for Action {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -177,6 +181,7 @@ impl PolicyEngine {
     /// Rules:
     /// - Bikes can read secrets belonging to their service (service claim must match)
     /// - Services can access their own service secrets
+    /// - Garages can read service secrets EXCEPT those in the deny-list (ai-proxy)
     fn evaluate_service(
         &self,
         claims: &SvidClaims,
@@ -236,16 +241,26 @@ impl PolicyEngine {
                 }
             }
             PrincipalType::Garage => {
-                // Garages can read service secrets for development
-                if action == Action::Read {
-                    Ok(())
-                } else {
-                    Err(Error::AccessDenied {
+                // Garages can read service secrets for development, except sensitive services
+                if action != Action::Read {
+                    return Err(Error::AccessDenied {
                         message: format!(
                             "garage '{}' can only read service secrets, not {}",
                             claims.principal_id, action
                         ),
+                    });
+                }
+
+                // Deny-list: garages cannot access secrets for these services
+                if GARAGE_DENIED_SERVICES.contains(&secret_service) {
+                    Err(Error::AccessDenied {
+                        message: format!(
+                            "garage '{}' cannot access service '{}' secrets (restricted)",
+                            claims.principal_id, secret_service
+                        ),
                     })
+                } else {
+                    Ok(())
                 }
             }
         }
@@ -426,6 +441,49 @@ mod tests {
             .evaluate(&claims, &secret, Action::Write)
             .unwrap_err();
         assert!(matches!(err, Error::AccessDenied { .. }));
+    }
+
+    #[test]
+    fn garage_can_read_normal_service_secrets() {
+        let engine = PolicyEngine::new();
+        let claims = garage_claims("garage-123");
+        let secret = SecretMetadata::service("tokenization", "db/password");
+
+        engine.can_read(&claims, &secret).unwrap();
+    }
+
+    #[test]
+    fn garage_cannot_read_ai_proxy_service_secrets() {
+        let engine = PolicyEngine::new();
+        let claims = garage_claims("garage-123");
+        let secret = SecretMetadata::service("ai-proxy", "anthropic");
+
+        let err = engine.can_read(&claims, &secret).unwrap_err();
+        assert!(matches!(err, Error::AccessDenied { .. }));
+        if let Error::AccessDenied { message } = err {
+            assert!(message.contains("restricted"));
+        }
+    }
+
+    #[test]
+    fn garage_cannot_write_service_secrets() {
+        let engine = PolicyEngine::new();
+        let claims = garage_claims("garage-123");
+        let secret = SecretMetadata::service("tokenization", "db/password");
+
+        let err = engine
+            .evaluate(&claims, &secret, Action::Write)
+            .unwrap_err();
+        assert!(matches!(err, Error::AccessDenied { .. }));
+    }
+
+    #[test]
+    fn ai_proxy_service_can_read_own_secrets() {
+        let engine = PolicyEngine::new();
+        let claims = service_claims("ai-proxy");
+        let secret = SecretMetadata::service("ai-proxy", "anthropic");
+
+        engine.can_read(&claims, &secret).unwrap();
     }
 
     #[test]
