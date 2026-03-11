@@ -10,6 +10,35 @@ use axum::http::HeaderMap;
 use moto_audit_types::AuditEventBuilder;
 use uuid::Uuid;
 
+/// Extracts token counts from provider response headers.
+///
+/// Checks for common token count headers used by AI providers.
+/// Returns `(tokens_in, tokens_out)` as `Option<u64>` values.
+fn extract_token_counts(headers: &HeaderMap) -> (Option<u64>, Option<u64>) {
+    let tokens_in = extract_token_header(
+        headers,
+        &["x-tokens-input", "x-input-tokens", "x-prompt-tokens"],
+    );
+    let tokens_out = extract_token_header(
+        headers,
+        &["x-tokens-output", "x-output-tokens", "x-completion-tokens"],
+    );
+    (tokens_in, tokens_out)
+}
+
+/// Extracts a u64 value from the first matching header name.
+fn extract_token_header(headers: &HeaderMap, names: &[&str]) -> Option<u64> {
+    for name in names {
+        if let Some(value) = headers.get(*name)
+            && let Ok(s) = value.to_str()
+            && let Ok(n) = s.parse::<u64>()
+        {
+            return Some(n);
+        }
+    }
+    None
+}
+
 /// Extracts the client IP from request headers.
 ///
 /// Checks `X-Forwarded-For` (first IP) and `X-Real-Ip` headers.
@@ -49,7 +78,8 @@ pub fn log_ai_request(
     mode: &str,
     upstream_status: Option<u16>,
     start: &Instant,
-    headers: &HeaderMap,
+    request_headers: &HeaderMap,
+    response_headers: Option<&HeaderMap>,
 ) {
     let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
     let mut metadata = serde_json::json!({
@@ -64,13 +94,24 @@ pub fn log_ai_request(
         metadata["upstream_status"] = serde_json::json!(status);
     }
 
+    // Extract token counts from provider response headers if available.
+    if let Some(resp_headers) = response_headers {
+        let (tokens_in, tokens_out) = extract_token_counts(resp_headers);
+        if let Some(t) = tokens_in {
+            metadata["tokens_in"] = serde_json::json!(t);
+        }
+        if let Some(t) = tokens_out {
+            metadata["tokens_out"] = serde_json::json!(t);
+        }
+    }
+
     let mut builder = AuditEventBuilder::new("ai_request", "ai-proxy", "proxy")
         .principal("garage", format!("spiffe://moto.local/garage/{garage_id}"))
         .resource("ai_request", request_id.to_string())
         .outcome("success")
         .metadata(metadata);
 
-    if let Some(ip) = extract_client_ip(headers) {
+    if let Some(ip) = extract_client_ip(request_headers) {
         builder = builder.client_ip(ip);
     }
 
@@ -132,7 +173,8 @@ pub fn log_provider_error(
     mode: &str,
     upstream_status: u16,
     start: &Instant,
-    headers: &HeaderMap,
+    request_headers: &HeaderMap,
+    response_headers: Option<&HeaderMap>,
 ) {
     let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
     let mut metadata = serde_json::json!({
@@ -145,13 +187,24 @@ pub fn log_provider_error(
         metadata["model"] = serde_json::Value::String(m.to_string());
     }
 
+    // Extract token counts from provider response headers if available.
+    if let Some(resp_headers) = response_headers {
+        let (tokens_in, tokens_out) = extract_token_counts(resp_headers);
+        if let Some(t) = tokens_in {
+            metadata["tokens_in"] = serde_json::json!(t);
+        }
+        if let Some(t) = tokens_out {
+            metadata["tokens_out"] = serde_json::json!(t);
+        }
+    }
+
     let mut builder = AuditEventBuilder::new("provider_error", "ai-proxy", "error")
         .principal("garage", format!("spiffe://moto.local/garage/{garage_id}"))
         .resource("ai_request", request_id.to_string())
         .outcome("error")
         .metadata(metadata);
 
-    if let Some(ip) = extract_client_ip(headers) {
+    if let Some(ip) = extract_client_ip(request_headers) {
         builder = builder.client_ip(ip);
     }
 

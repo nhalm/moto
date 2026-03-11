@@ -90,6 +90,8 @@ pub struct ForwardResult {
     pub response: Response,
     /// The upstream HTTP status code, if a response was received.
     pub upstream_status: Option<u16>,
+    /// The upstream response headers (for audit logging).
+    pub upstream_headers: Option<HeaderMap>,
 }
 
 /// Forwards a request to the given provider's upstream, rewriting the path
@@ -114,6 +116,7 @@ pub async fn forward_to_provider<K: KeyStore>(
                 "server_error",
             ),
             upstream_status: None,
+            upstream_headers: None,
         };
     };
 
@@ -167,6 +170,7 @@ pub async fn forward_to_provider<K: KeyStore>(
                     "server_error",
                 ),
                 upstream_status: None,
+                upstream_headers: None,
             };
         }
         Err(_) => {
@@ -178,6 +182,7 @@ pub async fn forward_to_provider<K: KeyStore>(
                     "server_error",
                 ),
                 upstream_status: None,
+                upstream_headers: None,
             };
         }
     };
@@ -186,6 +191,9 @@ pub async fn forward_to_provider<K: KeyStore>(
     let upstream_status_code = upstream_resp.status().as_u16();
     let status = StatusCode::from_u16(upstream_status_code).unwrap_or(StatusCode::BAD_GATEWAY);
 
+    // Capture upstream headers for audit logging (before consuming the response).
+    let upstream_headers = upstream_resp.headers().clone();
+
     // Sanitize non-success responses: buffer, extract error message, scrub API keys,
     // and wrap in OpenAI error format. Raw upstream error bodies are never forwarded.
     if !upstream_resp.status().is_success() {
@@ -193,6 +201,7 @@ pub async fn forward_to_provider<K: KeyStore>(
         return ForwardResult {
             response: sanitized,
             upstream_status: Some(upstream_status_code),
+            upstream_headers: Some(upstream_headers),
         };
     }
 
@@ -220,6 +229,7 @@ pub async fn forward_to_provider<K: KeyStore>(
     ForwardResult {
         response: resp,
         upstream_status: Some(upstream_status_code),
+        upstream_headers: Some(upstream_headers),
     }
 }
 
@@ -355,6 +365,7 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
             result.upstream_status,
             &start,
             headers,
+            result.upstream_headers.as_ref(),
         );
     } else {
         audit::log_provider_error(
@@ -366,6 +377,7 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
             result.upstream_status.unwrap_or(status),
             &start,
             headers,
+            result.upstream_headers.as_ref(),
         );
     }
 
@@ -625,6 +637,7 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
             result.upstream_status,
             &start,
             &headers,
+            result.upstream_headers.as_ref(),
         );
     } else {
         audit::log_provider_error(
@@ -636,6 +649,7 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
             result.upstream_status.unwrap_or(status),
             &start,
             &headers,
+            result.upstream_headers.as_ref(),
         );
     }
 
