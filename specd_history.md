@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **audit-logging v0.6 (2026-03-11):** Add `garage_terminated` audit events for reconciler-driven terminations in `crates/moto-club-reconcile/src/garage.rs`: NamespaceMissing (line ~315), PodLost/Succeeded (line ~418), and PodLost/Unknown (line ~442) paths terminate garages without emitting audit events.
+- **audit-logging v0.6 (2026-03-11):** Fix `principal_id` in reconciler audit events at `crates/moto-club-reconcile/src/garage.rs:502,754`: change from `"moto-club-reconciler"` to `"moto-club"` for `garage_state_changed` and `ttl_enforced` events. The spec requires `principal_id = "moto-club"` for service actions; reconciler context belongs in metadata.
 - **audit-logging v0.6 (2026-03-11):** Fix `outcome` field in `PgSecretRepository::audit()` at `crates/moto-keybox/src/pg_repository.rs:759`: currently hardcoded to `"success"` for all event types. `AccessDenied` events must use `outcome = "denied"`. Determine outcome from event type instead of hardcoding.
 - **audit-logging v0.6 (2026-03-11):** Emit `access_denied` audit events from `PgSecretRepository` when ABAC policy denies access. Currently, `policy.evaluate()` and `policy.can_read()` return `Err(AccessDenied)` which propagates via `?` before any audit call. Each ABAC check in `create_with_context`, `get_with_context`, `update_with_context`, and `delete_with_context` must catch the error, log the `access_denied` audit event, then re-return the error. File: `crates/moto-keybox/src/pg_repository.rs`
 - **audit-logging v0.6 (2026-03-11):** Fix `access_denied` action value from `"auth_fail"` to `"deny"` in `audit_fields_for_event()` at `crates/moto-keybox/src/pg_repository.rs:851` and in `AuditEntry::access_denied()` at `crates/moto-keybox/src/types.rs:384`
