@@ -2247,6 +2247,8 @@ name = "moto-club-reconcile"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "k8s-openapi",
+ "kube",
  "moto-club-db",
  "moto-club-k8s",
  "moto-club-types",

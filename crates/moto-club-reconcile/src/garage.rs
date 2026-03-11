@@ -23,6 +23,8 @@ use moto_club_types::GarageId;
 use moto_club_ws::events::{EventBroadcaster, GarageEvent};
 use moto_k8s::Labels;
 
+use crate::LeaderElector;
+
 /// TTL warning thresholds in minutes (15 and 5 minutes before expiry).
 const TTL_WARNING_THRESHOLDS: &[u32] = &[15, 5];
 
@@ -111,6 +113,8 @@ pub struct GarageReconciler {
     ttl_warnings_sent: Arc<Mutex<HashSet<(Uuid, u32)>>>,
     /// Tracks garage IDs for which crash loop error events have been sent.
     crash_loop_errors_sent: Arc<Mutex<HashSet<Uuid>>>,
+    /// Optional leader elector for multi-replica deployments.
+    leader_elector: Option<Arc<LeaderElector>>,
 }
 
 impl GarageReconciler {
@@ -124,6 +128,7 @@ impl GarageReconciler {
             event_broadcaster: None,
             ttl_warnings_sent: Arc::new(Mutex::new(HashSet::new())),
             crash_loop_errors_sent: Arc::new(Mutex::new(HashSet::new())),
+            leader_elector: None,
         }
     }
 
@@ -131,6 +136,15 @@ impl GarageReconciler {
     #[must_use]
     pub fn with_event_broadcaster(mut self, broadcaster: Arc<EventBroadcaster>) -> Self {
         self.event_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Sets the leader elector for multi-replica deployments.
+    ///
+    /// When set, the reconciler will only run when this instance is the leader.
+    #[must_use]
+    pub fn with_leader_elector(mut self, elector: Arc<LeaderElector>) -> Self {
+        self.leader_elector = Some(elector);
         self
     }
 
@@ -172,11 +186,21 @@ impl GarageReconciler {
     /// Runs the reconciliation loop continuously.
     ///
     /// This runs forever, reconciling on each interval tick.
+    /// If a leader elector is configured, only runs reconciliation when this instance is the leader.
     pub async fn run(&self) {
         let mut ticker = interval(self.config.interval);
 
         loop {
             ticker.tick().await;
+
+            // Check if we should run reconciliation
+            if let Some(ref elector) = self.leader_elector
+                && !elector.is_leader()
+            {
+                // Not the leader - skip this cycle
+                debug!("skipping reconciliation (not leader)");
+                continue;
+            }
 
             match self.reconcile_once().await {
                 Ok(stats) => {

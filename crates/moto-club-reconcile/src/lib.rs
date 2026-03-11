@@ -35,5 +35,7 @@
 //! ```
 
 mod garage;
+mod leader_elector;
 
 pub use garage::{GarageReconciler, ReconcileConfig, ReconcileError, ReconcileStats};
+pub use leader_elector::{LeaderElectionConfig, LeaderElectionError, LeaderElector};
