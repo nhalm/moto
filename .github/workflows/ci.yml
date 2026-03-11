@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  REGISTRY: ghcr.io
+  REGISTRY_ORG: ${{ github.repository_owner }}
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -45,3 +49,50 @@ jobs:
 
       - name: Run CI checks
         run: make ci
+
+  build-images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [garage, bike, club, keybox]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Build ${{ matrix.image }} image
+        run: nix build .#moto-${{ matrix.image }}
+
+      - name: Load image
+        run: docker load < result
+
+      - name: Log in to registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push image
+        if: github.event_name != 'pull_request'
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          docker tag moto-${{ matrix.image }}:latest ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.image }}:$SHA
+          docker tag moto-${{ matrix.image }}:latest ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.image }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.image }}:$SHA
+          docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.image }}:latest
+
+      - name: Sign image
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          cosign sign --yes ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.image }}:$SHA
+          cosign sign --yes ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.image }}:latest

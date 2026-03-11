@@ -237,7 +237,7 @@ mod tests {
 
         // Check the initial migration exists
         let migrations: Vec<_> = MIGRATIONS.iter().collect();
-        assert_eq!(migrations.len(), 2, "should have two migrations");
+        assert_eq!(migrations.len(), 3, "should have three migrations");
         // sqlx converts underscores to spaces in descriptions
         assert!(
             migrations[0].description.contains("initial"),
@@ -246,6 +246,10 @@ mod tests {
         assert!(
             migrations[1].description.contains("audit"),
             "second migration should be audit log unified schema"
+        );
+        assert!(
+            migrations[2].description.contains("audit"),
+            "third migration should be audit writer role"
         );
     }
 }
