@@ -10,8 +10,3 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## audit-logging v0.3
-
-- Add keybox 90-day audit log retention task to moto-cron reconciler (batch delete keybox audit rows older than 90 days, same pattern as moto-club 30-day retention)
-
-
