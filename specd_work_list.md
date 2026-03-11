@@ -10,11 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## makefile v0.20 (compliance: dependency scanning)
-
-- Add `cargo install cargo-audit` to dev setup if not present, and add `make audit` target that runs `cargo audit` to check for known CVEs in dependencies
-- Add `cargo audit` to the `ci` target so it runs as part of `make ci`
-
 ## pre-commit v0.2 (compliance: content scanning)
 
 - Add secret content scanning to `.githooks/pre-commit` using regex patterns on staged file contents (not just filenames). Scan for patterns: `sk-ant-`, `sk-proj-`, `sk-live-`, `AKIA`, `ghp_`, `gho_`, `xoxb-`, `xoxp-`, `-----BEGIN.*PRIVATE KEY-----`, base64-encoded key patterns. Block commit if found in staged diffs.
@@ -37,7 +32,6 @@ Read it in full at the start of each iteration.
 ## makefile v0.20 (compliance: CI/CD pipeline)
 
 - Create `.github/workflows/ci.yml` GitHub Actions workflow: trigger on push to main and PRs. Steps: checkout, install Nix, `make ci`, `make audit`. Use `ubuntu-latest` runner. Cache cargo registry and target dir.
-- (blocked: makefile v0.20 cargo-audit — need the audit target first)
 
 ## container-system v1.5 (compliance: image signing)
 
