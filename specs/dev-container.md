@@ -247,7 +247,7 @@ Garage needs access to:
 | usr-local | `/usr/local` | emptyDir | Locally installed tools, ephemeral |
 | wireguard-config | `/etc/wireguard` | ConfigMap | WireGuard config pushed by moto-club |
 | wireguard-keys | `/run/wireguard` | Secret | WireGuard private/public keys |
-| garage-svid | `/run/svid` | Secret | SPIFFE SVID for keybox auth |
+| garage-svid | `/var/run/secrets/svid` | Secret | SPIFFE SVID for keybox auth |
 
 **Notes:**
 - `/workspace` is a PVC so uncommitted work survives pod restarts

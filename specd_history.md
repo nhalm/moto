@@ -22,6 +22,12 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **moto-cli v0.14 (2026-03-10):** Fix `garage extend --ttl` default from `2h` to `4h` to match spec
+- **service-deploy v0.7 (2026-03-10):** Update spec replica counts (1→3) and resource values to match bike.toml
+- **local-dev v0.11 (2026-03-10):** Add moto-ai-proxy to spec's `moto dev up` flow (port assignments, env vars, step 9/10, --no-ai-proxy flag)
+- **dev-container v0.19 (2026-03-10):** Fix SVID mount path in spec from `/run/svid` to `/var/run/secrets/svid`
+- **garage-isolation v0.5 (2026-03-10):** Fix endpoint name in spec from `POST /auth/issue-svid` to `POST /auth/issue-garage-svid`
+
 ## moto-club v2.3
 
 - moto-club-types crate: GarageId, GarageState, GarageInfo

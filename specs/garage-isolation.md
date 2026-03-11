@@ -346,7 +346,7 @@ Garages access secrets via keybox with SVID authentication.
 
 moto-club issues a garage SVID when creating the garage:
 
-1. moto-club calls keybox: `POST /auth/issue-svid` with garage ID
+1. moto-club calls keybox: `POST /auth/issue-garage-svid` with garage ID
 2. keybox returns signed SVID JWT (short-lived, e.g., 1 hour)
 3. moto-club creates Secret with SVID in garage namespace
 4. Garage pod mounts SVID Secret at `/var/run/secrets/svid/`

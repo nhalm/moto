@@ -44,6 +44,17 @@ Common targets include `make test`, `make lint`, `make build`, `make check`, and
 
 **Validate with `make test`, not just unit tests.** If integration tests fail, that's a real failure — do not dismiss them.
 
+## Security & Compliance
+
+**All code MUST comply with SOC 2 requirements.** See [specs/compliance.md](specs/compliance.md) for the full control mapping and security principles.
+
+Key rules:
+- **Verify cryptographic signatures** before trusting identity claims. Decoding a JWT without verifying the signature is NOT authentication.
+- **Never log secrets.** Use `Secret<T>` wrapper, `sanitize_metadata()`, and `scrub_api_keys()`.
+- **Least privilege.** Services mount only the secrets they need. Pods get only the capabilities they need.
+- **Fail closed.** Auth failures and unreachable dependencies MUST deny access.
+- **Audit security-relevant operations.** Use `AuditEventBuilder` from `moto-audit-types`.
+
 ## Conventions
 
 - All crates use the `moto-` prefix

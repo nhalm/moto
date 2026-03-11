@@ -2,20 +2,20 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.10 |
+| Version | 0.11 |
 | Status | Ripping |
-| Last Updated | 2026-02-26 |
+| Last Updated | 2026-03-10 |
 
 ## Overview
 
-Run the full moto stack locally for development. The control plane (moto-club, moto-keybox) runs as local cargo processes, backed by a Docker Compose Postgres and the k3d cluster.
+Run the full moto stack locally for development. The control plane (moto-club, moto-keybox, moto-ai-proxy) runs as local cargo processes, backed by a Docker Compose Postgres and the k3d cluster.
 
 **This is the fastest path to a working system.** No K8s deployment of the control plane needed — just `cargo run`.
 
 **Scope:**
 - Docker Compose for development databases
 - Keybox bootstrap (key generation)
-- Running moto-club and moto-keybox locally
+- Running moto-club, moto-keybox, and moto-ai-proxy locally
 - Building and pushing the garage image
 - Makefile targets for the local dev workflow
 
@@ -94,6 +94,7 @@ Local dev uses distinct ports per service to avoid collisions. Port 18080 matche
 |---------|----------|-------------|--------------|
 | moto-keybox | 8090 | 8091 | — |
 | moto-club | 18080 | 8081 | 9090 |
+| moto-ai-proxy | 18090 | 18091 | — |
 
 ### Environment Variables
 
@@ -121,6 +122,19 @@ Local dev uses distinct ports per service to avoid collisions. Port 18080 matche
 | `MOTO_CLUB_DEV_CONTAINER_IMAGE` | `moto-registry:5000/moto-garage:latest` |
 | `RUST_LOG` | `moto_club=debug` |
 
+**moto-ai-proxy:**
+
+| Variable | Dev Value |
+|----------|-----------|
+| `MOTO_AI_PROXY_BIND_ADDR` | `0.0.0.0:18090` |
+| `MOTO_AI_PROXY_HEALTH_BIND_ADDR` | `0.0.0.0:18091` |
+| `MOTO_AI_PROXY_KEYBOX_URL` | `http://localhost:8090` |
+| `MOTO_AI_PROXY_SVID_FILE` | `.dev/ai-proxy/svid.jwt` |
+| `MOTO_AI_PROXY_CLUB_URL` | `http://localhost:18080` |
+| `MOTO_AI_PROXY_KEY_CACHE_TTL_SECS` | `300` |
+| `MOTO_AI_PROXY_GARAGE_CACHE_TTL_SECS` | `60` |
+| `RUST_LOG` | `moto_ai_proxy=debug` |
+
 K8s access comes from `~/.kube/config` (the `k3d-moto` context created by `moto cluster init`).
 
 ### Garage Image
@@ -137,12 +151,12 @@ The `moto dev` subcommand orchestrates the full local dev flow. One command, one
 moto dev up
 ```
 
-This performs all steps: cluster check, postgres, keybox keys, migrations, starts keybox and club as background subprocesses, and opens a garage. Ctrl-C tears everything down.
+This performs all steps: cluster check, postgres, keybox keys, migrations, starts keybox, club, and ai-proxy as background subprocesses, and opens a garage. Ctrl-C tears everything down.
 
 #### `moto dev up`
 
 ```
-moto dev up [--no-garage] [--rebuild-image] [--skip-image]
+moto dev up [--no-garage] [--rebuild-image] [--skip-image] [--no-ai-proxy]
 ```
 
 | Flag | Behavior |
@@ -150,19 +164,21 @@ moto dev up [--no-garage] [--rebuild-image] [--skip-image]
 | `--no-garage` | Start services only, don't open a garage |
 | `--rebuild-image` | Force rebuild and push the garage container image |
 | `--skip-image` | Skip the registry image check entirely |
+| `--no-ai-proxy` | Skip starting moto-ai-proxy |
 
 Orchestration steps (each idempotent, with progress output):
 
 ```
-[1/9] Checking prerequisites...     docker, k3d, MOTO_USER
-[2/9] Ensuring cluster...           exists / created
-[3/9] Checking garage image...      found in registry / missing
-[4/9] Starting postgres...          ready (localhost:5432)
-[5/9] Generating keybox keys...     found (.dev/keybox/) / generated
-[6/9] Running migrations...         up to date
-[7/9] Starting keybox...            healthy (localhost:8090)
-[8/9] Starting moto-club...         healthy (localhost:18080)
-[9/9] Opening garage...             bold-mongoose
+[1/10] Checking prerequisites...     docker, k3d, MOTO_USER
+[2/10] Ensuring cluster...          exists / created
+[3/10] Checking garage image...     found in registry / missing
+[4/10] Starting postgres...         ready (localhost:5432)
+[5/10] Generating keybox keys...    found (.dev/keybox/) / generated
+[6/10] Running migrations...        up to date
+[7/10] Starting keybox...            healthy (localhost:8090)
+[8/10] Starting moto-club...         healthy (localhost:18080)
+[9/10] Starting ai-proxy...          healthy (localhost:18090)
+[10/10] Opening garage...            bold-mongoose
 ```
 
 **Step details:**
@@ -176,18 +192,19 @@ Orchestration steps (each idempotent, with progress output):
 | 5. Keys | Check if all three files exist in `.dev/keybox/` (`master.key`, `signing.key`, `service-token`). If any missing, regenerate all: run `moto-keybox init --output-dir .dev/keybox --force`, then generate service-token (`openssl rand -hex 32`), set permissions to 600. | Abort |
 | 6. Migrations | Run `cargo sqlx migrate run --source crates/moto-club-db/migrations` against the club database. Keybox migrations run automatically on keybox startup (step 7). | Abort |
 | 7. Keybox | Spawn `moto-keybox-server` as subprocess with dev env vars. Wait for `GET http://localhost:8091/health/ready` to return 200. Timeout: 30 seconds with exponential backoff. | Abort (kill keybox subprocess) |
-| 8. Club | Spawn `moto-club` as subprocess with dev env vars. Wait for `GET http://localhost:8081/health/ready` to return 200. Timeout: 30 seconds with exponential backoff. | Abort (kill both subprocesses) |
-| 9. Garage | `POST http://localhost:18080/api/v1/garages` with auto-generated name and default TTL. Skipped with `--no-garage`. | Print warning, continue (services are still running) |
+| 8. Club | Spawn `moto-club` as subprocess with dev env vars. Wait for `GET http://localhost:8081/health/ready` to return 200. Timeout: 30 seconds with exponential backoff. | Abort (kill all subprocesses) |
+| 9. AI Proxy | Spawn `moto-ai-proxy` as subprocess with dev env vars. Wait for `GET http://localhost:18091/health/ready` to return 200. Timeout: 30 seconds with exponential backoff. Skipped with `--no-ai-proxy`. | Abort (kill all subprocesses) |
+| 10. Garage | `POST http://localhost:18080/api/v1/garages` with auto-generated name and default TTL. Skipped with `--no-garage`. | Print warning, continue (services are still running) |
 
-**Failure behavior:** Steps 1-8 abort on failure. Step 9 is best-effort — if garage creation fails, services keep running and the user can open a garage manually. On abort, any already-started subprocesses are killed and postgres is left running (fast restart).
+**Failure behavior:** Steps 1-9 abort on failure. Step 10 is best-effort — if garage creation fails, services keep running and the user can open a garage manually. On abort, any already-started subprocesses are killed and postgres is left running (fast restart).
 
 **Image build inline:** When `--rebuild-image` triggers a build, it runs the same Docker-wrapped Nix build as `make build-garage` + `make push-garage`, with progress output. This can take 15-20 minutes on first run.
 
-**Subprocess management:** Keybox and club are spawned as subprocesses. On Ctrl-C (SIGINT), both subprocesses are killed. Postgres is left running (fast restart on next `dev up`). Exit code is 0 on Ctrl-C. If either subprocess dies unexpectedly, an error is printed and the other subprocess is killed.
+**Subprocess management:** Keybox, club, and ai-proxy are spawned as subprocesses. On Ctrl-C (SIGINT), all subprocesses are killed. Postgres is left running (fast restart on next `dev up`). Exit code is 0 on Ctrl-C. If any subprocess dies unexpectedly, an error is printed and all other subprocesses are killed.
 
-**Subprocess output:** Log output from keybox and club is suppressed by default. With `-v`, subprocess stderr is forwarded to the terminal. With `-vv`, both stdout and stderr are forwarded.
+**Subprocess output:** Log output from keybox, club, and ai-proxy is suppressed by default. With `-v`, subprocess stderr is forwarded to the terminal. With `-vv`, both stdout and stderr are forwarded.
 
-**DevConfig:** All env vars from the tables above use hardcoded dev defaults. Each is overridable via the same environment variable name (e.g., set `MOTO_KEYBOX_BIND_ADDR=0.0.0.0:9090` to override the default `0.0.0.0:8090`). Total: 14 env vars (7 keybox + 7 club).
+**DevConfig:** All env vars from the tables above use hardcoded dev defaults. Each is overridable via the same environment variable name (e.g., set `MOTO_KEYBOX_BIND_ADDR=0.0.0.0:9090` to override the default `0.0.0.0:8090`). Total: 22 env vars (7 keybox + 7 club + 8 ai-proxy).
 
 **Idempotency:** Running `moto dev up` while services are already running restarts the services (kills existing subprocesses, starts new ones). Cluster, postgres, keys, and migrations are all idempotent checks that skip if already done.
 
@@ -236,6 +253,7 @@ Garages:   1 running
 | Postgres | `docker compose ps` — check container is running and healthy |
 | Keybox | `GET http://localhost:8091/health/ready` — returns 200 |
 | Club | `GET http://localhost:8081/health/ready` — returns 200 |
+| AI Proxy | `GET http://localhost:18091/health/ready` — returns 200 |
 | Image | `GET http://localhost:5050/v2/moto-garage/tags/list` — contains `latest` tag |
 | Garages | `GET http://localhost:18080/api/v1/garages` — count non-terminated garages |
 
@@ -338,6 +356,14 @@ moto/
 - [service-deploy.md](service-deploy.md) — K8s deployment (alternative)
 
 ## Changelog
+
+### v0.11 (2026-03-10)
+- Add moto-ai-proxy as third service in `moto dev up` flow (step 9/10)
+- Add `--no-ai-proxy` flag to skip ai-proxy startup
+- Add ai-proxy port assignments (18090 API, 18091 health)
+- Add 8 ai-proxy env vars to Environment Variables section
+- Update step count from 9 to 10, subprocess management to include ai-proxy
+- Total env vars: 22 (7 keybox + 7 club + 8 ai-proxy)
 
 ### v0.10 (2026-02-26)
 - Change moto-club API port from 8080 to 18080 — matches k3d deploy path so CLI default works for both modes

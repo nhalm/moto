@@ -116,8 +116,8 @@ pub enum GarageAction {
         /// Name of the garage to extend
         name: String,
 
-        /// Time to add to current TTL (e.g., 2h, 30m)
-        #[arg(long, default_value = "2h")]
+        /// Time to add to current TTL (e.g., 4h, 30m)
+        #[arg(long, default_value = "4h")]
         ttl: String,
     },
 

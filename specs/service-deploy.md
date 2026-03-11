@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.6 |
+| Version | 0.7 |
 | Status | Ripping |
-| Last Updated | 2026-03-04 |
+| Last Updated | 2026-03-10 |
 
 ## Overview
 
@@ -22,7 +22,7 @@ Deploy moto infrastructure services (moto-club, moto-keybox, PostgreSQL) to the 
 - Remote/cloud cluster deployment
 - Helm charts (raw manifests for v1, Helm later)
 - Ingress / external access (services accessed via port-forward)
-- HA / multi-replica deployment
+- HA (active-active load balancing, session affinity)
 - Automated certificate management
 - GitOps (ArgoCD/Flux)
 - NetworkPolicy for moto-system namespace (future — garages have isolation per [garage-isolation.md](garage-isolation.md))
@@ -83,10 +83,10 @@ Same pattern as local dev (`scripts/init-dev-db.sql`).
 
 | Property | Value |
 |----------|-------|
-| Kind | Deployment (1 replica) |
+| Kind | Deployment (3 replicas) |
 | Image | `moto-registry:5000/moto-keybox:latest` |
 | Service | `moto-keybox.moto-system:8080` (ClusterIP), port 8081 (health) |
-| Resources | requests: 50m CPU / 128Mi, limits: 500m CPU / 512Mi |
+| Resources | requests: 250m CPU / 256Mi, limits: 1 CPU / 1Gi |
 | Migrations | Automatic on startup (already implemented in moto-keybox-db) |
 | Health probes | Per [moto-bike.md](moto-bike.md) engine contract on port 8081 |
 
@@ -105,11 +105,11 @@ Secret `keybox-keys` mounted at `/run/secrets/keybox/` provides the key files.
 
 | Property | Value |
 |----------|-------|
-| Kind | Deployment (1 replica) |
+| Kind | Deployment (3 replicas) |
 | Image | `moto-registry:5000/moto-club:latest` |
 | Service | `moto-club.moto-system:8080` (ClusterIP), port 8081 (health), port 9090 (metrics) |
 | ServiceAccount | `moto-club` with ClusterRole (see RBAC section) |
-| Resources | requests: 50m CPU / 128Mi, limits: 500m CPU / 512Mi |
+| Resources | requests: 500m CPU / 512Mi, limits: 2 CPU / 2Gi |
 | Migrations | Automatic on startup (see [moto-club.md](moto-club.md) v2.3) |
 | Health probes | Per [moto-bike.md](moto-bike.md) engine contract on port 8081 |
 
@@ -283,7 +283,7 @@ Port 18080 is chosen to avoid conflicts with common services on 80, 443, and 808
 - Helm chart packaging
 - Ingress controller for external access
 - TLS termination
-- Multi-replica deployments
+- Active-active HA with session affinity
 - Automated database backups
 - Prometheus / Grafana monitoring stack
 - NetworkPolicy for moto-system namespace
@@ -302,6 +302,11 @@ Port 18080 is chosen to avoid conflicts with common services on 80, 443, and 808
 - [garage-isolation.md](garage-isolation.md) — What K8s resources moto-club creates per garage
 
 ## Changelog
+
+### v0.7 (2026-03-10)
+- Update moto-keybox to 3 replicas and resources from bike.toml (250m/256Mi → 1/1Gi)
+- Update moto-club to 3 replicas and resources from bike.toml (500m/512Mi → 2/2Gi)
+- Remove "multi-replica deployment" from out-of-scope and deferred (already deployed)
 
 ### v0.6 (2026-03-04)
 - Fix Quick path: remove stale manual port-forward step (handled by `deploy-system` since v0.5)
