@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **audit-logging v0.6 (2026-03-11):** Create a matching SQL migration for moto-keybox-db with the same INSERT-only `audit_writer` role pattern on keybox's `audit_log` table
+- **moto-club v2.7 (2026-03-11):** Add `leases` resource (`coordination.k8s.io` API group, verbs: `get, create, update`) to the moto-club ClusterRole in `infra/k8s/moto-system/club.yaml`
 - **moto-club v2.7 (2026-03-11):** Implement leader election for the reconciler using K8s Lease API in `crates/moto-club-reconcile/`. Create a `LeaderElector` that acquires/renews a Lease in the `moto-system` namespace. Only the leader runs `reconcile_once()`. Use 15s lease duration, 10s renew deadline, 2s retry period. On leadership loss, stop reconciling until re-elected.
 - **audit-logging v0.6 (2026-03-11):** Create a SQL migration for moto-club-db that creates an `audit_writer` Postgres role with INSERT-only permission on the `audit_log` table (no UPDATE, no DELETE except via the retention function). Grant the application user this role for audit writes. The `delete_expired` retention function should use SECURITY DEFINER to run with elevated privileges.
 - **service-deploy v0.7 (2026-03-11):** Create `infra/k8s/moto-system/pdb.yaml` with PodDisruptionBudgets for moto-keybox (`minAvailable: 2`) and moto-club (`minAvailable: 2`) — both run 3 replicas per bike.toml. Add `pdb.yaml` to `infra/k8s/moto-system/kustomization.yaml` resources list.
