@@ -10,7 +10,3 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## container-system v1.5 (compliance: image signing)
-
-- Sign images in CI after build (add signing step to `.github/workflows/ci.yml` after image builds)
-

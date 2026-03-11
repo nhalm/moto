@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **container-system v1.5 (2026-03-11):** Sign images in CI after build (add signing step to `.github/workflows/ci.yml` after image builds)
 - **container-system v1.5 (2026-03-11):** Add Cosign image signing to the Nix build pipeline or Makefile: after `make push-*` targets, sign the image with `cosign sign`. Generate a cosign keypair stored in `.dev/cosign/` (gitignored). Add `make sign-images` target.
 - **makefile v0.20 (2026-03-11):** Create `.github/workflows/ci.yml` GitHub Actions workflow: trigger on push to main and PRs. Steps: checkout, install Nix, `make ci`, `make audit`. Use `ubuntu-latest` runner. Cache cargo registry and target dir.
 - **audit-logging v0.6 (2026-03-11):** Create a matching SQL migration for moto-keybox-db with the same INSERT-only `audit_writer` role pattern on keybox's `audit_log` table
