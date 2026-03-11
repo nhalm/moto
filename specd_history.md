@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **pre-commit v0.2 (2026-03-11):** Add secret content scanning to `.githooks/pre-commit` using regex patterns on staged file contents (not just filenames). Scan for patterns: `sk-ant-`, `sk-proj-`, `sk-live-`, `AKIA`, `ghp_`, `gho_`, `xoxb-`, `xoxp-`, `-----BEGIN.*PRIVATE KEY-----`, base64-encoded key patterns. Block commit if found in staged diffs.
 - **makefile v0.20 (2026-03-11):** Add `cargo install cargo-audit` to dev setup if not present, and add `make audit` target that runs `cargo audit` to check for known CVEs in dependencies. Add `cargo audit` to the `ci` target so it runs as part of `make ci`.
 - **audit-logging v0.6 (2026-03-11):** Add `garage_terminated` audit events for reconciler-driven terminations in `crates/moto-club-reconcile/src/garage.rs`: NamespaceMissing (line ~315), PodLost/Succeeded (line ~418), and PodLost/Unknown (line ~442) paths terminate garages without emitting audit events.
 - **audit-logging v0.6 (2026-03-11):** Fix `principal_id` in reconciler audit events at `crates/moto-club-reconcile/src/garage.rs:502,754`: change from `"moto-club-reconciler"` to `"moto-club"` for `garage_state_changed` and `ttl_enforced` events. The spec requires `principal_id = "moto-club"` for service actions; reconciler context belongs in metadata.

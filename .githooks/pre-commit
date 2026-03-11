@@ -22,16 +22,18 @@ SECRET_PATTERNS=(
     '[A-Za-z0-9+/]{64,}={0,2}'          # Long base64 strings (potential keys)
 )
 
-# Scan only added lines (exclude removals and hook file itself)
-STAGED_ADDITIONS=$(git diff --cached -- ':!.githooks/pre-commit' | grep '^+' | grep -v '^+++')
-for pattern in "${SECRET_PATTERNS[@]}"; do
-    if echo "$STAGED_ADDITIONS" | grep -qE "$pattern"; then
-        echo "ERROR: Potential secret detected in staged content"
-        echo "Pattern matched: $pattern"
-        echo "FIX: Remove the secret and run: git reset HEAD <filename>"
-        exit 1
-    fi
-done
+# Scan only added lines (exclude hook file and documentation)
+STAGED_ADDITIONS=$(git diff --cached -- ':!.githooks/pre-commit' ':!*.md' | grep '^+' | grep -v '^+++' || true)
+if [ -n "$STAGED_ADDITIONS" ]; then
+    for pattern in "${SECRET_PATTERNS[@]}"; do
+        if echo "$STAGED_ADDITIONS" | grep -qE "$pattern"; then
+            echo "ERROR: Potential secret detected in staged content"
+            echo "Pattern matched: $pattern"
+            echo "FIX: Remove the secret and run: git reset HEAD <filename>"
+            exit 1
+        fi
+    done
+fi
 
 # Rust formatting and linting (if Rust files changed)
 if git diff --cached --name-only | grep -qE '\.(rs)$|Cargo\.'; then

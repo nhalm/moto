@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## pre-commit v0.2 (compliance: content scanning)
-
-- Add secret content scanning to `.githooks/pre-commit` using regex patterns on staged file contents (not just filenames). Scan for patterns: `sk-ant-`, `sk-proj-`, `sk-live-`, `AKIA`, `ghp_`, `gho_`, `xoxb-`, `xoxp-`, `-----BEGIN.*PRIVATE KEY-----`, base64-encoded key patterns. Block commit if found in staged diffs.
-
 ## service-deploy v0.7 (compliance: PodDisruptionBudgets)
 
 - Create `infra/k8s/moto-system/pdb.yaml` with PodDisruptionBudgets for moto-keybox (`minAvailable: 2`) and moto-club (`minAvailable: 2`) — both run 3 replicas per bike.toml
