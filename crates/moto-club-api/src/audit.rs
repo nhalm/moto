@@ -156,11 +156,14 @@ async fn get_audit_logs(
     let mut warnings = Vec::new();
 
     // Query local audit log and keybox in parallel
+    // Each service is queried with offset+limit rows (offset is NOT forwarded).
+    // Results are merged, sorted by timestamp, then offset is applied to the merged set.
+    let fetch_limit = offset + limit;
     let (local_result, keybox_result) = tokio::join!(
-        query_local_audit(&state, &query, query_moto_club, limit, offset),
+        query_local_audit(&state, &query, query_moto_club, fetch_limit, 0),
         async {
             if query_keybox {
-                query_keybox_fanout(&state, &query, limit).await
+                query_keybox_fanout(&state, &query, fetch_limit).await
             } else {
                 Ok(None)
             }
@@ -178,10 +181,20 @@ async fn get_audit_logs(
         Err(warning) => warnings.push(warning),
     }
 
-    // Sort merged results by timestamp (newest first) and truncate to limit
+    // Sort merged results by timestamp (newest first), apply offset, then truncate to limit
     events.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-    #[allow(clippy::cast_sign_loss)]
-    events.truncate(limit as usize);
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let offset_usize = offset as usize;
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let limit_usize = limit as usize;
+
+    // Skip offset rows, then take up to limit rows
+    if offset_usize < events.len() {
+        events.drain(0..offset_usize);
+        events.truncate(limit_usize);
+    } else {
+        events.clear();
+    }
 
     Ok((
         StatusCode::OK,
