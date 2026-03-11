@@ -27,8 +27,11 @@ install: ## Set up local development environment
 build: ## Build all crates
 	cargo build --workspace
 
-# Test database URL (override with environment variable if needed)
-TEST_DATABASE_URL ?= postgres://moto_test:moto_test@localhost:5433/moto_test
+# Test database URLs (separate databases per service, matching production)
+TEST_CLUB_DATABASE_URL ?= postgres://moto_test:moto_test@localhost:5433/moto_test_club
+TEST_KEYBOX_DATABASE_URL ?= postgres://moto_test:moto_test@localhost:5433/moto_test_keybox
+# Legacy variable for compatibility
+TEST_DATABASE_URL ?= $(TEST_CLUB_DATABASE_URL)
 
 test: ## Run unit tests (fast, no dependencies)
 	cargo test --lib
@@ -218,16 +221,18 @@ test-db-down: ## Stop test database, remove volumes
 	docker compose -f docker-compose.test.yml down -v
 	@echo "Test database stopped."
 
-# --ignore-missing: both crates share one database, so each sees the other's migrations as "missing"
 test-db-migrate: ## Run migrations against test database
 	@echo "Running moto-club-db migrations..."
-	cargo sqlx migrate run --source crates/moto-club-db/migrations --database-url $(TEST_DATABASE_URL) --ignore-missing
+	cargo sqlx migrate run --source crates/moto-club-db/migrations --database-url $(TEST_CLUB_DATABASE_URL)
 	@echo "Running moto-keybox-db migrations..."
-	cargo sqlx migrate run --source crates/moto-keybox-db/migrations --database-url $(TEST_DATABASE_URL) --ignore-missing
+	cargo sqlx migrate run --source crates/moto-keybox-db/migrations --database-url $(TEST_KEYBOX_DATABASE_URL)
 	@echo "All migrations complete."
 
 test-integration: test-db-down test-db-up test-db-migrate ## Fresh database cycle + integration tests
-	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration; \
+	MOTO_CLUB_DATABASE_URL=$(TEST_CLUB_DATABASE_URL) \
+	MOTO_KEYBOX_DATABASE_URL=$(TEST_KEYBOX_DATABASE_URL) \
+	TEST_DATABASE_URL=$(TEST_CLUB_DATABASE_URL) \
+	cargo test --features integration; \
 	status=$$?; \
 	$(MAKE) test-db-down; \
 	exit $$status
@@ -235,7 +240,10 @@ test-integration: test-db-down test-db-up test-db-migrate ## Fresh database cycl
 test-all: ## Every test: unit + integration + ignored (K8s) — no test left behind
 	@k3d cluster list 2>/dev/null | grep -q moto || { echo "Error: k3d cluster 'moto' is not running. Start it with: make dev-cluster"; exit 1; }
 	$(MAKE) test-db-down test-db-up test-db-migrate
-	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration; \
+	MOTO_CLUB_DATABASE_URL=$(TEST_CLUB_DATABASE_URL) \
+	MOTO_KEYBOX_DATABASE_URL=$(TEST_KEYBOX_DATABASE_URL) \
+	TEST_DATABASE_URL=$(TEST_CLUB_DATABASE_URL) \
+	cargo test --features integration; \
 	status=$$?; \
 	$(MAKE) test-db-down; \
 	if [ $$status -ne 0 ]; then exit $$status; fi
@@ -243,7 +251,10 @@ test-all: ## Every test: unit + integration + ignored (K8s) — no test left beh
 
 test-ci: ## CI tests (assumes database running)
 	cargo test --lib
-	TEST_DATABASE_URL=$(TEST_DATABASE_URL) cargo test --features integration
+	MOTO_CLUB_DATABASE_URL=$(TEST_CLUB_DATABASE_URL) \
+	MOTO_KEYBOX_DATABASE_URL=$(TEST_KEYBOX_DATABASE_URL) \
+	TEST_DATABASE_URL=$(TEST_CLUB_DATABASE_URL) \
+	cargo test --features integration
 
 smoke-keybox: ## Smoke test keybox in k3d (port-forward, test, cleanup)
 	@kubectl -n moto-system port-forward svc/moto-keybox 18090:8080 >/dev/null 2>&1 & \

@@ -26,7 +26,7 @@ GRANT audit_writer TO CURRENT_USER;
 
 -- Create retention function with SECURITY DEFINER for privileged deletion
 -- This allows the retention process to delete expired records despite audit_writer restrictions
--- Retention period: 30 days (per specs/audit-logging.md)
+-- Retention period: 90 days (per specs/audit-logging.md)
 CREATE OR REPLACE FUNCTION delete_expired_audit_logs()
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -36,7 +36,7 @@ DECLARE
     deleted_count INTEGER;
 BEGIN
     DELETE FROM audit_log
-    WHERE timestamp < NOW() - INTERVAL '30 days';
+    WHERE timestamp < NOW() - INTERVAL '90 days';
 
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
     RETURN deleted_count;
@@ -50,4 +50,4 @@ GRANT EXECUTE ON FUNCTION delete_expired_audit_logs() TO CURRENT_USER;
 
 -- Comment for documentation
 COMMENT ON FUNCTION delete_expired_audit_logs() IS
-    'Deletes audit log entries older than 30 days. Uses SECURITY DEFINER to bypass audit_writer INSERT-only restrictions.';
+    'Deletes audit log entries older than 90 days. Uses SECURITY DEFINER to bypass audit_writer INSERT-only restrictions.';

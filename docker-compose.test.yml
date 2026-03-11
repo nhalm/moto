@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_USER: moto_test
       POSTGRES_PASSWORD: moto_test
-      POSTGRES_DB: moto_test
+      POSTGRES_DB: moto_test_club
     ports:
       - "5433:5432"  # Different port to avoid conflicts with dev database
     healthcheck:
@@ -14,3 +14,5 @@ services:
       interval: 2s
       timeout: 5s
       retries: 10
+    volumes:
+      - ./infra/test-init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro

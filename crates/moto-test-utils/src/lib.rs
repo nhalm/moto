@@ -31,8 +31,12 @@ use sqlx::postgres::PgPoolOptions;
 use std::time::Duration;
 use uuid::Uuid;
 
-/// Test database URL.
-const TEST_DATABASE_URL: &str = "postgres://moto_test:moto_test@localhost:5433/moto_test";
+/// Default club test database URL.
+const TEST_CLUB_DATABASE_URL: &str = "postgres://moto_test:moto_test@localhost:5433/moto_test_club";
+
+/// Default keybox test database URL.
+const TEST_KEYBOX_DATABASE_URL: &str =
+    "postgres://moto_test:moto_test@localhost:5433/moto_test_keybox";
 
 /// Returns a connection to the test database (port 5433).
 ///
@@ -40,11 +44,14 @@ const TEST_DATABASE_URL: &str = "postgres://moto_test:moto_test@localhost:5433/m
 /// has its own pool, `PostgreSQL` handles connection pooling efficiently
 /// and this avoids cross-runtime issues with `#[tokio::test]`.
 ///
+/// Uses `MOTO_CLUB_DATABASE_URL` or `TEST_DATABASE_URL` environment variable if set,
+/// otherwise defaults to `moto_test_club` database.
+///
 /// # Panics
 ///
 /// Panics with a helpful message if:
 /// - The test database is not running
-/// - `TEST_DATABASE_URL` environment variable is set but invalid
+/// - Database URL environment variable is set but invalid
 ///
 /// # Example
 ///
@@ -53,12 +60,38 @@ const TEST_DATABASE_URL: &str = "postgres://moto_test:moto_test@localhost:5433/m
 /// let result = sqlx::query("SELECT 1").fetch_one(&pool).await;
 /// ```
 pub async fn test_pool() -> PgPool {
-    let url = std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| TEST_DATABASE_URL.to_string());
+    club_test_pool().await
+}
 
+/// Returns a connection to the moto-club test database.
+///
+/// Uses `MOTO_CLUB_DATABASE_URL` environment variable if set,
+/// otherwise falls back to `TEST_DATABASE_URL`, then to the default.
+pub async fn club_test_pool() -> PgPool {
+    let url = std::env::var("MOTO_CLUB_DATABASE_URL")
+        .or_else(|_| std::env::var("TEST_DATABASE_URL"))
+        .unwrap_or_else(|_| TEST_CLUB_DATABASE_URL.to_string());
+
+    create_pool(&url).await
+}
+
+/// Returns a connection to the moto-keybox test database.
+///
+/// Uses `MOTO_KEYBOX_DATABASE_URL` environment variable if set,
+/// otherwise defaults to `moto_test_keybox` database.
+pub async fn keybox_test_pool() -> PgPool {
+    let url = std::env::var("MOTO_KEYBOX_DATABASE_URL")
+        .unwrap_or_else(|_| TEST_KEYBOX_DATABASE_URL.to_string());
+
+    create_pool(&url).await
+}
+
+/// Internal helper to create a database pool.
+async fn create_pool(url: &str) -> PgPool {
     PgPoolOptions::new()
         .max_connections(5)
         .acquire_timeout(Duration::from_secs(10))
-        .connect(&url)
+        .connect(url)
         .await
         .unwrap_or_else(|e| {
             panic!(

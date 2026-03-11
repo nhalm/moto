@@ -10,7 +10,7 @@
 mod integration_tests {
     use crate::{AuditEventType, AuditLogQuery, PrincipalType, audit_repo};
     use audit_repo::InsertAuditEntry;
-    use moto_test_utils::test_pool;
+    use moto_test_utils::keybox_test_pool;
     use uuid::Uuid;
 
     /// Generates a unique principal ID for test isolation.
@@ -37,7 +37,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn insert_audit_entry_minimal() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         let entry = InsertAuditEntry {
@@ -64,7 +64,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn insert_audit_entry_all_fields() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         let entry = InsertAuditEntry {
@@ -92,7 +92,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn insert_audit_entry_all_event_types() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         let event_types = [
@@ -127,7 +127,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_audit_entries_no_filters() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         let entry1 = InsertAuditEntry {
@@ -156,7 +156,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_audit_entries_filter_by_event_type() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         let entry1 = InsertAuditEntry {
@@ -189,7 +189,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_audit_entries_filter_by_resource_type() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         audit_repo::insert_audit_entry(&pool, &test_entry(&pid))
@@ -219,7 +219,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_audit_entries_ordered_by_timestamp_desc() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         let entry1 = InsertAuditEntry {
@@ -252,7 +252,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_audit_entries_limit_and_offset() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         for event_type in [
@@ -287,7 +287,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_audit_entries_empty_result() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
 
         let query = AuditLogQuery {
             principal_id: Some(format!("nonexistent-{}", Uuid::now_v7())),
@@ -301,7 +301,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn count_audit_entries_no_filters() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         for _ in 0..3 {
@@ -322,7 +322,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn count_audit_entries_with_event_type_filter() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let pid = unique_principal_id();
 
         let entry1 = InsertAuditEntry {
@@ -365,7 +365,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn count_audit_entries_zero() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
 
         let query = AuditLogQuery {
             principal_id: Some(format!("nonexistent-{}", Uuid::now_v7())),

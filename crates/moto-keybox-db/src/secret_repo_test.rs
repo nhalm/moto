@@ -9,7 +9,7 @@
 #[cfg(feature = "integration")]
 mod integration_tests {
     use crate::{Scope, secret_repo};
-    use moto_test_utils::test_pool;
+    use moto_test_utils::keybox_test_pool;
     use uuid::Uuid;
 
     /// Generates a unique secret name for test isolation.
@@ -36,7 +36,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn create_secret_global() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let secret = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -53,7 +53,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn create_secret_service_scoped() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
         let service = unique_service();
 
@@ -68,7 +68,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn create_secret_instance_scoped() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
         let service = unique_service();
         let instance = unique_instance_id();
@@ -90,7 +90,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn create_secret_duplicate_fails() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
         let service = unique_service();
         let instance = unique_instance_id();
@@ -122,7 +122,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_found() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let created = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -140,7 +140,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_not_found() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
 
         let result = secret_repo::get_secret(&pool, Scope::Global, None, None, "nonexistent")
             .await
@@ -150,7 +150,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_excludes_deleted() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let created = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -169,7 +169,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_by_id_found() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let created = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -185,7 +185,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_by_id_not_found() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
 
         let result = secret_repo::get_secret_by_id(&pool, Uuid::now_v7())
             .await
@@ -195,7 +195,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_by_id_excludes_deleted() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let created = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -214,7 +214,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_secrets_by_scope() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let service = unique_service();
 
         // Create two service-scoped secrets under the same service
@@ -240,7 +240,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_secrets_excludes_deleted() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let service = unique_service();
 
         let name1 = unique_secret_name();
@@ -269,7 +269,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_secrets_ordered_by_name() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let service = unique_service();
 
         // Create secrets with names that sort in a known order
@@ -298,7 +298,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_service_secrets_filters_by_service() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let svc1 = unique_service();
         let svc2 = unique_service();
 
@@ -328,7 +328,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn list_instance_secrets_filters_by_instance() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let service = unique_service();
         let inst1 = unique_instance_id();
         let inst2 = unique_instance_id();
@@ -359,7 +359,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn update_secret_version_not_found() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
 
         let result = secret_repo::update_secret_version(&pool, Uuid::now_v7(), 2).await;
         assert!(result.is_err());
@@ -367,7 +367,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn update_secret_version_increments() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let created = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -386,7 +386,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn delete_secret_soft_deletes() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let created = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -410,7 +410,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn delete_secret_not_found_succeeds() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
 
         let result = secret_repo::delete_secret(&pool, Uuid::now_v7()).await;
         assert!(result.is_ok());
@@ -420,7 +420,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn create_and_get_encrypted_dek() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let key_bytes = fake_bytes(32);
         let nonce_bytes = fake_bytes(12);
 
@@ -441,7 +441,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_encrypted_dek_not_found() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
 
         let result = secret_repo::get_encrypted_dek(&pool, Uuid::now_v7())
             .await
@@ -453,7 +453,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn create_and_get_secret_version() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let secret = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -481,7 +481,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_current_secret_version_found() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let secret = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -512,7 +512,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_current_secret_version_wrong_version() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let secret = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -543,7 +543,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn create_multiple_versions() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let secret = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -598,7 +598,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_with_value_full_join() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let secret = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -634,7 +634,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_with_value_not_found() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
 
         let result = secret_repo::get_secret_with_value(
             &pool,
@@ -650,7 +650,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_with_value_uses_current_version() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let secret = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -701,7 +701,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_with_value_excludes_deleted() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
 
         let secret = secret_repo::create_secret(&pool, Scope::Global, None, None, &name)
@@ -733,7 +733,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn get_secret_with_value_service_scoped() {
-        let pool = test_pool().await;
+        let pool = keybox_test_pool().await;
         let name = unique_secret_name();
         let service = unique_service();
 
