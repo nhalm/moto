@@ -2,8 +2,8 @@
 //!
 //! Garages authenticate to ai-proxy by sending their SVID JWT (issued by keybox,
 //! mounted at `/var/run/secrets/svid/`) in the provider-native auth header. The
-//! proxy decodes the JWT claims to extract the garage ID, checks expiration, and
-//! validates the garage state against moto-club (`GET /api/v1/garages/{id}`).
+//! proxy verifies the Ed25519 signature cryptographically, validates expiration,
+//! and checks garage state against moto-club (`GET /api/v1/garages/{id}`).
 //! Validation results are cached with a configurable TTL (default 60s).
 
 use std::collections::HashMap;
@@ -11,9 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::http::HeaderMap;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use chrono::Utc;
-use serde::Deserialize;
+use moto_keybox::svid::SvidValidator;
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
 
@@ -69,21 +67,6 @@ impl AuthError {
             Self::ValidationFailed(msg) => format!("garage validation failed: {msg}"),
         }
     }
-}
-
-/// Minimal SVID JWT claims needed for garage identity extraction.
-///
-/// We decode only the claims we need without full signature verification.
-/// The SVID is cryptographically signed by keybox — forging it requires
-/// keybox's private key. Garage state is separately validated via moto-club.
-#[derive(Debug, Deserialize)]
-struct SvidClaims {
-    /// Expiration time (Unix timestamp).
-    exp: i64,
-    /// Principal type (garage, bike, service).
-    principal_type: String,
-    /// Principal ID (garage-id, bike-id, or service name).
-    principal_id: String,
 }
 
 /// Trait for validating garage identity.
@@ -215,37 +198,32 @@ pub fn extract_token(headers: &HeaderMap) -> Option<String> {
 
 /// Extracts the garage ID from an SVID JWT token.
 ///
-/// Decodes the JWT claims (without full signature verification) and extracts
-/// the `principal_id` field. Checks that:
-/// - The token is a valid 3-part JWT
-/// - The claims can be decoded and parsed
-/// - The `principal_type` is "garage"
+/// Verifies the Ed25519 signature cryptographically using keybox's public key,
+/// then extracts the `principal_id` field. Checks that:
+/// - The Ed25519 signature is valid (verifies keybox issued this token)
 /// - The token has not expired
+/// - The issuer is "keybox" and audience is "moto"
+/// - The `principal_type` is "garage"
 ///
 /// # Errors
 ///
-/// Returns `AuthError::InvalidToken` if the JWT is malformed or claims cannot be parsed,
-/// `AuthError::NotGarage` if the principal is not a garage, or `AuthError::SvidExpired`
-/// if the token has expired.
-pub fn extract_garage_id(token: &str) -> Result<String, AuthError> {
-    let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() != 3 {
-        return Err(AuthError::InvalidToken);
-    }
+/// Returns `AuthError::InvalidToken` if signature verification fails or the JWT
+/// is malformed, `AuthError::NotGarage` if the principal is not a garage, or
+/// `AuthError::SvidExpired` if the token has expired.
+pub fn extract_garage_id(validator: &SvidValidator, token: &str) -> Result<String, AuthError> {
+    // Verify signature and decode claims atomically.
+    // This validates: signature, expiration, issuer, and audience.
+    let claims = validator.validate(token).map_err(|e| {
+        // Map keybox error types to auth errors.
+        match e {
+            moto_keybox::Error::SvidExpired => AuthError::SvidExpired,
+            _ => AuthError::InvalidToken,
+        }
+    })?;
 
-    let claims_bytes = URL_SAFE_NO_PAD
-        .decode(parts[1])
-        .map_err(|_| AuthError::InvalidToken)?;
-
-    let claims: SvidClaims =
-        serde_json::from_slice(&claims_bytes).map_err(|_| AuthError::InvalidToken)?;
-
-    if claims.principal_type != "garage" {
+    // Check that the principal is a garage.
+    if claims.principal_type != moto_keybox::types::PrincipalType::Garage {
         return Err(AuthError::NotGarage);
-    }
-
-    if Utc::now().timestamp() > claims.exp {
-        return Err(AuthError::SvidExpired);
     }
 
     if claims.principal_id.is_empty() {
@@ -255,43 +233,40 @@ pub fn extract_garage_id(token: &str) -> Result<String, AuthError> {
     Ok(claims.principal_id)
 }
 
-/// Builds a minimal SVID JWT for testing purposes.
-///
-/// Creates a JWT with the given claims but a dummy signature.
-/// Only for use in tests — production SVIDs are signed by keybox.
-#[cfg(test)]
-#[must_use]
-pub fn build_test_svid(principal_type: &str, principal_id: &str, ttl_secs: i64) -> String {
-    let header = serde_json::json!({"alg": "EdDSA", "typ": "JWT"});
-    let now = Utc::now().timestamp();
-    let claims = serde_json::json!({
-        "iss": "keybox",
-        "sub": format!("spiffe://moto.local/{principal_type}/{principal_id}"),
-        "aud": "moto",
-        "exp": now + ttl_secs,
-        "iat": now,
-        "jti": "test-jti",
-        "principal_type": principal_type,
-        "principal_id": principal_id,
-    });
-    let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string());
-    let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string());
-    // Dummy signature — not cryptographically valid, but structurally correct.
-    let sig_b64 = URL_SAFE_NO_PAD.encode(vec![0u8; 64]);
-    format!("{header_b64}.{claims_b64}.{sig_b64}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use moto_keybox::svid::{SvidClaims, SvidIssuer};
+    use moto_keybox::types::SpiffeId;
 
-    fn test_garage_svid(garage_id: &str) -> String {
-        build_test_svid("garage", garage_id, 900)
+    // Test issuer and validator for generating/verifying real SVIDs in tests.
+    fn test_issuer_and_validator() -> (SvidIssuer, SvidValidator) {
+        let key = SvidIssuer::generate_key();
+        let issuer = SvidIssuer::new(key);
+        let validator = SvidValidator::new(issuer.verifying_key());
+        (issuer, validator)
+    }
+
+    fn build_test_svid(
+        issuer: &SvidIssuer,
+        principal_type: &str,
+        principal_id: &str,
+        ttl_secs: i64,
+    ) -> String {
+        let spiffe_id = match principal_type {
+            "garage" => SpiffeId::garage(principal_id),
+            "bike" => SpiffeId::bike(principal_id),
+            "service" => SpiffeId::service(principal_id),
+            _ => panic!("unknown principal type"),
+        };
+        let claims = SvidClaims::new(&spiffe_id, ttl_secs);
+        issuer.issue_with_claims(&claims).unwrap()
     }
 
     #[test]
     fn extract_token_from_bearer() {
-        let svid = test_garage_svid("abc123");
+        let (issuer, _) = test_issuer_and_validator();
+        let svid = build_test_svid(&issuer, "garage", "abc123", 900);
         let mut headers = HeaderMap::new();
         headers.insert("authorization", format!("Bearer {svid}").parse().unwrap());
         assert_eq!(extract_token(&headers), Some(svid));
@@ -299,7 +274,8 @@ mod tests {
 
     #[test]
     fn extract_token_from_x_api_key() {
-        let svid = test_garage_svid("abc123");
+        let (issuer, _) = test_issuer_and_validator();
+        let svid = build_test_svid(&issuer, "garage", "abc123", 900);
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", svid.parse().unwrap());
         assert_eq!(extract_token(&headers), Some(svid));
@@ -307,8 +283,9 @@ mod tests {
 
     #[test]
     fn extract_token_prefers_bearer_over_x_api_key() {
-        let svid_bearer = test_garage_svid("bearer-garage");
-        let svid_apikey = test_garage_svid("apikey-garage");
+        let (issuer, _) = test_issuer_and_validator();
+        let svid_bearer = build_test_svid(&issuer, "garage", "bearer-garage", 900);
+        let svid_apikey = build_test_svid(&issuer, "garage", "apikey-garage", 900);
         let mut headers = HeaderMap::new();
         headers.insert(
             "authorization",
@@ -333,50 +310,59 @@ mod tests {
 
     #[test]
     fn extract_garage_id_from_svid() {
-        let svid = test_garage_svid("abc123");
-        assert_eq!(extract_garage_id(&svid).unwrap(), "abc123");
+        let (issuer, validator) = test_issuer_and_validator();
+        let svid = build_test_svid(&issuer, "garage", "abc123", 900);
+        assert_eq!(extract_garage_id(&validator, &svid).unwrap(), "abc123");
     }
 
     #[test]
     fn extract_garage_id_rejects_non_garage_principal() {
-        let svid = build_test_svid("service", "ai-proxy", 900);
+        let (issuer, validator) = test_issuer_and_validator();
+        let svid = build_test_svid(&issuer, "service", "ai-proxy", 900);
         assert!(matches!(
-            extract_garage_id(&svid),
+            extract_garage_id(&validator, &svid),
             Err(AuthError::NotGarage)
         ));
     }
 
     #[test]
     fn extract_garage_id_rejects_expired_svid() {
-        let svid = build_test_svid("garage", "abc123", -10);
+        let (issuer, validator) = test_issuer_and_validator();
+        let svid = build_test_svid(&issuer, "garage", "abc123", -10);
         assert!(matches!(
-            extract_garage_id(&svid),
+            extract_garage_id(&validator, &svid),
             Err(AuthError::SvidExpired)
         ));
     }
 
     #[test]
     fn extract_garage_id_rejects_malformed_token() {
+        let (_, validator) = test_issuer_and_validator();
         assert!(matches!(
-            extract_garage_id("not-a-jwt"),
+            extract_garage_id(&validator, "not-a-jwt"),
             Err(AuthError::InvalidToken)
         ));
     }
 
     #[test]
     fn extract_garage_id_rejects_invalid_base64_claims() {
+        let (_, validator) = test_issuer_and_validator();
         assert!(matches!(
-            extract_garage_id("header.!!!invalid!!!.signature"),
+            extract_garage_id(&validator, "header.!!!invalid!!!.signature"),
             Err(AuthError::InvalidToken)
         ));
     }
 
     #[test]
-    fn extract_garage_id_rejects_non_json_claims() {
-        let claims_b64 = URL_SAFE_NO_PAD.encode("not json");
-        let token = format!("header.{claims_b64}.signature");
+    fn extract_garage_id_rejects_invalid_signature() {
+        // Create two different issuer/validator pairs with different keys.
+        let (issuer1, _) = test_issuer_and_validator();
+        let (_, validator2) = test_issuer_and_validator();
+
+        // Sign with issuer1, try to verify with validator2 (different key).
+        let svid = build_test_svid(&issuer1, "garage", "abc123", 900);
         assert!(matches!(
-            extract_garage_id(&token),
+            extract_garage_id(&validator2, &svid),
             Err(AuthError::InvalidToken)
         ));
     }

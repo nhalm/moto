@@ -29,6 +29,7 @@ use moto_ai_proxy::keys::KeyboxKeyStore;
 use moto_ai_proxy::provider::ModelRouter;
 use moto_ai_proxy::proxy;
 
+use moto_keybox::svid::SvidValidator;
 use moto_keybox_client::{KeyboxClient, KeyboxConfig, SvidCache};
 use moto_throttle::{PrincipalType, ThrottleConfig, ThrottleLayer};
 
@@ -49,6 +50,31 @@ async fn main() {
         error!(error = %e, "moto-ai-proxy failed to start");
         std::process::exit(1);
     }
+}
+
+/// Fetches the Ed25519 public verifying key from keybox for SVID signature verification.
+///
+/// This key is public and used to verify that SVID JWTs were issued by keybox.
+async fn fetch_verifying_key(
+    keybox_url: &str,
+) -> Result<SvidValidator, Box<dyn std::error::Error>> {
+    let url = format!("{keybox_url}/auth/verifying-key");
+    info!(url = %url, "fetching SVID verifying key from keybox");
+
+    let client = reqwest::Client::new();
+    let key_base64 = client
+        .get(&url)
+        .send()
+        .await?
+        .error_for_status()?
+        .text()
+        .await?;
+
+    let validator = SvidValidator::from_base64(&key_base64)
+        .map_err(|e| format!("invalid verifying key from keybox: {e}"))?;
+
+    info!("SVID verifying key loaded successfully");
+    Ok(validator)
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -90,6 +116,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Duration::from_secs(config.key_cache_ttl_secs),
     );
 
+    // Fetch the SVID verifying key from keybox for signature verification.
+    let svid_validator = fetch_verifying_key(&config.keybox_url).await?;
+
     // Mark startup complete — SVID is loaded (or will be retried on first request).
     health::mark_startup_complete();
 
@@ -124,8 +153,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _cleanup_handle = throttle_layer.spawn_cleanup();
 
     // Build proxy router with passthrough routes, key injection, and garage auth
-    let app = proxy::proxy_router(client, key_store, garage_validator, model_router)
-        .layer(throttle_layer);
+    let app = proxy::proxy_router(
+        client,
+        key_store,
+        svid_validator,
+        garage_validator,
+        model_router,
+    )
+    .layer(throttle_layer);
 
     let listener = TcpListener::bind(config.bind_addr).await?;
     info!(addr = %config.bind_addr, "moto-ai-proxy listening");

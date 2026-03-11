@@ -18,6 +18,7 @@ use crate::auth::{self, AuthError, GarageValidator};
 use crate::keys::KeyStore;
 use crate::provider::{ModelRouter, Provider, ProviderInfo};
 use crate::translate::anthropic as anthropic_translate;
+use moto_keybox::svid::SvidValidator;
 
 /// Known models to return for Anthropic (no public /v1/models endpoint).
 const ANTHROPIC_KNOWN_MODELS: &[&str] = &[
@@ -38,6 +39,8 @@ pub struct ProxyState<K: KeyStore + 'static, G: GarageValidator + 'static> {
     pub client: Client,
     /// Key store for fetching provider API keys.
     pub key_store: Arc<K>,
+    /// SVID validator for verifying garage identity signatures.
+    pub svid_validator: Arc<SvidValidator>,
     /// Garage identity validator.
     pub garage_validator: Arc<G>,
     /// Model router for resolving model names to providers.
@@ -49,6 +52,7 @@ impl<K: KeyStore + 'static, G: GarageValidator + 'static> Clone for ProxyState<K
         Self {
             client: self.client.clone(),
             key_store: Arc::clone(&self.key_store),
+            svid_validator: Arc::clone(&self.svid_validator),
             garage_validator: Arc::clone(&self.garage_validator),
             model_router: self.model_router.clone(),
         }
@@ -57,21 +61,22 @@ impl<K: KeyStore + 'static, G: GarageValidator + 'static> Clone for ProxyState<K
 
 /// Validates the garage identity from request headers.
 ///
-/// Extracts the auth token, decodes the SVID JWT to get the garage ID,
-/// and validates via the garage validator.
+/// Extracts the auth token, verifies the SVID Ed25519 signature, extracts the
+/// garage ID, and validates via the garage validator.
 async fn validate_garage_auth<G: GarageValidator>(
     headers: &HeaderMap,
-    validator: &G,
+    svid_validator: &SvidValidator,
+    garage_validator: &G,
 ) -> Result<String, Response> {
     let token = auth::extract_token(headers).ok_or_else(|| {
         let err = AuthError::MissingToken;
         error_response(err.status_code(), &err.message(), err.error_type())
     })?;
 
-    let garage_id = auth::extract_garage_id(&token)
+    let garage_id = auth::extract_garage_id(svid_validator, &token)
         .map_err(|err| error_response(err.status_code(), &err.message(), err.error_type()))?;
 
-    validator
+    garage_validator
         .validate_garage(&garage_id)
         .await
         .map_err(|err| error_response(err.status_code(), &err.message(), err.error_type()))?;
@@ -275,7 +280,13 @@ async fn handle_passthrough<K: KeyStore, G: GarageValidator>(
         return resp;
     }
 
-    let garage_id = match validate_garage_auth(headers, state.garage_validator.as_ref()).await {
+    let garage_id = match validate_garage_auth(
+        headers,
+        state.svid_validator.as_ref(),
+        state.garage_validator.as_ref(),
+    )
+    .await
+    {
         Ok(id) => id,
         Err(resp) => {
             let status = resp.status().as_u16();
@@ -507,7 +518,13 @@ pub async fn chat_completions<K: KeyStore, G: GarageValidator>(
     let start = Instant::now();
     let path = uri.path().to_string();
 
-    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
+    let garage_id = match validate_garage_auth(
+        &headers,
+        state.svid_validator.as_ref(),
+        state.garage_validator.as_ref(),
+    )
+    .await
+    {
         Ok(id) => id,
         Err(resp) => {
             log_request(
@@ -856,7 +873,13 @@ pub async fn list_models<K: KeyStore, G: GarageValidator>(
     let start = Instant::now();
     let path = uri.path().to_string();
 
-    let garage_id = match validate_garage_auth(&headers, state.garage_validator.as_ref()).await {
+    let garage_id = match validate_garage_auth(
+        &headers,
+        state.svid_validator.as_ref(),
+        state.garage_validator.as_ref(),
+    )
+    .await
+    {
         Ok(id) => id,
         Err(resp) => {
             log_request(
@@ -923,12 +946,14 @@ pub async fn list_models<K: KeyStore, G: GarageValidator>(
 pub fn proxy_router<K: KeyStore + 'static, G: GarageValidator + 'static>(
     client: Client,
     key_store: K,
+    svid_validator: SvidValidator,
     garage_validator: G,
     model_router: ModelRouter,
 ) -> axum::Router {
     let state = ProxyState {
         client,
         key_store: Arc::new(key_store),
+        svid_validator: Arc::new(svid_validator),
         garage_validator: Arc::new(garage_validator),
         model_router,
     };

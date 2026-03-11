@@ -1330,6 +1330,27 @@ pub fn parse_scope_query(
     ))
 }
 
+/// Get the public verifying key for SVID signature verification.
+///
+/// GET /auth/verifying-key
+///
+/// Returns the base64-encoded Ed25519 public key that can be used to verify
+/// SVID signatures. This endpoint is public and requires no authentication —
+/// the verifying key is public by design (anyone can verify signatures, but
+/// only keybox can create them).
+///
+/// This allows services like ai-proxy to verify SVID signatures without
+/// needing keybox's private signing key.
+async fn get_verifying_key(State(state): State<AppState>) -> impl IntoResponse {
+    let key_base64 = SvidValidator::encode_key(&state.svid_issuer.verifying_key());
+
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "text/plain")],
+        key_base64,
+    )
+}
+
 // =============================================================================
 // Router
 // =============================================================================
@@ -1339,6 +1360,7 @@ pub fn parse_scope_query(
 /// Includes:
 /// - `POST /auth/token` - Issue SVID token (bikes, via K8s SA JWT)
 /// - `POST /auth/issue-garage-svid` - Issue garage SVID (moto-club delegation)
+/// - `GET /auth/verifying-key` - Get public verifying key for signature verification
 /// - `GET /secrets/{scope}/{name}` - Get secret value
 /// - `POST /secrets/{scope}/{name}` - Create/update secret
 /// - `DELETE /secrets/{scope}/{name}` - Delete secret
@@ -1352,6 +1374,7 @@ pub fn router(state: AppState) -> Router {
         // Auth endpoints
         .route("/auth/token", post(issue_token))
         .route("/auth/issue-garage-svid", post(issue_garage_svid))
+        .route("/auth/verifying-key", get(get_verifying_key))
         // Secret CRUD endpoints
         .route(
             "/secrets/{scope}/{name}",

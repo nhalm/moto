@@ -10,14 +10,26 @@ use secrecy::SecretString;
 use tokio_stream::wrappers::ReceiverStream;
 use tower::ServiceExt;
 
-use crate::auth::{self, AuthError, GarageValidator};
+use crate::auth::{AuthError, GarageValidator};
 use crate::keys::KeyStore;
 use crate::provider::{ModelRouter, Provider};
 use crate::proxy;
+use moto_keybox::svid::{SvidClaims, SvidIssuer, SvidValidator};
+use moto_keybox::types::SpiffeId;
+
+/// Test issuer and validator for generating/verifying real SVIDs in tests.
+fn test_issuer_and_validator() -> (SvidIssuer, SvidValidator) {
+    let key = SvidIssuer::generate_key();
+    let issuer = SvidIssuer::new(key);
+    let validator = SvidValidator::new(issuer.verifying_key());
+    (issuer, validator)
+}
 
 /// Helper to build a test SVID JWT for a garage.
-fn garage_svid(id: &str) -> String {
-    auth::build_test_svid("garage", id, 900)
+fn garage_svid(issuer: &SvidIssuer, id: &str) -> String {
+    let spiffe_id = SpiffeId::garage(id);
+    let claims = SvidClaims::new(&spiffe_id, 900);
+    issuer.issue_with_claims(&claims).unwrap()
 }
 
 /// Mock key store that returns pre-configured keys.
@@ -122,6 +134,7 @@ async fn start_json_upstream() -> String {
 
 #[tokio::test]
 async fn streaming_sse_passthrough_forwards_events_unchanged() {
+    let ctx = TestContext::new();
     let upstream_url = start_sse_upstream().await;
 
     // Build a reqwest client that talks to the mock upstream.
@@ -131,7 +144,7 @@ async fn streaming_sse_passthrough_forwards_events_unchanged() {
     let mut headers = HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
     headers.insert("accept", "text/event-stream".parse().unwrap());
-    headers.insert("x-api-key", garage_svid("abc123").parse().unwrap());
+    headers.insert("x-api-key", ctx.garage_svid("abc123").parse().unwrap());
 
     // Override the upstream base by making the request directly to our mock.
     // We'll use forward_to_provider but need to point at our mock.
@@ -139,6 +152,7 @@ async fn streaming_sse_passthrough_forwards_events_unchanged() {
     let state = proxy::ProxyState {
         client: client.clone(),
         key_store: std::sync::Arc::new(key_store),
+        svid_validator: std::sync::Arc::new(ctx.validator.clone()),
         garage_validator: std::sync::Arc::new(AcceptAllValidator),
         model_router: ModelRouter::default(),
     };
@@ -294,11 +308,12 @@ impl KeyStore for MultiKeyStore {
     }
 }
 
-fn build_test_router(key_store: MultiKeyStore) -> axum::Router {
+fn build_test_router(key_store: MultiKeyStore, validator: SvidValidator) -> axum::Router {
     let client = reqwest::Client::new();
     proxy::proxy_router(
         client,
         key_store,
+        validator,
         AcceptAllValidator,
         ModelRouter::default(),
     )
@@ -307,15 +322,52 @@ fn build_test_router(key_store: MultiKeyStore) -> axum::Router {
 fn build_test_router_with_model_map(
     key_store: MultiKeyStore,
     model_router: ModelRouter,
+    validator: SvidValidator,
 ) -> axum::Router {
     let client = reqwest::Client::new();
-    proxy::proxy_router(client, key_store, AcceptAllValidator, model_router)
+    proxy::proxy_router(
+        client,
+        key_store,
+        validator,
+        AcceptAllValidator,
+        model_router,
+    )
+}
+
+/// Test context that bundles issuer, validator, and convenience methods.
+struct TestContext {
+    issuer: SvidIssuer,
+    validator: SvidValidator,
+}
+
+impl TestContext {
+    fn new() -> Self {
+        let (issuer, validator) = test_issuer_and_validator();
+        Self { issuer, validator }
+    }
+
+    fn garage_svid(&self, id: &str) -> String {
+        garage_svid(&self.issuer, id)
+    }
+
+    fn build_router(&self, key_store: MultiKeyStore) -> axum::Router {
+        build_test_router(key_store, self.validator.clone())
+    }
+
+    fn build_router_with_model_map(
+        &self,
+        key_store: MultiKeyStore,
+        model_router: ModelRouter,
+    ) -> axum::Router {
+        build_test_router_with_model_map(key_store, model_router, self.validator.clone())
+    }
 }
 
 #[tokio::test]
 async fn chat_completions_returns_400_for_missing_model() {
+    let ctx = TestContext::new();
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
@@ -323,7 +375,7 @@ async fn chat_completions_returns_400_for_missing_model() {
         .header("content-type", "application/json")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::from(r#"{"messages": []}"#))
         .unwrap();
@@ -339,8 +391,9 @@ async fn chat_completions_returns_400_for_missing_model() {
 
 #[tokio::test]
 async fn chat_completions_returns_400_for_unknown_model() {
+    let ctx = TestContext::new();
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
@@ -348,7 +401,7 @@ async fn chat_completions_returns_400_for_unknown_model() {
         .header("content-type", "application/json")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::from(r#"{"model": "mistral-large", "messages": []}"#))
         .unwrap();
@@ -371,7 +424,8 @@ async fn chat_completions_returns_400_for_unknown_model() {
 async fn chat_completions_returns_503_for_unconfigured_provider() {
     // No keys configured at all.
     let key_store = MultiKeyStore::new();
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
@@ -379,7 +433,7 @@ async fn chat_completions_returns_503_for_unconfigured_provider() {
         .header("content-type", "application/json")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::from(r#"{"model": "gpt-4o", "messages": []}"#))
         .unwrap();
@@ -400,7 +454,8 @@ async fn chat_completions_returns_503_for_unconfigured_provider() {
 #[tokio::test]
 async fn chat_completions_returns_401_without_auth() {
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
@@ -416,7 +471,8 @@ async fn chat_completions_returns_401_without_auth() {
 #[tokio::test]
 async fn responses_include_x_moto_request_id_header() {
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     // Even error responses should include X-Moto-Request-Id.
     let req = Request::builder()
@@ -425,7 +481,7 @@ async fn responses_include_x_moto_request_id_header() {
         .header("content-type", "application/json")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::from(r#"{"model": "unknown-model", "messages": []}"#))
         .unwrap();
@@ -449,14 +505,15 @@ async fn responses_include_x_moto_request_id_header() {
 #[tokio::test]
 async fn list_models_includes_x_moto_request_id_header() {
     let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("GET")
         .uri("/v1/models")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::empty())
         .unwrap();
@@ -498,7 +555,8 @@ async fn gemini_provider_routes_to_openai_compat_endpoint() {
 async fn chat_completions_returns_503_for_unconfigured_gemini() {
     // No Gemini key configured — should return 503 for Gemini model.
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
@@ -506,7 +564,7 @@ async fn chat_completions_returns_503_for_unconfigured_gemini() {
         .header("content-type", "application/json")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::from(
             r#"{"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": "Hi"}]}"#,
@@ -529,7 +587,8 @@ async fn chat_completions_returns_503_for_unconfigured_gemini() {
 #[tokio::test]
 async fn list_models_returns_401_without_auth() {
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("GET")
@@ -545,14 +604,15 @@ async fn list_models_returns_401_without_auth() {
 async fn list_models_returns_anthropic_models_when_configured() {
     // Only Anthropic key configured — should return static Claude model list.
     let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("GET")
         .uri("/v1/models")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::empty())
         .unwrap();
@@ -574,14 +634,15 @@ async fn list_models_returns_anthropic_models_when_configured() {
 #[tokio::test]
 async fn list_models_returns_empty_when_no_keys() {
     let key_store = MultiKeyStore::new();
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("GET")
         .uri("/v1/models")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::empty())
         .unwrap();
@@ -601,7 +662,8 @@ async fn chat_completions_routes_custom_model_prefix() {
     let model_map = r#"[{"prefix": "mistral-", "provider": "mistral", "upstream": "https://api.mistral.ai/", "auth_header": "Authorization", "auth_prefix": "Bearer "}]"#;
     let model_router = ModelRouter::new(Some(model_map)).unwrap();
     let key_store = MultiKeyStore::new().with_custom_key("ai-proxy/mistral", "sk-mistral-test");
-    let app = build_test_router_with_model_map(key_store, model_router);
+    let ctx = TestContext::new();
+    let app = ctx.build_router_with_model_map(key_store, model_router);
 
     // Sending a mistral model should attempt to route to the custom provider.
     // Since we can't reach the real upstream, it will fail with a connection error (502),
@@ -612,7 +674,7 @@ async fn chat_completions_routes_custom_model_prefix() {
         .header("content-type", "application/json")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::from(
             r#"{"model": "mistral-large", "messages": [{"role": "user", "content": "Hi"}]}"#,
@@ -630,7 +692,8 @@ async fn chat_completions_returns_503_for_custom_provider_without_key() {
     let model_map = r#"[{"prefix": "mistral-", "provider": "mistral", "upstream": "https://api.mistral.ai/", "auth_header": "Authorization", "auth_prefix": "Bearer "}]"#;
     let model_router = ModelRouter::new(Some(model_map)).unwrap();
     let key_store = MultiKeyStore::new(); // No keys at all.
-    let app = build_test_router_with_model_map(key_store, model_router);
+    let ctx = TestContext::new();
+    let app = ctx.build_router_with_model_map(key_store, model_router);
 
     let req = Request::builder()
         .method("POST")
@@ -638,7 +701,7 @@ async fn chat_completions_returns_503_for_custom_provider_without_key() {
         .header("content-type", "application/json")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::from(
             r#"{"model": "mistral-large", "messages": [{"role": "user", "content": "Hi"}]}"#,
@@ -662,7 +725,8 @@ async fn chat_completions_returns_503_for_custom_provider_without_key() {
 async fn chat_completions_includes_x_moto_provider_header() {
     // Provider is resolved but upstream unreachable → 503, but X-Moto-Provider should be set.
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
@@ -670,7 +734,7 @@ async fn chat_completions_includes_x_moto_provider_header() {
         .header("content-type", "application/json")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::from(
             r#"{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]}"#,
@@ -690,7 +754,8 @@ async fn chat_completions_includes_x_moto_provider_header() {
 async fn chat_completions_no_provider_header_on_auth_error() {
     // No auth → 401, X-Moto-Provider should NOT be set (no provider resolved).
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
@@ -711,7 +776,8 @@ async fn chat_completions_no_provider_header_on_auth_error() {
 async fn chat_completions_no_provider_header_on_unknown_model() {
     // Unknown model → 400, X-Moto-Provider should NOT be set.
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
@@ -719,7 +785,7 @@ async fn chat_completions_no_provider_header_on_unknown_model() {
         .header("content-type", "application/json")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::from(r#"{"model": "unknown-model", "messages": []}"#))
         .unwrap();
@@ -735,13 +801,14 @@ async fn chat_completions_no_provider_header_on_unknown_model() {
 #[tokio::test]
 async fn passthrough_anthropic_allows_messages_path() {
     let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
         .uri("/passthrough/anthropic/v1/messages")
         .header("content-type", "application/json")
-        .header("x-api-key", &garage_svid("abc123"))
+        .header("x-api-key", &ctx.garage_svid("abc123"))
         .body(Body::from(
             r#"{"model":"claude-sonnet-4-20250514","messages":[]}"#,
         ))
@@ -755,12 +822,13 @@ async fn passthrough_anthropic_allows_messages_path() {
 #[tokio::test]
 async fn passthrough_anthropic_blocks_disallowed_path() {
     let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("GET")
         .uri("/passthrough/anthropic/v1/organizations")
-        .header("x-api-key", &garage_svid("abc123"))
+        .header("x-api-key", &ctx.garage_svid("abc123"))
         .body(Body::empty())
         .unwrap();
 
@@ -776,14 +844,15 @@ async fn passthrough_anthropic_blocks_disallowed_path() {
 #[tokio::test]
 async fn passthrough_openai_blocks_disallowed_path() {
     let key_store = MultiKeyStore::new().with_key(Provider::OpenAi, "sk-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("GET")
         .uri("/passthrough/openai/v1/billing/usage")
         .header(
             "authorization",
-            &format!("Bearer {}", garage_svid("abc123")),
+            &format!("Bearer {}", ctx.garage_svid("abc123")),
         )
         .body(Body::empty())
         .unwrap();
@@ -800,12 +869,13 @@ async fn passthrough_openai_blocks_disallowed_path() {
 #[tokio::test]
 async fn passthrough_blocked_path_includes_moto_headers() {
     let key_store = MultiKeyStore::new().with_key(Provider::Anthropic, "sk-ant-test");
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("GET")
         .uri("/passthrough/anthropic/admin/something")
-        .header("x-api-key", &garage_svid("abc123"))
+        .header("x-api-key", &ctx.garage_svid("abc123"))
         .body(Body::empty())
         .unwrap();
 
@@ -827,13 +897,14 @@ async fn chat_completions_routes_finetuned_model_to_openai() {
     // Fine-tuned model ft:gpt-4o:org:model:id should route to OpenAI.
     // No OpenAI key configured, so it should return 503 (not 400 "unknown model prefix").
     let key_store = MultiKeyStore::new();
-    let app = build_test_router(key_store);
+    let ctx = TestContext::new();
+    let app = ctx.build_router(key_store);
 
     let req = Request::builder()
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
-        .header("authorization", &format!("Bearer {}", garage_svid("abc123")))
+        .header("authorization", &format!("Bearer {}", ctx.garage_svid("abc123")))
         .body(Body::from(
             r#"{"model": "ft:gpt-4o:my-org:custom:abc123", "messages": [{"role": "user", "content": "Hi"}]}"#,
         ))

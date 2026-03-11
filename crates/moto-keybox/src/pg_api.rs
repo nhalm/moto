@@ -990,6 +990,24 @@ const fn from_db_audit_event_type(et: moto_keybox_db::AuditEventType) -> AuditEv
     }
 }
 
+/// Get the public verifying key for SVID signature verification.
+///
+/// GET /auth/verifying-key
+///
+/// Returns the base64-encoded Ed25519 public key that can be used to verify
+/// SVID signatures. This endpoint is public and requires no authentication —
+/// the verifying key is public by design (anyone can verify signatures, but
+/// only keybox can create them).
+async fn get_verifying_key(State(state): State<PgAppState>) -> impl IntoResponse {
+    let key_base64 = SvidValidator::encode_key(&state.svid_issuer.verifying_key());
+
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "text/plain")],
+        key_base64,
+    )
+}
+
 // =============================================================================
 // Router
 // =============================================================================
@@ -999,6 +1017,7 @@ pub fn pg_router(state: PgAppState) -> Router {
     Router::new()
         .route("/auth/token", post(issue_token))
         .route("/auth/issue-garage-svid", post(issue_garage_svid))
+        .route("/auth/verifying-key", get(get_verifying_key))
         .route(
             "/secrets/{scope}/{name}",
             get(get_secret).post(set_secret).delete(delete_secret),
