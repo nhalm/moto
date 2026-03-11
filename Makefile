@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install build test check fmt lint clean run fix ci
+.PHONY: help install build test check fmt lint clean run fix audit ci
 .PHONY: test-ci
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
 .PHONY: build-bike test-bike
@@ -51,7 +51,14 @@ run: ## Run the CLI
 fix: fmt ## Auto-fix lint issues
 	cargo clippy --workspace --all-targets --fix --allow-dirty
 
-ci: fmt check lint test ## Full CI check (fmt + check + lint + test)
+audit: ## Check for known CVEs in dependencies
+	@if ! command -v cargo-audit &>/dev/null; then \
+		echo "Error: cargo-audit is not installed. Install with 'cargo install cargo-audit'"; \
+		exit 1; \
+	fi
+	cargo audit
+
+ci: fmt check lint test audit ## Full CI check (fmt + check + lint + test + audit)
 
 ##@ Container
 
