@@ -338,10 +338,25 @@ fn map_error(e: Error) -> (StatusCode, Json<ApiError>) {
 // =============================================================================
 
 /// Issue an SVID token.
+///
+/// Requires service token authentication (only moto-club can issue SVIDs).
+/// This prevents identity spoofing attacks where unauthenticated callers could mint SVIDs.
 async fn issue_token(
     State(state): State<PgAppState>,
+    headers: HeaderMap,
     Json(req): Json<TokenRequest>,
 ) -> impl IntoResponse {
+    // Validate service token (only moto-club can call this endpoint)
+    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new(
+                error_codes::UNAUTHORIZED,
+                "Operation requires service token",
+            )),
+        )
+    })?;
+
     let spiffe_id = match req.principal_type {
         PrincipalType::Garage => SpiffeId::garage(&req.principal_id),
         PrincipalType::Bike => SpiffeId::bike(&req.principal_id),

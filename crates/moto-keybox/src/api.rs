@@ -644,12 +644,24 @@ fn map_error(e: Error) -> (StatusCode, Json<ApiError>) {
 ///
 /// POST /auth/token
 ///
-/// In production, this validates a K8s `ServiceAccount` JWT and issues an SVID.
-/// For MVP, we accept principal info directly (no K8s validation).
+/// Requires service token authentication (only moto-club can issue SVIDs).
+/// This prevents identity spoofing attacks where unauthenticated callers could mint SVIDs.
 async fn issue_token(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(req): Json<TokenRequest>,
 ) -> impl IntoResponse {
+    // Validate service token (only moto-club can call this endpoint)
+    validate_service_token(&headers, state.service_token.as_ref()).map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new(
+                error_codes::UNAUTHORIZED,
+                "Operation requires service token",
+            )),
+        )
+    })?;
+
     let spiffe_id = match req.principal_type {
         PrincipalType::Garage => SpiffeId::garage(&req.principal_id),
         PrincipalType::Bike => SpiffeId::bike(&req.principal_id),
