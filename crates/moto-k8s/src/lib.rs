@@ -10,6 +10,7 @@
 //! - [`ResourceQuotaOps`] - Trait for `ResourceQuota` operations
 //! - [`LimitRangeOps`] - Trait for `LimitRange` operations
 //! - [`TokenReviewOps`] - Trait for `ServiceAccount` token validation
+//! - [`RbacOps`] - Trait for RBAC operations (Role, `RoleBinding`)
 //! - [`labels`] - Constants for moto K8s labels
 
 mod client;
@@ -21,6 +22,7 @@ mod namespace;
 mod network_policy;
 mod pod;
 mod pvc;
+mod rbac;
 mod resource_quota;
 mod token_review;
 
@@ -33,5 +35,6 @@ pub use namespace::NamespaceOps;
 pub use network_policy::NetworkPolicyOps;
 pub use pod::{LogStream, PodLogOptions, PodOps};
 pub use pvc::PvcOps;
+pub use rbac::RbacOps;
 pub use resource_quota::ResourceQuotaOps;
 pub use token_review::{TokenReviewOps, ValidatedToken};

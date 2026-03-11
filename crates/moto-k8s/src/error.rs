@@ -220,6 +220,10 @@ pub enum Error {
     /// Failed to delete `Secret`.
     #[error("failed to delete Secret: {0}")]
     SecretDelete(#[source] kube::Error),
+
+    /// Failed to create RBAC resource (Role or `RoleBinding`).
+    #[error("failed to create RBAC resource: {0}")]
+    RbacCreate(#[source] kube::Error),
 }
 
 /// Result type alias for K8s operations.

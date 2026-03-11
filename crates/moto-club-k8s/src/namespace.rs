@@ -6,11 +6,14 @@
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
-use k8s_openapi::api::core::v1::Namespace;
+use k8s_openapi::api::{
+    core::v1::Namespace,
+    rbac::v1::{PolicyRule, Subject},
+};
 use tracing::{debug, instrument};
 
 use moto_club_types::GarageId;
-use moto_k8s::{Labels, NamespaceOps, Result};
+use moto_k8s::{Labels, NamespaceOps, RbacOps, Result};
 
 use crate::GarageK8s;
 
@@ -114,7 +117,56 @@ impl GarageNamespaceOps for GarageK8s {
         );
 
         debug!(namespace = %namespace_name, "creating garage namespace");
-        self.client.create_namespace(&namespace_name, labels).await
+        let ns = self
+            .client
+            .create_namespace(&namespace_name, labels.clone())
+            .await?;
+
+        // Create namespace-scoped RBAC for secrets (compliance: service-deploy v0.7 HIGH-3)
+        // moto-club needs secret access in garage namespaces but NOT in moto-system.
+        debug!(namespace = %namespace_name, "creating namespace-scoped RBAC for secrets");
+
+        // Create Role for secret operations in this garage namespace
+        let secret_rules = vec![PolicyRule {
+            api_groups: Some(vec![String::new()]),
+            resources: Some(vec!["secrets".to_string()]),
+            verbs: vec![
+                "get".to_string(),
+                "list".to_string(),
+                "create".to_string(),
+                "delete".to_string(),
+            ],
+            ..Default::default()
+        }];
+
+        self.client
+            .create_role(
+                &namespace_name,
+                "moto-club-secrets",
+                secret_rules,
+                labels.clone(),
+            )
+            .await?;
+
+        // Create RoleBinding to bind moto-club ServiceAccount to the Role
+        let subjects = vec![Subject {
+            kind: "ServiceAccount".to_string(),
+            name: "moto-club".to_string(),
+            namespace: Some("moto-system".to_string()),
+            ..Default::default()
+        }];
+
+        self.client
+            .create_role_binding(
+                &namespace_name,
+                "moto-club-secrets",
+                "moto-club-secrets",
+                subjects,
+                labels,
+            )
+            .await?;
+
+        Ok(ns)
     }
 
     #[instrument(skip(self), fields(garage_id = %id))]
