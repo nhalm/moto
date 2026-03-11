@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## audit-logging v0.4
 
-- Add `limit` and `offset` fields to keybox `AuditLogsResponse` in `crates/moto-keybox/src/api.rs` so direct keybox audit queries support proper pagination.
 - Add keybox 90-day audit retention to moto-cron reconciler: `moto-keybox-db::audit_repo::delete_expired` exists but nothing calls it. Add a reconciler step that calls it with 90-day retention (previously marked complete in error).
 - Fix moto-club garage audit events to use `principal_type: "service"` with `principal_id: "moto-club"` and add `"requested_by": username` to metadata for user-initiated operations (garage create/terminate), per spec requirement that `principal_id` must be SPIFFE ID or service name.
 
