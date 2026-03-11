@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **audit-logging v0.6 (2026-03-11):** Fix `outcome` field in `PgSecretRepository::audit()` at `crates/moto-keybox/src/pg_repository.rs:759`: currently hardcoded to `"success"` for all event types. `AccessDenied` events must use `outcome = "denied"`. Determine outcome from event type instead of hardcoding.
 - **audit-logging v0.6 (2026-03-11):** Emit `access_denied` audit events from `PgSecretRepository` when ABAC policy denies access. Currently, `policy.evaluate()` and `policy.can_read()` return `Err(AccessDenied)` which propagates via `?` before any audit call. Each ABAC check in `create_with_context`, `get_with_context`, `update_with_context`, and `delete_with_context` must catch the error, log the `access_denied` audit event, then re-return the error. File: `crates/moto-keybox/src/pg_repository.rs`
 - **audit-logging v0.6 (2026-03-11):** Fix `access_denied` action value from `"auth_fail"` to `"deny"` in `audit_fields_for_event()` at `crates/moto-keybox/src/pg_repository.rs:851` and in `AuditEntry::access_denied()` at `crates/moto-keybox/src/types.rs:384`
 - **audit-logging v0.6 (2026-03-11):** Fix `AuditEntry::auth_failed()` helper at `crates/moto-keybox/src/types.rs:362-373`: change `principal_type` from `PrincipalType::Service` to `PrincipalType::Anonymous`, and move `reason` from `resource_id` to `metadata` field (add metadata field to `AuditEntry` struct if needed). Update corresponding test at line 553.
