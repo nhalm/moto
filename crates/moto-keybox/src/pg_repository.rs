@@ -814,6 +814,7 @@ const fn to_db_principal_type(pt: PrincipalType) -> DbPrincipalType {
         PrincipalType::Garage => DbPrincipalType::Garage,
         PrincipalType::Bike => DbPrincipalType::Bike,
         PrincipalType::Service => DbPrincipalType::Service,
+        PrincipalType::Anonymous => DbPrincipalType::Anonymous,
     }
 }
 

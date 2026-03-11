@@ -71,6 +71,8 @@ pub enum PrincipalType {
     Bike,
     /// A platform service.
     Service,
+    /// An unauthenticated caller.
+    Anonymous,
 }
 
 impl fmt::Display for PrincipalType {
@@ -79,6 +81,7 @@ impl fmt::Display for PrincipalType {
             Self::Garage => write!(f, "garage"),
             Self::Bike => write!(f, "bike"),
             Self::Service => write!(f, "service"),
+            Self::Anonymous => write!(f, "anonymous"),
         }
     }
 }
@@ -421,6 +424,7 @@ mod tests {
         assert_eq!(PrincipalType::Garage.to_string(), "garage");
         assert_eq!(PrincipalType::Bike.to_string(), "bike");
         assert_eq!(PrincipalType::Service.to_string(), "service");
+        assert_eq!(PrincipalType::Anonymous.to_string(), "anonymous");
     }
 
     #[test]

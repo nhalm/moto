@@ -130,6 +130,8 @@ pub enum PrincipalType {
     Bike,
     /// A platform service.
     Service,
+    /// An unauthenticated caller.
+    Anonymous,
 }
 
 impl std::fmt::Display for PrincipalType {
@@ -138,6 +140,7 @@ impl std::fmt::Display for PrincipalType {
             Self::Garage => "garage",
             Self::Bike => "bike",
             Self::Service => "service",
+            Self::Anonymous => "anonymous",
         };
         write!(f, "{s}")
     }
@@ -151,6 +154,7 @@ impl std::str::FromStr for PrincipalType {
             "garage" => Ok(Self::Garage),
             "bike" => Ok(Self::Bike),
             "service" => Ok(Self::Service),
+            "anonymous" => Ok(Self::Anonymous),
             _ => Err(ParsePrincipalTypeError(s.to_string())),
         }
     }
@@ -318,6 +322,7 @@ mod tests {
         assert_eq!(PrincipalType::Garage.to_string(), "garage");
         assert_eq!(PrincipalType::Bike.to_string(), "bike");
         assert_eq!(PrincipalType::Service.to_string(), "service");
+        assert_eq!(PrincipalType::Anonymous.to_string(), "anonymous");
     }
 
     #[test]
@@ -333,6 +338,10 @@ mod tests {
         assert_eq!(
             "service".parse::<PrincipalType>().unwrap(),
             PrincipalType::Service
+        );
+        assert_eq!(
+            "anonymous".parse::<PrincipalType>().unwrap(),
+            PrincipalType::Anonymous
         );
         assert!("invalid".parse::<PrincipalType>().is_err());
     }

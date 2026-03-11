@@ -361,6 +361,15 @@ async fn issue_token(
         PrincipalType::Garage => SpiffeId::garage(&req.principal_id),
         PrincipalType::Bike => SpiffeId::bike(&req.principal_id),
         PrincipalType::Service => SpiffeId::service(&req.principal_id),
+        PrincipalType::Anonymous => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new(
+                    error_codes::INVALID_REQUEST,
+                    "Cannot issue SVID for anonymous principal",
+                )),
+            ));
+        }
     };
 
     let mut claims = SvidClaims::new(&spiffe_id, state.svid_issuer.ttl_secs());
@@ -979,6 +988,7 @@ const fn from_db_principal_type(pt: moto_keybox_db::PrincipalType) -> PrincipalT
         moto_keybox_db::PrincipalType::Garage => PrincipalType::Garage,
         moto_keybox_db::PrincipalType::Bike => PrincipalType::Bike,
         moto_keybox_db::PrincipalType::Service => PrincipalType::Service,
+        moto_keybox_db::PrincipalType::Anonymous => PrincipalType::Anonymous,
     }
 }
 

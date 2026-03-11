@@ -173,6 +173,9 @@ impl PolicyEngine {
                     })
                 }
             }
+            PrincipalType::Anonymous => Err(Error::AccessDenied {
+                message: "Anonymous principals cannot access secrets".to_string(),
+            }),
         }
     }
 
@@ -263,6 +266,9 @@ impl PolicyEngine {
                     Ok(())
                 }
             }
+            PrincipalType::Anonymous => Err(Error::AccessDenied {
+                message: "Anonymous principals cannot access secrets".to_string(),
+            }),
         }
     }
 
@@ -316,6 +322,9 @@ impl PolicyEngine {
                     ),
                 })
             }
+            PrincipalType::Anonymous => Err(Error::AccessDenied {
+                message: "Anonymous principals cannot access secrets".to_string(),
+            }),
         }
     }
 }
