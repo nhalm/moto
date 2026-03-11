@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## garage-isolation v0.5 (compliance HIGH-1)
-
-- Add IPv6 NetworkPolicy rules in `crates/moto-club-k8s/src/network_policy.rs` — mirror all IPv4 egress rules with IPv6 equivalents. Block `fd00::/8` (ULA/WireGuard overlay), `::1/128` (loopback), `fe80::/10` (link-local).
-
 ## keybox v0.16 (compliance HIGH-2)
 
 - Restrict garage access to service-scoped secrets in `crates/moto-keybox/src/abac.rs` `evaluate_service()` — garages should NOT be able to read `ai-proxy/*` secrets directly. Add a deny-list for sensitive service prefixes or require explicit grant.

@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **garage-isolation v0.5 (2026-03-11):** Add IPv6 NetworkPolicy rules in `crates/moto-club-k8s/src/network_policy.rs` — mirror all IPv4 egress rules with IPv6 equivalents. Block `fd00::/8` (ULA/WireGuard overlay), `::1/128` (loopback), `fe80::/10` (link-local).
 - **ai-proxy v0.5 (2026-03-11):** Verify Ed25519 SVID signature in `crates/moto-ai-proxy/src/auth.rs` `extract_garage_id()` — load keybox's public verifying key at startup, verify signature before trusting claims. A forged JWT MUST be rejected.
 - **keybox v0.16 (2026-03-11):** Add service token authentication to `POST /auth/token` in `crates/moto-keybox/src/api.rs` and `pg_api.rs` — only moto-club (via service token) should be able to issue SVIDs. Return 401 for unauthenticated callers.
 - **moto-cli v0.14 (2026-03-10):** Fix `garage extend --ttl` default from `2h` to `4h` to match spec
