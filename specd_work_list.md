@@ -10,14 +10,8 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## service-deploy v0.7 (compliance: PodDisruptionBudgets)
-
-- Create `infra/k8s/moto-system/pdb.yaml` with PodDisruptionBudgets for moto-keybox (`minAvailable: 2`) and moto-club (`minAvailable: 2`) — both run 3 replicas per bike.toml
-- Add `pdb.yaml` to `infra/k8s/moto-system/kustomization.yaml` resources list
-
 ## audit-logging v0.6 (compliance: tamper-evident audit log)
 
-- Create a SQL migration for moto-club-db that creates an `audit_writer` Postgres role with INSERT-only permission on the `audit_log` table (no UPDATE, no DELETE except via the retention function). Grant the application user this role for audit writes. The `delete_expired` retention function should use SECURITY DEFINER to run with elevated privileges.
 - Create a matching SQL migration for moto-keybox-db with the same INSERT-only `audit_writer` role pattern on keybox's `audit_log` table
 
 ## moto-club v2.7 (compliance: leader election)
