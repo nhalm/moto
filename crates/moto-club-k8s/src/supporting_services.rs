@@ -412,6 +412,7 @@ fn build_postgres_deployment(namespace: &str) -> Deployment {
                 spec: Some(PodSpec {
                     containers: vec![container],
                     volumes: Some(volumes),
+                    automount_service_account_token: Some(false),
                     ..Default::default()
                 }),
             },
@@ -588,6 +589,7 @@ fn build_redis_deployment(namespace: &str) -> Deployment {
                 spec: Some(PodSpec {
                     containers: vec![container],
                     volumes: Some(volumes),
+                    automount_service_account_token: Some(false),
                     ..Default::default()
                 }),
             },
