@@ -499,7 +499,7 @@ impl GarageReconciler {
                 audit_repo::InsertAuditEntry {
                     event_type: "garage_state_changed",
                     principal_type: "service",
-                    principal_id: "moto-club-reconciler",
+                    principal_id: "moto-club",
                     action: "update",
                     resource_type: "garage",
                     resource_id: id_str,
@@ -752,7 +752,7 @@ impl GarageReconciler {
                         audit_repo::InsertAuditEntry {
                             event_type: "ttl_enforced",
                             principal_type: "service",
-                            principal_id: "moto-club-reconciler",
+                            principal_id: "moto-club",
                             action: "delete",
                             resource_type: "garage",
                             resource_id: &id_str,
