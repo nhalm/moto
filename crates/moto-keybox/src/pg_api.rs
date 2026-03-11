@@ -848,6 +848,9 @@ async fn get_audit_logs(
         ));
     }
 
+    let limit = query.limit.unwrap_or(100).min(1000);
+    let offset = query.offset.unwrap_or(0);
+
     let db_query = AuditLogQuery {
         event_type: query.event_type.and_then(|s| s.parse().ok()),
         principal_id: query.principal_id,
@@ -861,8 +864,8 @@ async fn get_audit_logs(
             .until
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
             .map(|dt| dt.with_timezone(&chrono::Utc)),
-        limit: query.limit.and_then(|l| i64::try_from(l).ok()),
-        offset: query.offset.and_then(|o| i64::try_from(o).ok()),
+        limit: i64::try_from(limit).ok(),
+        offset: i64::try_from(offset).ok(),
     };
 
     let entries = audit_repo::list_audit_entries(state.repository.pool(), &db_query)
@@ -894,6 +897,8 @@ async fn get_audit_logs(
             })
             .collect(),
         total,
+        limit,
+        offset,
     };
 
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))

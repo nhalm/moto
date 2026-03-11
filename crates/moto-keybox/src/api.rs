@@ -311,6 +311,10 @@ pub struct AuditLogsResponse {
     pub entries: Vec<AuditEntryResponse>,
     /// Total number of entries (before pagination).
     pub total: usize,
+    /// Maximum number of entries per page.
+    pub limit: usize,
+    /// Pagination offset.
+    pub offset: usize,
 }
 
 /// An audit log entry in API responses (unified schema).
@@ -1211,7 +1215,12 @@ async fn get_audit_logs(
         .map(AuditEntryResponse::from)
         .collect();
 
-    let response = AuditLogsResponse { entries, total };
+    let response = AuditLogsResponse {
+        entries,
+        total,
+        limit,
+        offset,
+    };
 
     Ok::<_, (StatusCode, Json<ApiError>)>((StatusCode::OK, Json(response)))
 }
@@ -1535,11 +1544,15 @@ mod tests {
         let resp = AuditLogsResponse {
             entries: vec![AuditEntryResponse::from(&entry)],
             total: 1,
+            limit: 100,
+            offset: 0,
         };
         let json = serde_json::to_string(&resp).unwrap();
 
         assert!(json.contains(r#""event_type":"svid_issued""#));
         assert!(json.contains(r#""total":1"#));
+        assert!(json.contains(r#""limit":100"#));
+        assert!(json.contains(r#""offset":0"#));
         assert!(json.contains(r#""principal_id":"spiffe://moto.local/service/moto-club""#));
     }
 
