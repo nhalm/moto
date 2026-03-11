@@ -15,7 +15,3 @@ Read it in full at the start of each iteration.
 - Fix fan-out query logic in `crates/moto-club-api/src/audit.rs` to handle `offset` correctly: query each service with `offset+limit` rows (not forwarding offset), merge results by timestamp, then apply offset to the merged set (blocked: requires offset not to be forwarded to keybox in line 293-309)
 - Add integration tests in `crates/moto-club-api/src/audit.rs` for offset parameter in fan-out queries to verify correct pagination across multiple services
 
-## audit-logging v0.5
-
-- Fix keybox `audit_auth_failed` in `crates/moto-keybox/src/pg_api.rs` to store the failure reason in `metadata` (e.g. `{"reason": "..."}`) instead of `resource_id`; set `resource_id` to empty string or omit
-

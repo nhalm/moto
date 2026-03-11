@@ -72,3 +72,4 @@ moto-wgtunnel-types = { workspace = true }
 [dev-dependencies]
 moto-test-utils = { workspace = true }
 tokio-test = { workspace = true }
+wiremock = "0.6"

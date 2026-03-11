@@ -77,7 +77,7 @@ pub struct AuditEventResponse {
 }
 
 /// Response for the audit logs endpoint.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AuditLogsResponse {
     /// Matching audit events.
     pub events: Vec<AuditEventResponse>,
@@ -88,7 +88,7 @@ pub struct AuditLogsResponse {
     /// Pagination offset.
     pub offset: i64,
     /// Warnings (e.g. "keybox unavailable"). Omitted when empty.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
 }
 

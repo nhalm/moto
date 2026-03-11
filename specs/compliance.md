@@ -2,8 +2,8 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
-| Status | Ready to Rip |
+| Version | 0.3 |
+| Status | Ripping |
 | Last Updated | 2026-03-11 |
 
 ## Overview
@@ -37,15 +37,15 @@ These apply to ALL specs and ALL code:
 | Service token auth (constant-time comparison) | Satisfied | keybox | `subtle::ConstantTimeEq` |
 | Secret enumeration prevention (403 for both not-found and denied) | Satisfied | keybox | |
 | Garage pod isolation (SecurityContext, capabilities) | Satisfied | garage-isolation | `allowPrivilegeEscalation: false`, drop ALL caps |
-| NetworkPolicy (deny-all ingress, scoped egress) | Satisfied (IPv4) | garage-isolation | **IPv6 gap — see Findings** |
+| NetworkPolicy (deny-all ingress, scoped egress) | Satisfied | garage-isolation | IPv4 + IPv6 egress rules with ULA/loopback/link-local blocks |
 | No K8s API access from garages | Satisfied | garage-isolation | `automountServiceAccountToken: false` |
 | Cloud metadata blocked (169.254.0.0/16) | Satisfied | garage-isolation | |
 | ResourceQuota / LimitRange per garage | Satisfied | garage-isolation | |
-| SVID signature verification at all auth points | **CRITICAL GAP** | ai-proxy | ai-proxy decodes without verifying — see Findings |
-| Token issuance requires authentication | **CRITICAL GAP** | keybox | `POST /auth/token` is unauthenticated — see Findings |
-| Garage secret access scoped to own secrets | **HIGH GAP** | keybox | Garages can read all service-scoped secrets |
-| K8s RBAC follows least privilege | **HIGH GAP** | service-deploy | ClusterRole has cluster-wide `secrets` access |
-| Supporting service pods have no SA token | **GAP** | garage-isolation | postgres/redis pods mount SA token by default |
+| SVID signature verification at all auth points | Satisfied | ai-proxy | `SvidValidator::validate` verifies Ed25519 signature |
+| Token issuance requires authentication | Satisfied | keybox | `validate_service_token` with constant-time comparison |
+| Garage secret access scoped to own secrets | Satisfied | keybox | `GARAGE_DENIED_SERVICES` deny-list blocks `ai-proxy` |
+| K8s RBAC follows least privilege | Satisfied | service-deploy | No `secrets` resource in ClusterRole |
+| Supporting service pods have no SA token | Satisfied | garage-isolation | `automount_service_account_token: Some(false)` on both |
 
 ### CC7 — System Operations / Monitoring
 
@@ -115,55 +115,18 @@ These apply to ALL specs and ALL code:
 | Constant-time token comparison | Satisfied | keybox, audit-logging | `subtle::ConstantTimeEq` |
 | Deterministic SVID validation | Satisfied | keybox | Signature + expiry + issuer + audience |
 
-## Findings — Critical and High Priority
+## Findings — Resolved
 
-### CRITICAL-1: Unauthenticated SVID Issuance
+All previously identified critical and high-priority findings have been resolved:
 
-**Spec:** keybox
-**Location:** `crates/moto-keybox/src/api.rs` — `POST /auth/token`
-**Issue:** Any caller that can reach keybox can mint a valid SVID for any principal identity (garage, bike, service). No authentication required.
-**Impact:** Complete identity spoofing. A compromised garage could mint SVIDs for other garages.
-**Fix:** Require service token authentication on `POST /auth/token`. Only moto-club should be able to issue SVIDs.
-
-### CRITICAL-2: ai-proxy Does Not Verify SVID Signatures
-
-**Spec:** ai-proxy
-**Location:** `crates/moto-ai-proxy/src/auth.rs` — `extract_garage_id()`
-**Issue:** JWT claims are decoded (base64) but the Ed25519 signature is never verified. A structurally valid JWT with any `principal_id` passes auth if the garage exists in moto-club.
-**Impact:** Any network-reachable party can impersonate any garage for AI requests.
-**Fix:** Verify the Ed25519 signature using keybox's public verifying key. ai-proxy needs the verifying key (not the signing key) at startup.
-
-### HIGH-1: IPv6 NetworkPolicy Gap
-
-**Spec:** garage-isolation
-**Location:** `crates/moto-club-k8s/src/network_policy.rs`
-**Issue:** All NetworkPolicy rules are IPv4-only (`0.0.0.0/0`). On a dual-stack cluster, IPv6 egress is completely uncontrolled. The WireGuard overlay uses IPv6 (`fd00:moto::/48`), which is unblocked.
-**Impact:** Garages could reach other garages via IPv6, bypassing all isolation.
-**Fix:** Add IPv6 egress rules mirroring IPv4 rules. Block `fd00::/8` (ULA), `::1/128` (loopback), `fe80::/10` (link-local).
-
-### HIGH-2: Garage ABAC Too Broad for Service Secrets
-
-**Spec:** keybox
-**Location:** `crates/moto-keybox/src/abac.rs` — `evaluate_service()`
-**Issue:** Garages can read ALL service-scoped secrets (e.g., `ai-proxy/anthropic`), bypassing ai-proxy's credential injection and audit trail.
-**Impact:** Garages can directly fetch API keys that should only be injected by ai-proxy.
-**Fix:** Restrict garage access to service secrets. Options: deny-list for sensitive service prefixes, or require explicit grant.
-
-### HIGH-3: moto-club ClusterRole Over-Scoped
-
-**Spec:** service-deploy
-**Location:** `infra/k8s/moto-system/club.yaml`
-**Issue:** ClusterRole grants `get, list, create, delete` on `secrets` cluster-wide. moto-club could read `keybox-keys` (master key) from `moto-system`.
-**Impact:** Compromised moto-club = compromised master key = all secrets exposed.
-**Fix:** Scope secrets access to `moto-garage-*` namespaces only (namespace-scoped Roles created per garage), or add a deny rule for `moto-system`.
-
-### HIGH-4: Supporting Service Pods Have SA Token
-
-**Spec:** garage-isolation
-**Location:** `crates/moto-club-k8s/src/supporting_services.rs`
-**Issue:** Per-garage postgres and redis Deployments don't set `automountServiceAccountToken: false`. These pods get a default SA token.
-**Impact:** If postgres/redis is compromised (e.g., via SQL injection from the garage), the attacker gets a K8s API token.
-**Fix:** Add `automount_service_account_token: Some(false)` to postgres and redis pod specs.
+| Finding | Resolution |
+|---------|-----------|
+| CRITICAL-1: Unauthenticated SVID issuance | `POST /auth/token` now requires service token (`validate_service_token`, constant-time comparison) |
+| CRITICAL-2: ai-proxy skips signature verification | `SvidValidator::validate` verifies Ed25519 signature before trusting claims |
+| HIGH-1: IPv6 NetworkPolicy gap | IPv6 egress rules added (`fd00::/8`, `::1/128`, `fe80::/10` blocked) |
+| HIGH-2: Garage ABAC too broad | `GARAGE_DENIED_SERVICES` deny-list blocks `ai-proxy` secrets |
+| HIGH-3: ClusterRole over-scoped | No `secrets` resource in ClusterRole |
+| HIGH-4: Supporting service pods have SA token | `automount_service_account_token: Some(false)` on postgres and redis |
 
 ## Deferred Items
 
@@ -194,6 +157,10 @@ These are real SOC 2 gaps but are not blocking for initial compliance posture:
 - [moto-cron.md](moto-cron.md) — TTL enforcement, reconciliation
 
 ## Changelog
+
+### v0.3 (2026-03-11)
+- Mark CRITICAL-1, CRITICAL-2, HIGH-1, HIGH-2, HIGH-3, HIGH-4 as resolved (all implemented in code)
+- Update CC6 control table to reflect Satisfied status for all previously-gapped controls
 
 ### v0.2 (2026-03-11)
 - Full SOC 2 control mapping (CC6, CC7, CC8, A1, C1, PI1)

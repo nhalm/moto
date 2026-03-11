@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
+| Version | 0.6 |
 | Status | Ready to Rip |
 | Last Updated | 2026-03-09 |
 
@@ -74,7 +74,8 @@ All services use the same audit event structure:
 | `secret_deleted` | `delete` | `secret` | Secret removed |
 | `dek_rotated` | `rotate` | `secret` | DEK rotation |
 | `svid_issued` | `create` | `svid` | SVID issued for garage/bike |
-| `auth_failed` | `auth_fail` | `token` | Invalid or expired token |
+| `auth_failed` | `auth_fail` | `token` | Invalid or expired token. `principal_type` MUST be `anonymous` (caller is unauthenticated). Failure reason goes in `metadata.reason`, not `resource_id`. |
+| `access_denied` | `deny` | `secret` | ABAC policy denied access |
 
 Keybox's existing `audit_log` table must be migrated to the unified schema. The current table has different column names (`spiffe_id`, `secret_scope`, `secret_name`) — the migration maps these to the new fields and adds missing columns (`service`, `action`, `resource_type`, `resource_id`, `outcome`, `metadata`, `client_ip`).
 
@@ -202,7 +203,7 @@ When `service` is not specified, moto-club queries both its own audit table and 
 
 **Query parameter pass-through:** All filter parameters (`event_type`, `principal_id`, `since`, `until`, etc.) are forwarded to keybox so filtering happens at the source.
 
-**Pagination:** The `limit` applies to the merged result set. Each service is queried with the full `limit` — results are merged, sorted by timestamp, and truncated to `limit`.
+**Pagination:** The `limit` and `offset` apply to the merged result set. Each service is queried with the full `limit` (offset is NOT forwarded) — results are merged, sorted by timestamp, then offset and truncated to `limit`. This ensures correct pagination: fetching each service with `offset+limit` rows, merging, then applying offset once to the merged set (not once per service).
 
 **Error handling:** If keybox is unreachable, moto-club returns only its own events and includes a `"warnings": ["keybox unavailable"]` field in the response. The query does not fail.
 
@@ -228,6 +229,16 @@ When `service` is not specified, moto-club queries both its own audit table and 
 - [compliance.md](compliance.md) — Future compliance requirements
 
 ## Changelog
+
+### v0.6 (2026-03-11)
+- Clarify fan-out pagination: `offset` is NOT forwarded to keybox. Instead, fan-out fetches `offset+limit` rows from each service, merges by timestamp, then applies offset to the merged set. This prevents double-skipping in paginated queries.
+
+### v0.5 (2026-03-11)
+- Clarify `auth_failed` events in keybox MUST use `principal_type: "anonymous"` (not "service") since the caller is unauthenticated.
+- Clarify `auth_failed` failure reason belongs in `metadata.reason`, not in `resource_id` field.
+
+### v0.4 (2026-03-11)
+- Add `access_denied` event type for keybox ABAC policy denials (already implemented in code, missing from spec).
 
 ### v0.3 (2026-03-09)
 - Add cross-spec impact callout: keybox.md, moto-club.md, moto-cron.md all need updates when this spec is implemented.
