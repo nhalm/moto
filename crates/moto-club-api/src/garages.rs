@@ -880,12 +880,13 @@ async fn audit_garage_created(pool: &DbPool, owner: &str, garage: &Garage) {
         audit_repo::InsertAuditEntry {
             event_type: "garage_created",
             principal_type: "service",
-            principal_id: owner,
+            principal_id: "moto-club",
             action: "create",
             resource_type: "garage",
             resource_id: &garage.id.to_string(),
             outcome: "success",
             metadata: serde_json::json!({
+                "requested_by": owner,
                 "garage_name": garage.name,
                 "branch": garage.branch,
                 "ttl_seconds": garage.ttl_seconds,
@@ -903,12 +904,13 @@ async fn audit_garage_terminated(pool: &DbPool, owner: &str, garage: &Garage) {
         audit_repo::InsertAuditEntry {
             event_type: "garage_terminated",
             principal_type: "service",
-            principal_id: owner,
+            principal_id: "moto-club",
             action: "delete",
             resource_type: "garage",
             resource_id: &garage.id.to_string(),
             outcome: "success",
             metadata: serde_json::json!({
+                "requested_by": owner,
                 "garage_name": garage.name,
                 "termination_reason": "user_closed",
             }),
