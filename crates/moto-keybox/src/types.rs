@@ -320,6 +320,8 @@ pub struct AuditEntry {
     pub resource_id: String,
     /// Result: success, denied, or error.
     pub outcome: String,
+    /// Service-specific additional context (no sensitive data).
+    pub metadata: serde_json::Value,
     /// When the event occurred.
     pub timestamp: DateTime<Utc>,
 }
@@ -337,6 +339,7 @@ impl AuditEntry {
             resource_type: "secret".to_string(),
             resource_id: format!("{scope}/{}", name.into()),
             outcome: "success".to_string(),
+            metadata: serde_json::Value::Object(serde_json::Map::new()),
             timestamp: Utc::now(),
         }
     }
@@ -353,6 +356,7 @@ impl AuditEntry {
             resource_type: "svid".to_string(),
             resource_id: spiffe_id.to_uri(),
             outcome: "success".to_string(),
+            metadata: serde_json::Value::Object(serde_json::Map::new()),
             timestamp: Utc::now(),
         }
     }
@@ -360,15 +364,22 @@ impl AuditEntry {
     /// Creates a new audit entry for an authentication failure.
     #[must_use]
     pub fn auth_failed(reason: impl Into<String>) -> Self {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert(
+            "reason".to_string(),
+            serde_json::Value::String(reason.into()),
+        );
+
         Self {
             id: Uuid::now_v7(),
             event_type: AuditEventType::AuthFailed,
-            principal_type: PrincipalType::Service,
+            principal_type: PrincipalType::Anonymous,
             principal_id: String::new(),
             action: "auth_fail".to_string(),
             resource_type: "token".to_string(),
-            resource_id: reason.into(),
+            resource_id: String::new(),
             outcome: "denied".to_string(),
+            metadata: serde_json::Value::Object(metadata),
             timestamp: Utc::now(),
         }
     }
@@ -381,10 +392,11 @@ impl AuditEntry {
             event_type: AuditEventType::AccessDenied,
             principal_type: spiffe_id.principal_type,
             principal_id: spiffe_id.to_uri(),
-            action: "auth_fail".to_string(),
+            action: "deny".to_string(),
             resource_type: "secret".to_string(),
             resource_id: format!("{scope}/{}", name.into()),
             outcome: "denied".to_string(),
+            metadata: serde_json::Value::Object(serde_json::Map::new()),
             timestamp: Utc::now(),
         }
     }
@@ -552,10 +564,15 @@ mod tests {
     fn audit_entry_auth_failed() {
         let entry = AuditEntry::auth_failed("Invalid token signature");
         assert_eq!(entry.event_type, AuditEventType::AuthFailed);
+        assert_eq!(entry.principal_type, PrincipalType::Anonymous);
         assert_eq!(entry.action, "auth_fail");
         assert_eq!(entry.resource_type, "token");
-        assert_eq!(entry.resource_id, "Invalid token signature");
+        assert_eq!(entry.resource_id, "");
         assert_eq!(entry.outcome, "denied");
+        assert_eq!(
+            entry.metadata.get("reason").and_then(|v| v.as_str()),
+            Some("Invalid token signature")
+        );
     }
 
     #[test]
@@ -568,6 +585,7 @@ mod tests {
             entry.principal_id,
             "spiffe://moto.local/service/untrusted-service"
         );
+        assert_eq!(entry.action, "deny");
         assert_eq!(entry.resource_type, "secret");
         assert_eq!(entry.resource_id, "global/crypto/master-key");
         assert_eq!(entry.outcome, "denied");

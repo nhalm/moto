@@ -128,7 +128,11 @@ impl PgSecretRepository {
         };
 
         // Check ABAC policy
-        self.policy.evaluate(claims, &metadata, Action::Write)?;
+        if let Err(e) = self.policy.evaluate(claims, &metadata, Action::Write) {
+            self.audit(claims, AuditEventType::AccessDenied, Some(&metadata))
+                .await;
+            return Err(e);
+        }
 
         // Check if secret already exists
         let existing =
@@ -278,7 +282,11 @@ impl PgSecretRepository {
         };
 
         // Check ABAC policy
-        self.policy.can_read(claims, &metadata)?;
+        if let Err(e) = self.policy.can_read(claims, &metadata) {
+            self.audit(claims, AuditEventType::AccessDenied, Some(&metadata))
+                .await;
+            return Err(e);
+        }
 
         // Decrypt
         let encrypted_dek = EncryptedDek {
@@ -399,7 +407,11 @@ impl PgSecretRepository {
         };
 
         // Check ABAC policy
-        self.policy.evaluate(claims, &metadata, Action::Write)?;
+        if let Err(e) = self.policy.evaluate(claims, &metadata, Action::Write) {
+            self.audit(claims, AuditEventType::AccessDenied, Some(&metadata))
+                .await;
+            return Err(e);
+        }
 
         // Generate new DEK and encrypt
         let dek = DataEncryptionKey::generate();
@@ -532,7 +544,11 @@ impl PgSecretRepository {
         };
 
         // Check ABAC policy
-        self.policy.evaluate(claims, &metadata, Action::Delete)?;
+        if let Err(e) = self.policy.evaluate(claims, &metadata, Action::Delete) {
+            self.audit(claims, AuditEventType::AccessDenied, Some(&metadata))
+                .await;
+            return Err(e);
+        }
 
         // Soft-delete the secret
         secret_repo::delete_secret(&self.pool, existing.id)
@@ -763,7 +779,7 @@ impl PgSecretRepository {
             resource_type: &entry.resource_type,
             resource_id: &entry.resource_id,
             outcome: &entry.outcome,
-            metadata: serde_json::Value::Object(serde_json::Map::new()),
+            metadata: entry.metadata.clone(),
             client_ip: None,
         };
 
@@ -848,7 +864,7 @@ fn audit_fields_for_event(
         AuditEventType::DekRotated => ("rotate", "secret", resource_id),
         AuditEventType::SvidIssued => ("create", "svid", resource_id),
         AuditEventType::AuthFailed => ("auth_fail", "token", resource_id),
-        AuditEventType::AccessDenied => ("auth_fail", "secret", resource_id),
+        AuditEventType::AccessDenied => ("deny", "secret", resource_id),
     }
 }
 

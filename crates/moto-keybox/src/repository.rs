@@ -678,7 +678,7 @@ impl SecretRepository {
             AuditEventType::SvidIssued => ("create", "svid", claims.sub.clone()),
             AuditEventType::AuthFailed => ("auth_fail", "token", String::new()),
             AuditEventType::AccessDenied => (
-                "auth_fail",
+                "deny",
                 "secret",
                 metadata
                     .map(|m| format!("{}/{}", m.scope, m.name))
@@ -695,6 +695,7 @@ impl SecretRepository {
             resource_type: resource_type.to_string(),
             resource_id,
             outcome: "success".to_string(),
+            metadata: serde_json::Value::Object(serde_json::Map::new()),
             timestamp: Utc::now(),
         };
         self.audit_log.push(entry);
