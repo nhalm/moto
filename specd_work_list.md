@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## keybox v0.16 (compliance CRITICAL-1)
-
-- Add service token authentication to `POST /auth/token` in `crates/moto-keybox/src/api.rs` and `pg_api.rs` — only moto-club (via service token) should be able to issue SVIDs. Return 401 for unauthenticated callers.
-
 ## ai-proxy v0.5 (compliance CRITICAL-2)
 
 - Verify Ed25519 SVID signature in `crates/moto-ai-proxy/src/auth.rs` `extract_garage_id()` — load keybox's public verifying key at startup, verify signature before trusting claims. A forged JWT MUST be rejected.

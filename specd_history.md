@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **keybox v0.16 (2026-03-11):** Add service token authentication to `POST /auth/token` in `crates/moto-keybox/src/api.rs` and `pg_api.rs` — only moto-club (via service token) should be able to issue SVIDs. Return 401 for unauthenticated callers.
 - **moto-cli v0.14 (2026-03-10):** Fix `garage extend --ttl` default from `2h` to `4h` to match spec
 - **service-deploy v0.7 (2026-03-10):** Update spec replica counts (1→3) and resource values to match bike.toml
 - **local-dev v0.11 (2026-03-10):** Add moto-ai-proxy to spec's `moto dev up` flow (port assignments, env vars, step 9/10, --no-ai-proxy flag)
