@@ -119,7 +119,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Fetch the SVID verifying key from keybox for signature verification.
     let svid_validator = fetch_verifying_key(&config.keybox_url).await?;
 
-    // Mark startup complete — SVID is loaded (or will be retried on first request).
+    // Perform initial key fetch to populate the cache. If no provider keys are available,
+    // log a warning but continue — the proxy will still start, and /health/startup will
+    // report readiness based on whether keys were successfully fetched.
+    if !moto_ai_proxy::keys::has_cached_keys(key_store.as_ref()).await {
+        info!(
+            "no provider API keys available in keybox — proxy will start but /health/startup will not be ready until at least one provider key is configured"
+        );
+    }
+
+    // Mark startup complete — SVID is loaded and initial key fetch attempt is done.
     health::mark_startup_complete();
 
     // Build HTTP client for upstream requests with timeouts per spec:

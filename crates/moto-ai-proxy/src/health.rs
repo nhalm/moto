@@ -60,8 +60,8 @@ async fn ready_handler<K: KeyStore>(State(key_store): State<Arc<K>>) -> impl Int
 /// Startup probe handler — returns 200 if initial startup is complete.
 ///
 /// Per ai-proxy spec: SVID loaded, initial key fetch complete.
-async fn startup_handler() -> impl IntoResponse {
-    if is_startup_complete() {
+async fn startup_handler<K: KeyStore>(State(key_store): State<Arc<K>>) -> impl IntoResponse {
+    if is_startup_complete() && has_cached_keys(key_store.as_ref()).await {
         (StatusCode::OK, Json(HealthResponse { status: "ok" }))
     } else {
         (
@@ -76,7 +76,7 @@ pub fn health_router<K: KeyStore + 'static>(key_store: Arc<K>) -> Router {
     Router::new()
         .route("/health/live", get(live_handler))
         .route("/health/ready", get(ready_handler::<K>))
-        .route("/health/startup", get(startup_handler))
+        .route("/health/startup", get(startup_handler::<K>))
         .with_state(key_store)
 }
 
