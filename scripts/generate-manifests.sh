@@ -255,7 +255,7 @@ rules:
     verbs: [get, list, create, delete]
   - apiGroups: [""]
     resources: [secrets]
-    verbs: [get, list, create, delete]
+    verbs: [create]
   - apiGroups: [""]
     resources: [persistentvolumeclaims]
     verbs: [get, list, create, delete]
