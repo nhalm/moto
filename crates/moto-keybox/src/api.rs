@@ -575,10 +575,10 @@ fn validate_service_token(
 
     let expected = expected_token.ok_or_else(|| {
         (
-            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::FORBIDDEN,
             Json(ApiError::new(
-                error_codes::SERVICE_TOKEN_NOT_CONFIGURED,
-                "Service token not configured on server",
+                error_codes::FORBIDDEN,
+                "Operation requires service token",
             )),
         )
     })?;
@@ -620,6 +620,40 @@ fn map_error(e: Error) -> (StatusCode, Json<ApiError>) {
         Error::AccessDenied { .. } | Error::SecretNotFound { .. } => (
             // Return 403 for both "not found" and "access denied" to prevent
             // information leakage about secret existence (spec v0.4)
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(error_codes::ACCESS_DENIED, "Access denied")),
+        ),
+        Error::SecretExists { scope, name } => (
+            StatusCode::CONFLICT,
+            Json(ApiError::new(
+                error_codes::SECRET_EXISTS,
+                format!("Secret already exists: {scope}/{name}"),
+            )),
+        ),
+        _ => {
+            tracing::error!("Internal error: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new(error_codes::INTERNAL_ERROR, "Internal error")),
+            )
+        }
+    }
+}
+
+/// Maps repository errors to HTTP responses for admin operations.
+///
+/// Unlike `map_error`, this returns 404 for `SecretNotFound` instead of 403,
+/// since admin operations (service token required) don't need enumeration prevention.
+fn map_admin_error(e: Error) -> (StatusCode, Json<ApiError>) {
+    match e {
+        Error::SecretNotFound { scope, name } => (
+            StatusCode::NOT_FOUND,
+            Json(ApiError::new(
+                error_codes::SECRET_NOT_FOUND,
+                format!("Secret not found: {scope}/{name}"),
+            )),
+        ),
+        Error::AccessDenied { .. } => (
             StatusCode::FORBIDDEN,
             Json(ApiError::new(error_codes::ACCESS_DENIED, "Access denied")),
         ),
@@ -1268,7 +1302,7 @@ async fn rotate_dek(
             instance_id.as_deref(),
             &name,
         )
-        .map_err(map_error)?;
+        .map_err(map_admin_error)?;
 
     let response = RotateDekResponse {
         name: metadata.name,
@@ -1650,8 +1684,8 @@ mod tests {
         let result = validate_service_token(&headers, token.as_ref());
         assert!(result.is_err());
         let (status, json) = result.unwrap_err();
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(json.0.error.code, error_codes::SERVICE_TOKEN_NOT_CONFIGURED);
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(json.0.error.code, error_codes::FORBIDDEN);
     }
 
     #[test]
