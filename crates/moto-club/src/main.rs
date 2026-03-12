@@ -438,11 +438,23 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // - Complete in-flight requests
     // - 30-second grace period
     // - Exit cleanly
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    let shutdown_timeout = Duration::from_secs(SHUTDOWN_GRACE_PERIOD_SECS);
+    let serve_result = tokio::time::timeout(
+        shutdown_timeout,
+        axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()),
+    )
+    .await;
 
-    info!("moto-club shutdown complete");
+    if let Ok(result) = serve_result {
+        result?;
+        info!("moto-club shutdown complete");
+    } else {
+        error!(
+            timeout_secs = SHUTDOWN_GRACE_PERIOD_SECS,
+            "graceful shutdown timed out, forcing exit"
+        );
+        return Err("shutdown timeout exceeded".into());
+    }
 
     Ok(())
 }
