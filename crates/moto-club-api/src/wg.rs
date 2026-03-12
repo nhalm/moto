@@ -23,7 +23,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use moto_club_wg::{
     CreateSessionRequest as WgCreateSessionRequest, CreateSessionResponse, DeviceRegistration,
-    GarageConnectionInfo, GarageRegistration, RegisteredDevice, Session,
+    GarageConnectionInfo, GarageRegistration, PeerError, RegisteredDevice, Session,
 };
 use moto_wgtunnel_types::{DerpMap, OverlayIp, WgPublicKey};
 use serde::{Deserialize, Serialize};
@@ -527,14 +527,25 @@ async fn register_device(
         .register_device(registration)
         .await
         .map_err(|e| {
-            tracing::error!(error = %e, "Failed to register device");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiError::new(
-                    error_codes::INTERNAL_ERROR,
-                    format!("Failed to register device: {e}"),
-                )),
-            )
+            if matches!(e, PeerError::DeviceNotOwned) {
+                tracing::warn!("Device registration rejected: device belongs to different user");
+                (
+                    StatusCode::FORBIDDEN,
+                    Json(ApiError::new(
+                        error_codes::DEVICE_NOT_OWNED,
+                        "Device public key already registered to a different user".to_string(),
+                    )),
+                )
+            } else {
+                tracing::error!(error = %e, "Failed to register device");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new(
+                        error_codes::INTERNAL_ERROR,
+                        format!("Failed to register device: {e}"),
+                    )),
+                )
+            }
         })?;
 
     let response = DeviceResponse::from(device);

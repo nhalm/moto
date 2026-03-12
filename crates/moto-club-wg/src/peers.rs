@@ -47,6 +47,10 @@ pub enum PeerError {
     #[error("device not found: {0}")]
     DeviceNotFound(String),
 
+    /// Device not owned by requesting user.
+    #[error("device not owned by requesting user")]
+    DeviceNotOwned,
+
     /// Garage not found.
     #[error("garage not found: {0}")]
     GarageNotFound(String),
@@ -210,6 +214,11 @@ impl<P: PeerStore, I: IpamStore> PeerRegistry<P, I> {
     ) -> Result<(RegisteredDevice, bool)> {
         // Check if device is already registered (by public key)
         if let Some(mut existing) = self.store.get_device(&req.public_key)? {
+            // Check ownership - same key registered to different user is forbidden
+            if existing.owner != req.owner {
+                return Err(PeerError::DeviceNotOwned);
+            }
+
             // Update device name if it changed (idempotent)
             if existing.device_name != req.device_name {
                 existing.device_name = req.device_name;
