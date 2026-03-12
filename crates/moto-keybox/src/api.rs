@@ -1268,23 +1268,7 @@ async fn rotate_dek(
             instance_id.as_deref(),
             &name,
         )
-        .map_err(|e| {
-            if let Error::SecretNotFound { .. } = e {
-                (
-                    StatusCode::NOT_FOUND,
-                    Json(ApiError::new(
-                        error_codes::SECRET_NOT_FOUND,
-                        format!("Secret not found: {scope_str}/{name}"),
-                    )),
-                )
-            } else {
-                tracing::error!("DEK rotation failed: {e}");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ApiError::new(error_codes::INTERNAL_ERROR, "Internal error")),
-                )
-            }
-        })?;
+        .map_err(map_error)?;
 
     let response = RotateDekResponse {
         name: metadata.name,
