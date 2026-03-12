@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## moto-club (WG) v1.5
-
-- Add ownership check to `PeerRegistry::register_device` for re-registration (`crates/moto-club-wg/src/peers.rs:212-218`): when an existing device is found by public key, code returns it unconditionally regardless of owner — spec requires 403 DEVICE_NOT_OWNED if owner differs
-
 ## moto-throttle v0.1
 
 - Fix `client_ip()` to fall back to socket address instead of `"unknown"` (`crates/moto-throttle/src/layer.rs:290-297`): spec requires key = client IP from X-Forwarded-For or socket addr; all clients without the header currently share one bucket

@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **moto-club (WG) v1.5 (2026-03-11):** Add ownership check to `PeerRegistry::register_device` for re-registration (`crates/moto-club-wg/src/peers.rs:212-218`): when an existing device is found by public key, code returns it unconditionally regardless of owner — spec requires 403 DEVICE_NOT_OWNED if owner differs
 - **keybox v1.5 (2026-03-11):** Fix in-memory `AuditEntryResponse::from` to preserve `metadata` and `client_ip` fields (`crates/moto-keybox/src/api.rs:362-363`): hardcodes empty `{}` metadata and `None` client_ip, dropping actual data
 - **keybox v1.5 (2026-03-11):** Fix `validate_service_token` to return 403 instead of 500 when service token is not configured (`crates/moto-keybox/src/api.rs:576-583`): spec requires 403 for auth failures, not 500
 - **garage-lifecycle v0.3 (2026-03-11):** Implement unsaved changes warning on `garage close`: spec requires checking for unsaved changes and prompting to sync first; code only does a generic Y/N prompt
