@@ -89,6 +89,7 @@ spec:
       port: ${health_port}
       targetPort: ${health_port}
       protocol: TCP
+    # Prometheus metrics scraping endpoint (standard K8s pattern)
     - name: metrics
       port: 9090
       targetPort: 9090
@@ -274,6 +275,7 @@ rules:
   - apiGroups: [authentication.k8s.io]
     resources: [tokenreviews]
     verbs: [create]
+  # Leader election among multiple replicas (standard K8s pattern)
   - apiGroups: [coordination.k8s.io]
     resources: [leases]
     verbs: [get, create, update]
@@ -315,6 +317,7 @@ spec:
       port: ${health_port}
       targetPort: ${health_port}
       protocol: TCP
+    # Prometheus metrics scraping endpoint (standard K8s pattern)
     - name: metrics
       port: 9090
       targetPort: 9090
