@@ -312,7 +312,7 @@ fn build_test_router(key_store: MultiKeyStore, validator: SvidValidator) -> axum
     let client = reqwest::Client::new();
     proxy::proxy_router(
         client,
-        key_store,
+        std::sync::Arc::new(key_store),
         validator,
         AcceptAllValidator,
         ModelRouter::default(),
@@ -327,7 +327,7 @@ fn build_test_router_with_model_map(
     let client = reqwest::Client::new();
     proxy::proxy_router(
         client,
-        key_store,
+        std::sync::Arc::new(key_store),
         validator,
         AcceptAllValidator,
         model_router,

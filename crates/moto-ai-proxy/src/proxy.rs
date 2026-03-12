@@ -959,14 +959,14 @@ pub async fn list_models<K: KeyStore, G: GarageValidator>(
 /// Builds the proxy router with passthrough routes and garage auth.
 pub fn proxy_router<K: KeyStore + 'static, G: GarageValidator + 'static>(
     client: Client,
-    key_store: K,
+    key_store: Arc<K>,
     svid_validator: SvidValidator,
     garage_validator: G,
     model_router: ModelRouter,
 ) -> axum::Router {
     let state = ProxyState {
         client,
-        key_store: Arc::new(key_store),
+        key_store,
         svid_validator: Arc::new(svid_validator),
         garage_validator: Arc::new(garage_validator),
         model_router,

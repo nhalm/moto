@@ -7,10 +7,13 @@
 //!
 //! These endpoints are served on a separate port (8081) from the main API (8080).
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get};
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use serde::Serialize;
+
+use crate::keys::{KeyStore, has_cached_keys};
 
 /// Global startup flag — set to true once initial startup is complete.
 static STARTUP_COMPLETE: AtomicBool = AtomicBool::new(false);
@@ -41,9 +44,8 @@ async fn live_handler() -> impl IntoResponse {
 /// Readiness probe handler — returns 200 if ready for traffic.
 ///
 /// Per ai-proxy spec: keybox reachable, at least one provider key cached.
-/// Until key caching is implemented, checks startup completion only.
-async fn ready_handler() -> impl IntoResponse {
-    if is_startup_complete() {
+async fn ready_handler<K: KeyStore>(State(key_store): State<Arc<K>>) -> impl IntoResponse {
+    if is_startup_complete() && has_cached_keys(key_store.as_ref()).await {
         (StatusCode::OK, Json(HealthResponse { status: "ok" }))
     } else {
         (
@@ -70,11 +72,12 @@ async fn startup_handler() -> impl IntoResponse {
 }
 
 /// Creates the health server router for port 8081.
-pub fn health_router() -> Router {
+pub fn health_router<K: KeyStore + 'static>(key_store: Arc<K>) -> Router {
     Router::new()
         .route("/health/live", get(live_handler))
-        .route("/health/ready", get(ready_handler))
+        .route("/health/ready", get(ready_handler::<K>))
         .route("/health/startup", get(startup_handler))
+        .with_state(key_store)
 }
 
 #[cfg(test)]

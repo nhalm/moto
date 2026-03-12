@@ -91,16 +91,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "starting moto-ai-proxy"
     );
 
-    // Start health server on port 8081 (per Engine Contract)
-    let health_app = health::health_router();
-    let health_listener = TcpListener::bind(config.health_bind_addr).await?;
-    info!(addr = %config.health_bind_addr, "health server listening");
-    tokio::spawn(async move {
-        if let Err(e) = axum::serve(health_listener, health_app).await {
-            error!(error = %e, "health server failed");
-        }
-    });
-
     // Initialize keybox client with SVID for ai-proxy service identity.
     let svid_file = config.svid_file.to_string_lossy().to_string();
     let svid_cache = SvidCache::from_file(&svid_file).await.unwrap_or_else(|e| {
@@ -111,10 +101,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let keybox_config = KeyboxConfig::new(&config.keybox_url);
     let keybox_client = KeyboxClient::new(keybox_config, svid_cache)?;
 
-    let key_store = KeyboxKeyStore::new(
+    let key_store = std::sync::Arc::new(KeyboxKeyStore::new(
         keybox_client,
         Duration::from_secs(config.key_cache_ttl_secs),
-    );
+    ));
+
+    // Start health server on port 8081 (per Engine Contract)
+    let health_app = health::health_router(key_store.clone());
+    let health_listener = TcpListener::bind(config.health_bind_addr).await?;
+    info!(addr = %config.health_bind_addr, "health server listening");
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(health_listener, health_app).await {
+            error!(error = %e, "health server failed");
+        }
+    });
 
     // Fetch the SVID verifying key from keybox for signature verification.
     let svid_validator = fetch_verifying_key(&config.keybox_url).await?;
