@@ -300,8 +300,11 @@ pub async fn handle_event_socket<C: EventStreamingContext>(
         }
     }
 
+    // Drop the receiver before checking subscriber count
+    drop(event_rx);
+
     // Clean up if no more subscribers
-    if broadcaster.subscriber_count(&owner) <= 1 {
+    if broadcaster.subscriber_count(&owner) == 0 {
         broadcaster.remove_owner(&owner);
     }
 
