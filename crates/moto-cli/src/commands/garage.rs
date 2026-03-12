@@ -894,7 +894,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                 let ttl_formatted = format_duration(response.ttl_remaining_seconds);
                 println!("Garage TTL extended.");
                 println!("  New TTL: {ttl_formatted}");
-                println!("  Expires: {}", response.expires_at);
+                println!("  Expires: {}", format_expires_at(&response.expires_at));
             }
         }
     }
