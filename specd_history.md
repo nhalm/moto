@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **ai-proxy v1.3 (2026-03-11):** Fix `/health/startup` to verify initial key fetch complete: `mark_startup_complete()` is called after SVID fetch but before any provider API key is fetched; spec requires "SVID loaded, initial key fetch complete"
 - **ai-proxy v1.3 (2026-03-11):** Fix `/health/ready` to check keybox reachability and key availability: currently only checks `is_startup_complete()` flag; spec requires "keybox reachable, at least one provider key cached"; `has_cached_keys()` exists but is not wired in
 - **moto-throttle v0.1 (2026-03-11):** Fix `client_ip()` to fall back to socket address instead of `"unknown"` (`crates/moto-throttle/src/layer.rs:290-297`): spec requires key = client IP from X-Forwarded-For or socket addr; all clients without the header currently share one bucket
 - **moto-club (WG) v1.5 (2026-03-11):** Add ownership check to `PeerRegistry::register_device` for re-registration (`crates/moto-club-wg/src/peers.rs:212-218`): when an existing device is found by public key, code returns it unconditionally regardless of owner — spec requires 403 DEVICE_NOT_OWNED if owner differs

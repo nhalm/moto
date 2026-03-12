@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## ai-proxy v1.3
-
-- Fix `/health/startup` to verify initial key fetch complete: `mark_startup_complete()` is called after SVID fetch but before any provider API key is fetched; spec requires "SVID loaded, initial key fetch complete"
-
 ## audit-logging v0.1
 
 - Fix `garage_created` and `garage_terminated` audit events to log requesting user as principal (`crates/moto-club-api/src/garages.rs:882-883`): currently logs `principal_type: "service"` / `principal_id: "moto-club"` instead of the actual user; user identity (`owner`) is available but only put in metadata
