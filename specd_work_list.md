@@ -10,10 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## garage-lifecycle v0.3
-
-- Implement unsaved changes warning on `garage close`: spec requires checking for unsaved changes and prompting to sync first; code only does a generic Y/N prompt
-
 ## keybox v1.5
 
 - Fix `rotate_dek` handler to return 403 instead of 404 for missing secrets (`crates/moto-keybox/src/api.rs:1272`): breaks secret enumeration prevention — all other endpoints correctly return 403 for not-found
