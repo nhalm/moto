@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **compliance v0.4 (2026-03-11):** Investigate and remove `secrets` resource from moto-club ClusterRole (`infra/k8s/moto-system/club.yaml` lines 54-56): currently grants `secrets` with verbs [get, list, create, delete], violating least-privilege principle. Clarify whether this is needed for garage provisioning; if not, remove and verify functionality still works.
 - **moto-club-websocket v0.1 (2026-03-11):** Fix log streaming timestamps in `logs.rs`: timestamp is always `Utc::now()` (server clock) instead of the actual K8s pod log timestamp; should set `timestamps: true` in `PodLogOptions` and parse embedded timestamps
 - **moto-club-websocket v0.1 (2026-03-11):** Fix event subscriber cleanup race in `events.rs`: uses `subscriber_count(&owner) <= 1` to decide when to remove an owner's channel, but the departing handler's receiver is still in scope — a second connected subscriber's channel gets deleted, causing connection loss; should check `== 0` after dropping the receiver
 - **audit-logging v0.1 (2026-03-11):** Fix `garage_created` and `garage_terminated` audit events to log requesting user as principal (`crates/moto-club-api/src/garages.rs:882-883`): currently logs `principal_type: "service"` / `principal_id: "moto-club"` instead of the actual user; user identity (`owner`) is available but only put in metadata
