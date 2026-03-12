@@ -593,10 +593,29 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
             let client = create_client(flags, None)?;
 
             // Check if garage exists first
-            client
+            let garage = client
                 .get_garage(&name)
                 .await
                 .map_err(client_error_to_cli_error)?;
+
+            // Check for unsaved changes unless --force is used
+            if !force && !flags.json {
+                let namespace = resolve_namespace(&garage.namespace, &garage.id);
+                let pod_name = if garage.pod_name.is_empty() {
+                    format!("garage-{}", &garage.id.to_string()[..8])
+                } else {
+                    garage.pod_name.clone()
+                };
+
+                // Check for unsaved changes
+                if let Ok(has_changes) = has_unsaved_changes(&namespace, &pod_name, flags).await
+                    && has_changes
+                {
+                    eprintln!("Warning: This garage has unsaved changes.");
+                    eprintln!("Consider syncing your work first (push changes or create a PR).");
+                    eprintln!();
+                }
+            }
 
             // Prompt for confirmation unless --force is used
             if !force && !flags.json {
@@ -923,6 +942,52 @@ fn resolve_pod_name(pod: &str) -> String {
     } else {
         pod.to_string()
     }
+}
+
+/// Check if a garage has unsaved changes.
+///
+/// Runs `git status --porcelain` in the garage's workspace to detect uncommitted changes.
+/// Returns `true` if there are unsaved changes, `false` otherwise.
+///
+/// # Errors
+///
+/// Returns an error if kubectl exec fails or the command cannot be executed.
+async fn has_unsaved_changes(namespace: &str, pod_name: &str, flags: &GlobalFlags) -> Result<bool> {
+    let mut cmd = tokio::process::Command::new("kubectl");
+
+    // Global flags must come before the subcommand
+    if let Some(ctx) = flags.context.as_deref() {
+        cmd.args(["--context", ctx]);
+    }
+
+    cmd.args([
+        "exec",
+        "-n",
+        namespace,
+        pod_name,
+        "--",
+        "git",
+        "-C",
+        "/workspace",
+        "status",
+        "--porcelain",
+    ]);
+
+    let output = cmd.output().await.map_err(|e| {
+        CliError::general(format!(
+            "failed to run kubectl: {e}\n\n\
+             Make sure kubectl is installed and in your PATH."
+        ))
+    })?;
+
+    if !output.status.success() {
+        // If git status fails (e.g., not a git repo, pod not ready), treat as no unsaved changes
+        // to avoid blocking garage close
+        return Ok(false);
+    }
+
+    // If output is non-empty, there are unsaved changes
+    Ok(!output.stdout.is_empty())
 }
 
 /// Connect to a garage via `kubectl exec`.
