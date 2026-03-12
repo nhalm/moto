@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **moto-cli v1.5 (2026-03-11):** Fix `garage extend` human-readable output to use `format_expires_at()` helper for `expires_at` display (`crates/moto-cli/src/commands/garage.rs:897`): currently prints raw RFC 3339 string (e.g., `2026-01-20T04:48:00Z`) instead of formatted display
+- **garage-lifecycle v0.3 (2026-03-11):** Fix `garage close` order: code terminates DB record before deleting K8s namespace, but spec requires namespace deletion first then DB update (`crates/moto-club-garage/src/service.rs`)
 - **garage-lifecycle v0.3 (2026-03-11):** Fix `is_terminal()` in `crates/moto-club-garage/src/lifecycle.rs`: incorrectly marks `Ready` as a terminal state. `Ready` is an active operational state; only `Failed` and `Terminated` are terminal per the spec state machine
 - **container-system v1.5 (2026-03-11):** Sign images in CI after build (add signing step to `.github/workflows/ci.yml` after image builds)
 - **container-system v1.5 (2026-03-11):** Add Cosign image signing to the Nix build pipeline or Makefile: after `make push-*` targets, sign the image with `cosign sign`. Generate a cosign keypair stored in `.dev/cosign/` (gitignored). Add `make sign-images` target.

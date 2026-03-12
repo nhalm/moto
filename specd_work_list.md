@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## garage-lifecycle v0.3
 
-- Fix `garage close` order: code terminates DB record before deleting K8s namespace, but spec requires namespace deletion first then DB update (`crates/moto-club-garage/src/service.rs`)
 - Implement unsaved changes warning on `garage close`: spec requires checking for unsaved changes and prompting to sync first; code only does a generic Y/N prompt
 
 ## keybox v1.5
@@ -42,10 +41,6 @@ Read it in full at the start of each iteration.
 
 - Fix event subscriber cleanup race in `events.rs`: uses `subscriber_count(&owner) <= 1` to decide when to remove an owner's channel, but the departing handler's receiver is still in scope — a second connected subscriber's channel gets deleted, causing connection loss; should check `== 0` after dropping the receiver
 - Fix log streaming timestamps in `logs.rs`: timestamp is always `Utc::now()` (server clock) instead of the actual K8s pod log timestamp; should set `timestamps: true` in `PodLogOptions` and parse embedded timestamps
-
-## moto-cli v1.5
-
-- Fix `garage extend` human-readable output to use `format_expires_at()` helper for `expires_at` display (`crates/moto-cli/src/commands/garage.rs:897`): currently prints raw RFC 3339 string (e.g., `2026-01-20T04:48:00Z`) instead of formatted display
 
 ## compliance v0.4
 
