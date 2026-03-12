@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **keybox v1.5 (2026-03-11):** Fix in-memory `AuditEntryResponse::from` to preserve `metadata` and `client_ip` fields (`crates/moto-keybox/src/api.rs:362-363`): hardcodes empty `{}` metadata and `None` client_ip, dropping actual data
+- **keybox v1.5 (2026-03-11):** Fix `validate_service_token` to return 403 instead of 500 when service token is not configured (`crates/moto-keybox/src/api.rs:576-583`): spec requires 403 for auth failures, not 500
 - **garage-lifecycle v0.3 (2026-03-11):** Implement unsaved changes warning on `garage close`: spec requires checking for unsaved changes and prompting to sync first; code only does a generic Y/N prompt
 - **moto-cli v1.5 (2026-03-11):** Fix `garage extend` human-readable output to use `format_expires_at()` helper for `expires_at` display (`crates/moto-cli/src/commands/garage.rs:897`): currently prints raw RFC 3339 string (e.g., `2026-01-20T04:48:00Z`) instead of formatted display
 - **garage-lifecycle v0.3 (2026-03-11):** Fix `garage close` order: code terminates DB record before deleting K8s namespace, but spec requires namespace deletion first then DB update (`crates/moto-club-garage/src/service.rs`)

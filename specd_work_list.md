@@ -10,12 +10,6 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## keybox v1.5
-
-- Fix `rotate_dek` handler to return 403 instead of 404 for missing secrets (`crates/moto-keybox/src/api.rs:1272`): breaks secret enumeration prevention — all other endpoints correctly return 403 for not-found
-- Fix `validate_service_token` to return 403 instead of 500 when service token is not configured (`crates/moto-keybox/src/api.rs:576-583`): spec requires 403 for auth failures, not 500
-- Fix in-memory `AuditEntryResponse::from` to preserve `metadata` and `client_ip` fields (`crates/moto-keybox/src/api.rs:362-363`): hardcodes empty `{}` metadata and `None` client_ip, dropping actual data
-
 ## moto-club (WG) v1.5
 
 - Add ownership check to `PeerRegistry::register_device` for re-registration (`crates/moto-club-wg/src/peers.rs:212-218`): when an existing device is found by public key, code returns it unconditionally regardless of owner — spec requires 403 DEVICE_NOT_OWNED if owner differs
