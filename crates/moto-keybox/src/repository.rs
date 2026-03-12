@@ -696,6 +696,7 @@ impl SecretRepository {
             resource_id,
             outcome: "success".to_string(),
             metadata: serde_json::Value::Object(serde_json::Map::new()),
+            client_ip: None,
             timestamp: Utc::now(),
         };
         self.audit_log.push(entry);

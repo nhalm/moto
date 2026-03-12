@@ -359,8 +359,8 @@ impl From<&AuditEntry> for AuditEntryResponse {
             resource_type: entry.resource_type.clone(),
             resource_id: entry.resource_id.clone(),
             outcome: entry.outcome.clone(),
-            metadata: serde_json::Value::Object(serde_json::Map::new()),
-            client_ip: None,
+            metadata: entry.metadata.clone(),
+            client_ip: entry.client_ip.clone(),
             timestamp: entry.timestamp.to_rfc3339(),
         }
     }

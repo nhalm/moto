@@ -322,6 +322,8 @@ pub struct AuditEntry {
     pub outcome: String,
     /// Service-specific additional context (no sensitive data).
     pub metadata: serde_json::Value,
+    /// Source IP from request headers or socket addr.
+    pub client_ip: Option<String>,
     /// When the event occurred.
     pub timestamp: DateTime<Utc>,
 }
@@ -340,6 +342,7 @@ impl AuditEntry {
             resource_id: format!("{scope}/{}", name.into()),
             outcome: "success".to_string(),
             metadata: serde_json::Value::Object(serde_json::Map::new()),
+            client_ip: None,
             timestamp: Utc::now(),
         }
     }
@@ -357,6 +360,7 @@ impl AuditEntry {
             resource_id: spiffe_id.to_uri(),
             outcome: "success".to_string(),
             metadata: serde_json::Value::Object(serde_json::Map::new()),
+            client_ip: None,
             timestamp: Utc::now(),
         }
     }
@@ -380,6 +384,7 @@ impl AuditEntry {
             resource_id: String::new(),
             outcome: "denied".to_string(),
             metadata: serde_json::Value::Object(metadata),
+            client_ip: None,
             timestamp: Utc::now(),
         }
     }
@@ -397,6 +402,7 @@ impl AuditEntry {
             resource_id: format!("{scope}/{}", name.into()),
             outcome: "denied".to_string(),
             metadata: serde_json::Value::Object(serde_json::Map::new()),
+            client_ip: None,
             timestamp: Utc::now(),
         }
     }

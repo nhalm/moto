@@ -781,7 +781,7 @@ impl PgSecretRepository {
             resource_id: &entry.resource_id,
             outcome: &entry.outcome,
             metadata: entry.metadata.clone(),
-            client_ip: None,
+            client_ip: entry.client_ip.as_deref(),
         };
 
         let result = audit_repo::insert_audit_entry(&self.pool, &insert).await;
