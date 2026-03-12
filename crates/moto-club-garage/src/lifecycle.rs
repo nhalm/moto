@@ -137,10 +137,7 @@ impl GarageLifecycle {
     /// Checks if a state is terminal (no forward progress expected).
     #[must_use]
     pub const fn is_terminal(status: GarageStatus) -> bool {
-        matches!(
-            status,
-            GarageStatus::Ready | GarageStatus::Failed | GarageStatus::Terminated
-        )
+        matches!(status, GarageStatus::Failed | GarageStatus::Terminated)
     }
 
     /// Checks if a state is active (not in a terminal failure or terminated state).
@@ -325,7 +322,7 @@ mod tests {
     fn is_terminal_identifies_terminal_states() {
         assert!(!GarageLifecycle::is_terminal(GarageStatus::Pending));
         assert!(!GarageLifecycle::is_terminal(GarageStatus::Initializing));
-        assert!(GarageLifecycle::is_terminal(GarageStatus::Ready));
+        assert!(!GarageLifecycle::is_terminal(GarageStatus::Ready));
         assert!(GarageLifecycle::is_terminal(GarageStatus::Failed));
         assert!(GarageLifecycle::is_terminal(GarageStatus::Terminated));
     }
