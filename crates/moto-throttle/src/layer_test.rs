@@ -1,7 +1,8 @@
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::body::Body;
-use axum::extract::Request;
+use axum::extract::{ConnectInfo, Request};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
@@ -101,6 +102,28 @@ fn unknown_fallback_no_headers() {
     let principal = extract_principal(&req, None);
     assert_eq!(principal.principal_type, PrincipalType::Unknown);
     assert_eq!(principal.key, "unknown");
+}
+
+#[test]
+fn unknown_fallback_uses_socket_addr() {
+    let socket_addr: SocketAddr = "192.168.1.100:54321".parse().unwrap();
+    let mut req = empty_request();
+    req.extensions_mut().insert(ConnectInfo(socket_addr));
+
+    let principal = extract_principal(&req, None);
+    assert_eq!(principal.principal_type, PrincipalType::Unknown);
+    assert_eq!(principal.key, "192.168.1.100");
+}
+
+#[test]
+fn x_forwarded_for_takes_precedence_over_socket_addr() {
+    let socket_addr: SocketAddr = "192.168.1.100:54321".parse().unwrap();
+    let mut req = request_with_ip("10.0.0.5");
+    req.extensions_mut().insert(ConnectInfo(socket_addr));
+
+    let principal = extract_principal(&req, None);
+    assert_eq!(principal.principal_type, PrincipalType::Unknown);
+    assert_eq!(principal.key, "10.0.0.5");
 }
 
 #[test]

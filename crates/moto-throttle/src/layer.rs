@@ -1,12 +1,13 @@
 //! Tower middleware layer for rate limiting.
 
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
 use axum::body::Body;
-use axum::extract::Request;
+use axum::extract::{ConnectInfo, Request};
 use axum::response::Response;
 use tower::{Layer, Service};
 
@@ -286,14 +287,26 @@ fn parse_jwt_principal(token: &str) -> Option<Principal> {
     })
 }
 
-/// Extract client IP from X-Forwarded-For header or fall back to "unknown".
+/// Extract client IP from X-Forwarded-For header or fall back to socket address.
 fn client_ip(request: &Request<Body>) -> String {
-    request
+    // Try X-Forwarded-For header first.
+    if let Some(forwarded_ip) = request
         .headers()
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.split(',').next())
-        .map_or_else(|| "unknown".to_string(), |s| s.trim().to_string())
+        .map(str::trim)
+    {
+        return forwarded_ip.to_string();
+    }
+
+    // Fall back to socket address from ConnectInfo.
+    if let Some(ConnectInfo(addr)) = request.extensions().get::<ConnectInfo<SocketAddr>>() {
+        return addr.ip().to_string();
+    }
+
+    // Final fallback if neither is available (shouldn't happen in production).
+    "unknown".to_string()
 }
 
 /// Evict buckets that haven't been accessed within the given TTL.
