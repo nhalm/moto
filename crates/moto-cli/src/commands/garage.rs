@@ -710,6 +710,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                         tail_lines: Some(tail),
                         since_seconds,
                         follow,
+                        timestamps: false,
                     };
 
                     if follow {

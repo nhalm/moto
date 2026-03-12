@@ -629,6 +629,7 @@ pub async fn run(cmd: BikeCommand, flags: &GlobalFlags) -> Result<()> {
                 tail_lines: Some(tail),
                 since_seconds: since_seconds.map(|s| i64::try_from(s).unwrap_or(i64::MAX)),
                 follow,
+                timestamps: false,
             };
 
             if follow {

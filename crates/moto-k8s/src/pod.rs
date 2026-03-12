@@ -18,6 +18,8 @@ pub struct PodLogOptions {
     pub since_seconds: Option<i64>,
     /// Whether to follow (stream) the logs.
     pub follow: bool,
+    /// Whether to include timestamps in the log lines.
+    pub timestamps: bool,
 }
 
 /// A stream of log lines from pods.
@@ -170,6 +172,10 @@ fn build_log_params(options: &PodLogOptions) -> LogParams {
 
     if options.follow {
         params.follow = true;
+    }
+
+    if options.timestamps {
+        params.timestamps = true;
     }
 
     params

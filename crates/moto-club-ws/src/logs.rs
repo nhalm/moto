@@ -155,6 +155,29 @@ fn parse_since_duration(s: &str) -> Option<i64> {
     num_str.parse::<i64>().ok().map(|n| n * unit)
 }
 
+/// Parse a K8s log line that has a timestamp prefix.
+///
+/// K8s log lines with timestamps enabled have the format:
+/// `2026-01-21T10:15:32.123456789Z actual log content`
+///
+/// Returns (timestamp, `line_content`). If parsing fails, falls back to current time and original line.
+fn parse_timestamped_log_line(line: &str) -> (String, String) {
+    // K8s timestamps are RFC3339 with nanoseconds, followed by a space
+    // Find the first space after a timestamp-like prefix
+    if let Some(space_idx) = line.find(' ') {
+        let timestamp_str = &line[..space_idx];
+        let content = &line[space_idx + 1..];
+
+        // Try to parse as RFC3339 timestamp
+        if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(timestamp_str) {
+            return (parsed.to_rfc3339(), content.to_string());
+        }
+    }
+
+    // Fallback: use current time if parsing fails
+    (chrono::Utc::now().to_rfc3339(), line.to_string())
+}
+
 /// Send an error message and close the WebSocket.
 async fn send_error_and_close(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
@@ -210,6 +233,7 @@ pub async fn handle_log_socket<C: LogStreamingContext>(
         tail_lines: Some(query.tail),
         since_seconds,
         follow: query.follow,
+        timestamps: true,
     };
 
     // Open pod log stream
@@ -261,9 +285,10 @@ async fn stream_logs(
             line_result = log_stream.next() => {
                 match line_result {
                     Some(Ok(line)) => {
+                        let (timestamp, content) = parse_timestamped_log_line(line.trim_end());
                         let log_msg = LogMessage::Log {
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                            line: line.trim_end().to_string(),
+                            timestamp,
+                            line: content,
                         };
                         if let Ok(json) = serde_json::to_string(&log_msg) {
                             // Buffer the message; drop oldest if at capacity
@@ -446,5 +471,37 @@ mod tests {
         assert_eq!(query.tail, 100);
         assert!(!query.follow);
         assert!(query.since.is_none());
+    }
+
+    #[test]
+    fn parse_timestamped_log_line_valid() {
+        let line = "2026-01-21T10:15:32.123456789Z Starting dev environment...";
+        let (timestamp, content) = parse_timestamped_log_line(line);
+        assert_eq!(timestamp, "2026-01-21T10:15:32.123456789+00:00");
+        assert_eq!(content, "Starting dev environment...");
+    }
+
+    #[test]
+    fn parse_timestamped_log_line_without_nanos() {
+        let line = "2026-01-21T10:15:32Z Server listening on port 8080";
+        let (timestamp, content) = parse_timestamped_log_line(line);
+        assert_eq!(timestamp, "2026-01-21T10:15:32+00:00");
+        assert_eq!(content, "Server listening on port 8080");
+    }
+
+    #[test]
+    fn parse_timestamped_log_line_invalid_timestamp() {
+        let line = "not-a-timestamp Some log content";
+        let (_timestamp, content) = parse_timestamped_log_line(line);
+        // Should fallback to current time, so just check content is preserved
+        assert_eq!(content, line);
+    }
+
+    #[test]
+    fn parse_timestamped_log_line_no_space() {
+        let line = "2026-01-21T10:15:32Z";
+        let (_timestamp, content) = parse_timestamped_log_line(line);
+        // No space found, so entire line is treated as content with current time
+        assert_eq!(content, line);
     }
 }
