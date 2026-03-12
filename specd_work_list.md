@@ -10,13 +10,8 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## audit-logging v0.1
-
-- Fix `garage_created` and `garage_terminated` audit events to log requesting user as principal (`crates/moto-club-api/src/garages.rs:882-883`): currently logs `principal_type: "service"` / `principal_id: "moto-club"` instead of the actual user; user identity (`owner`) is available but only put in metadata
-
 ## moto-club-websocket v0.1
 
-- Fix event subscriber cleanup race in `events.rs`: uses `subscriber_count(&owner) <= 1` to decide when to remove an owner's channel, but the departing handler's receiver is still in scope — a second connected subscriber's channel gets deleted, causing connection loss; should check `== 0` after dropping the receiver
 - Fix log streaming timestamps in `logs.rs`: timestamp is always `Utc::now()` (server clock) instead of the actual K8s pod log timestamp; should set `timestamps: true` in `PodLogOptions` and parse embedded timestamps
 
 ## compliance v0.4
