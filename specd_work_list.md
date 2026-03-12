@@ -10,13 +10,8 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## moto-throttle v0.1
-
-- Fix `client_ip()` to fall back to socket address instead of `"unknown"` (`crates/moto-throttle/src/layer.rs:290-297`): spec requires key = client IP from X-Forwarded-For or socket addr; all clients without the header currently share one bucket
-
 ## ai-proxy v1.3
 
-- Fix `/health/ready` to check keybox reachability and key availability: currently only checks `is_startup_complete()` flag; spec requires "keybox reachable, at least one provider key cached"; `has_cached_keys()` exists but is not wired in
 - Fix `/health/startup` to verify initial key fetch complete: `mark_startup_complete()` is called after SVID fetch but before any provider API key is fetched; spec requires "SVID loaded, initial key fetch complete"
 
 ## audit-logging v0.1
