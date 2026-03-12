@@ -395,7 +395,19 @@ impl GarageService {
 
         info!(garage_id = %garage.id, garage_name = %name, "closing garage");
 
-        // Mark as terminated in database first
+        // Delete K8s namespace first (this cascades to all resources)
+        let garage_id = GarageId::from_uuid(garage.id);
+        if let Err(e) = self.k8s.delete_garage_namespace(&garage_id).await {
+            warn!(
+                garage_id = %garage.id,
+                error = %e,
+                "failed to delete K8s namespace (may already be deleted)"
+            );
+            // Don't fail the close operation - continue to mark as terminated
+            // Reconciliation will eventually clean up orphaned resources
+        }
+
+        // Mark as terminated in database
         let terminated =
             garage_repo::terminate(&self.db, garage.id, TerminationReason::UserClosed).await?;
 
@@ -410,18 +422,6 @@ impl GarageService {
                     reason: Some("user_closed".to_string()),
                 },
             );
-        }
-
-        // Delete K8s namespace (this cascades to all resources)
-        let garage_id = GarageId::from_uuid(garage.id);
-        if let Err(e) = self.k8s.delete_garage_namespace(&garage_id).await {
-            warn!(
-                garage_id = %garage.id,
-                error = %e,
-                "failed to delete K8s namespace (may already be deleted)"
-            );
-            // Don't fail the close operation - the garage is marked as terminated
-            // Reconciliation will eventually clean up orphaned resources
         }
 
         info!(garage_id = %garage.id, garage_name = %name, "garage closed");
