@@ -63,7 +63,7 @@ Each garage namespace has a default-deny NetworkPolicy:
 **Egress:** Allow only:
 - DNS (port 53 to kube-dns in kube-system)
 - Internet (for package installs, git clone, external APIs)
-- Keybox (port 9090 in moto-system)
+- Keybox (port 8080 in moto-system)
 - Supporting services (postgres, redis in own namespace)
 
 **Blocked egress:**
@@ -204,7 +204,7 @@ Keybox prevents secret enumeration attacks:
 Garages can reach:
 - **Internet** (HTTP/HTTPS) — for package installs, git clone, external APIs
 - **DNS** (port 53) — for name resolution
-- **Keybox** (port 9090 in moto-system) — for fetching secrets
+- **Keybox** (port 8080 in moto-system) — for fetching secrets
 - **Supporting services** — postgres and redis in the garage's own namespace
 
 Garages **cannot** reach:
