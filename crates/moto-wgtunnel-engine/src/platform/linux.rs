@@ -102,7 +102,7 @@ impl PlatformTun {
     /// Returns error if:
     /// - `/dev/net/tun` cannot be opened
     /// - ioctl fails (permission denied, invalid name, etc.)
-    pub fn create(config: TunConfig) -> Result<Self, TunError> {
+    pub fn create(config: &TunConfig) -> Result<Self, TunError> {
         // Open the TUN clone device
         let file = OpenOptions::new()
             .read(true)
