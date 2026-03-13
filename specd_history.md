@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.1 (2026-03-13):** Fix `docs/components.md` keybox anti-enumeration status code: change 404 to 403 (line 66) — code returns 403 for both "not found" and "access denied" (`moto-keybox/src/api.rs` line 621)
 - **docs v0.1 (2026-03-13):** Fix `docs/security.md` SPIFFE trust domain: change `moto.internal` to `moto.local` (lines 133, 134, 139) — must match code (`moto-keybox/src/types.rs` TRUST_DOMAIN) and other docs
 - **docs v0.1 (2026-03-13):** Write `.github/workflows/wiki-publish.yml` — publish `docs/` to GitHub Wiki on push to main
 - **docs v0.1 (2026-03-13):** Write `README.md` — project landing page: tagline, what Moto is, how-it-works diagram, doc links
