@@ -62,7 +62,7 @@ audit: ## Check for known CVEs in dependencies
 	fi
 	cargo audit
 
-ci: fmt check lint test audit ## Full CI check (fmt + check + lint + test + audit)
+ci: test-ci ## Alias for test-ci
 
 ##@ Container
 
@@ -299,7 +299,7 @@ test-all: ## Every test: unit + integration + ignored (K8s) — no test left beh
 	if [ $$status -ne 0 ]; then exit $$status; fi
 	cargo test -- --ignored --skip create_utun_device --skip create_tun_device --skip tun_read_write
 
-test-ci: ## CI tests (assumes database running)
+test-ci: fmt check lint audit ## Full CI check (fmt + check + lint + test + audit + integration)
 	cargo test --lib
 	MOTO_CLUB_DATABASE_URL=$(TEST_CLUB_DATABASE_URL) \
 	MOTO_KEYBOX_DATABASE_URL=$(TEST_KEYBOX_DATABASE_URL) \
