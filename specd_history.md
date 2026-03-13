@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.1 (2026-03-13):** Write `docs/security.md` — threat model, isolation layers, SPIFFE SVIDs, keybox encryption, network boundaries, compliance
 - **docs v0.1 (2026-03-13):** Write `docs/deployment.md` — `make deploy`, what runs where, secrets, port-forward, production considerations
 - **docs v0.1 (2026-03-13):** Write `docs/getting-started.md` — prerequisites, `moto dev up` walkthrough, first garage, stopping
 - **docs v0.1 (2026-03-13):** Write `docs/architecture.md` — component map, design philosophy, data flow, motorcycle metaphor glossary
