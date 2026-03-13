@@ -304,7 +304,7 @@ Moto is designed to work the same way locally and in production, with a few diff
 | **RBAC** | Permissive (developer ergonomics) | Least privilege (SOC 2 compliance) |
 | **Audit logs** | Local Postgres (7-day retention) | Forwarded to SIEM or log aggregator |
 
-The `make deploy` path mirrors production—it sets up the full moto-system namespace with StatefulSet Postgres, 3-replica Deployments for moto-club, keybox, and ai-proxy, and uses K8s Secrets for credentials (generated via `.dev/k8s-secrets/`).
+The `make deploy` path mirrors production—it sets up the full moto-system namespace with StatefulSet Postgres, Deployments for moto-club and keybox (3 replicas each) and ai-proxy (2 replicas), and uses K8s Secrets for credentials (generated via `.dev/k8s-secrets/`).
 
 ## Future Architecture
 

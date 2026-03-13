@@ -2,11 +2,14 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.1 |
+| Version | 0.2 |
 | Status | Ready to Rip |
 | Last Updated | 2026-03-13 |
 
 ## Changelog
+
+### v0.2 (2026-03-13)
+- Fix deployment.md description: ai-proxy is 2 replicas, not 3. Change "3-replica Deployments" to specify per-component replica counts.
 
 ### v0.1 (2026-03-13)
 - Initial spec (draft)
@@ -68,7 +71,7 @@ Prerequisites and first run:
 
 Running Moto in a K8s cluster:
 
-- **Local K8s deployment** — `make deploy`, what it sets up (moto-system namespace, StatefulSet Postgres, 3-replica Deployments)
+- **Local K8s deployment** — `make deploy`, what it sets up (moto-system namespace, StatefulSet Postgres, Deployments: moto-club and keybox at 3 replicas, ai-proxy at 2 replicas)
 - **What runs where** — moto-club, keybox, ai-proxy in `moto-system`; each garage in its own namespace
 - **Secrets management** — How deploy-time secrets are generated and applied (`.dev/k8s-secrets/`, never in manifests)
 - **Accessing the cluster** — `kubectl port-forward`, CLI default port 18080
