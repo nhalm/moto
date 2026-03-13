@@ -54,8 +54,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-target-
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
+      - name: Install cargo tools
+        run: cargo install cargo-audit sqlx-cli --no-default-features --features postgres
 
       - name: Create keybox database
         run: PGPASSWORD=moto_test psql -h localhost -p 5433 -U moto_test -d moto_test_club -c "CREATE DATABASE moto_test_keybox;"
