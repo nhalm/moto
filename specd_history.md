@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.2 (2026-03-13):** Remove or relocate `docs/garage-startup-steps.md` — internal engineering notes (bug writeups, workarounds, commit SHAs) that get published to the public GitHub Wiki via `cp -r docs/* wiki/`. Either move to a non-docs location (e.g. `notes/`) or add a `.wikiignore`/filter to the publish workflow.
+- **docs v0.2 (2026-03-13):** Fix `docs/security.md` line 270: remove link to `../specs/compliance.md` — docs must be self-contained with no links to `specs/`. Replace with inline summary of SOC 2 alignment or remove the reference.
 - **docs v0.2 (2026-03-13):** Fix `docs/architecture.md` line 307: change "3-replica Deployments for moto-club, keybox, and ai-proxy" to reflect that ai-proxy is 2 replicas (moto-club and keybox are 3)
 - **docs v0.1 (2026-03-13):** Fix `docs/deployment.md` ai-proxy replica count: change 3 to 2 (lines 34, 216) — `bike.toml` and K8s manifest specify `replicas: 2`
 - **docs v0.1 (2026-03-13):** Fix `docs/getting-started.md` keybox in-cluster port: change `:9090` to `:8080` in curl example (line 176) — keybox API is on port 8080, not 9090
