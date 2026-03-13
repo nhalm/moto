@@ -77,7 +77,7 @@ build-garage: ## Build garage container (Docker-wrapped Nix)
 		-v nix-store:/nix \
 		-w /workspace \
 		nixos/nix:latest \
-		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-garage --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
+		sh -c "git config --global --add safe.directory /workspace && nix build .#packages.$(NIX_LINUX_SYSTEM).moto-garage --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
 		| docker load
 
 test-garage: build-garage ## Run smoke tests on garage container
@@ -98,7 +98,7 @@ build-bike: ## Build moto-bike base container
 		-v nix-store:/nix \
 		-w /workspace \
 		nixos/nix:latest \
-		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-bike --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
+		sh -c "git config --global --add safe.directory /workspace && nix build .#packages.$(NIX_LINUX_SYSTEM).moto-bike --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
 		| docker load
 
 test-bike: build-bike ## Run smoke tests on bike container
@@ -112,7 +112,7 @@ build-club: ## Build moto-club container image
 		-v nix-store:/nix \
 		-w /workspace \
 		nixos/nix:latest \
-		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-club-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
+		sh -c "git config --global --add safe.directory /workspace && nix build .#packages.$(NIX_LINUX_SYSTEM).moto-club-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
 		| docker load
 
 build-keybox: ## Build moto-keybox container image
@@ -122,7 +122,7 @@ build-keybox: ## Build moto-keybox container image
 		-v nix-store:/nix \
 		-w /workspace \
 		nixos/nix:latest \
-		sh -c "nix build .#packages.$(NIX_LINUX_SYSTEM).moto-keybox-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
+		sh -c "git config --global --add safe.directory /workspace && nix build .#packages.$(NIX_LINUX_SYSTEM).moto-keybox-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
 		| docker load
 
 # Default registry for pushing images
