@@ -892,7 +892,7 @@ pub async fn run(cmd: GarageCommand, flags: &GlobalFlags) -> Result<()> {
                     ClientError::GarageNotFound(_) => CliError::not_found(format!(
                         "Garage '{name}' not found.\n\nTry: moto garage list"
                     )),
-                    ClientError::Server { code, message } if code == "GARAGE_EXPIRED" => {
+                    ClientError::Server { code, message: _ } if code == "GARAGE_EXPIRED" => {
                         CliError::general(format!(
                             "Garage '{name}' has expired and cannot be extended."
                         ))
