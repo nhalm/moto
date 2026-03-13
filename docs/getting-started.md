@@ -176,7 +176,7 @@ curl -H "Authorization: Bearer $MOTO_GARAGE_SVID" \
      http://keybox.moto-system.svc.cluster.local:8080/secrets/example
 
 # Call an AI provider through the proxy
-export ANTHROPIC_API_KEY="garage-abc123"
+export ANTHROPIC_API_KEY="$MOTO_GARAGE_SVID"
 curl -X POST http://ai-proxy.moto-system.svc.cluster.local:8080/passthrough/anthropic/v1/messages \
      -H "Authorization: Bearer $ANTHROPIC_API_KEY" \
      -H "Content-Type: application/json" \
