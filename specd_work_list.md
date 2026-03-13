@@ -13,5 +13,4 @@ Read it in full at the start of each iteration.
 ## docs v0.1
 
 - Write `README.md` — project landing page: tagline, what Moto is, how-it-works diagram, doc links
-- Write `docs/components.md` — reference table and short sections for each component
 - Write `.github/workflows/wiki-publish.yml` — publish `docs/` to GitHub Wiki on push to main
