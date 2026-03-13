@@ -10,6 +10,3 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## docs v0.2
-
-- Fix `docs/architecture.md` line 321: remove references to internal spec filenames (`moto-cron.md`, `moto-club-websocket.md`) — docs must be self-contained with no references to `specs/`. Replace with generic phrasing like "planned for future implementation".
