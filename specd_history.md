@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.1 (2026-03-13):** Write `docs/getting-started.md` — prerequisites, `moto dev up` walkthrough, first garage, stopping
 - **docs v0.1 (2026-03-13):** Write `docs/architecture.md` — component map, design philosophy, data flow, motorcycle metaphor glossary
 - **service-deploy v0.8 (2026-03-11):** Update `infra/k8s/moto-system/club.yaml` ClusterRole to explicitly document leases permission (coordination.k8s.io) for leader election among multiple replicas (standard K8s pattern)
 - **service-deploy v0.8 (2026-03-11):** Update `infra/k8s/moto-system/keybox.yaml` Service definition to explicitly expose port 9090 for Prometheus metrics (standard K8s pattern)
