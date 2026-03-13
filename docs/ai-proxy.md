@@ -104,7 +104,7 @@ Garages authenticate using their SPIFFE SVID—a short-lived Ed25519-signed JWT 
 
 The proxy validates each request by:
 1. Extracting the garage ID from SVID claims
-2. Verifying the signature (public key from moto-club)
+2. Verifying the signature (public key from keybox)
 3. Checking that the garage is in `Ready` state
 4. Caching the result for 60 seconds
 
