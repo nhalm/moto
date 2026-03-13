@@ -2,11 +2,15 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.16 |
+| Version | 0.17 |
 | Status | Ripping |
 | Last Updated | 2026-03-09 |
 
 ## Changelog
+
+### v0.17 (2026-03-11)
+- Fix: `POST /auth/token` now requires service token auth (only moto-club can issue SVIDs). Update endpoint authorization matrix and auth flow documentation.
+- Clarify: Service token requirement strengthens security model — SVID issuance is mediated by moto-club, not delegated to individual callers.
 
 ### v0.16 (2026-03-09)
 - Audit log schema migration: existing `audit_log` table must be migrated to the unified schema defined in [audit-logging.md](audit-logging.md). Migration adds `service`, `action`, `resource_type`, `resource_id`, `outcome`, `metadata`, `client_ip` columns and maps existing columns (`spiffe_id` → `principal_id`, `secret_scope` → `resource_type`, `secret_name` → `resource_id`). Spec-level schema updated below to reflect the target state.
@@ -156,9 +160,11 @@ Resolution priority: Instance → Service → Global
 1. Bike pod starts with K8s ServiceAccount JWT
 
 2. Pod → POST /auth/token
+   Headers: Authorization: Bearer <service-token>
    Body: { "principal_type": "bike", "principal_id": "bike-id", "pod_uid": "..." }
 
    Keybox:
+   - Validates service token
    - Signs SVID JWT with Ed25519 key
 
    ← Returns: Signed SVID (15 min TTL)
@@ -166,7 +172,7 @@ Resolution priority: Instance → Service → Global
 3. Pod caches SVID, refreshes at 14 min (before expiry)
 ```
 
-**Note (MVP):** The current implementation accepts principal identity directly in the request body without K8s ServiceAccount JWT validation. K8s TokenReview API integration (validating the JWT, fetching pod metadata, verifying pod labels) is deferred to a future version. For now, any caller can obtain an SVID by providing principal info.
+**Note (MVP):** The current implementation accepts principal identity directly in the request body without K8s ServiceAccount JWT validation. K8s TokenReview API integration (validating the JWT, fetching pod metadata, verifying pod labels) is deferred to a future version. For now, any caller with the service token can obtain an SVID by providing principal info.
 
 **Garages (no K8s ServiceAccount - SVID pushed by moto-club):**
 
@@ -386,7 +392,8 @@ The client library supports multiple modes:
 **Authentication:**
 ```
 POST /auth/token
-  Request: K8s ServiceAccount JWT (for bikes)
+  Auth: Service token (only moto-club can issue SVIDs)
+  Request: { "principal_type": "bike|garage", "principal_id": "...", "pod_uid": "..." }
   Response: Signed SVID (15 min TTL)
 
 POST /auth/issue-garage-svid
@@ -427,7 +434,7 @@ Keybox enforces logical isolation based on token type:
 
 | Endpoint | SVID (garages/bikes) | Service Token (moto-club) |
 |----------|---------------------|---------------------------|
-| `POST /auth/token` | No (uses K8s SA JWT) | No |
+| `POST /auth/token` | No (uses K8s SA JWT) | Required |
 | `POST /auth/issue-garage-svid` | **Denied** | Allowed |
 | `GET /secrets/{scope}/{name}` | Allowed (ABAC checked) | Allowed |
 | `POST /secrets/{scope}/{name}` | **Denied** | Allowed |

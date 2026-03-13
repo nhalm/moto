@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.3 |
+| Version | 0.4 |
 | Status | Ripping |
 | Last Updated | 2026-03-11 |
 
@@ -44,7 +44,7 @@ These apply to ALL specs and ALL code:
 | SVID signature verification at all auth points | Satisfied | ai-proxy | `SvidValidator::validate` verifies Ed25519 signature |
 | Token issuance requires authentication | Satisfied | keybox | `validate_service_token` with constant-time comparison |
 | Garage secret access scoped to own secrets | Satisfied | keybox | `GARAGE_DENIED_SERVICES` deny-list blocks `ai-proxy` |
-| K8s RBAC follows least privilege | Satisfied | service-deploy | No `secrets` resource in ClusterRole |
+| K8s RBAC follows least privilege | **GAP** | service-deploy | ClusterRole grants `secrets` resource (contradicts least privilege) |
 | Supporting service pods have no SA token | Satisfied | garage-isolation | `automount_service_account_token: Some(false)` on both |
 
 ### CC7 — System Operations / Monitoring
@@ -73,9 +73,9 @@ These apply to ALL specs and ALL code:
 | Unit test suite | Satisfied | testing | Co-located with implementation |
 | Integration test infrastructure | Satisfied | testing | docker-compose, smoke tests |
 | Secret content scanning in pre-commit | **GAP** | pre-commit | Hook only checks file names, not contents |
-| CI/CD pipeline (GitHub Actions) | **GAP** | (new work needed) | No automated pipeline blocking merges |
+| CI/CD pipeline (GitHub Actions) | Satisfied | makefile | GitHub Actions workflow for automated merge blocking |
 | Dependency vulnerability scanning (`cargo audit`) | **GAP** | pre-commit / makefile | Known CVEs not detected |
-| Container image signing / SBOM | **GAP** | container-system | No Cosign, no SLSA provenance |
+| Container image signing / SBOM | Satisfied | container-system | Cosign image signing with SLSA provenance |
 
 ### A1 — Availability
 
@@ -125,21 +125,19 @@ All previously identified critical and high-priority findings have been resolved
 | CRITICAL-2: ai-proxy skips signature verification | `SvidValidator::validate` verifies Ed25519 signature before trusting claims |
 | HIGH-1: IPv6 NetworkPolicy gap | IPv6 egress rules added (`fd00::/8`, `::1/128`, `fe80::/10` blocked) |
 | HIGH-2: Garage ABAC too broad | `GARAGE_DENIED_SERVICES` deny-list blocks `ai-proxy` secrets |
-| HIGH-3: ClusterRole over-scoped | No `secrets` resource in ClusterRole |
 | HIGH-4: Supporting service pods have SA token | `automount_service_account_token: Some(false)` on postgres and redis |
 
 ## Deferred Items
 
 These are real SOC 2 gaps but are not blocking for initial compliance posture:
 
+- **K8s RBAC: remove `secrets` resource from ClusterRole** — Currently grants `secrets` access in violation of least-privilege. Clarify use case; remove if not needed.
 - **In-cluster TLS** — Requires service mesh (Linkerd/Istio) or per-service TLS config. Significant infrastructure work.
 - **HSM/KMS for master key** — Cloud-provider dependent. File-based KEK is acceptable for initial audit with compensating controls.
 - **Master key versioning** — Needed for KEK rotation without downtime. Complex; acceptable to defer with documented rotation procedure.
 - **Centralized log aggregation / SIEM** — Requires Loki/ELK/Datadog. Infrastructure decision.
 - **Anomaly detection / alerting** — Depends on SIEM. Define alert rules after aggregation is in place.
 - **Tamper-evident audit log** — Hash chaining or append-only DB role. Can add incrementally.
-- **CI/CD pipeline** — GitHub Actions workflow for automated merge blocking.
-- **Container image signing / SBOM** — Cosign + SLSA provenance. Depends on CI/CD.
 - **PodDisruptionBudgets** — Add when running multi-replica in production.
 - **Leader election for reconciler** — Needed when moto-club runs >1 replica. Use K8s Lease API.
 - **Dependency vulnerability scanning** — Add `cargo audit` to CI and/or pre-commit.
@@ -157,6 +155,11 @@ These are real SOC 2 gaps but are not blocking for initial compliance posture:
 - [moto-cron.md](moto-cron.md) — TTL enforcement, reconciliation
 
 ## Changelog
+
+### v0.4 (2026-03-11)
+- Audit finding: HIGH-3 still has a gap — ClusterRole grants `secrets` resource, violating least-privilege. Mark K8s RBAC control as GAP pending removal.
+- Update CC8: Container image signing and CI/CD pipeline marked as Satisfied (already implemented with Cosign and GitHub Actions)
+- Remove HIGH-3 from resolved findings list (re-escalated as GAP)
 
 ### v0.3 (2026-03-11)
 - Mark CRITICAL-1, CRITICAL-2, HIGH-1, HIGH-2, HIGH-3, HIGH-4 as resolved (all implemented in code)

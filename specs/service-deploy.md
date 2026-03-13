@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.7 |
+| Version | 0.8 |
 | Status | Ripping |
 | Last Updated | 2026-03-10 |
 
@@ -85,7 +85,7 @@ Same pattern as local dev (`scripts/init-dev-db.sql`).
 |----------|-------|
 | Kind | Deployment (3 replicas) |
 | Image | `moto-registry:5000/moto-keybox:latest` |
-| Service | `moto-keybox.moto-system:8080` (ClusterIP), port 8081 (health) |
+| Service | `moto-keybox.moto-system:8080` (ClusterIP), port 8081 (health), port 9090 (metrics/Prometheus) |
 | Resources | requests: 250m CPU / 256Mi, limits: 1 CPU / 1Gi |
 | Migrations | Automatic on startup (already implemented in moto-keybox-db) |
 | Health probes | Per [moto-bike.md](moto-bike.md) engine contract on port 8081 |
@@ -142,6 +142,7 @@ moto-club needs a ServiceAccount with a ClusterRole granting cluster-wide access
 | networkpolicies | networking.k8s.io | get, list, create, delete |
 | resourcequotas | core | get, list, create, delete |
 | limitranges | core | get, list, create, delete |
+| leases | coordination.k8s.io | get, list, create, delete (for leader election among multiple replicas) |
 | tokenreviews | authentication.k8s.io | create |
 
 **Note:** `namespaces` needs `patch` for label updates (e.g., TTL extension via `moto garage extend`).
@@ -302,6 +303,11 @@ Port 18080 is chosen to avoid conflicts with common services on 80, 443, and 808
 - [garage-isolation.md](garage-isolation.md) — What K8s resources moto-club creates per garage
 
 ## Changelog
+
+### v0.8 (2026-03-11)
+- Fix: Document moto-keybox Service metrics port 9090 (Prometheus scraping)
+- Fix: Document moto-club ClusterRole `leases` permission (coordination.k8s.io) for leader election among multiple replicas
+- Both are standard K8s patterns documented here for clarity
 
 ### v0.7 (2026-03-10)
 - Update moto-keybox to 3 replicas and resources from bike.toml (250m/256Mi → 1/1Gi)

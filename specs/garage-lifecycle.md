@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
+| Version | 0.6 |
 | Status | Ripping |
 | Last Updated | 2026-02-04 |
 
@@ -93,8 +93,8 @@ Creates a new wrenching environment.
 
 **Flow:**
 ```
-1. Generate garage ID (UUID)
-2. Create K8s namespace: moto-garage-{id}
+1. Generate garage ID (UUID, 8-char short ID used for K8s resources)
+2. Create K8s namespace: moto-garage-{short-id}
 3. Apply resource quotas and network policies
 4. Deploy dev container pod with repo config (URL, branch) as env vars
 5. Wait for pod Running
@@ -250,7 +250,7 @@ Multiple garages can run concurrently.
 
 ### Garage Identity
 
-Each garage gets a SPIFFE identity for keybox access:
+Each garage gets a SPIFFE identity for keybox access (using full UUID, not short ID):
 
 ```
 spiffe://moto.local/garage/{garage-id}
@@ -260,7 +260,13 @@ Garage can fetch:
 - Instance-scoped secrets (its own)
 - Global secrets (AI keys via ai-proxy, etc.)
 
+**Note:** K8s namespace names use the 8-character short ID (`moto-garage-abc123de`) for readability, while SPIFFE identities and instance scopes use the full UUID.
+
 ## Changelog
+
+### v0.6 (2026-03-11)
+- Fix: Document 8-character short ID for K8s namespace naming (e.g., `moto-garage-abc123de`). Full UUID used internally for instance scopes and SPIFFE identities.
+- Clarify: SPIFFE IDs and garage identity scoping use full UUID; K8s namespace names use short ID for readability.
 
 ### v0.5 (2026-03-05)
 - Add `--owner`, `--engine`, `--with-postgres`, `--with-redis`, `--kubectl` flags to `garage open` options (implemented in CLI but not documented)

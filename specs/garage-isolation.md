@@ -2,7 +2,7 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.5 |
+| Version | 0.6 |
 | Last Updated | 2026-03-05 |
 
 ## Overview
@@ -200,7 +200,7 @@ spec:
               moto.dev/type: system
           podSelector:
             matchLabels:
-              app: keybox
+              app.kubernetes.io/component: moto-keybox
       ports:
         - protocol: TCP
           port: 8080
@@ -404,6 +404,9 @@ Secrets are pull-based and on-demand. Garage only gets secrets it explicitly req
 | moto-club knows WG private key | Key is per-garage, ephemeral; moto-club already controls lifecycle |
 
 ## Changelog
+
+### v0.6 (2026-03-11)
+- Fix: NetworkPolicy podSelector for keybox egress uses standard K8s label convention `app.kubernetes.io/component: moto-keybox` (was `app: keybox`)
 
 ### v0.5 (2026-03-05)
 - Fix: WireGuard ConfigMap now shows actual `wg0.conf` INI format with IPv6 overlay address (`fd00:moto:1::{id}/128`) instead of abstract keys with outdated IPv4 (`100.64.x.y/32`). Peers are managed dynamically by the garage daemon, not baked into the ConfigMap.
