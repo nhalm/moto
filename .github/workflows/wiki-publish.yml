@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   publish-wiki:
@@ -19,25 +23,29 @@ jobs:
         with:
           repository: ${{ github.repository }}.wiki
           path: wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sync docs to wiki
         run: |
-          # Remove old wiki content (except .git)
-          find wiki -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          # Remove old wiki markdown (except .git)
+          find wiki/ -name "*.md" -delete
 
           # Copy all docs to wiki root
-          cp -r docs/* wiki/
+          cp docs/*.md wiki/
 
           # If docs/README.md exists, also copy it as Home.md for wiki home page
           if [ -f docs/README.md ]; then
             cp docs/README.md wiki/Home.md
           fi
 
+          echo "Wiki files synchronized:"
+          ls -la wiki/ | grep -E "\.(md)$" | sort
+
       - name: Commit and push to wiki
         working-directory: wiki
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "GitHub Action"
+          git config --local user.email "action@github.com"
           git add .
 
           # Only commit if there are changes
@@ -45,5 +53,5 @@ jobs:
             echo "No changes to wiki"
           else
             git commit -m "Update wiki from docs/ (${GITHUB_SHA::7})"
-            git push
+            git push origin master
           fi
