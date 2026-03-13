@@ -67,7 +67,7 @@ Each garage namespace has a default-deny NetworkPolicy:
 - Supporting services (postgres, redis in own namespace)
 
 **Blocked egress:**
-- moto-club (port 18080)
+- moto-club (port 8080)
 - Other garage namespaces
 - Kubernetes API server (port 443 in default namespace)
 - Cloud metadata endpoints (169.254.0.0/16)
@@ -208,7 +208,7 @@ Garages can reach:
 - **Supporting services** — postgres and redis in the garage's own namespace
 
 Garages **cannot** reach:
-- **moto-club** (port 18080 in moto-system) — control plane is isolated
+- **moto-club** (port 8080 in moto-system) — control plane is isolated
 - **Other garages** — cross-namespace traffic is blocked
 - **Kubernetes API server** — no ServiceAccount token is mounted
 - **Cloud metadata endpoints** (169.254.0.0/16) — blocks AWS/GCP/Azure metadata APIs
