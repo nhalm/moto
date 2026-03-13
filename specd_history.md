@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.2 (2026-03-13):** Fix `docs/ai-proxy.md` line 111: change "Invalid or expired SVIDs return `401 Unauthorized`" — expired SVIDs actually return `403 Forbidden` (same as non-ready garages). Only missing/malformed tokens return 401. Update to reflect the code's distinction: missing/invalid → 401, expired/not-garage/not-ready → 403.
+- **docs v0.2 (2026-03-13):** Fix `docs/getting-started.md` line 179: change `ANTHROPIC_API_KEY="garage-abc123"` to use `$MOTO_GARAGE_SVID` — ai-proxy validates SVID JWTs, a bare garage ID string will return 401. The keybox curl on line 175 already uses `$MOTO_GARAGE_SVID` correctly.
 - **docs v0.2 (2026-03-13):** Fix `docs/deployment.md` line 257: remove link to `specs/compliance.md` — docs must be self-contained with no `specs/` links (will break on wiki publish). Replace with inline summary or remove the reference.
 - **docs v0.2 (2026-03-13):** Remove or relocate `docs/garage-startup-steps.md` — internal engineering notes (bug writeups, workarounds, commit SHAs) that get published to the public GitHub Wiki via `cp -r docs/* wiki/`. Either move to a non-docs location (e.g. `notes/`) or add a `.wikiignore`/filter to the publish workflow.
 - **docs v0.2 (2026-03-13):** Fix `docs/security.md` line 270: remove link to `../specs/compliance.md` — docs must be self-contained with no links to `specs/`. Replace with inline summary of SOC 2 alignment or remove the reference.

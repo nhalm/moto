@@ -108,7 +108,7 @@ The proxy validates each request by:
 3. Checking that the garage is in `Ready` state
 4. Caching the result for 60 seconds
 
-Invalid or expired SVIDs return `401 Unauthorized`. Garages in non-ready states return `403 Forbidden`.
+Missing or malformed tokens return `401 Unauthorized`. Expired SVIDs, non-garage callers, and non-ready garages return `403 Forbidden`.
 
 ### Secret Management
 

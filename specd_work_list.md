@@ -12,4 +12,5 @@ Read it in full at the start of each iteration.
 
 ## docs v0.2
 
-- Fix `docs/getting-started.md` line 179: change `ANTHROPIC_API_KEY="garage-abc123"` to use `$MOTO_GARAGE_SVID` — ai-proxy validates SVID JWTs, a bare garage ID string will return 401. The keybox curl on line 175 already uses `$MOTO_GARAGE_SVID` correctly.
+- Fix `docs/ai-proxy.md` line 107: change "public key from moto-club" to "public key from keybox" — ai-proxy fetches the verifying key from keybox (`GET {keybox_url}/auth/verifying-key`), not from moto-club.
+- Fix `docs/architecture.md` line 194: change "using fake API key `garage-{id}`" to reference the SVID JWT — garages use their SVID JWT as the API key value, not a plain `garage-{id}` string. A bare garage ID would fail SVID signature verification.
