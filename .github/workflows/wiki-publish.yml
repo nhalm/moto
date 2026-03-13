@@ -1,0 +1,49 @@
+name: Publish Docs to Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+
+jobs:
+  publish-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout wiki
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+
+      - name: Sync docs to wiki
+        run: |
+          # Remove old wiki content (except .git)
+          find wiki -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
+          # Copy all docs to wiki root
+          cp -r docs/* wiki/
+
+          # If docs/README.md exists, also copy it as Home.md for wiki home page
+          if [ -f docs/README.md ]; then
+            cp docs/README.md wiki/Home.md
+          fi
+
+      - name: Commit and push to wiki
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to wiki"
+          else
+            git commit -m "Update wiki from docs/ (${GITHUB_SHA::7})"
+            git push
+          fi
