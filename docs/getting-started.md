@@ -173,7 +173,7 @@ free -h
 
 # Fetch a secret from keybox (requires MOTO_GARAGE_SVID env var)
 curl -H "Authorization: Bearer $MOTO_GARAGE_SVID" \
-     http://keybox.moto-system.svc.cluster.local:9090/secrets/example
+     http://keybox.moto-system.svc.cluster.local:8080/secrets/example
 
 # Call an AI provider through the proxy
 export ANTHROPIC_API_KEY="garage-abc123"
