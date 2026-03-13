@@ -89,13 +89,13 @@ Behind the scenes, this command performs **10 steps**:
 [moto] Building dev container (this may take a few minutes)...
 [moto] Pushing moto-garage:latest to registry...
 [moto] Starting moto-club on :18080...
-[moto] Starting keybox on :19090...
-[moto] Starting ai-proxy on :17070...
+[moto] Starting keybox on :8090...
+[moto] Starting ai-proxy on :18090...
 [moto] All services ready!
 
 moto-club:  http://localhost:18080
-keybox:     http://localhost:19090
-ai-proxy:   http://localhost:17070
+keybox:     http://localhost:8090
+ai-proxy:   http://localhost:18090
 ```
 
 ### Verifying the Stack
@@ -107,10 +107,10 @@ Check that all services are healthy:
 curl http://localhost:18080/health
 
 # Check keybox
-curl http://localhost:19090/health
+curl http://localhost:8090/health
 
 # Check ai-proxy
-curl http://localhost:17070/health
+curl http://localhost:18090/health
 
 # List Kubernetes nodes (should show 1 server node)
 kubectl get nodes
@@ -273,7 +273,7 @@ Now that you have a working garage, you can:
 
 ### Port Conflicts
 
-If port 18080, 19090, or 17070 is already in use, edit the port mappings in `docker-compose.yml` or pass custom ports via environment variables:
+If port 18080, 8090, or 18090 is already in use, edit the port mappings in `docker-compose.yml` or pass custom ports via environment variables:
 
 ```bash
 CLUB_PORT=28080 KEYBOX_PORT=29090 AI_PROXY_PORT=27070 moto dev up
