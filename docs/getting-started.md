@@ -177,7 +177,7 @@ curl -H "Authorization: Bearer $MOTO_GARAGE_SVID" \
 
 # Call an AI provider through the proxy
 export ANTHROPIC_API_KEY="garage-abc123"
-curl -X POST http://ai-proxy.moto-system.svc.cluster.local:7070/passthrough/anthropic/v1/messages \
+curl -X POST http://ai-proxy.moto-system.svc.cluster.local:8080/passthrough/anthropic/v1/messages \
      -H "Authorization: Bearer $ANTHROPIC_API_KEY" \
      -H "Content-Type: application/json" \
      -d '{"model": "claude-3-5-sonnet-20241022", "messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 100}'
