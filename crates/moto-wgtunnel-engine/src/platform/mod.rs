@@ -64,7 +64,9 @@ use std::io;
 use std::net::Ipv6Addr;
 use thiserror::Error;
 
+// Linux TUN requires unsafe for libc/ioctl; c_char casts are safe (ASCII names).
 #[cfg(target_os = "linux")]
+#[allow(unsafe_code, clippy::cast_possible_wrap)]
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;

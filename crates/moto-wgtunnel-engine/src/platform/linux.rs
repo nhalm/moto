@@ -7,7 +7,7 @@
 //! # Requirements
 //!
 //! - `/dev/net/tun` must exist (typically provided by the `tun` kernel module)
-//! - Either root privileges or CAP_NET_ADMIN capability
+//! - Either root privileges or `CAP_NET_ADMIN` capability
 //!
 //! # Example
 //!
@@ -46,7 +46,7 @@ const IFF_TUN: libc::c_short = 0x0001;
 const IFF_NO_PI: libc::c_short = 0x1000;
 
 /// ioctl request to create TUN device.
-const TUNSETIFF: libc::c_ulong = 0x400454ca;
+const TUNSETIFF: libc::c_ulong = 0x4004_54ca;
 
 /// ioctl request to set interface flags (bring up).
 const SIOCSIFFLAGS: libc::c_ulong = 0x8914;
@@ -288,9 +288,13 @@ impl PlatformTun {
 
     /// Set the IPv6 address.
     ///
+    /// # Errors
+    ///
+    /// Returns error if the `ip` command fails or the address cannot be set.
+    ///
     /// # Note
     ///
-    /// This requires root privileges or CAP_NET_ADMIN.
+    /// This requires root privileges or `CAP_NET_ADMIN`.
     pub fn set_ipv6(&mut self, addr: Ipv6Addr) -> Result<(), TunError> {
         // Use ip command to set the address (simpler than netlink)
         let output = std::process::Command::new("ip")
@@ -355,7 +359,7 @@ mod tests {
     #[ignore = "requires root and /dev/net/tun"]
     fn create_tun_device() {
         let config = TunConfig::new().name("mototest%d").mtu(1420);
-        let tun = PlatformTun::create(config).unwrap();
+        let tun = PlatformTun::create(&config).unwrap();
 
         assert!(tun.name().starts_with("mototest"));
         assert_eq!(tun.mtu(), 1420);
@@ -365,7 +369,7 @@ mod tests {
     #[ignore = "requires root and /dev/net/tun"]
     fn tun_read_write() {
         let config = TunConfig::new().name("mototest%d");
-        let mut tun = PlatformTun::create(config).unwrap();
+        let mut tun = PlatformTun::create(&config).unwrap();
 
         // Write an IPv6 packet
         let packet = [
