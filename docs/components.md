@@ -63,7 +63,7 @@ Keybox is where garages and bikes fetch the secrets they need to operate. It's b
 2. **Envelope encryption** — Each secret is encrypted with a unique AES-256 DEK (data encryption key), which is itself encrypted with a master KEK (key encryption key). Secrets are never stored in plaintext.
 3. **Attribute-based access control (ABAC)** — Secrets are tagged with attributes (e.g., `garage_id=abc123`). Workloads can only fetch secrets whose attributes match the workload's identity claims.
 
-Keybox also prevents enumeration attacks — callers can only fetch secrets they're authorized to see, and unauthorized requests return 404 (not 403) to avoid leaking secret existence.
+Keybox also prevents enumeration attacks — callers can only fetch secrets they're authorized to see, and unauthorized requests return 403 (not 404) to avoid leaking secret existence.
 
 **Key design decisions:**
 - **No secret enumeration** — Garages can only access secrets explicitly granted to them, and cannot discover what other secrets exist.
