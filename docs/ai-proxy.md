@@ -19,7 +19,7 @@ AI development tools like Claude Code need to call AI providers (Anthropic, Open
 │  Garage Pod                                                  │
 │                                                               │
 │  Claude Code sends:                                          │
-│    POST http://ai-proxy.moto-system:8080/passthrough/        │
+│    POST http://moto-ai-proxy.moto-system:8080/passthrough/   │
 │         anthropic/v1/messages                                │
 │    x-api-key: {garage-svid-jwt}                              │
 │    {...request body}                                         │
@@ -43,11 +43,11 @@ The garage's environment variables point to the proxy:
 
 ```bash
 # Claude Code (Anthropic SDK)
-ANTHROPIC_BASE_URL=http://ai-proxy.moto-system:8080/passthrough/anthropic
+ANTHROPIC_BASE_URL=http://moto-ai-proxy.moto-system:8080/passthrough/anthropic
 ANTHROPIC_API_KEY={garage-svid-jwt}
 
 # OpenAI-compatible tools (litellm, langchain, etc.)
-OPENAI_BASE_URL=http://ai-proxy.moto-system:8080/v1
+OPENAI_BASE_URL=http://moto-ai-proxy.moto-system:8080/v1
 OPENAI_API_KEY={garage-svid-jwt}
 ```
 
@@ -190,7 +190,7 @@ The AI proxy runs as a bike engine in `moto-system` with 2 replicas for availabi
 
 - CPU: 100m (limit: 500m)
 - Memory: 128Mi (limit: 256Mi)
-- Service: `ai-proxy.moto-system:8080`
+- Service: `moto-ai-proxy.moto-system:8080`
 - SVID mounted at `/var/run/secrets/svid/svid.jwt`
 
 NetworkPolicy: allow ingress from garage namespaces, allow egress to keybox and internet.
