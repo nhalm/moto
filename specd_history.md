@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.2 (2026-03-13):** Fix `docs/architecture.md` line 194: change "using fake API key `garage-{id}`" to reference the SVID JWT — garages use their SVID JWT as the API key value, not a plain `garage-{id}` string. A bare garage ID would fail SVID signature verification.
+- **docs v0.2 (2026-03-13):** Fix `docs/ai-proxy.md` line 107: change "public key from moto-club" to "public key from keybox" — ai-proxy fetches the verifying key from keybox (`GET {keybox_url}/auth/verifying-key`), not from moto-club.
 - **docs v0.2 (2026-03-13):** Fix `docs/ai-proxy.md` line 111: change "Invalid or expired SVIDs return `401 Unauthorized`" — expired SVIDs actually return `403 Forbidden` (same as non-ready garages). Only missing/malformed tokens return 401. Update to reflect the code's distinction: missing/invalid → 401, expired/not-garage/not-ready → 403.
 - **docs v0.2 (2026-03-13):** Fix `docs/getting-started.md` line 179: change `ANTHROPIC_API_KEY="garage-abc123"` to use `$MOTO_GARAGE_SVID` — ai-proxy validates SVID JWTs, a bare garage ID string will return 401. The keybox curl on line 175 already uses `$MOTO_GARAGE_SVID` correctly.
 - **docs v0.2 (2026-03-13):** Fix `docs/deployment.md` line 257: remove link to `specs/compliance.md` — docs must be self-contained with no `specs/` links (will break on wiki publish). Replace with inline summary or remove the reference.
