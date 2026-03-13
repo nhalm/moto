@@ -254,7 +254,7 @@ This deployment is designed for **local development and testing**. For productio
 
 - **Current:** No audit trail, secrets in K8s Secrets
 - **Production:**
-  - Full audit logging per SOC 2 requirements (see `specs/compliance.md`)
+  - Full audit logging per SOC 2 requirements (audit trail, least privilege, fail-closed defaults, encryption at rest)
   - Immutable audit log storage (S3, Cloud Storage)
   - Secrets never logged or exposed in error messages
   - Data encryption at rest for all PVCs
