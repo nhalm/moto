@@ -318,4 +318,4 @@ Features planned for later phases:
 - **Rate limiting** — moto-throttle middleware limits AI proxy requests per garage (prevents runaway costs)
 - **Audit log forwarding** — Ship audit events to external SIEM (Splunk, Datadog, etc.)
 
-These are documented in individual specs (e.g., `moto-cron.md`, `moto-club-websocket.md`) and will be implemented incrementally.
+These features are planned for future implementation and will be developed incrementally.
