@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.1 (2026-03-13):** Write `README.md` — project landing page: tagline, what Moto is, how-it-works diagram, doc links
 - **docs v0.1 (2026-03-13):** Write `docs/components.md` — reference table and short sections for each component
 - **docs v0.1 (2026-03-13):** Write `docs/ai-proxy.md` — the problem, how it works, passthrough vs unified, security, configuration
 - **docs v0.1 (2026-03-13):** Write `docs/security.md` — threat model, isolation layers, SPIFFE SVIDs, keybox encryption, network boundaries, compliance
