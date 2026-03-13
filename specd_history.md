@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.1 (2026-03-13):** Write `docs/ai-proxy.md` — the problem, how it works, passthrough vs unified, security, configuration
 - **docs v0.1 (2026-03-13):** Write `docs/security.md` — threat model, isolation layers, SPIFFE SVIDs, keybox encryption, network boundaries, compliance
 - **docs v0.1 (2026-03-13):** Write `docs/deployment.md` — `make deploy`, what runs where, secrets, port-forward, production considerations
 - **docs v0.1 (2026-03-13):** Write `docs/getting-started.md` — prerequisites, `moto dev up` walkthrough, first garage, stopping
