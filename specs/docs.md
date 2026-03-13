@@ -2,11 +2,15 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
-| Status | Ready to Rip |
+| Version | 0.3 |
+| Status | Ripping |
 | Last Updated | 2026-03-13 |
 
 ## Changelog
+
+### v0.3 (2026-03-13)
+- Add wiki structure: `docs/home.md` (wiki home page), `docs/_Sidebar.md` (navigation), `docs/_Footer.md` (repo links)
+- Wiki publish workflow copies `home.md` as `Home.md` per GitHub Wiki convention
 
 ### v0.2 (2026-03-13)
 - Fix deployment.md description: ai-proxy is 2 replicas, not 3. Change "3-replica Deployments" to specify per-component replica counts.
@@ -23,6 +27,7 @@ The `docs/` folder is the single source of truth. A GitHub Action publishes it t
 **Scope:**
 - Project README.md (landing page)
 - `docs/` folder with topical pages
+- Wiki structure: home page, sidebar navigation, footer
 - GitHub Action to publish `docs/` to the GitHub Wiki
 
 **Out of scope:**
@@ -118,13 +123,39 @@ Reference page for every major component:
 
 Each component gets a short section: what it does, key design decisions, how it fits into the system.
 
+### docs/home.md
+
+Wiki home page. Serves as the entry point when visiting the GitHub Wiki. Contains:
+
+- **Header** — Project name, tagline
+- **How it works** — Brief text diagram of the system
+- **Documentation links** — Organized by category (Getting Started, Architecture, Operations, Security)
+- **Quick start** — Minimal commands to get running
+- **Key concepts** — Glossary table (Garage, Bike, Club, Keybox, AI Proxy, Engine)
+
+The wiki publish workflow copies this as `Home.md` (GitHub Wiki convention for the landing page).
+
+### docs/_Sidebar.md
+
+Wiki navigation sidebar. Lists all doc pages organized by category:
+- Getting Started (Home, Getting Started)
+- Architecture (Architecture, Components)
+- Operations (Deployment)
+- Security (Security, AI Proxy)
+- External links (GitHub repo, issues)
+
+### docs/_Footer.md
+
+Wiki footer with contributing link and auto-sync notice.
+
 ### GitHub Action: Wiki Publish
 
 A workflow at `.github/workflows/wiki-publish.yml`:
 
-- **Trigger** — Push to `main` that changes `docs/**`
-- **Action** — Checks out the wiki repo, syncs `docs/` contents, commits and pushes
-- **Mapping** — Each `docs/foo.md` becomes a wiki page. `docs/README.md` or a `docs/Home.md` becomes the wiki sidebar/home if needed.
+- **Trigger** — Push to `main` that changes `docs/**`, or manual `workflow_dispatch`
+- **Permissions** — `contents: write` with explicit `GITHUB_TOKEN`
+- **Action** — Checks out the wiki repo, syncs `docs/` contents (including `_Sidebar.md` and `_Footer.md`), commits and pushes to `origin master`
+- **Mapping** — Each `docs/foo.md` becomes a wiki page. `docs/home.md` is copied as `Home.md` (GitHub Wiki home page convention).
 
 ## Notes
 

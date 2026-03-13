@@ -33,9 +33,9 @@ jobs:
           # Copy all docs to wiki root
           cp docs/*.md wiki/
 
-          # If docs/README.md exists, also copy it as Home.md for wiki home page
-          if [ -f docs/README.md ]; then
-            cp docs/README.md wiki/Home.md
+          # home.md becomes Home.md (GitHub Wiki convention)
+          if [ -f wiki/home.md ]; then
+            cp wiki/home.md wiki/Home.md
           fi
 
           echo "Wiki files synchronized:"
