@@ -12,6 +12,5 @@ Read it in full at the start of each iteration.
 
 ## docs v0.1
 
-- Fix `docs/security.md` keybox egress port: change 9090 to 8080 (lines 66, 207) — port 9090 is metrics, API is on 8080 per `keybox.yaml` Service definition
 - Fix `docs/getting-started.md` keybox in-cluster port: change `:9090` to `:8080` in curl example (line 176) — keybox API is on port 8080, not 9090
 - Fix `docs/deployment.md` ai-proxy replica count: change 3 to 2 (lines 34, 216) — `bike.toml` and K8s manifest specify `replicas: 2`
