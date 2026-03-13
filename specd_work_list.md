@@ -9,7 +9,3 @@ Read it in full at the start of each iteration.
 - Check this file for items blocked on what you just completed — remove resolved `(blocked: ...)` annotations
 - Keep this file small — it should fit comfortably in context
 -->
-
-## docs v0.1
-
-- Write `.github/workflows/wiki-publish.yml` — publish `docs/` to GitHub Wiki on push to main
