@@ -31,7 +31,7 @@ k3d cluster "moto"
     │   └── moto_keybox database
     ├── moto-keybox (Deployment, 3 replicas)
     ├── moto-club (Deployment, 3 replicas)
-    └── moto-ai-proxy (Deployment, 3 replicas)
+    └── moto-ai-proxy (Deployment, 2 replicas)
 ```
 
 **Garages are dynamic:** When you run `moto garage open`, moto-club creates a new namespace (e.g., `moto-garage-abc123`) with the garage pod, supporting services, and NetworkPolicies. These are ephemeral and cleaned up when the garage closes.
@@ -43,7 +43,7 @@ k3d cluster "moto"
 | **postgres** | `moto-system` | Persistent database for club and keybox | 1 (StatefulSet) |
 | **moto-keybox** | `moto-system` | Secrets manager, SPIFFE identity issuer | 3 |
 | **moto-club** | `moto-system` | Orchestrator, garage lifecycle manager | 3 |
-| **moto-ai-proxy** | `moto-system` | AI credential-injecting proxy | 3 |
+| **moto-ai-proxy** | `moto-system` | AI credential-injecting proxy | 2 |
 | **garage pods** | `moto-garage-*` | AI dev environment (created on-demand) | 1 per garage |
 
 All services in `moto-system` are ClusterIP — they're accessed by the CLI via `kubectl port-forward` (automatic on deploy).
