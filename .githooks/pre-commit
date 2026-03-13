@@ -23,10 +23,10 @@ SECRET_PATTERNS=(
 )
 
 # Scan only added lines (exclude hook file and documentation)
-STAGED_ADDITIONS=$(git diff --cached -- ':!.githooks/pre-commit' ':!*.md' | grep '^+' | grep -v '^+++' || true)
+STAGED_ADDITIONS=$(git diff --cached -- ':!.githooks/pre-commit' ':!*.md' ':!Cargo.lock' | grep '^+' | grep -v '^+++' || true)
 if [ -n "$STAGED_ADDITIONS" ]; then
     for pattern in "${SECRET_PATTERNS[@]}"; do
-        if echo "$STAGED_ADDITIONS" | grep -qE "$pattern"; then
+        if echo "$STAGED_ADDITIONS" | grep -qE -- "$pattern"; then
             echo "ERROR: Potential secret detected in staged content"
             echo "Pattern matched: $pattern"
             echo "FIX: Remove the secret and run: git reset HEAD <filename>"

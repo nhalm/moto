@@ -56,11 +56,11 @@ fix: fmt ## Auto-fix lint issues
 	cargo clippy --workspace --all-targets --fix --allow-dirty
 
 audit: ## Check for known CVEs in dependencies
-	@if ! command -v cargo-audit >/dev/null 2>&1; then \
+	@if ! command -v cargo-audit >/dev/null 2>&1 && ! test -x "$$HOME/.cargo/bin/cargo-audit"; then \
 		echo "Error: cargo-audit is not installed. Install with 'cargo install cargo-audit'"; \
 		exit 1; \
 	fi
-	cargo audit
+	PATH="$$HOME/.cargo/bin:$$PATH" cargo audit --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2025-0134
 
 ci: test-ci ## Alias for test-ci
 

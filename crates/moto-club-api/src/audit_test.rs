@@ -439,8 +439,8 @@ mod integration_tests {
         Mock::given(method("GET"))
             .and(path("/audit/logs"))
             .and(header("authorization", "Bearer test-keybox-token"))
-            // Verify limit is present but offset is NOT
-            .and(query_param("limit", "5"))
+            // Verify limit is fetch_limit (offset + limit = 2 + 5 = 7) but offset is NOT forwarded
+            .and(query_param("limit", "7"))
             .and(query_param("principal_id", test_principal.as_str()))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "entries": [],
