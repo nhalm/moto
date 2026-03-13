@@ -40,7 +40,7 @@ Flow: CLI → moto-club → K8s namespace + pod + NetworkPolicy + WireGuard peer
 
 ## Quickstart
 
-See **[docs/getting-started.md](docs/getting-started.md)** for prerequisites and a walkthrough of your first garage.
+See the **[Getting Started](https://github.com/nhalm/moto/wiki/getting-started)** guide for prerequisites and a walkthrough of your first garage.
 
 Quick version:
 ```bash
@@ -55,12 +55,12 @@ moto garage open
 
 | Page | Description |
 |------|-------------|
-| [architecture.md](docs/architecture.md) | Component map, design philosophy, data flow, motorcycle metaphor glossary |
-| [getting-started.md](docs/getting-started.md) | Prerequisites, `moto dev up` walkthrough, first garage, stopping |
-| [deployment.md](docs/deployment.md) | `make deploy`, what runs where, secrets, production considerations |
-| [security.md](docs/security.md) | Threat model, isolation layers, SPIFFE SVIDs, keybox encryption, compliance |
-| [ai-proxy.md](docs/ai-proxy.md) | How AI credentials flow, passthrough vs unified, security, configuration |
-| [components.md](docs/components.md) | Reference table and short sections for each component |
+| [Architecture](https://github.com/nhalm/moto/wiki/architecture) | Component map, design philosophy, data flow, motorcycle metaphor glossary |
+| [Getting Started](https://github.com/nhalm/moto/wiki/getting-started) | Prerequisites, `moto dev up` walkthrough, first garage, stopping |
+| [Deployment](https://github.com/nhalm/moto/wiki/deployment) | `make deploy`, what runs where, secrets, production considerations |
+| [Security](https://github.com/nhalm/moto/wiki/security) | Threat model, isolation layers, SPIFFE SVIDs, keybox encryption, compliance |
+| [AI Proxy](https://github.com/nhalm/moto/wiki/ai-proxy) | How AI credentials flow, passthrough vs unified, security, configuration |
+| [Components](https://github.com/nhalm/moto/wiki/components) | Reference table and short sections for each component |
 
 ## License
 
