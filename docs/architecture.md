@@ -191,7 +191,7 @@ When a user runs `moto garage open`, here's what happens:
 Once the garage is running, the agent can:
 
 - Fetch secrets from keybox (using SVID for auth)
-- Call AI providers through ai-proxy (using fake API key `garage-{id}`, which ai-proxy translates to real keys)
+- Call AI providers through ai-proxy (using its SVID JWT as the API key value, which ai-proxy validates and translates to real provider keys)
 - Install packages, clone repos, build code—anything a developer would do
 
 ## The Motorcycle Metaphor
