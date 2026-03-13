@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.2 (2026-03-13):** Fix `docs/ai-proxy.md` in-cluster DNS hostnames (lines 22, 46, 50, 193): change `ai-proxy.moto-system:8080` to `moto-ai-proxy.moto-system:8080` — K8s Service is named `moto-ai-proxy` (per `infra/k8s/moto-system/ai-proxy.yaml` line 16). Users following the docs to configure garage env vars (`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`) would get DNS resolution failures.
+- **docs v0.2 (2026-03-13):** Fix `docs/getting-started.md` port override env vars (line 279): change `CLUB_PORT=28080 KEYBOX_PORT=29090 AI_PROXY_PORT=27070` to use actual env var names `MOTO_CLUB_BIND_ADDR`, `MOTO_KEYBOX_BIND_ADDR`, `MOTO_AI_PROXY_BIND_ADDR` with full address values — the documented vars don't exist and are silently ignored.
 - **docs v0.2 (2026-03-13):** Fix `docs/ai-proxy.md` KEYBOX_URL default (line 153): change `http://keybox.moto-system:8080` to `http://moto-keybox.moto-system:8080` — must match actual K8s service name in `ai-proxy.yaml` line 89.
 - **docs v0.2 (2026-03-13):** Fix `docs/getting-started.md` in-cluster DNS hostnames (lines 176, 180): change `keybox.moto-system.svc.cluster.local` to `moto-keybox.moto-system.svc.cluster.local` and `ai-proxy.moto-system.svc.cluster.local` to `moto-ai-proxy.moto-system.svc.cluster.local` — K8s services are named `moto-keybox` and `moto-ai-proxy` per infra/k8s manifests.
 - **docs v0.2 (2026-03-13):** Fix `docs/getting-started.md` local dev ports: change keybox from `:19090` to `:8090` and ai-proxy from `:17070` to `:18090` (lines 92-98, 110, 113, 276) — these are the `moto dev up` output and health check URLs. Code defaults are `0.0.0.0:8090` (keybox) and `0.0.0.0:18090` (ai-proxy) per `dev.rs` lines 37, 45.
