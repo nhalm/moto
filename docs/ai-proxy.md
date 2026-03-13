@@ -150,7 +150,7 @@ The AI proxy runs in the `moto-system` namespace. Garage NetworkPolicies already
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `MOTO_AI_PROXY_BIND_ADDR` | `0.0.0.0:8080` | Listen address |
-| `MOTO_AI_PROXY_KEYBOX_URL` | `http://keybox.moto-system:8080` | Keybox endpoint |
+| `MOTO_AI_PROXY_KEYBOX_URL` | `http://moto-keybox.moto-system:8080` | Keybox endpoint |
 | `MOTO_AI_PROXY_SVID_FILE` | `/var/run/secrets/svid/svid.jwt` | Path to service SVID |
 | `MOTO_AI_PROXY_CLUB_URL` | `http://moto-club.moto-system:8080` | moto-club endpoint |
 | `MOTO_AI_PROXY_KEY_CACHE_TTL_SECS` | `300` | API key cache duration (5 min) |
