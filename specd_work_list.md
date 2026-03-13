@@ -13,7 +13,6 @@ Read it in full at the start of each iteration.
 ## docs v0.1
 
 - Write `README.md` — project landing page: tagline, what Moto is, how-it-works diagram, doc links
-- Write `docs/architecture.md` — component map, design philosophy, data flow, motorcycle metaphor glossary
 - Write `docs/getting-started.md` — prerequisites, `moto dev up` walkthrough, first garage, stopping
 - Write `docs/deployment.md` — `make deploy`, what runs where, secrets, port-forward, production considerations
 - Write `docs/security.md` — threat model, isolation layers, SPIFFE SVIDs, keybox encryption, network boundaries, compliance
