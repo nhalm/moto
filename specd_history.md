@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.1 (2026-03-13):** Fix `docs/getting-started.md` keybox in-cluster port: change `:9090` to `:8080` in curl example (line 176) — keybox API is on port 8080, not 9090
 - **docs v0.1 (2026-03-13):** Fix `docs/security.md` keybox egress port: change 9090 to 8080 (lines 66, 207) — port 9090 is metrics, API is on 8080 per `keybox.yaml` Service definition
 - **docs v0.1 (2026-03-13):** Fix `docs/getting-started.md` ai-proxy in-cluster port: change `:7070` to `:8080` in curl example (line 180) — ai-proxy listens on 8080 per `bike.toml` and K8s manifest
 - **docs v0.1 (2026-03-13):** Fix `docs/getting-started.md` registry port: change `localhost:5555` to `localhost:5050` (lines 73, 77, 86) — all other docs and k3d config use 5050
