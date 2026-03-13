@@ -173,11 +173,11 @@ free -h
 
 # Fetch a secret from keybox (requires MOTO_GARAGE_SVID env var)
 curl -H "Authorization: Bearer $MOTO_GARAGE_SVID" \
-     http://keybox.moto-system.svc.cluster.local:8080/secrets/example
+     http://moto-keybox.moto-system.svc.cluster.local:8080/secrets/example
 
 # Call an AI provider through the proxy
 export ANTHROPIC_API_KEY="$MOTO_GARAGE_SVID"
-curl -X POST http://ai-proxy.moto-system.svc.cluster.local:8080/passthrough/anthropic/v1/messages \
+curl -X POST http://moto-ai-proxy.moto-system.svc.cluster.local:8080/passthrough/anthropic/v1/messages \
      -H "Authorization: Bearer $ANTHROPIC_API_KEY" \
      -H "Content-Type: application/json" \
      -d '{"model": "claude-3-5-sonnet-20241022", "messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 100}'
