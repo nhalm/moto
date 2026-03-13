@@ -267,4 +267,4 @@ The following are SOC 2 gaps but acceptable for initial deployments:
 - **Centralized log aggregation:** No ELK/Loki/Grafana pipeline yet
 - **Tamper-evident audit logs:** No hash chaining or signed entries
 
-See [specs/compliance.md](../specs/compliance.md) for the full SOC 2 control mapping.
+See the Trust Service Criteria table above for the full SOC 2 control mapping.
