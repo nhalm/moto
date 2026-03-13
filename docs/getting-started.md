@@ -70,11 +70,11 @@ moto dev up
 Behind the scenes, this command performs **10 steps**:
 
 1. **Creates k3d cluster** — Spins up a local Kubernetes cluster named `moto-dev` using k3d
-2. **Sets up local registry** — Creates a Docker registry at `localhost:5555` for container images
+2. **Sets up local registry** — Creates a Docker registry at `localhost:5050` for container images
 3. **Starts Postgres (Docker Compose)** — Runs Postgres 15 for moto-club, keybox, and audit logs
 4. **Generates secrets** — Creates master encryption keys, service tokens, and database credentials (stored in `.dev/k8s-secrets/`)
 5. **Builds dev container** — Uses Nix to build the garage container image (~3GB, includes Rust toolchain and dev tools)
-6. **Pushes image to registry** — Tags and pushes the dev container to `localhost:5555/moto-garage:latest`
+6. **Pushes image to registry** — Tags and pushes the dev container to `localhost:5050/moto-garage:latest`
 7. **Starts moto-club** — Runs the orchestrator service via `cargo run` (watches for code changes)
 8. **Starts keybox** — Runs the secrets manager via `cargo run`
 9. **Starts ai-proxy** — Runs the credential-injecting reverse proxy via `cargo run`
@@ -83,7 +83,7 @@ Behind the scenes, this command performs **10 steps**:
 **What you'll see:**
 ```
 [moto] Creating k3d cluster...
-[moto] Starting local registry at localhost:5555...
+[moto] Starting local registry at localhost:5050...
 [moto] Starting Postgres (docker-compose)...
 [moto] Generating secrets...
 [moto] Building dev container (this may take a few minutes)...
