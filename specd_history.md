@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.1 (2026-03-13):** Fix `docs/getting-started.md` ai-proxy in-cluster port: change `:7070` to `:8080` in curl example (line 180) — ai-proxy listens on 8080 per `bike.toml` and K8s manifest
+- **docs v0.1 (2026-03-13):** Fix `docs/getting-started.md` registry port: change `localhost:5555` to `localhost:5050` (lines 73, 77, 86) — all other docs and k3d config use 5050
 - **docs v0.1 (2026-03-13):** Fix `docs/components.md` keybox anti-enumeration status code: change 404 to 403 (line 66) — code returns 403 for both "not found" and "access denied" (`moto-keybox/src/api.rs` line 621)
 - **docs v0.1 (2026-03-13):** Fix `docs/security.md` SPIFFE trust domain: change `moto.internal` to `moto.local` (lines 133, 134, 139) — must match code (`moto-keybox/src/types.rs` TRUST_DOMAIN) and other docs
 - **docs v0.1 (2026-03-13):** Write `.github/workflows/wiki-publish.yml` — publish `docs/` to GitHub Wiki on push to main
