@@ -276,7 +276,7 @@ Now that you have a working garage, you can:
 If port 18080, 8090, or 18090 is already in use, edit the port mappings in `docker-compose.yml` or pass custom ports via environment variables:
 
 ```bash
-CLUB_PORT=28080 KEYBOX_PORT=29090 AI_PROXY_PORT=27070 moto dev up
+MOTO_CLUB_BIND_ADDR=0.0.0.0:28080 MOTO_KEYBOX_BIND_ADDR=0.0.0.0:29090 MOTO_AI_PROXY_BIND_ADDR=0.0.0.0:27070 moto dev up
 ```
 
 ### Container Build Fails
