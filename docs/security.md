@@ -130,13 +130,13 @@ Moto uses SPIFFE-inspired identity tokens called **SVIDs** (SPIFFE Verifiable Id
 3. **No bearer token risk:** SVIDs are short-lived (15 min) and bound to pod UID. If a pod is deleted, its SVID becomes invalid immediately.
 
 **SPIFFE ID format:**
-- Garages: `spiffe://moto.internal/garage/{garage_id}`
-- Bikes: `spiffe://moto.internal/bike/{bike_id}`
+- Garages: `spiffe://moto.local/garage/{garage_id}`
+- Bikes: `spiffe://moto.local/bike/{bike_id}`
 
 **Claims:**
 ```json
 {
-  "spiffe_id": "spiffe://moto.internal/garage/g-abc123",
+  "spiffe_id": "spiffe://moto.local/garage/g-abc123",
   "pod_uid": "12345678-abcd-1234-abcd-1234567890ab",
   "principal_type": "Garage",
   "exp": 1678886400

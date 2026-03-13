@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.1 (2026-03-13):** Fix `docs/security.md` SPIFFE trust domain: change `moto.internal` to `moto.local` (lines 133, 134, 139) — must match code (`moto-keybox/src/types.rs` TRUST_DOMAIN) and other docs
 - **docs v0.1 (2026-03-13):** Write `.github/workflows/wiki-publish.yml` — publish `docs/` to GitHub Wiki on push to main
 - **docs v0.1 (2026-03-13):** Write `README.md` — project landing page: tagline, what Moto is, how-it-works diagram, doc links
 - **docs v0.1 (2026-03-13):** Write `docs/components.md` — reference table and short sections for each component
