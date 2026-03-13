@@ -60,6 +60,12 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | [local-dev](local-dev.md) | Ripping | Local dev stack: cargo run + docker-compose |
 | [service-deploy](service-deploy.md) | Ripping | K8s deployment of moto-club, keybox, postgres |
 
+## Cross-cutting
+
+| Spec | Status | Description |
+|------|--------|-------------|
+| [docs](docs.md) | Ready to Rip | Project README, docs/ folder, wiki publishing |
+
 ## Phase 2: Future
 
 | Spec | Status | Description |
