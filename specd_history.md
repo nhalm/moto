@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **docs v0.2 (2026-03-13):** Fix `docs/getting-started.md` local dev ports: change keybox from `:19090` to `:8090` and ai-proxy from `:17070` to `:18090` (lines 92-98, 110, 113, 276) — these are the `moto dev up` output and health check URLs. Code defaults are `0.0.0.0:8090` (keybox) and `0.0.0.0:18090` (ai-proxy) per `dev.rs` lines 37, 45.
 - **docs v0.2 (2026-03-13):** Fix `docs/architecture.md` line 321: remove references to internal spec filenames (`moto-cron.md`, `moto-club-websocket.md`) — docs must be self-contained with no references to `specs/`. Replace with generic phrasing like "planned for future implementation".
 - **docs v0.2 (2026-03-13):** Fix `docs/security.md` lines 70 and 211: change moto-club port from 18080 to 8080 — 18080 is the `kubectl port-forward` host-side binding, not the in-cluster service port. NetworkPolicy operates on in-cluster ports; the K8s Service (`club.yaml`) exposes port 8080.
 - **docs v0.2 (2026-03-13):** Fix `docs/architecture.md` line 194: change "using fake API key `garage-{id}`" to reference the SVID JWT — garages use their SVID JWT as the API key value, not a plain `garage-{id}` string. A bare garage ID would fail SVID signature verification.
