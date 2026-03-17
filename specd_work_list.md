@@ -10,6 +10,4 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## docs v0.2
-
-(All items completed)
+(No remaining work items)

@@ -64,7 +64,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [docs](docs.md) | Ready to Rip | Project README, docs/ folder, wiki publishing |
+| [docs](docs.md) | Ripping | Project README, docs/ folder, wiki publishing |
 
 ## Phase 2: Future
 
