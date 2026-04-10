@@ -10,4 +10,20 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-(No remaining work items)
+## nix-removal v0.2
+
+- Create `infra/docker/Dockerfile.bike` — scratch-based bike image with CA certs, tzdata, non-root user
+- Create `infra/docker/Dockerfile.garage` — Wolfi (Chainguard) base with full dev toolchain matching dev-container.md tool list
+- Create `infra/docker/Dockerfile.club` — multi-stage Rust build, copies binary onto moto-bike base
+- Create `infra/docker/Dockerfile.keybox` — multi-stage Rust build, copies binary onto moto-bike base
+- Update Makefile `build-*` targets to use `docker build` instead of Docker-wrapped Nix, remove `clean-nix-cache` target and `NIX_LINUX_SYSTEM` variable
+- Update `.github/workflows/ci.yml` — remove `nix-installer-action`, use `docker build` with buildx layer caching
+- Delete Nix files: `flake.nix`, `flake.lock`, `infra/pkgs/` (5 files), `infra/modules/` (4 files)
+- Update `infra/smoke-test.sh` to work with the new Docker-built garage image (if any Nix-specific paths changed)
+- Run `make build-garage && make test-garage` to validate the new garage image builds and passes smoke tests
+- Run `make build-club && make build-keybox` to validate engine images build correctly
+- Update spec `dev-container.md` — replace Nix dockerTools with Dockerfile approach, update philosophy, structure, build sections
+- Update spec `container-system.md` — replace build pipeline diagram, directory structure, Nix references
+- Update spec `makefile.md` — remove Nix prerequisites, update build target docs, remove `clean-nix-cache`
+- Update spec `project-structure.md` — replace `infra/modules/` and `infra/pkgs/` with `infra/docker/`, remove `flake.nix`/`flake.lock`
+- Update specs with minor Nix references: `local-dev.md`, `pre-commit.md`, `garage-isolation.md`, `docs.md`
