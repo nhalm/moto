@@ -12,8 +12,6 @@ Read it in full at the start of each iteration.
 
 ## nix-removal v0.2
 
-- Create `infra/docker/Dockerfile.bike` — scratch-based bike image with CA certs, tzdata, non-root user
-- Create `infra/docker/Dockerfile.garage` — Wolfi (Chainguard) base with full dev toolchain matching dev-container.md tool list
 - Create `infra/docker/Dockerfile.club` — multi-stage Rust build, copies binary onto moto-bike base
 - Create `infra/docker/Dockerfile.keybox` — multi-stage Rust build, copies binary onto moto-bike base
 - Update Makefile `build-*` targets to use `docker build` instead of Docker-wrapped Nix, remove `clean-nix-cache` target and `NIX_LINUX_SYSTEM` variable
@@ -27,3 +25,4 @@ Read it in full at the start of each iteration.
 - Update spec `makefile.md` — remove Nix prerequisites, update build target docs, remove `clean-nix-cache`
 - Update spec `project-structure.md` — replace `infra/modules/` and `infra/pkgs/` with `infra/docker/`, remove `flake.nix`/`flake.lock`
 - Update specs with minor Nix references: `local-dev.md`, `pre-commit.md`, `garage-isolation.md`, `docs.md`
+Update specs with minor Nix references: `local-dev.md`, `pre-commit.md`, `garage-isolation.md`, `docs.md`
