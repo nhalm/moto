@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-10):** Create `infra/docker/Dockerfile.club` — multi-stage Rust build, copies binary onto moto-bike base
 - **nix-removal v0.2 (2026-04-10):** Create `infra/docker/Dockerfile.garage` — Wolfi (Chainguard) base with full dev toolchain matching dev-container.md tool list
 - **nix-removal v0.2 (2026-04-10):** Create `infra/docker/Dockerfile.bike` — scratch-based bike image with CA certs, tzdata, non-root user
 - **docs v0.2 (2026-03-13):** Fix `docs/ai-proxy.md` in-cluster DNS hostnames (lines 22, 46, 50, 193): change `ai-proxy.moto-system:8080` to `moto-ai-proxy.moto-system:8080` — K8s Service is named `moto-ai-proxy` (per `infra/k8s/moto-system/ai-proxy.yaml` line 16). Users following the docs to configure garage env vars (`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`) would get DNS resolution failures.

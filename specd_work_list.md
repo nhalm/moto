@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## nix-removal v0.2
 
-- Create `infra/docker/Dockerfile.club` — multi-stage Rust build, copies binary onto moto-bike base
 - Create `infra/docker/Dockerfile.keybox` — multi-stage Rust build, copies binary onto moto-bike base
 - Update Makefile `build-*` targets to use `docker build` instead of Docker-wrapped Nix, remove `clean-nix-cache` target and `NIX_LINUX_SYSTEM` variable
 - Update `.github/workflows/ci.yml` — remove `nix-installer-action`, use `docker build` with buildx layer caching
