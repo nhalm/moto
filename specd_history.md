@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-10):** Update `infra/smoke-test.sh` to work with the new Docker-built garage image (if any Nix-specific paths changed)
 - **nix-removal v0.2 (2026-04-10):** Delete Nix files: `flake.nix`, `flake.lock`, `infra/pkgs/` (5 files), `infra/modules/` (4 files)
 - **nix-removal v0.2 (2026-04-10):** Update `.github/workflows/ci.yml` — remove `nix-installer-action`, use `docker build` with buildx layer caching
 - **nix-removal v0.2 (2026-04-10):** Update Makefile `build-*` targets to use `docker build` instead of Docker-wrapped Nix, remove `clean-nix-cache` target and `NIX_LINUX_SYSTEM` variable
