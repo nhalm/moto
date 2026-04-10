@@ -30,8 +30,8 @@ Think of containers like motorcycle builds:
 
 **Core principles:**
 
-1. **Reproducible**: Nix dockerTools builds guarantee identical images from identical inputs
-2. **Layered**: `buildLayeredImage` creates efficient Docker layers automatically
+1. **Reproducible**: Docker builds with pinned base images and locked dependencies (`Cargo.lock`)
+2. **Layered**: Multi-stage Dockerfiles create efficient Docker layers
 3. **Minimal runtime**: Bike containers exclude all build tooling
 4. **Secure by default**: Non-root, no shell in production
 
@@ -43,14 +43,14 @@ Think of containers like motorcycle builds:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐                      ┌──────────────┐         │
-│  │  flake.nix   │                      │   flake.nix  │         │
-│  │ + modules/   │                      │ + Cargo.toml │         │
+│  │ Dockerfile   │                      │  Dockerfile  │         │
+│  │   .garage    │                      │    .bike     │         │
 │  └──────┬───────┘                      └──────┬───────┘         │
 │         │                                     │                  │
 │         ▼                                     ▼                  │
 │  ┌──────────────┐                      ┌──────────────┐         │
-│  │ nix build    │                      │ nix build    │         │
-│  │ (dockerTools)│                      │ (dockerTools)│         │
+│  │docker build  │                      │ docker build │         │
+│  │ (wolfi-base) │                      │ (wolfi-base) │         │
 │  └──────┬───────┘                      └──────┬───────┘         │
 │         │                                     │                  │
 │         ▼                                     ▼                  │
@@ -97,24 +97,18 @@ See [moto-bike.md](moto-bike.md) for full specification of the bike base image a
 
 ### Infrastructure Directory Structure
 
-Modular structure with packages and modules:
+Docker-based structure with Dockerfiles:
 
 ```
 moto/
-├── flake.nix                    # Root flake - devShells + crane + imports infra/pkgs
-├── flake.lock                   # Pinned dependencies (includes crane input)
+├── rust-toolchain.toml          # Pins Rust version
+├── .cargo/config.toml           # Cargo settings
 └── infra/
-    ├── pkgs/                    # Container package definitions
-    │   ├── default.nix          # Exports all packages
-    │   ├── moto-garage.nix      # Garage container definition
-    │   ├── moto-bike.nix        # Bike base image + mkBike helper
-    │   ├── moto-club.nix        # Club engine image (crane + bike)
-    │   └── moto-keybox.nix      # Keybox engine image (crane + bike)
-    ├── modules/                 # Reusable module components
-    │   ├── base.nix             # Core system tools
-    │   ├── dev-tools.nix        # Development tooling
-    │   ├── terminal.nix         # ttyd + tmux
-    │   └── wireguard.nix        # WireGuard tools
+    ├── docker/                  # Container definitions
+    │   ├── Dockerfile.garage    # Garage container definition
+    │   ├── Dockerfile.bike      # Bike base image
+    │   ├── Dockerfile.club      # Club engine image
+    │   └── Dockerfile.keybox    # Keybox engine image
     └── smoke-test.sh            # Container smoke tests
 ```
 
@@ -122,269 +116,107 @@ moto/
 
 | Benefit | Description |
 |---------|-------------|
-| Modular | Each `infra/modules/*.nix` provides a reusable component |
-| No collisions | Uses `buildEnv` in pkgs - Nix handles file conflicts |
-| Simple | Direct imports, no framework dependencies |
-| Composable | Modules return `{ contents, env }` for easy merging |
+| Standard | Universal Dockerfile format, no custom build systems |
+| Simple | Each Dockerfile is self-contained |
+| Portable | Works with any Docker-compatible tooling |
+| Transparent | Build steps are explicit, not abstracted |
 
 **Build commands:**
 
-See [makefile.md](makefile.md) for build targets. Local builds use Docker-wrapped Nix.
+See [makefile.md](makefile.md) for build targets. Local builds use standard `docker build`.
 
 ### Build Pipeline Architecture
 
-**Three-stage pipeline:**
+**Docker multi-stage builds:**
 
 ```
-Stage 1: Source         Stage 2: Build           Stage 3: Package
-─────────────────────   ─────────────────────    ─────────────────────
-flake.nix               nix build                dockerTools.buildLayeredImage
-flake.lock              cargo build --release    or
-Cargo.toml              (inside Nix)             streamLayeredImage
-Cargo.lock
-src/**
+Stage 1: Builder        Stage 2: Runtime
+─────────────────────   ─────────────────────
+FROM wolfi-base         FROM moto-bike (scratch)
+Install build tools     COPY binary from builder
+cargo build --release   Minimal runtime image
 ```
 
-**Key insight:** Nix handles the build-vs-runtime separation automatically. The build stage has full toolchain; the output is a minimal closure.
+**Key insight:** Multi-stage Dockerfiles separate build and runtime environments. The builder stage has the full Rust toolchain; the final image contains only the binary.
 
-**Rust builds use crane.** Engine packages (`moto-club.nix`, `moto-keybox.nix`) receive `craneLib` from `flake.nix` and use `craneLib.buildPackage` instead of `rustPlatform.buildRustPackage`. This eliminates manual `cargoHash` maintenance — crane vendors dependencies directly from `Cargo.lock`.
+**Rust builds use standard cargo.** Engine images (`Dockerfile.club`, `Dockerfile.keybox`) use multi-stage builds: a Wolfi builder stage compiles the Rust binary, then copies it onto the `moto-bike` base. Docker layer caching of the dependency build step provides efficient incremental builds.
 
-### Complete Flake Example
+### Dockerfile Examples
 
-Engine binaries (moto-club, moto-keybox) MUST be built with crane. Crane reads `Cargo.lock` directly to vendor dependencies — no manual `cargoHash` required. When `Cargo.lock` changes (adding/removing dependencies), builds just work without updating hashes.
+**Garage container** (`infra/docker/Dockerfile.garage`):
 
-`flake.nix` with crane for Rust builds:
+Single-stage build from Wolfi base with all dev tools:
 
-```nix
-{
-  description = "Moto - fintech infrastructure";
+```dockerfile
+FROM cgr.dev/chainguard/wolfi-base:latest
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    crane.url = "github:ipetkov/crane";
-  };
+# Install tools via apk
+RUN apk add --no-cache \
+    rust cargo \
+    git bash curl \
+    kubectl k9s \
+    postgresql-client redis \
+    ripgrep fd jq
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay, crane }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        overlays = [ (import rust-overlay) ];
-        pkgs = import nixpkgs { inherit system overlays; };
+# Install tools from release binaries (not in Wolfi repos)
+RUN curl -L https://github.com/jj-vcs/jj/releases/download/v0.15.0/jj-v0.15.0-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/bin
 
-        # Pin Rust version
-        rustToolchain = pkgs.rust-bin.stable."1.88.0".minimal.override {
-          extensions = [ "rust-src" "rust-analyzer" "rustfmt" "clippy" ];
-        };
-        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+WORKDIR /workspace
+USER root
+ENV RUST_BACKTRACE=1
 
-        # Common source filtering
-        src = craneLib.cleanCargoSource ./.;
-
-        # Build deps once (cached separately)
-        commonArgs = {
-          inherit src;
-          strictDeps = true;
-          nativeBuildInputs = with pkgs; [ pkg-config stdenv.cc lld ];
-          buildInputs = with pkgs; [ openssl ];
-        };
-
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-
-        # Individual engine builds
-        moto-club = craneLib.buildPackage (commonArgs // {
-          inherit cargoArtifacts;
-          cargoExtraArgs = "-p moto-club";
-        });
-
-        moto-vault = craneLib.buildPackage (commonArgs // {
-          inherit cargoArtifacts;
-          cargoExtraArgs = "-p moto-vault";
-        });
-
-        # Garage dev container
-        garage = pkgs.dockerTools.buildLayeredImage {
-          name = "moto-garage";
-          tag = "latest";
-          contents = with pkgs; [
-            # From dev-container.md - full toolchain
-            rustToolchain
-            cargo-watch cargo-nextest cargo-audit cargo-deny
-            git jujutsu gh
-            postgresql redis
-            curl jq yq ripgrep fd
-            kubectl k9s
-            bashInteractive coreutils tini cacert
-          ];
-          config = {
-            Entrypoint = [ "${pkgs.tini}/bin/tini" "--" ];
-            Cmd = [ "${pkgs.bashInteractive}/bin/bash" ];
-            WorkingDir = "/workspace";
-            User = "root";
-            Env = [
-              "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-              "RUST_BACKTRACE=1"
-            ];
-          };
-        };
-
-        # Bike base image
-        moto-bike = pkgs.dockerTools.buildLayeredImage {
-          name = "moto-bike";
-          tag = "latest";
-          contents = [ pkgs.cacert ];
-          config = {
-            User = "1000:1000";
-            Env = [ "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" ];
-          };
-          fakeRootCommands = ''
-            ${pkgs.dockerTools.shadowSetup}
-            groupadd -g 1000 moto
-            useradd -u 1000 -g moto -d / -s /sbin/nologin moto
-          '';
-          enableFakechroot = true;
-        };
-
-        # Final image builder: bike base + engine binary
-        mkBike = { name, package }: pkgs.dockerTools.buildLayeredImage {
-          name = "moto-${name}";
-          tag = "latest";
-          fromImage = moto-bike;
-          contents = [ package ];
-          config = {
-            Entrypoint = [ "${package}/bin/${name}" ];
-            User = "1000:1000";
-            ExposedPorts = { "8080/tcp" = {}; "8081/tcp" = {}; "9090/tcp" = {}; };
-          };
-        };
-
-      in {
-        packages = {
-          inherit moto-club moto-vault moto-bike;
-          moto-garage = garage;
-          # Final images built with mkBike
-          moto-club-image = mkBike { name = "club"; package = moto-club; };
-          moto-vault-image = mkBike { name = "vault"; package = moto-vault; };
-          default = moto-club;
-        };
-
-        devShells.default = craneLib.devShell {
-          packages = with pkgs; [ cargo-watch rust-analyzer ];
-        };
-
-        # Checks run by `nix flake check`
-        checks = {
-          inherit moto-club moto-vault;
-          clippy = craneLib.cargoClippy (commonArgs // {
-            inherit cargoArtifacts;
-            cargoClippyExtraArgs = "--all-targets -- --deny warnings";
-          });
-          fmt = craneLib.cargoFmt { inherit src; };
-          audit = craneLib.cargoAudit { inherit src; advisory-db = inputs.advisory-db; };
-        };
-      }
-    );
-}
+CMD ["/bin/bash"]
 ```
 
-**Key points:**
-- `eachSystem` limited to Linux (containers don't build on macOS)
-- `crane.buildDepsOnly` caches dependency compilation
-- `mkEngine` helper creates consistent bike containers
-- `checks` runs clippy, fmt, audit via `nix flake check`
+**Bike base image** (`infra/docker/Dockerfile.bike`):
 
-### Nix Image Building
+Minimal runtime-only image from scratch:
 
-**Preferred approach:** Pure Nix with `dockerTools.buildLayeredImage`.
+```dockerfile
+FROM cgr.dev/chainguard/wolfi-base:latest AS builder
 
-Why layers matter:
-```
-Layer 1: System libraries (glibc, openssl)     ← rarely changes
-Layer 2: CA certificates                        ← rarely changes
-Layer 3: Application binary                     ← changes per build
-```
+# Extract CA certificates and timezone data
+RUN mkdir -p /runtime/etc/ssl/certs /runtime/usr/share/zoneinfo
+RUN cp -r /etc/ssl/certs/* /runtime/etc/ssl/certs/
+RUN cp -r /usr/share/zoneinfo/* /runtime/usr/share/zoneinfo/
 
-**Garage image** (defined in `infra/pkgs/moto-garage.nix`):
+FROM scratch
+COPY --from=builder /runtime /
 
-```nix
-# infra/pkgs/moto-garage.nix
-{ pkgs, rustToolchain }:
-let
-  # Import modules
-  base = import ../modules/base.nix { inherit pkgs; };
-  devTools = import ../modules/dev-tools.nix { inherit pkgs rustToolchain; };
-  # ... other modules
+# Create non-root user
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
 
-  allContents = base.contents ++ devTools.contents;
-
-  # Use buildEnv to handle file collisions
-  garageEnv = pkgs.buildEnv {
-    name = "garage-env";
-    paths = allContents;
-  };
-in
-pkgs.dockerTools.buildLayeredImage {
-  name = "moto-garage";
-  tag = "latest";
-  contents = [ garageEnv ];
-  config = {
-    Cmd = [ "/bin/bash" ];
-    WorkingDir = "/workspace";
-    Env = base.env ++ devTools.env;
-  };
-}
+USER 1000:1000
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt
 ```
 
-**Key points:**
-- `buildLayeredImage` produces tarball for `docker load`
-- `buildEnv` handles file collisions automatically (required for packages with overlapping dirs like `share/`)
-- Modules in `infra/modules/` provide reusable package sets
+**Engine image** (`infra/docker/Dockerfile.club`):
 
-**Bike base + final images** (defined in `infra/bike.nix` flake-parts module):
+Multi-stage build: compile with Wolfi, run on bike base:
 
-```nix
-# infra/flake/bike.nix
-{ inputs, ... }: {
-  perSystem = { pkgs, self', ... }:
-  let
-    # Bike base image - minimal runtime
-    moto-bike = pkgs.dockerTools.buildLayeredImage {
-      name = "moto-bike";
-      tag = "latest";
-      contents = [ pkgs.cacert ];
-      config = {
-        User = "1000:1000";
-        Env = [ "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" ];
-      };
-      fakeRootCommands = ''
-        ${pkgs.dockerTools.shadowSetup}
-        groupadd -g 1000 moto
-        useradd -u 1000 -g moto -d / -s /sbin/nologin moto
-      '';
-      enableFakechroot = true;
-    };
+```dockerfile
+# Build stage
+FROM cgr.dev/chainguard/wolfi-base:latest AS builder
 
-    # Build final image: bike base + engine binary
-    mkBike = { name, package }: pkgs.dockerTools.buildLayeredImage {
-      name = "moto-${name}";
-      tag = "latest";
-      fromImage = moto-bike;
-      contents = [ package ];
-      config = {
-        Entrypoint = [ "${package}/bin/${name}" ];
-        User = "1000:1000";
-        ExposedPorts = {
-          "8080/tcp" = {};
-          "8081/tcp" = {};
-          "9090/tcp" = {};
-        };
-        WorkingDir = "/";
-        Env = [ "RUST_BACKTRACE=1" ];
-      };
-    };
+RUN apk add --no-cache rust cargo build-base openssl-dev
+
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+RUN cargo build --release --bin moto-club
+
+# Runtime stage
+FROM moto-bike:latest
+
+COPY --from=builder /build/target/release/moto-club /bin/moto-club
+
+USER 1000:1000
+EXPOSE 8080 8081 9090
+ENV RUST_BACKTRACE=1
+
+ENTRYPOINT ["/bin/moto-club"]
 ```
 
 ### Image Registry & Tagging Strategy
@@ -463,15 +295,26 @@ ghcr.io/nhalm/moto-club:v1.0.0
 
 ### Local Build Workflow
 
-**Docker-wrapped Nix:** Local builds run `nix build` inside a `nixos/nix` container. This works on any platform (Mac or Linux) without requiring a Linux builder configuration.
+**Standard Docker builds:** Local builds use `docker build` with standard Dockerfiles. This works on any platform (Mac, Linux, Windows) with Docker installed.
 
 The flow:
-1. Docker runs a `nixos/nix` container with the repo mounted
-2. Inside the container, `nix build .#moto-garage` runs
-3. Output is loaded via `docker load`
-4. Image is pushed to local registry
+1. Run `docker build -f infra/docker/Dockerfile.<image> -t <image-name> .`
+2. Image is available in local Docker
+3. Optionally push to registry with `docker push`
 
-Architecture is auto-detected - ARM Mac builds `aarch64-linux`, Intel builds `x86_64-linux`.
+For multi-architecture builds, use `docker buildx`:
+
+```bash
+# Create builder (one-time setup)
+docker buildx create --name moto-builder --use
+
+# Build for multiple architectures
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -f infra/docker/Dockerfile.club \
+  -t localhost:5050/moto-club:latest \
+  --push .
+```
 
 See [makefile.md](makefile.md) for build targets.
 
@@ -509,9 +352,9 @@ Bike containers have no shell, so testing is different:
 
 ### CI/CD Pipeline (future)
 
-**CI uses direct Nix, not Makefile.**
+**CI uses docker buildx for multi-architecture builds.**
 
-GitHub Actions installs Nix on Linux runners and runs `nix build` directly. This avoids Docker-in-Docker and is faster than the local Docker-wrapped approach.
+GitHub Actions uses Docker buildx with layer caching for efficient builds.
 
 ```yaml
 # .github/workflows/containers.yml
@@ -534,22 +377,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: cachix/install-nix-action@v27
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-
-      - uses: cachix/cachix-action@v15
-        with:
-          name: moto
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-        if: ${{ secrets.CACHIX_AUTH_TOKEN != '' }}
-
-      - name: Build garage image
-        run: nix build .#moto-garage
-
-      - name: Load image
-        run: docker load < result
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to registry
         if: github.event_name != 'pull_request'
@@ -559,39 +388,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push image
-        if: github.event_name != 'pull_request'
-        run: |
-          SHA=$(git rev-parse --short HEAD)
-          docker tag moto-garage:latest ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-garage:$SHA
-          docker tag moto-garage:latest ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-garage:latest
-          docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-garage:$SHA
-          docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-garage:latest
+      - name: Build and push garage image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile.garage
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-garage:latest
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-garage:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   build-bikes:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        engine: [club, vault, proxy]
+        engine: [club, keybox]
     steps:
       - uses: actions/checkout@v4
 
-      - uses: cachix/install-nix-action@v27
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build moto-${{ matrix.engine }} image
-        run: nix build .#moto-${{ matrix.engine }}-image
-
-      - name: Load and push
+      - name: Log in to registry
         if: github.event_name != 'pull_request'
-        run: |
-          docker load < result
-          SHA=$(git rev-parse --short HEAD)
-          docker tag moto-${{ matrix.engine }}:latest \
-            ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.engine }}:$SHA
-          docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.engine }}:$SHA
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.engine }} image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile.${{ matrix.engine }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.engine }}:latest
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_ORG }}/moto-${{ matrix.engine }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 ```
 
 ### Reproducibility Guarantees
@@ -600,28 +440,26 @@ jobs:
 
 | Input | How it's locked |
 |-------|-----------------|
-| Nix packages | `flake.lock` pins exact nixpkgs commit |
+| Base image | Wolfi base image pinned by digest (e.g., `@sha256:abc123...`) |
 | Rust toolchain | `rust-toolchain.toml` pins version |
 | Rust dependencies | `Cargo.lock` pins exact versions |
-| Build environment | Nix ensures identical build closure |
+| System packages | Wolfi packages pinned to specific versions in Dockerfile |
 
-**Verification:**
+**Best practices for reproducibility:**
 
-```bash
-# Two builds from same commit should produce identical images
-nix build .#moto-club-image
-sha256sum result
-# → same hash every time on same commit
-```
+1. **Pin base image by digest:**
+   ```dockerfile
+   FROM cgr.dev/chainguard/wolfi-base@sha256:abc123...
+   ```
 
-**Content-addressable builds:**
+2. **Pin package versions:**
+   ```dockerfile
+   RUN apk add --no-cache rust=1.88.0-r0 cargo=1.88.0-r0
+   ```
 
-Nix store paths include content hash:
-```
-/infra/store/abc123...-moto-club-1.0.0
-            ^^^^^^^
-            content hash
-```
+3. **Lock Rust dependencies:** `Cargo.lock` pins all transitive dependencies
+
+**Note:** Full reproducibility requires additional controls (SOURCE_DATE_EPOCH, --no-cache builds) beyond typical development workflows. For production, use image digests and signatures to verify provenance.
 
 ### Multi-Architecture Support
 
@@ -632,79 +470,75 @@ Nix store paths include content hash:
 
 **Build strategy:**
 
-```nix
-# flake.nix uses eachDefaultSystem
-flake-utils.lib.eachDefaultSystem (system: ...)
+Use `docker buildx` for multi-architecture builds:
 
-# Produces outputs for:
-# - x86_64-linux
-# - aarch64-linux
-# - x86_64-darwin (dev only)
-# - aarch64-darwin (dev only)
+```bash
+# Create builder (one-time setup)
+docker buildx create --name moto-builder --use
+
+# Build for multiple architectures
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -f infra/docker/Dockerfile.club \
+  -t ghcr.io/nhalm/moto-club:v1.0.0 \
+  --push .
 ```
 
 **CI multi-arch:**
 
-For releases, GitHub Actions builds both architectures and creates a multi-arch manifest:
+GitHub Actions uses `docker/build-push-action` with `platforms: linux/amd64,linux/arm64`. This automatically builds both architectures and creates a multi-arch manifest.
 
-```bash
-# Single tag, multiple architectures
-docker manifest create ghcr.io/nhalm/moto-club:v1.0.0 \
-  ghcr.io/nhalm/moto-club:v1.0.0-amd64 \
-  ghcr.io/nhalm/moto-club:v1.0.0-arm64
-```
+The result is a single tag (`moto-club:v1.0.0`) that works on both architectures — Docker automatically pulls the correct variant for the platform.
 
 ### Cache Strategy
 
-**Build caches:**
+**Docker layer caching:**
 
-| Cache | Location | Purpose |
-|-------|----------|---------|
-| Nix store | Cachix (`moto.cachix.org`) | Built Nix derivations |
-| Cargo deps | Crane `buildDepsOnly` | Rust dependency artifacts |
+Docker automatically caches layers based on instruction order. Structure Dockerfiles for maximum cache reuse:
 
-**Note:** sccache does NOT work with Nix sandboxed builds. Crane provides Rust caching by building dependencies separately:
+```dockerfile
+# Layer 1: Base image (rarely changes)
+FROM cgr.dev/chainguard/wolfi-base:latest
 
-```nix
-# In flake.nix: create craneLib and shared artifacts
-craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
-src = craneLib.cleanCargoSource ./.;
-commonArgs = {
-  inherit src;
-  strictDeps = true;
-  nativeBuildInputs = with pkgs; [ pkg-config stdenv.cc lld ];
-  buildInputs = [ pkgs.openssl ];
-  OPENSSL_NO_VENDOR = "1";
-};
-cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+# Layer 2: System packages (rarely changes)
+RUN apk add --no-cache rust cargo build-base
 
-# In moto-club.nix: build using shared artifacts (no cargoHash needed)
-craneLib.buildPackage (commonArgs // {
-  inherit cargoArtifacts;
-  cargoExtraArgs = "--package moto-club --bin moto-club";
-});
+# Layer 3: Dependency manifest (changes less often than code)
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release
+
+# Layer 4: Source code (changes frequently)
+COPY src ./src
+RUN cargo build --release
 ```
 
-**Engine packages receive `craneLib`, `commonArgs`, and `cargoArtifacts` from flake.nix** — they do not create their own. This ensures dependency artifacts are built once and shared across all engine builds.
+**Rust dependency caching:**
 
-**Layer caching:**
+Multi-stage Dockerfiles can cache Rust dependencies separately from application code:
 
-`buildLayeredImage` creates separate layers:
-```
-Layer 1: glibc, openssl     (shared across images)
-Layer 2: cacert              (shared across images)
-Layer 3: application binary  (unique per image)
+```dockerfile
+# Build dependencies layer (cached until Cargo.lock changes)
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release && rm -rf src
+
+# Build application (uses cached dependencies)
+COPY src ./src
+RUN cargo build --release
 ```
 
 **CI caching:**
 
+GitHub Actions uses `cache-from` and `cache-to` for cross-build caching:
+
 ```yaml
-- uses: cachix/cachix-action@v15
+- uses: docker/build-push-action@v5
   with:
-    name: moto
-    # Pulls from cache, pushes new builds
-    # Use read-only for PRs to prevent cache poisoning
+    cache-from: type=gha
+    cache-to: type=gha,mode=max
 ```
+
+This caches layers in GitHub Actions cache storage, speeding up subsequent builds.
 
 ### Image Signing (cosign)
 
@@ -716,8 +550,10 @@ Sign images to verify they came from your build pipeline.
 # macOS
 brew install cosign
 
-# Nix
-nix-shell -p cosign
+# Linux (binary install)
+curl -LO https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+chmod +x cosign-linux-amd64
+sudo mv cosign-linux-amd64 /usr/local/bin/cosign
 ```
 
 **Keyless signing (recommended for CI):**
@@ -790,8 +626,8 @@ Scan images for known CVEs before deployment.
 # macOS
 brew install trivy
 
-# Nix
-nix-shell -p trivy
+# Linux (binary install)
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
 # Or use Docker (no install needed)
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
@@ -811,7 +647,7 @@ trivy image --exit-code 1 --severity CRITICAL moto-club:latest
 trivy image --format json --output results.json moto-club:latest
 
 # Scan before pushing (recommended flow)
-nix build .#moto-club-image && docker load < result
+docker build -f infra/docker/Dockerfile.club -t moto-club:latest .
 trivy image --exit-code 1 --severity HIGH,CRITICAL moto-club:latest
 docker push localhost:5050/moto-club:latest
 ```
@@ -915,11 +751,11 @@ See [makefile.md](makefile.md) for build targets (`build-garage`, `test-garage`,
 **Size optimization for bikes:**
 
 1. **Single binary**: No shell, no package manager
-2. **Symbol stripping**: `strip` or Nix's `removeReferencesTo`
+2. **Symbol stripping**: Rust's `strip = true` in release profile
 3. **Release mode**: `cargo build --release` with LTO
 4. **Minimal deps**: Only cacert for TLS
 
-```nix
+```toml
 # Release profile in Cargo.toml
 [profile.release]
 lto = true
@@ -965,14 +801,15 @@ strip = true
 **Build failures:**
 
 ```bash
-# View detailed Nix build logs
-nix build .#moto-garage -L
+# View detailed Docker build logs
+docker build --progress=plain -f infra/docker/Dockerfile.garage -t moto-garage .
 
 # Keep failed build for inspection
-nix build .#moto-garage --keep-failed
+docker build --progress=plain --rm=false -f infra/docker/Dockerfile.garage -t moto-garage .
 
-# Check what's in a derivation
-nix path-info -rsh .#moto-garage
+# Check image size breakdown
+docker images moto-garage:latest
+docker history moto-garage:latest
 ```
 
 **Image inspection:**
@@ -1032,21 +869,25 @@ docker logs moto-registry
 |-------|-------|----------|
 | `OOM killed during build` | Rust compilation needs memory | Increase Docker memory limit or use remote builder |
 | `registry unreachable` | Registry not running | `make registry-start` |
-| `image not found` | Not loaded into Docker | `docker load < result` after nix build |
+| `image not found` | Not built yet | Run `docker build` first |
 | `permission denied` | Non-root in bike container | Check file ownership in image |
 | `no such file` in container | Binary path wrong | Check `Entrypoint` in image config |
+| `failed to solve` | Dockerfile syntax error | Check Dockerfile syntax and COPY paths |
 
-**Verifying reproducibility:**
+**Verifying image contents:**
 
 ```bash
-# Build twice and compare
-nix build .#moto-club-image -o result1
-nix build .#moto-club-image -o result2
-diff <(sha256sum result1) <(sha256sum result2)
-# Should be identical
+# Inspect image layers
+docker history moto-club:latest
 
-# Check derivation hash
-nix path-info --json .#moto-club-image | jq '.[] | .path'
+# Check image digest
+docker inspect moto-club:latest | jq '.[0].RepoDigests'
+
+# Extract and inspect binary
+docker create --name temp moto-club:latest
+docker cp temp:/bin/moto-club ./moto-club
+docker rm temp
+file ./moto-club
 ```
 
 ## Changelog
@@ -1131,12 +972,13 @@ nix path-info --json .#moto-club-image | jq '.[] | .path'
 
 ## Notes
 
-- Consider distroless base for bike containers (though Nix already builds minimal images)
-- `cargo audit` and `cargo deny` are included in the flake's `checks` output
-- Run `nix flake check` in CI for Nix validation (clippy, fmt, audit)
+- Wolfi base images provide minimal CVE footprint with daily package rebuilds
+- `cargo audit` and `cargo deny` should be run in CI as separate jobs
+- Consider using distroless or scratch-based final images for smallest attack surface
 
 ## References
 
-- [Nix dockerTools](https://nixos.org/manual/nixpkgs/stable/#sec-pkgs-dockerTools)
-- [Loom container system](https://github.com/ghuntley/loom) - reference architecture
+- [Wolfi (Chainguard)](https://github.com/wolfi-dev) - Minimal container OS with daily CVE fixes
+- [Docker multi-stage builds](https://docs.docker.com/build/building/multi-stage/) - Official Docker documentation
+- [Docker buildx](https://docs.docker.com/buildx/working-with-buildx/) - Multi-architecture builds
 - [OCI Image Spec](https://github.com/opencontainers/image-spec)
