@@ -2,148 +2,139 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.19 |
+| Version | 0.20 |
 | Status | Ripping |
-| Last Updated | 2026-03-05 |
+| Last Updated | 2026-04-10 |
 
 ## Overview
 
-The dev container is the garage environment - where Claude Code wrenches on the codebase. This is a **Nix-built container** using `dockerTools.buildLayeredImage` for fully reproducible, declarative builds.
+The dev container is the garage environment - where Claude Code wrenches on the codebase. This is a **Dockerfile-built container** using Wolfi (Chainguard) as the base image for minimal CVE footprint.
 
 **Key architecture decisions:**
-- **Nix dockerTools** for container builds (reproducible, layered images)
-- **Modular flake** using flake-parts for clean composition
-- **Root flake** at repo root (`moto/flake.nix`) exports container packages
-- **Multi-arch** via flake outputs (`x86_64-linux`, `aarch64-linux`)
+- **Wolfi base image** for minimal security vulnerabilities
+- **Standard Dockerfile** for universal compatibility
+- **Single-stage build** with full dev toolchain
+- **Multi-arch** via Docker buildx (`linux/amd64`, `linux/arm64`)
 
 ## Specification
 
 ### Philosophy
 
-- **Reproducible**: NixOS = same system configuration every time
-- **Declarative**: Entire OS defined in Nix, version-controlled
+- **Minimal CVE footprint**: Wolfi packages rebuilt daily by Chainguard
+- **Standard tooling**: Universal Dockerfiles, no custom build systems
 - **Complete**: Everything Claude Code needs to build, test, run
 - **Root access**: AI needs full control inside the sandbox
 - **Isolated**: Security comes from the container/namespace boundary
 
-### Why Nix dockerTools
+### Why Wolfi (Chainguard)
 
 | Approach | Description | Trade-off |
 |----------|-------------|-----------|
-| Pure Dockerfile | Install packages via apt/apk | Simple but not reproducible |
-| Dockerfile + Nix | Dockerfile shell, Nix inside | Mixed build systems |
-| **Nix dockerTools** | Build image entirely with Nix | Fully reproducible, layered, content-addressed |
+| Debian/Ubuntu | Large base with many packages | Large attack surface, slower CVE patches |
+| Alpine (musl) | Small base image | musl compatibility issues with Rust/openssl/libpq |
+| **Wolfi (glibc)** | Minimal base, daily rebuilds | Small footprint, glibc compatibility, fresh CVE fixes |
 
-We use Nix dockerTools because:
-- **Reproducible**: Same inputs always produce identical images (content-addressed)
-- **Layered**: `buildLayeredImage` creates efficient Docker layers automatically
-- **Modular**: Compose container contents from reusable Nix modules
-- **Multi-arch**: Flake outputs for both `x86_64-linux` and `aarch64-linux`
+We use Wolfi because:
+- **Minimal CVE footprint**: Packages rebuilt daily, fast security updates
+- **glibc-based**: No musl compatibility issues with Rust toolchain or PostgreSQL client libs
+- **Small base**: ~15MB base image
+- **apk package manager**: Simple, familiar Alpine-style package management
+- **Multi-arch**: Supports both `linux/amd64` and `linux/arm64`
 
 ### Project Structure
 
-Modular structure with packages and modules:
+Standard Docker build structure:
 
 ```
 moto/
-├── flake.nix                    # Root flake - devShells + imports infra/pkgs
-├── flake.lock                   # Pinned dependencies
+├── rust-toolchain.toml          # Pins Rust version
+├── .cargo/config.toml           # Cargo settings
 └── infra/
-    ├── pkgs/                    # Container package definitions
-    │   ├── default.nix          # Exports all packages
-    │   └── moto-garage.nix      # Garage container definition
-    ├── modules/                 # Reusable module components
-    │   ├── base.nix             # Core system tools (bash, coreutils, etc.)
-    │   ├── dev-tools.nix        # Development tooling (Rust, cargo, etc.)
-    │   ├── terminal.nix         # Terminal daemon (ttyd + tmux)
-    │   └── wireguard.nix        # WireGuard tools
+    ├── docker/
+    │   ├── Dockerfile.garage    # Garage container definition
+    │   ├── Dockerfile.bike      # Bike base image
+    │   ├── Dockerfile.club      # Club engine image
+    │   └── Dockerfile.keybox    # Keybox engine image
     └── smoke-test.sh            # Container smoke tests
 ```
 
 **Why this structure:**
-- Modular: each module returns `{ contents, env }` for composition
-- `buildEnv` wraps contents to avoid file collisions
-- Simple direct imports, no framework dependencies
-- Reusable modules across different container types
+- Standard: Universal Dockerfile format, no custom build systems
+- Simple: Direct package installation via apk, no module composition needed
+- Familiar: Any developer or AI agent can understand and modify
+- Efficient: Docker layer caching handles incremental builds
 
-**Root flake (`moto/flake.nix`):**
-- Defines `devShells.default` with development tools
-- Imports container packages from `./infra/pkgs`
-- Uses `eachDefaultSystem` for multi-platform support
-
-**Container definition (`moto/infra/pkgs/moto-garage.nix`):**
-- Uses `dockerTools.buildLayeredImage` for efficient layered images
-- Wraps contents with `buildEnv` (handles file collisions)
-- Imports modules from `../modules/` and combines them
+**Container definition (`infra/docker/Dockerfile.garage`):**
+- Single-stage build starting from `cgr.dev/chainguard/wolfi-base`
+- Installs all dev tooling via `apk add` (most tools) and release binaries (jujutsu, ttyd, yq)
+- Sets environment variables and working directory
+- Defines entrypoint as `garage-entrypoint`
 
 ### Included Tooling
 
-All tools are installed via Nix in the devShell/container.
+All tools are installed via apk (Wolfi packages) or release binaries.
 
 **Languages:**
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Rust | 1.88 stable | Primary language |
-| Node.js | 22.x LTS | For tooling (claude-code) |
+| Tool | Version | Installation |
+|------|---------|--------------|
+| Rust | 1.88 stable | apk (rust, cargo) |
+| Node.js | 22.x LTS | apk (nodejs) |
 
 **Rust toolchain:**
 
-The Rust toolchain uses `rust-bin.stable."X.Y".minimal` (not `.default`) to avoid pulling in rust-docs (~700MB). Required components are added via `extensions`.
-
-| Tool | Nix Package | Purpose |
-|------|-------------|---------|
-| cargo | (bundled with rust) | Build, run, test |
-| rustfmt | extension: `rustfmt` | Code formatting |
-| clippy | extension: `clippy` | Linting |
-| rust-analyzer | extension: `rust-analyzer` | IDE support |
-| rust-src | extension: `rust-src` | Source for IDE navigation |
-| cargo-watch | `cargo-watch` | Auto-rebuild on changes |
-| cargo-nextest | `cargo-nextest` | Modern test runner |
-| mold | `mold` | Fast linker |
-| sccache | `sccache` | Shared compilation cache |
-| sqlx-cli | `sqlx-cli` | Database migrations |
+| Tool | Installation | Purpose |
+|------|--------------|---------|
+| cargo | apk (bundled with rust) | Build, run, test |
+| rustfmt | apk (rustfmt) | Code formatting |
+| clippy | apk (clippy) | Linting |
+| rust-analyzer | apk (rust-analyzer) | IDE support |
+| cargo-watch | apk (cargo-watch) | Auto-rebuild on changes |
+| cargo-nextest | apk (cargo-nextest) | Modern test runner |
+| mold | apk (mold) | Fast linker |
+| sccache | apk (sccache) | Shared compilation cache |
+| sqlx-cli | cargo install (at build time) | Database migrations |
 
 **System libraries:**
 
-| Library | Nix Package | Purpose |
-|---------|-------------|---------|
-| pkg-config | `pkg-config` | Build system helper |
-| openssl | `openssl` | TLS/crypto |
-| libpq | `postgresql.lib` | PostgreSQL client library |
+| Library | Installation | Purpose |
+|---------|--------------|---------|
+| pkg-config | apk (pkgconf) | Build system helper |
+| openssl | apk (openssl-dev) | TLS/crypto |
+| libpq | apk (postgresql-dev) | PostgreSQL client library |
 
 **Version control:**
 
-| Tool | Nix Package | Purpose |
-|------|-------------|---------|
-| git | `git` | VCS |
-| jj (jujutsu) | `jujutsu` | Garage workflow - see [jj-workflow.md](jj-workflow.md) |
-| gh | `gh` | GitHub CLI |
+| Tool | Installation | Purpose |
+|------|--------------|---------|
+| git | apk (git) | VCS |
+| jj (jujutsu) | Release binary from GitHub | Garage workflow - see [jj-workflow.md](jj-workflow.md) |
+| gh | apk (gh) | GitHub CLI |
 
 **Database clients:**
 
-| Tool | Nix Package | Purpose |
-|------|-------------|---------|
-| psql | `postgresql` | PostgreSQL client |
+| Tool | Installation | Purpose |
+|------|--------------|---------|
+| psql | apk (postgresql-client) | PostgreSQL client |
 
 **General tools:**
 
-| Tool | Nix Package | Purpose |
-|------|-------------|---------|
-| curl | `curl` | HTTP client |
-| jq | `jq` | JSON processing |
-| yq | `yq` | YAML processing |
-| ripgrep | `ripgrep` | Fast search |
-| fd | `fd` | Fast find |
-| bat | `bat` | Better cat |
-| htop | `htop` | Process monitoring |
-| tree | `tree` | Directory visualization |
+| Tool | Installation | Purpose |
+|------|--------------|---------|
+| curl | apk (curl) | HTTP client |
+| jq | apk (jq) | JSON processing |
+| yq | Release binary from GitHub | YAML processing |
+| ripgrep | apk (ripgrep) | Fast search |
+| fd | apk (fd) | Fast find |
+| bat | apk (bat) | Better cat |
+| htop | apk (htop) | Process monitoring |
+| tree | apk (tree) | Directory visualization |
 
 **Kubernetes:**
 
-| Tool | Nix Package | Purpose |
-|------|-------------|---------|
-| kubectl | `kubectl` | K8s CLI |
+| Tool | Installation | Purpose |
+|------|--------------|---------|
+| kubectl | apk (kubectl) | K8s CLI |
 
 **AI:**
 
@@ -151,7 +142,7 @@ The Rust toolchain uses `rust-bin.stable."X.Y".minimal` (not `.default`) to avoi
 |------|--------------|---------|
 | claude-code | Native binary (shell script) | Claude CLI for wrenching |
 
-Claude Code is installed via the official shell script, not nixpkgs:
+Claude Code is installed via the official shell script:
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
 ```
@@ -159,11 +150,11 @@ This is run during container build. The binary installs to `~/.local/bin/claude`
 
 **Connectivity:**
 
-| Tool | Nix Package | Purpose |
-|------|-------------|---------|
-| wireguard-tools | `wireguard-tools` | WireGuard client for tunnel |
-| ttyd | `ttyd` | WebSocket terminal daemon |
-| tmux | `tmux` | Terminal multiplexer for session persistence |
+| Tool | Installation | Purpose |
+|------|--------------|---------|
+| wireguard-tools | apk (wireguard-tools) | WireGuard client for tunnel |
+| ttyd | Release binary from GitHub | WebSocket terminal daemon |
+| tmux | apk (tmux) | Terminal multiplexer for session persistence |
 
 ### Claude Code Configuration
 
@@ -226,7 +217,6 @@ Garage needs access to:
 - `api.anthropic.com` (Claude API, v1)
 - `*.moto-garage-{id}` (own namespace)
 - `crates.io`, `github.com`, `npmjs.org` (package registries)
-- `cache.nixos.org` (Nix binary cache)
 
 **Denied:**
 - Other garage namespaces
@@ -252,7 +242,7 @@ Garage needs access to:
 **Notes:**
 - `/workspace` is a PVC so uncommitted work survives pod restarts
 - Target directory is ephemeral (large, regenerable)
-- `/nix` is NOT mounted as a volume — the image provides `/nix/store` with all tools pre-installed (read-only via `readOnlyRootFilesystem`). Mounting an emptyDir over `/nix` would shadow the image contents and break all symlinks.
+- Tools are installed in standard locations (`/usr/bin`, `/usr/local/bin`) in the image, read-only via `readOnlyRootFilesystem`
 
 ### Environment Variables
 
@@ -294,9 +284,6 @@ REDIS_PORT="6379"
 REDIS_PASSWORD="<from secret>"
 REDIS_URL="redis://:password@redis:6379"
 
-# Nix
-NIX_PATH="nixpkgs=flake:nixpkgs"
-
 # Telemetry
 DO_NOT_TRACK="1"
 
@@ -311,10 +298,9 @@ SSL_CERT_FILE="/etc/ssl/certs/ca-bundle.crt"
 Inside the garage, Claude Code has full control. Isolation comes from the container and namespace boundary.
 
 **Inside garage (unrestricted):**
-- Root access (can install packages, modify anything)
+- Root access (can install packages via apk, modify anything)
 - Full filesystem access
 - Can run any commands
-- Can use `nix-shell`, `nix build`, etc.
 - This is intentional - AI needs freedom to wrench
 
 **Isolation (at the boundary):**
@@ -381,7 +367,7 @@ Default limits per garage:
 
 ### Building the Container
 
-Local builds use Docker-wrapped Nix: runs `nix build` inside a `nixos/nix` container. This works on Mac without a Linux builder. Architecture is auto-detected.
+Local builds use standard `docker build` with the Dockerfile. Multi-arch builds use `docker buildx`. Architecture is auto-detected.
 
 ```bash
 make build-garage    # Build the container
@@ -400,19 +386,18 @@ See [container-system.md](container-system.md) for details on the build approach
 make build-garage && make test-garage
 ```
 
-**Both commands must succeed.** Container builds can fail in non-obvious ways (file collisions, missing packages, broken paths) that only surface when actually built.
+**Both commands must succeed.** Container builds can fail in non-obvious ways (missing packages, broken paths, incorrect env vars) that only surface when actually built.
 
 **Files requiring build verification:**
-- `infra/pkgs/*.nix` - Container package definitions
-- `infra/modules/*.nix` - Container modules
-- `flake.nix` - Nix flake (container outputs)
+- `infra/docker/Dockerfile.garage` - Garage container definition
+- `infra/docker/*-entrypoint` - Container entrypoint scripts
 
 **Common build failures:**
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `File exists` | Package collision in `contents` | Use `buildEnv` to wrap contents |
-| `are the same file` | Duplicate file copy | Remove redundant copy in `extraCommands` |
-| `command not found` | Missing from PATH | Check `PATH` in env, verify package in contents |
+| `Package not found` | Missing apk package | Check Wolfi package availability, use release binary if needed |
+| `command not found` | Missing from PATH | Verify installation path, add to PATH if needed |
+| `Permission denied` | Script not executable | Add `chmod +x` in Dockerfile |
 
 ### Testing the Container
 
@@ -440,36 +425,73 @@ make test-garage
 
 ### Example Container Definition
 
-```nix
-# infra/pkgs/moto-garage.nix
-{ pkgs, rustToolchain }:
+```dockerfile
+# infra/docker/Dockerfile.garage
+FROM cgr.dev/chainguard/wolfi-base:latest
 
-let
-  base = import ../modules/base.nix { inherit pkgs; };
-  terminal = import ../modules/terminal.nix { inherit pkgs; };
-  devTools = import ../modules/dev-tools.nix { inherit pkgs rustToolchain; };
-  wireguard = import ../modules/wireguard.nix { inherit pkgs; };
+# Install core system tools
+RUN apk add --no-cache \
+    bash coreutils findutils grep sed gawk tar gzip bzip2 xz \
+    curl wget git gh jq tree htop procps util-linux ca-certificates tzdata
 
-  allContents = base.contents ++ terminal.contents ++ devTools.contents ++ wireguard.contents;
-  allEnv = base.env ++ devTools.env;
-in
-pkgs.dockerTools.buildLayeredImage {
-  name = "moto-garage";
-  tag = "latest";
-  contents = allContents;
-  config = {
-    Cmd = [ "garage-entrypoint" ];
-    WorkingDir = "/workspace";
-    Env = allEnv;
-    Volumes = {
-      "/workspace" = {};
-      "/root/.cargo" = {};
-    };
-  };
-}
+# Install Rust toolchain
+RUN apk add --no-cache \
+    rust cargo rustfmt clippy rust-analyzer \
+    cargo-watch cargo-nextest mold sccache \
+    pkgconf openssl-dev postgresql-dev
+
+# Install database clients
+RUN apk add --no-cache postgresql-client
+
+# Install general tools
+RUN apk add --no-cache ripgrep fd bat tmux
+
+# Install Kubernetes tools
+RUN apk add --no-cache kubectl
+
+# Install WireGuard tools
+RUN apk add --no-cache wireguard-tools
+
+# Install Node.js
+RUN apk add --no-cache nodejs npm
+
+# Install tools from release binaries (not in Wolfi repos)
+RUN curl -Lo /usr/local/bin/jj https://github.com/jj-vcs/jj/releases/download/v0.28.0/jj-v0.28.0-x86_64-unknown-linux-gnu.tar.gz && \
+    tar -xzf /usr/local/bin/jj -C /usr/local/bin && \
+    chmod +x /usr/local/bin/jj
+
+RUN curl -Lo /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 && \
+    chmod +x /usr/local/bin/ttyd
+
+RUN curl -Lo /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.1/yq_linux_amd64 && \
+    chmod +x /usr/local/bin/yq
+
+# Install Claude Code
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Install sqlx-cli
+RUN cargo install sqlx-cli --no-default-features --features postgres
+
+# Set environment variables
+ENV HOME=/root \
+    TERM=xterm-256color \
+    SHELL=/bin/bash \
+    WORKSPACE=/workspace \
+    CARGO_HOME=/root/.cargo \
+    CARGO_TARGET_DIR=/workspace/target \
+    RUST_BACKTRACE=1 \
+    RUST_LOG=info \
+    RUSTFLAGS="-C link-arg=-fuse-ld=mold" \
+    RUSTC_WRAPPER=sccache \
+    DO_NOT_TRACK=1 \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt
+
+WORKDIR /workspace
+
+CMD ["garage-entrypoint"]
 ```
 
-The modular design allows reusing components across different container types.
+The standard Dockerfile format is universally understood and easy to modify.
 
 ## Deferred Items
 
@@ -495,6 +517,17 @@ spiffe://moto.local/garage/{garage-id}
 ```
 
 ## Changelog
+
+### v0.20 (2026-04-10)
+- Replace Nix dockerTools with standard Dockerfile approach (nix-removal.md v0.2)
+- Change base image from NixOS to Wolfi (Chainguard) for minimal CVE footprint
+- Update philosophy: remove Nix reproducibility, focus on security and universal tooling
+- Update project structure: replace `flake.nix`/`flake.lock`/`infra/pkgs`/`infra/modules` with `infra/docker/Dockerfile.garage`
+- Update tooling table: replace Nix package references with apk/release binary installation methods
+- Update build commands: replace Docker-wrapped Nix with standard `docker build`
+- Remove Nix-specific environment variables (NIX_PATH)
+- Remove Nix binary cache from allowed egress
+- Update example container definition from Nix to Dockerfile format
 
 ### v0.19 (2026-03-05)
 - Fix: Container example `Cmd` from `["/bin/bash"]` to `["garage-entrypoint"]` (changed in v0.14 changelog but example was never updated)
