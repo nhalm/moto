@@ -156,12 +156,16 @@ moto/
 │       └── moto-lending/
 │
 ├── infra/
+│   ├── docker/
+│   │   ├── Dockerfile.garage         # Garage container (dev toolchain)
+│   │   ├── Dockerfile.bike           # Bike base image (scratch + CA certs)
+│   │   ├── Dockerfile.club           # Club engine (multi-stage build)
+│   │   └── Dockerfile.keybox         # Keybox engine (multi-stage build)
+│   │
 │   ├── k8s/
 │   │   └── moto-system/              # K8s manifests for control plane
 │   │
-│   ├── modules/                      # Nix modules (base, dev-tools, terminal, wireguard)
-│   │
-│   └── pkgs/                         # Nix package definitions (garage, bike, club, keybox)
+│   └── smoke-test.sh                 # Container smoke tests
 │
 ├── specs/                            # Specifications
 │   ├── README.md
@@ -172,7 +176,6 @@ moto/
 ├── CLAUDE.md                         # Points to AGENTS.md
 ├── Cargo.toml                        # Workspace manifest
 ├── Makefile
-├── flake.nix
 ├── rust-toolchain.toml
 ├── specd_work_list.md                # Remaining work items
 ├── specd_history.md                  # Done log
