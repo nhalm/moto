@@ -27,9 +27,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
-
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -77,8 +74,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ matrix.image }}-${{ hashFiles('infra/docker/Dockerfile.${{ matrix.image }}', 'Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-${{ matrix.image }}-
+            ${{ runner.os }}-buildx-
 
       - name: Build ${{ matrix.image }} image
-        run: make build-${{ matrix.image }}
+        run: |
+          docker build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            -t moto-${{ matrix.image }}:latest \
+            -f infra/docker/Dockerfile.${{ matrix.image }} \
+            .
+          # Move cache to prevent unbounded growth
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
