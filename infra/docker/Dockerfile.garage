@@ -1,0 +1,104 @@
+# Dockerfile.garage
+# Full dev container for garage environments
+# See specs/dev-container.md for full specification
+
+FROM cgr.dev/chainguard/wolfi-base:latest
+
+# Install system packages and development tools via apk
+# Note: Rust toolchain in Wolfi includes cargo, rustc bundled together
+RUN apk update && apk add --no-cache \
+    # Core system
+    bash \
+    coreutils \
+    ca-certificates \
+    tzdata \
+    # Build essentials
+    build-base \
+    pkgconf \
+    openssl \
+    openssl-dev \
+    # Languages - Rust (includes cargo)
+    rust \
+    mold \
+    sccache \
+    # Languages - Node.js
+    nodejs-22 \
+    npm \
+    # System libraries
+    postgresql-client \
+    postgresql-dev \
+    # Version control
+    git \
+    gh \
+    # Database clients
+    postgresql \
+    # General tools
+    curl \
+    wget \
+    jq \
+    ripgrep \
+    fd \
+    bat \
+    htop \
+    tree \
+    # Kubernetes
+    kubectl \
+    # Connectivity
+    wireguard-tools \
+    tmux
+
+# Install Rust tools via cargo
+WORKDIR /tmp
+
+# Install cargo-nextest
+RUN cargo install cargo-nextest --locked
+
+# Install cargo-watch
+RUN cargo install cargo-watch --locked
+
+# Install sqlx-cli
+RUN cargo install sqlx-cli --no-default-features --features postgres,rustls --locked
+
+# Install yq (YAML processor)
+RUN wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')" && \
+    chmod +x /usr/local/bin/yq
+
+# Install jujutsu (jj)
+RUN JJ_VERSION="0.24.0" && \
+    ARCH=$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch64/') && \
+    wget -qO jj.tar.gz "https://github.com/martinvonz/jj/releases/download/v${JJ_VERSION}/jj-v${JJ_VERSION}-${ARCH}-unknown-linux-musl.tar.gz" && \
+    tar -xzf jj.tar.gz && \
+    mv jj /usr/local/bin/jj && \
+    chmod +x /usr/local/bin/jj && \
+    rm jj.tar.gz
+
+# Install ttyd (terminal daemon)
+RUN TTYD_VERSION="1.7.7" && \
+    ARCH=$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch64/') && \
+    wget -qO /usr/local/bin/ttyd "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.${ARCH}" && \
+    chmod +x /usr/local/bin/ttyd
+
+# Set up environment variables
+ENV HOME="/root" \
+    TERM="xterm-256color" \
+    SHELL="/bin/bash" \
+    WORKSPACE="/workspace" \
+    CARGO_HOME="/root/.cargo" \
+    CARGO_TARGET_DIR="/workspace/target" \
+    RUST_BACKTRACE="1" \
+    RUST_LOG="info" \
+    RUSTFLAGS="-C link-arg=-fuse-ld=mold" \
+    RUSTC_WRAPPER="sccache" \
+    NIX_PATH="nixpkgs=flake:nixpkgs" \
+    DO_NOT_TRACK="1" \
+    SSL_CERT_FILE="/etc/ssl/certs/ca-bundle.crt" \
+    PATH="/root/.cargo/bin:/usr/local/bin:${PATH}"
+
+# Create required directories
+RUN mkdir -p /workspace /root/.cargo /var/run/secrets/svid /etc/wireguard /run/wireguard
+
+# Set working directory
+WORKDIR /workspace
+
+# Default command (will be overridden by garage-entrypoint in K8s)
+CMD ["/bin/bash"]
