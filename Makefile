@@ -2,7 +2,7 @@
 
 .PHONY: help install build test check fmt lint clean run fix audit ci
 .PHONY: test-ci
-.PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images clean-nix-cache
+.PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images
 .PHONY: build-bike test-bike
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
@@ -66,19 +66,9 @@ ci: test-ci ## Alias for test-ci
 
 ##@ Container
 
-# Detect Linux target based on host architecture
-# aarch64-darwin -> aarch64-linux, x86_64-darwin -> x86_64-linux
-NIX_LINUX_SYSTEM := $(shell uname -m | sed 's/arm64/aarch64/')-linux
-
-build-garage: ## Build garage container (Docker-wrapped Nix)
-	@echo "Building moto-garage container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
-	docker run --rm \
-		-v $(PWD):/workspace \
-		-v nix-store:/nix \
-		-w /workspace \
-		nixos/nix:latest \
-		sh -c "git config --global --add safe.directory /workspace && nix build .#packages.$(NIX_LINUX_SYSTEM).moto-garage --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
-		| docker load
+build-garage: ## Build garage container
+	@echo "Building moto-garage container..."
+	docker build -t moto-garage:latest -f infra/docker/Dockerfile.garage .
 
 test-garage: build-garage ## Run smoke tests on garage container
 	@echo "Running smoke tests..."
@@ -92,38 +82,20 @@ shell-garage: ## Interactive shell in garage container
 	docker run -it --rm moto-garage:latest
 
 build-bike: ## Build moto-bike base container
-	@echo "Building moto-bike container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
-	docker run --rm \
-		-v $(PWD):/workspace \
-		-v nix-store:/nix \
-		-w /workspace \
-		nixos/nix:latest \
-		sh -c "git config --global --add safe.directory /workspace && nix build .#packages.$(NIX_LINUX_SYSTEM).moto-bike --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
-		| docker load
+	@echo "Building moto-bike container..."
+	docker build -t moto-bike:latest -f infra/docker/Dockerfile.bike .
 
 test-bike: build-bike ## Run smoke tests on bike container
 	@echo "Running bike smoke tests..."
 	./infra/smoke-test-bike.sh
 
 build-club: ## Build moto-club container image
-	@echo "Building moto-club container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
-	docker run --rm \
-		-v $(PWD):/workspace \
-		-v nix-store:/nix \
-		-w /workspace \
-		nixos/nix:latest \
-		sh -c "git config --global --add safe.directory /workspace && nix build .#packages.$(NIX_LINUX_SYSTEM).moto-club-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
-		| docker load
+	@echo "Building moto-club container..."
+	docker build -t moto-club:latest -f infra/docker/Dockerfile.club .
 
 build-keybox: ## Build moto-keybox container image
-	@echo "Building moto-keybox container for $(NIX_LINUX_SYSTEM) via Docker-wrapped Nix..."
-	docker run --rm \
-		-v $(PWD):/workspace \
-		-v nix-store:/nix \
-		-w /workspace \
-		nixos/nix:latest \
-		sh -c "git config --global --add safe.directory /workspace && nix build .#packages.$(NIX_LINUX_SYSTEM).moto-keybox-image --extra-experimental-features 'nix-command flakes' -o /tmp/result && cat /tmp/result" \
-		| docker load
+	@echo "Building moto-keybox container..."
+	docker build -t moto-keybox:latest -f infra/docker/Dockerfile.keybox .
 
 # Default registry for pushing images
 REGISTRY ?= localhost:5050
@@ -191,11 +163,6 @@ clean-images: ## Remove all moto container images
 	-docker images --filter=reference='moto-*' -q | xargs docker rmi -f 2>/dev/null || true
 	-docker images --filter=reference='*/moto-*' -q | xargs docker rmi -f 2>/dev/null || true
 	@echo "Done."
-
-clean-nix-cache: ## Remove Nix store cache volume
-	@echo "Removing Nix store cache volume..."
-	-docker volume rm nix-store 2>/dev/null && echo "Removed nix-store volume." || \
-		echo "nix-store volume does not exist or is in use."
 
 ##@ Registry
 
