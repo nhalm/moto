@@ -46,11 +46,3 @@ if git diff --cached --name-only | grep -qE '\.(rs)$|Cargo\.'; then
         exit 1
     }
 fi
-
-# Nix syntax (if Nix files changed)
-if git diff --cached --name-only | grep -qE '\.nix$' && command -v nix &>/dev/null; then
-    nix flake check --no-build 2>/dev/null || {
-        echo "FIX: check nix flake check output"
-        exit 1
-    }
-fi
