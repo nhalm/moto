@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-10):** Update spec `project-structure.md` — replace `infra/modules/` and `infra/pkgs/` with `infra/docker/`, remove `flake.nix`/`flake.lock`
 - **nix-removal v0.2 (2026-04-10):** Update spec `makefile.md` — remove Nix prerequisites, update build target docs, remove `clean-nix-cache`
 - **nix-removal v0.2 (2026-04-10):** Update spec `container-system.md` — replace build pipeline diagram, directory structure, Nix references
 - **nix-removal v0.2 (2026-04-10):** Update spec `dev-container.md` — replace Nix dockerTools with Dockerfile approach, update philosophy, structure, build sections
