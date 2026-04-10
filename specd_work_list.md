@@ -9,7 +9,3 @@ Read it in full at the start of each iteration.
 - Check this file for items blocked on what you just completed — remove resolved `(blocked: ...)` annotations
 - Keep this file small — it should fit comfortably in context
 -->
-
-## nix-removal v0.2
-
-- Update specs with minor Nix references: `local-dev.md`, `pre-commit.md`, `garage-isolation.md`, `docs.md`
