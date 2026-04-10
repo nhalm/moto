@@ -22,7 +22,7 @@ Defines the isolation model for garage environments. The goal: Claude Code runs 
 
 **What Garages CAN Do:**
 - Full root access inside container
-- Install packages (apt, nix, cargo, npm, pip)
+- Install packages (apk, cargo, npm, pip)
 - Modify any file in the container
 - Access internet (packages, docs, external APIs)
 - Access keybox for secrets (scoped to their identity)
@@ -90,14 +90,11 @@ volumes:
     emptyDir: {}
   - name: cargo
     emptyDir: {}
-  # Note: /nix is NOT mounted as a volume. The image provides /nix/store
-  # with all tools pre-installed. Mounting emptyDir over /nix would shadow
-  # the image contents and break all tool symlinks.
 
-  # For apt package installation
-  - name: var-lib-apt
+  # For apk package installation
+  - name: var-lib-apk
     emptyDir: {}
-  - name: var-cache-apt
+  - name: var-cache-apk
     emptyDir: {}
   - name: usr-local
     emptyDir: {}
@@ -124,10 +121,10 @@ volumeMounts:
     mountPath: /root
   - name: cargo
     mountPath: /root/.cargo
-  - name: var-lib-apt
-    mountPath: /var/lib/apt
-  - name: var-cache-apt
-    mountPath: /var/cache/apt
+  - name: var-lib-apk
+    mountPath: /var/lib/apk
+  - name: var-cache-apk
+    mountPath: /var/cache/apk
   - name: usr-local
     mountPath: /usr/local
   - name: wireguard-config
@@ -418,7 +415,7 @@ Secrets are pull-based and on-demand. Garage only gets secrets it explicitly req
 
 ### v0.3 (2026-02-02)
 - Workspace volume changed to PVC (survives pod restarts)
-- Added writable mounts for apt: /var/lib/apt, /var/cache/apt, /usr/local
+- Added writable mounts for apt: /var/lib/apk, /var/cache/apk, /usr/local
 - NetworkPolicy: block cloud metadata (169.254.0.0/16), WireGuard range (100.64.0.0/10), loopback
 - NetworkPolicy: supporting services are per-garage (same namespace), not shared
 - ResourceQuota and LimitRange for namespace

@@ -32,7 +32,7 @@ Run the full moto stack locally for development. The control plane (moto-club, m
 |-------------|-----|
 | Docker or Colima | Postgres, k3d, container builds |
 | k3d | Local K8s cluster (see [local-cluster.md](local-cluster.md)) |
-| Nix | Dev shell with Rust toolchain |
+| Rust toolchain | Building moto binaries locally |
 
 ### Architecture
 
@@ -187,7 +187,7 @@ Orchestration steps (each idempotent, with progress output):
 |------|----------------------|------------|
 | 1. Prerequisites | Docker running, k3d installed, `MOTO_USER` set (falls back to `whoami`). With `--no-garage`, MOTO_USER is not required. | Abort with actionable error message |
 | 2. Cluster | If k3d cluster `moto` exists, skip. If not, create it (same as `moto cluster init`). | Abort |
-| 3. Image | `GET http://localhost:5050/v2/moto-garage/tags/list` — if response contains a `latest` tag, skip. If missing or registry unreachable: with `--rebuild-image`, run the Nix build + push inline; otherwise abort with instructions to run `make dev-garage-image`. With `--skip-image`, skip entirely. `--skip-image` and `--rebuild-image` together is invalid (abort with error). | Abort (unless `--skip-image`) |
+| 3. Image | `GET http://localhost:5050/v2/moto-garage/tags/list` — if response contains a `latest` tag, skip. If missing or registry unreachable: with `--rebuild-image`, run the Docker build + push inline; otherwise abort with instructions to run `make dev-garage-image`. With `--skip-image`, skip entirely. `--skip-image` and `--rebuild-image` together is invalid (abort with error). | Abort (unless `--skip-image`) |
 | 4. Postgres | Run `docker compose up -d --wait`. Idempotent — no-op if already running. | Abort |
 | 5. Keys | Check if all three files exist in `.dev/keybox/` (`master.key`, `signing.key`, `service-token`). If any missing, regenerate all: run `moto-keybox init --output-dir .dev/keybox --force`, then generate service-token (`openssl rand -hex 32`), set permissions to 600. | Abort |
 | 6. Migrations | Run `cargo sqlx migrate run --source crates/moto-club-db/migrations` against the club database. Keybox migrations run automatically on keybox startup (step 7). | Abort |
@@ -198,7 +198,7 @@ Orchestration steps (each idempotent, with progress output):
 
 **Failure behavior:** Steps 1-9 abort on failure. Step 10 is best-effort — if garage creation fails, services keep running and the user can open a garage manually. On abort, any already-started subprocesses are killed and postgres is left running (fast restart).
 
-**Image build inline:** When `--rebuild-image` triggers a build, it runs the same Docker-wrapped Nix build as `make build-garage` + `make push-garage`, with progress output. This can take 15-20 minutes on first run.
+**Image build inline:** When `--rebuild-image` triggers a build, it runs the same Docker build as `make build-garage` + `make push-garage`, with progress output. This can take 15-20 minutes on first run.
 
 **Subprocess management:** Keybox, club, and ai-proxy are spawned as subprocesses. On Ctrl-C (SIGINT), all subprocesses are killed. Postgres is left running (fast restart on next `dev up`). Exit code is 0 on Ctrl-C. If any subprocess dies unexpectedly, an error is printed and all other subprocesses are killed.
 

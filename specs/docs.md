@@ -67,7 +67,7 @@ High-level system design:
 
 Prerequisites and first run:
 
-- **Prerequisites** — Nix, Docker, k3d, Rust toolchain (whatever `moto dev up` needs)
+- **Prerequisites** — Docker, k3d, Rust toolchain (whatever `moto dev up` needs)
 - **Quick start** — `moto dev up` walkthrough: what it does (10 steps), what you see, how to verify it worked
 - **Opening your first garage** — `moto garage open`, connecting via terminal, running code
 - **Stopping** — Ctrl-C behavior, what persists (Postgres), what doesn't
@@ -114,7 +114,7 @@ Reference page for every major component:
 | moto-cli | `moto-cli` | User-facing CLI — `moto garage open`, `moto dev up`, etc. |
 | Keybox | `moto-keybox-*` | Secrets manager — SPIFFE identity, envelope encryption |
 | AI Proxy | `moto-ai-proxy` | Credential-injecting reverse proxy for AI providers |
-| Garage | `moto-garage` (image) | Dev container — Nix-built, ~3GB, full Rust toolchain + Claude Code |
+| Garage | `moto-garage` (image) | Dev container — Docker-built, ~3GB, full Rust toolchain + Claude Code |
 | Bike | `moto-bike` (image) | Minimal production container (<20MB), engine contract |
 | WireGuard Tunnel | `moto-wgtunnel` | Encrypted terminal access via userspace WireGuard + DERP relay |
 | Throttle | `moto-throttle` | Rate limiting middleware (tower) |

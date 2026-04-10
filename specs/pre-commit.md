@@ -36,27 +36,19 @@ if git diff --cached --name-only | grep -qE '\.(rs)$|Cargo\.'; then
         exit 1
     }
 fi
-
-# Nix syntax (if Nix files changed)
-if git diff --cached --name-only | grep -qE '\.nix$' && command -v nix &>/dev/null; then
-    nix flake check --no-build 2>/dev/null || {
-        echo "FIX: check nix flake check output"
-        exit 1
-    }
-fi
 ```
 
 ### Installation
 
 | Context | How |
 |---------|-----|
-| Garage container | Automatic via NixOS config |
+| Garage container | Pre-configured in container image |
 | Local dev | `make install` sets `core.hooksPath` |
 
 ### What's NOT in the Hook
 
 - `cargo test` - too slow, run in CI
-- `nix build` - too slow, run in CI
+- Full container builds - too slow, run in CI
 
 ### Bypass
 
