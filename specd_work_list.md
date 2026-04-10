@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## nix-removal v0.2
 
-- Update spec `container-system.md` — replace build pipeline diagram, directory structure, Nix references
 - Update spec `makefile.md` — remove Nix prerequisites, update build target docs, remove `clean-nix-cache`
 - Update spec `project-structure.md` — replace `infra/modules/` and `infra/pkgs/` with `infra/docker/`, remove `flake.nix`/`flake.lock`
 - Update specs with minor Nix references: `local-dev.md`, `pre-commit.md`, `garage-isolation.md`, `docs.md`
