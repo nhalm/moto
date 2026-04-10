@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-10):** Update Makefile `build-*` targets to use `docker build` instead of Docker-wrapped Nix, remove `clean-nix-cache` target and `NIX_LINUX_SYSTEM` variable
 - **nix-removal v0.2 (2026-04-10):** Create `infra/docker/Dockerfile.keybox` — multi-stage Rust build, copies binary onto moto-bike base
 - **nix-removal v0.2 (2026-04-10):** Create `infra/docker/Dockerfile.club` — multi-stage Rust build, copies binary onto moto-bike base
 - **nix-removal v0.2 (2026-04-10):** Create `infra/docker/Dockerfile.garage` — Wolfi (Chainguard) base with full dev toolchain matching dev-container.md tool list
