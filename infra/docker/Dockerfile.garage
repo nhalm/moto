@@ -89,13 +89,36 @@ ENV HOME="/root" \
     RUST_LOG="info" \
     RUSTFLAGS="-C link-arg=-fuse-ld=mold" \
     RUSTC_WRAPPER="sccache" \
-    NIX_PATH="nixpkgs=flake:nixpkgs" \
     DO_NOT_TRACK="1" \
     SSL_CERT_FILE="/etc/ssl/certs/ca-bundle.crt" \
     PATH="/root/.cargo/bin:/usr/local/bin:${PATH}"
 
 # Create required directories
 RUN mkdir -p /workspace /root/.cargo /var/run/secrets/svid /etc/wireguard /run/wireguard
+
+# Create garage-entrypoint script
+# This script starts ttyd with tmux for the terminal interface
+RUN cat > /usr/local/bin/garage-entrypoint <<'EOF'
+#!/bin/bash
+set -e
+
+# Default working directory (can be overridden by WORKSPACE_DIR)
+WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+
+# Ensure workspace directory exists
+mkdir -p "$WORKSPACE_DIR"
+
+# Start ttyd with tmux
+# -p 7681: Listen on port 7681
+# -W: Writable (allow input)
+# tmux new-session -A -s garage: Create or attach to session named "garage"
+#   -A: Attach to existing session if it exists
+#   -s garage: Session name
+#   -c: Start in specified directory
+exec ttyd -p 7681 -W tmux new-session -A -s garage -c "$WORKSPACE_DIR"
+EOF
+
+RUN chmod +x /usr/local/bin/garage-entrypoint
 
 # Set working directory
 WORKDIR /workspace
