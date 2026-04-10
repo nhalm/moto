@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-10):** Update spec `dev-container.md` — replace Nix dockerTools with Dockerfile approach, update philosophy, structure, build sections
 - **nix-removal v0.2 (2026-04-10):** Run `make build-club && make build-keybox` to validate engine images build correctly
 - **nix-removal v0.2 (2026-04-10):** Run make build-garage && make test-garage to validate the new garage image builds and passes smoke tests
 - **nix-removal v0.2 (2026-04-10):** Update `infra/smoke-test.sh` to work with the new Docker-built garage image (if any Nix-specific paths changed)
