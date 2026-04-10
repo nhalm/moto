@@ -12,7 +12,6 @@ Read it in full at the start of each iteration.
 
 ## nix-removal v0.2
 
-- Update `.github/workflows/ci.yml` — remove `nix-installer-action`, use `docker build` with buildx layer caching
 - Delete Nix files: `flake.nix`, `flake.lock`, `infra/pkgs/` (5 files), `infra/modules/` (4 files)
 - Update `infra/smoke-test.sh` to work with the new Docker-built garage image (if any Nix-specific paths changed)
 - Run `make build-garage && make test-garage` to validate the new garage image builds and passes smoke tests
