@@ -2,9 +2,9 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.20 |
+| Version | 0.21 |
 | Status | Ripping |
-| Last Updated | 2026-03-07 |
+| Last Updated | 2026-04-10 |
 
 ## Overview
 
@@ -18,27 +18,11 @@ The following tools should be installed before running `make install`:
 
 | Tool | Purpose | Installation |
 |------|---------|--------------|
-| **Nix** | Package manager for reproducible devShell | See below |
 | **Docker** | Container runtime | Docker Desktop, Colima, or OrbStack |
 | **Git** | Version control | `brew install git` or system package |
+| **Rust** | Rust toolchain | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
 
-**Nix Installation (Determinate installer recommended):**
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
-```
-
-After installing, open a new terminal or run:
-```bash
-. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-```
-
-Verify with: `nix --version`
-
-**Why Determinate Nix:**
-- Survives macOS upgrades
-- Enables flakes by default
-- Generates uninstall receipt for clean removal
+The Rust version is pinned by `rust-toolchain.toml` — rustup will install the correct version automatically.
 
 ### Target Groups
 
@@ -73,7 +57,7 @@ install:
 	cp target/release/moto ~/.local/bin/moto
 ```
 
-The `install` target is idempotent - safe to run multiple times. It configures git hooks and installs the `moto` binary to `~/.local/bin/`. Works on macOS and Linux — just needs Rust toolchain installed (provided by the Nix devShell).
+The `install` target is idempotent - safe to run multiple times. It configures git hooks and installs the `moto` binary to `~/.local/bin/`. Works on macOS and Linux — just needs Rust toolchain installed.
 
 ### Development Targets
 
@@ -111,18 +95,19 @@ push-keybox:                # Push moto-keybox to local registry, clean up local
 # Maintenance
 scan-garage:                # Scan image for vulnerabilities (requires trivy)
 clean-images:               # Remove all moto images
-clean-nix-cache:            # Remove Docker volume used for Nix store caching
 ```
 
 **How container builds work:**
 
-All `build-*` targets use Docker-wrapped Nix: they run `nix build` inside a `nixos/nix` container with the repo mounted, then load the resulting image via `docker load`. This keeps the Nix flake as the single source of truth while working on any platform — ARM Mac builds `aarch64-linux`, Intel builds `x86_64-linux`.
+All `build-*` targets use standard Dockerfiles with `docker build`. Dockerfiles are located in `infra/docker/`:
+- `Dockerfile.garage` — garage dev container (Wolfi base + toolchain)
+- `Dockerfile.bike` — bike base image (scratch + CA certs + user)
+- `Dockerfile.club` — moto-club service (multi-stage: builder + bike)
+- `Dockerfile.keybox` — moto-keybox service (multi-stage: builder + bike)
 
-A named Docker volume (`nix-store`) caches the Nix store between builds. Use `clean-nix-cache` to remove it and force a fresh build.
+Docker layer caching speeds up rebuilds — dependency layers are reused when `Cargo.lock` hasn't changed.
 
-**CI builds differently:** GitHub Actions installs Nix directly on Linux runners and runs `nix build` without Docker. See [container-system.md](container-system.md) for CI workflow.
-
-**If `build-*` targets fail:** verify Docker is running, check that the `nixos/nix` image is available, and look for detailed output from the nix build command.
+**If `build-*` targets fail:** verify Docker is running and check the detailed output from the `docker build` command.
 
 ### Registry Targets
 
@@ -199,6 +184,12 @@ See [service-deploy.md](service-deploy.md) for K8s deployment specification.
 - Keep names short but clear
 
 ## Changelog
+
+### v0.21 (2026-04-10)
+- Remove Nix prerequisites (replaced with Docker, Git, Rust)
+- Update container build documentation: `docker build` with Dockerfiles (not Docker-wrapped Nix)
+- Remove `clean-nix-cache` target (no longer needed)
+- Document Dockerfile locations (`infra/docker/`)
 
 ### v0.20 (2026-03-07)
 - Add `smoke-ai-proxy` to Testing Targets (port-forward + smoke test against k3d ai-proxy)
