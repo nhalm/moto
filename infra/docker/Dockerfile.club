@@ -1,0 +1,48 @@
+# Dockerfile.club
+# Multi-stage Rust build for moto-club
+# Compiles the binary in a Wolfi-based builder, then copies onto moto-bike base
+# See specs/container-system.md and specs/nix-removal.md for specification
+
+# Builder stage: compile Rust binary
+FROM cgr.dev/chainguard/wolfi-base:latest AS builder
+
+# Install Rust toolchain and build dependencies
+# Note: Rust toolchain in Wolfi includes cargo bundled together
+RUN apk add --no-cache \
+    rust \
+    build-base \
+    lld \
+    openssl-dev \
+    postgresql-dev
+
+# Set working directory
+WORKDIR /build
+
+# Copy workspace configuration files
+# These change infrequently, so Docker caches this layer
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY .cargo/ .cargo/
+
+# Copy all crate source code
+# Docker layer caching: when only source changes (not dependencies),
+# the dependency build from the previous step is reused
+COPY crates/ crates/
+
+# Build the moto-club binary in release mode
+# Strip and LTO settings from workspace Cargo.toml produce a minimal binary
+RUN cargo build --release --bin moto-club
+
+# Final stage: copy binary onto moto-bike base
+FROM moto-bike:latest
+
+# Copy the compiled binary from builder
+COPY --from=builder /build/target/release/moto-club /usr/local/bin/moto-club
+
+# Expose ports (moto-club listens on 8080 for API, 9090 for metrics)
+EXPOSE 8080 9090
+
+# Run as the moto user (inherited from moto-bike base)
+USER 1000:1000
+
+# Set the entrypoint
+ENTRYPOINT ["/usr/local/bin/moto-club"]
