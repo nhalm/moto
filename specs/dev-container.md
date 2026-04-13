@@ -89,8 +89,8 @@ All tools are installed via apk (Wolfi packages) or release binaries.
 | rustfmt | apk (bundled with rust) | Code formatting |
 | clippy | apk (bundled with rust) | Linting |
 | rust-analyzer | apk (rust-analyzer) | IDE support |
-| cargo-watch | apk (cargo-watch) | Auto-rebuild on changes |
-| cargo-nextest | apk (cargo-nextest) | Modern test runner |
+| cargo-watch | cargo install (at build time) | Auto-rebuild on changes |
+| cargo-nextest | cargo install (at build time) | Modern test runner |
 | mold | apk (mold) | Fast linker |
 | sccache | apk (sccache) | Shared compilation cache |
 | sqlx-cli | cargo install (at build time) | Database migrations |
