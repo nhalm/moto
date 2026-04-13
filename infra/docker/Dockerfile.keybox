@@ -28,12 +28,14 @@ COPY .cargo/ .cargo/
 COPY crates/moto-keybox/Cargo.toml crates/moto-keybox/
 COPY crates/moto-keybox-db/Cargo.toml crates/moto-keybox-db/
 COPY crates/moto-keybox-server/Cargo.toml crates/moto-keybox-server/
+COPY crates/moto-test-utils/Cargo.toml crates/moto-test-utils/
 
 # Create stub source files for dependency caching
 # This allows Docker to cache the dependency build layer separately from source code
 RUN mkdir -p crates/moto-keybox/src && echo "pub fn stub() {}" > crates/moto-keybox/src/lib.rs && \
     mkdir -p crates/moto-keybox-db/src && echo "pub fn stub() {}" > crates/moto-keybox-db/src/lib.rs && \
-    mkdir -p crates/moto-keybox-server/src && echo "fn main() {}" > crates/moto-keybox-server/src/main.rs
+    mkdir -p crates/moto-keybox-server/src && echo "fn main() {}" > crates/moto-keybox-server/src/main.rs && \
+    mkdir -p crates/moto-test-utils/src && echo "pub fn stub() {}" > crates/moto-test-utils/src/lib.rs
 
 # Build dependencies only (cached until Cargo.lock changes)
 RUN cargo build --release --bin moto-keybox-server && \
