@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.4 (2026-04-13):** Fix `.github/workflows/ci.yml` buildx driver: add `driver: docker` parameter to `setup-buildx-action@v3` at line 119 so that `docker load` image (moto-bike) is accessible to club/keybox Dockerfiles via `FROM moto-bike:latest`
 - **nix-removal v0.3 (2026-04-13):** Implement separate Rust dependency caching layer in Dockerfile.club and Dockerfile.keybox: add a build-dependencies-only step using stub src/main.rs (per container-system.md pattern lines 515-528) before copying source code, to enable Docker layer caching of dependencies
 - **nix-removal v0.3 (2026-04-13):** Add `build-bike` as a Make prerequisite for `build-club` and `build-keybox` targets, and add `build-bike push-bike` to the `deploy-images` target — currently these fail on a clean machine because `moto-bike:latest` doesn't exist
 - **nix-removal v0.3 (2026-04-13):** Fix `SSL_CERT_FILE` path in `specs/container-system.md` line 191: change `ca-bundle.crt` to `ca-certificates.crt` to match Wolfi base image
