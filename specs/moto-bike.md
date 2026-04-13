@@ -61,7 +61,7 @@ The bike is a minimal container image. As small as possible.
 
 **Base image name:** `moto-bike`
 
-**Build:** Nix builds the base image. See [container-system.md](container-system.md).
+**Build:** Built via Dockerfile at `infra/docker/Dockerfile.bike`. See [container-system.md](container-system.md).
 
 **Security posture:**
 
