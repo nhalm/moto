@@ -17,8 +17,9 @@ RUN apk update && apk add --no-cache \
     pkgconf \
     openssl \
     openssl-dev \
-    # Languages - Rust (includes cargo)
+    # Languages - Rust (includes cargo, rustfmt, clippy)
     rust \
+    rust-analyzer \
     mold \
     sccache \
     # Languages - Node.js
