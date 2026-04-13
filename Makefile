@@ -148,7 +148,7 @@ push-keybox: ## Push moto-keybox to registry, clean up local copy
 
 scan-garage: ## Scan garage image for vulnerabilities (requires trivy)
 	@if ! command -v trivy &>/dev/null; then \
-		echo "Error: trivy is not installed. Install with 'brew install trivy' or 'nix-shell -p trivy'"; \
+		echo "Error: trivy is not installed. Install with 'brew install trivy'"; \
 		exit 1; \
 	fi
 	@echo "Scanning moto-garage for vulnerabilities..."
@@ -184,7 +184,7 @@ cosign-keygen: ## Generate cosign keypair in .dev/cosign/ (idempotent)
 		echo "Cosign keypair already exists in .dev/cosign/"; \
 	else \
 		if ! command -v cosign &>/dev/null; then \
-			echo "Error: cosign is not installed. Install with 'brew install cosign' or 'nix-shell -p cosign'"; \
+			echo "Error: cosign is not installed. Install with 'brew install cosign'"; \
 			exit 1; \
 		fi; \
 		mkdir -p .dev/cosign && \
@@ -196,7 +196,7 @@ cosign-keygen: ## Generate cosign keypair in .dev/cosign/ (idempotent)
 
 sign-garage: cosign-keygen ## Sign moto-garage images in registry
 	@if ! command -v cosign &>/dev/null; then \
-		echo "Error: cosign is not installed. Install with 'brew install cosign' or 'nix-shell -p cosign'"; \
+		echo "Error: cosign is not installed. Install with 'brew install cosign'"; \
 		exit 1; \
 	fi
 	@echo "Signing $(REGISTRY)/moto-garage:latest and $(REGISTRY)/moto-garage:$(SHA)..."
@@ -206,7 +206,7 @@ sign-garage: cosign-keygen ## Sign moto-garage images in registry
 
 sign-club: cosign-keygen ## Sign moto-club images in registry
 	@if ! command -v cosign &>/dev/null; then \
-		echo "Error: cosign is not installed. Install with 'brew install cosign' or 'nix-shell -p cosign'"; \
+		echo "Error: cosign is not installed. Install with 'brew install cosign'"; \
 		exit 1; \
 	fi
 	@echo "Signing $(REGISTRY)/moto-club:latest and $(REGISTRY)/moto-club:$(SHA)..."
@@ -216,7 +216,7 @@ sign-club: cosign-keygen ## Sign moto-club images in registry
 
 sign-keybox: cosign-keygen ## Sign moto-keybox images in registry
 	@if ! command -v cosign &>/dev/null; then \
-		echo "Error: cosign is not installed. Install with 'brew install cosign' or 'nix-shell -p cosign'"; \
+		echo "Error: cosign is not installed. Install with 'brew install cosign'"; \
 		exit 1; \
 	fi
 	@echo "Signing $(REGISTRY)/moto-keybox:latest and $(REGISTRY)/moto-keybox:$(SHA)..."
