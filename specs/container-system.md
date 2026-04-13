@@ -188,7 +188,7 @@ COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 
 USER 1000:1000
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ```
 
 **Engine image** (`infra/docker/Dockerfile.club`):
