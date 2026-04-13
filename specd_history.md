@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-13):** Verify rustfmt and clippy installation in garage container: build Dockerfile.garage and test `cargo fmt --version && cargo clippy --version` inside. If they fail, add `rust-rustfmt` and `rust-clippy` apk packages. If they succeed, update dev-container.md spec table (lines 89-90) to document they are bundled with rust.
 - **nix-removal v0.2 (2026-04-13):** Fix CI `build-images` job: club and keybox matrix jobs use `FROM moto-bike:latest` but run in parallel with the bike job on separate runners — `moto-bike:latest` is never available. Add a separate `build-bike` job and make club/keybox `needs: [build-bike]`, or build bike first and export the image as an artifact.
 - **nix-removal v0.2 (2026-04-13):** Install Claude Code in `Dockerfile.garage`: dev-container.md requires `curl -fsSL https://claude.ai/install.sh | bash` during container build — currently missing entirely.
 - **nix-removal v0.2 (2026-04-13):** Remove `nix-shell -p` from Makefile error messages (lines 151, 187, 199, 209, 219) — Nix is gone, replace with `brew install` only

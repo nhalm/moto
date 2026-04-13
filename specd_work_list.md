@@ -12,4 +12,4 @@ Read it in full at the start of each iteration.
 
 ## nix-removal v0.2
 
-- [ ] Verify rustfmt and clippy installation in garage container: build Dockerfile.garage and test `cargo fmt --version && cargo clippy --version` inside. If they fail, add `rust-rustfmt` and `rust-clippy` apk packages. If they succeed, update dev-container.md spec table (lines 89-90) to document they are bundled with rust.
+(All items completed)
