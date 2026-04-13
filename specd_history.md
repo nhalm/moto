@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.3 (2026-04-13):** Update `specs/moto-bike.md` Build Pipeline section (lines 236, 252–290): replace Nix flake build commands with Docker build approach, update diagram and examples to use `docker build -f infra/docker/Dockerfile.club`
 - **nix-removal v0.2 (2026-04-13):** Fix `specs/dev-container.md` lines 92–93: change cargo-watch and cargo-nextest installation method from "apk" to "cargo install"
 - **nix-removal v0.2 (2026-04-13):** Fix `specs/README.md` line 52: change dev-container description from "Nix dockerTools container" to "Docker container"
 - **nix-removal v0.2 (2026-04-13):** Fix `specs/service-deploy.md` line 174: remove `mkBike` helper and "Nix build pipeline" reference, update to Docker build

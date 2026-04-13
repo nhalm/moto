@@ -233,7 +233,7 @@ memory_limit = "2Gi"
 
 **Required fields:** `name`
 
-**Note:** No `[build]` section - Nix flakes handle the build. See Build Pipeline below.
+**Note:** No `[build]` section - Dockerfiles handle the build. See Build Pipeline below.
 
 #### bike.toml → K8s Mapping
 
@@ -251,18 +251,19 @@ The Service is auto-generated with the same name as the Deployment, providing DN
 
 #### Build Pipeline
 
-Nix flakes handle the entire build. Each engine has a flake output that:
-1. Builds the Rust binary
-2. Combines it with the `moto-bike` base image
+Multi-stage Dockerfiles handle the entire build. Each engine has a Dockerfile that:
+1. Builds the Rust binary in a Wolfi-based builder stage
+2. Copies the binary onto the `moto-bike` base image
 3. Produces the final image (e.g., `moto-club`)
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐
-│  nix build      │───▶│   moto-club     │───▶│   Registry  │
-│  .#moto-club    │    │   (final image) │    │ moto-club:  │
-│                 │    │                 │    │   abc123f   │
-│  - builds binary│    │ = moto-bike     │    └─────────────┘
-│  - layers on    │    │ + club binary   │
+│  docker build   │───▶│   moto-club     │───▶│   Registry  │
+│  -f Dockerfile  │    │   (final image) │    │ moto-club:  │
+│     .club       │    │                 │    │   abc123f   │
+│                 │    │ = moto-bike     │    └─────────────┘
+│  - builds binary│    │ + club binary   │
+│  - layers on    │    │                 │
 │    moto-bike    │    │                 │
 └─────────────────┘    └─────────────────┘
 ```
@@ -271,12 +272,10 @@ Nix flakes handle the entire build. Each engine has a flake output that:
 
 ```bash
 # Build image locally (can run in garage dev-container)
-nix build .#moto-club-image
-
-# Load into Docker
-docker load < result
+docker build -f infra/docker/Dockerfile.club -t moto-club:latest .
 
 # Push to registry
+docker tag moto-club:latest ${MOTO_REGISTRY}/moto-club:$(git rev-parse --short HEAD)
 docker push ${MOTO_REGISTRY}/moto-club:$(git rev-parse --short HEAD)
 ```
 
@@ -287,7 +286,7 @@ moto bike build           # Build image from bike.toml in cwd
 moto bike build --push    # Build and push to registry
 ```
 
-See [container-system.md](container-system.md) for Nix flake details.
+See [container-system.md](container-system.md) for Docker build details.
 
 ---
 
