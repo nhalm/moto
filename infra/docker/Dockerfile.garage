@@ -79,6 +79,9 @@ RUN TTYD_VERSION="1.7.7" && \
     wget -qO /usr/local/bin/ttyd "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.${ARCH}" && \
     chmod +x /usr/local/bin/ttyd
 
+# Install Claude Code
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
 # Set up environment variables
 ENV HOME="/root" \
     TERM="xterm-256color" \
@@ -92,7 +95,7 @@ ENV HOME="/root" \
     RUSTC_WRAPPER="sccache" \
     DO_NOT_TRACK="1" \
     SSL_CERT_FILE="/etc/ssl/certs/ca-bundle.crt" \
-    PATH="/root/.cargo/bin:/usr/local/bin:${PATH}"
+    PATH="/root/.local/bin:/root/.cargo/bin:/usr/local/bin:${PATH}"
 
 # Create required directories
 RUN mkdir -p /workspace /root/.cargo /var/run/secrets/svid /etc/wireguard /run/wireguard
