@@ -12,4 +12,7 @@ Read it in full at the start of each iteration.
 
 ## nix-removal v0.2
 
-(All items completed)
+- Fix `specs/moto-bike.md` line 64: replace "Nix builds the base image" with Dockerfile reference
+- Fix `specs/service-deploy.md` line 174: remove `mkBike` helper and "Nix build pipeline" reference, update to Docker build
+- Fix `specs/README.md` line 52: change dev-container description from "Nix dockerTools container" to "Docker container"
+- Fix `specs/dev-container.md` lines 92–93: change cargo-watch and cargo-nextest installation method from "apk" to "cargo install"
