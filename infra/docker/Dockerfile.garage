@@ -124,5 +124,5 @@ RUN chmod +x /usr/local/bin/garage-entrypoint
 # Set working directory
 WORKDIR /workspace
 
-# Default command (will be overridden by garage-entrypoint in K8s)
-CMD ["/bin/bash"]
+# Default command
+CMD ["garage-entrypoint"]
