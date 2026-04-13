@@ -3,6 +3,11 @@
 # Compiles the binary in a Wolfi-based builder, then copies onto moto-bike base
 # See specs/container-system.md and specs/nix-removal.md for specification
 
+# Global ARG for bike base image
+# In CI, this is set to localhost:5000/moto-bike:latest via the local registry
+# In local builds, this defaults to the locally built moto-bike:latest image
+ARG BIKE_IMAGE=moto-bike:latest
+
 # Builder stage: compile Rust binary
 FROM cgr.dev/chainguard/wolfi-base:latest AS builder
 
@@ -51,7 +56,7 @@ COPY crates/ crates/
 RUN cargo build --release --bin moto-keybox-server
 
 # Final stage: copy binary onto moto-bike base
-FROM moto-bike:latest
+FROM ${BIKE_IMAGE}
 
 # Copy the compiled binary from builder
 COPY --from=builder /build/target/release/moto-keybox-server /usr/local/bin/moto-keybox-server

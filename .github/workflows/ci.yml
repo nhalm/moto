@@ -118,7 +118,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          driver: docker
+          driver: docker-container
+          driver-opts: network=host
 
       - name: Download bike image artifact
         if: matrix.image == 'club' || matrix.image == 'keybox'
@@ -127,10 +128,13 @@ jobs:
           name: moto-bike-image
           path: /tmp
 
-      - name: Load bike image
+      - name: Start temporary local registry
         if: matrix.image == 'club' || matrix.image == 'keybox'
         run: |
+          docker run -d -p 5000:5000 --name registry registry:2
           docker load -i /tmp/moto-bike.tar
+          docker tag moto-bike:latest localhost:5000/moto-bike:latest
+          docker push localhost:5000/moto-bike:latest
 
       - name: Cache Docker layers
         uses: actions/cache@v4
@@ -143,12 +147,27 @@ jobs:
 
       - name: Build ${{ matrix.image }} image
         run: |
-          docker build \
+          # Set BIKE_IMAGE arg for club/keybox builds
+          if [ "${{ matrix.image }}" = "club" ] || [ "${{ matrix.image }}" = "keybox" ]; then
+            BIKE_ARG="--build-arg BIKE_IMAGE=localhost:5000/moto-bike:latest"
+          else
+            BIKE_ARG=""
+          fi
+
+          docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
             --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
             -t moto-${{ matrix.image }}:latest \
             -f infra/docker/Dockerfile.${{ matrix.image }} \
+            --load \
+            $BIKE_ARG \
             .
           # Move cache to prevent unbounded growth
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Stop temporary registry
+        if: always() && (matrix.image == 'club' || matrix.image == 'keybox')
+        run: |
+          docker stop registry || true
+          docker rm registry || true
