@@ -1,0 +1,58 @@
+# Dockerfile.bike
+# Minimal base container image for production bikes
+# See specs/moto-bike.md for full specification
+
+# Build stage: Extract CA certificates and timezone data from Wolfi
+FROM cgr.dev/chainguard/wolfi-base:latest AS builder
+
+# Install CA certificates and timezone data
+RUN apk add --no-cache ca-certificates tzdata
+
+# Final stage: Scratch-based minimal image
+FROM scratch
+
+# Copy CA certificates from Wolfi
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Copy timezone data from Wolfi
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# Create necessary directories and files for non-root user
+# /etc/passwd: user database
+# /etc/group: group database
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
+
+# Create the moto user (1000:1000) in the passwd and group files
+# This is done by modifying the copied files to add our user
+# Note: Since we're using scratch, we need to create these files manually
+# We'll use a multi-stage approach where we modify them in the builder stage
+
+FROM cgr.dev/chainguard/wolfi-base:latest AS user-setup
+
+# Create the moto user and group
+RUN addgroup -g 1000 moto && \
+    adduser -D -u 1000 -G moto -h / -s /sbin/nologin moto
+
+# Final stage: Build the actual bike image
+FROM scratch
+
+# Copy CA certificates
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Copy timezone data
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# Copy user/group files from user-setup stage
+COPY --from=user-setup /etc/passwd /etc/passwd
+COPY --from=user-setup /etc/group /etc/group
+
+# Set environment variables
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    TZDIR=/usr/share/zoneinfo
+
+# Run as non-root user
+USER 1000:1000
+
+# Set working directory
+WORKDIR /

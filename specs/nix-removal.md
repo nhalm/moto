@@ -2,11 +2,14 @@
 
 | | |
 |--------|----------------------------------------------|
-| Version | 0.2 |
+| Version | 0.3 |
 | Status | Ready to Rip |
-| Last Updated | 2026-04-10 |
+| Last Updated | 2026-04-13 |
 
 ## Changelog
+
+### v0.3 (2026-04-13)
+- Add `moto-bike.md` to "Specs to Update" list — Build Pipeline section still prescribes `nix build` commands
 
 ### v0.2 (2026-04-10)
 - Rewrite: remove implementation details (Dockerfiles, code examples). Spec defines WHAT and WHY, not HOW.
@@ -118,6 +121,7 @@ Remove Nix references and update to reflect Dockerfile approach:
 - `container-system.md` — build pipeline, directory structure
 - `makefile.md` — prerequisites, build targets
 - `project-structure.md` — directory layout
+- `moto-bike.md` — Build Pipeline section, bike.toml note (replace Nix flake references with Dockerfile approach)
 - `local-dev.md`, `pre-commit.md`, `garage-isolation.md`, `docs.md` — minor reference cleanup
 
 ## References

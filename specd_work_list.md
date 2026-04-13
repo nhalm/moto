@@ -10,7 +10,4 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## nix-removal v0.3
-
-- Implement separate Rust dependency caching layer in Dockerfile.club and Dockerfile.keybox: add a build-dependencies-only step using stub src/main.rs (per container-system.md pattern lines 515-528) before copying source code, to enable Docker layer caching of dependencies
 
