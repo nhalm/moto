@@ -23,6 +23,22 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY .cargo/ .cargo/
 
+# Copy only Cargo.toml files from all crates to preserve workspace structure
+# This creates the directory tree without source code
+COPY crates/moto-keybox/Cargo.toml crates/moto-keybox/
+COPY crates/moto-keybox-db/Cargo.toml crates/moto-keybox-db/
+COPY crates/moto-keybox-server/Cargo.toml crates/moto-keybox-server/
+
+# Create stub source files for dependency caching
+# This allows Docker to cache the dependency build layer separately from source code
+RUN mkdir -p crates/moto-keybox/src && echo "pub fn stub() {}" > crates/moto-keybox/src/lib.rs && \
+    mkdir -p crates/moto-keybox-db/src && echo "pub fn stub() {}" > crates/moto-keybox-db/src/lib.rs && \
+    mkdir -p crates/moto-keybox-server/src && echo "fn main() {}" > crates/moto-keybox-server/src/main.rs
+
+# Build dependencies only (cached until Cargo.lock changes)
+RUN cargo build --release --bin moto-keybox-server && \
+    find crates -name "*.rs" -delete
+
 # Copy all crate source code
 # Docker layer caching: when only source changes (not dependencies),
 # the dependency build from the previous step is reused

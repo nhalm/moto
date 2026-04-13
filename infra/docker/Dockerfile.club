@@ -23,6 +23,46 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY .cargo/ .cargo/
 
+# Copy only Cargo.toml files from all crates to preserve workspace structure
+# This creates the directory tree without source code
+COPY crates/moto-club/Cargo.toml crates/moto-club/
+COPY crates/moto-club-api/Cargo.toml crates/moto-club-api/
+COPY crates/moto-club-db/Cargo.toml crates/moto-club-db/
+COPY crates/moto-club-garage/Cargo.toml crates/moto-club-garage/
+COPY crates/moto-club-k8s/Cargo.toml crates/moto-club-k8s/
+COPY crates/moto-club-reconcile/Cargo.toml crates/moto-club-reconcile/
+COPY crates/moto-club-types/Cargo.toml crates/moto-club-types/
+COPY crates/moto-club-wg/Cargo.toml crates/moto-club-wg/
+COPY crates/moto-club-ws/Cargo.toml crates/moto-club-ws/
+COPY crates/moto-common/Cargo.toml crates/moto-common/
+COPY crates/moto-k8s/Cargo.toml crates/moto-k8s/
+COPY crates/moto-wgtunnel-conn/Cargo.toml crates/moto-wgtunnel-conn/
+COPY crates/moto-wgtunnel-derp/Cargo.toml crates/moto-wgtunnel-derp/
+COPY crates/moto-wgtunnel-engine/Cargo.toml crates/moto-wgtunnel-engine/
+COPY crates/moto-wgtunnel-types/Cargo.toml crates/moto-wgtunnel-types/
+
+# Create stub source files for dependency caching
+# This allows Docker to cache the dependency build layer separately from source code
+RUN mkdir -p crates/moto-club/src && echo "fn main() {}" > crates/moto-club/src/main.rs && \
+    mkdir -p crates/moto-club-api/src && echo "pub fn stub() {}" > crates/moto-club-api/src/lib.rs && \
+    mkdir -p crates/moto-club-db/src && echo "pub fn stub() {}" > crates/moto-club-db/src/lib.rs && \
+    mkdir -p crates/moto-club-garage/src && echo "pub fn stub() {}" > crates/moto-club-garage/src/lib.rs && \
+    mkdir -p crates/moto-club-k8s/src && echo "pub fn stub() {}" > crates/moto-club-k8s/src/lib.rs && \
+    mkdir -p crates/moto-club-reconcile/src && echo "pub fn stub() {}" > crates/moto-club-reconcile/src/lib.rs && \
+    mkdir -p crates/moto-club-types/src && echo "pub fn stub() {}" > crates/moto-club-types/src/lib.rs && \
+    mkdir -p crates/moto-club-wg/src && echo "pub fn stub() {}" > crates/moto-club-wg/src/lib.rs && \
+    mkdir -p crates/moto-club-ws/src && echo "pub fn stub() {}" > crates/moto-club-ws/src/lib.rs && \
+    mkdir -p crates/moto-common/src && echo "pub fn stub() {}" > crates/moto-common/src/lib.rs && \
+    mkdir -p crates/moto-k8s/src && echo "pub fn stub() {}" > crates/moto-k8s/src/lib.rs && \
+    mkdir -p crates/moto-wgtunnel-conn/src && echo "pub fn stub() {}" > crates/moto-wgtunnel-conn/src/lib.rs && \
+    mkdir -p crates/moto-wgtunnel-derp/src && echo "pub fn stub() {}" > crates/moto-wgtunnel-derp/src/lib.rs && \
+    mkdir -p crates/moto-wgtunnel-engine/src && echo "pub fn stub() {}" > crates/moto-wgtunnel-engine/src/lib.rs && \
+    mkdir -p crates/moto-wgtunnel-types/src && echo "pub fn stub() {}" > crates/moto-wgtunnel-types/src/lib.rs
+
+# Build dependencies only (cached until Cargo.lock changes)
+RUN cargo build --release --bin moto-club && \
+    find crates -name "*.rs" -delete
+
 # Copy all crate source code
 # Docker layer caching: when only source changes (not dependencies),
 # the dependency build from the previous step is reused
