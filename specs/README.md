@@ -49,7 +49,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 |------|--------|-------------|
 | [moto-club](moto-club.md) | Ripping | Central orchestration, garage management |
 | [keybox](keybox.md) | Ripping | Secrets manager, SPIFFE-based identity |
-| [dev-container](dev-container.md) | Ripping | Nix dockerTools container, tooling, environment |
+| [dev-container](dev-container.md) | Ripping | Docker container, tooling, environment |
 | [container-system](container-system.md) | Ripping | Build pipeline, registry |
 | [local-cluster](local-cluster.md) | Ripping | Local k3s cluster, moto cluster CLI |
 | [garage-isolation](garage-isolation.md) | Ripping | Network policies, resource limits |
