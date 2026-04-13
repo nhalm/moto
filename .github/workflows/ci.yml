@@ -134,7 +134,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ matrix.image }}-${{ hashFiles('infra/docker/Dockerfile.${{ matrix.image }}', 'Cargo.lock') }}
+          key: ${{ runner.os }}-buildx-${{ matrix.image }}-${{ hashFiles(format('infra/docker/Dockerfile.{0}', matrix.image), 'Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-buildx-${{ matrix.image }}-
             ${{ runner.os }}-buildx-
