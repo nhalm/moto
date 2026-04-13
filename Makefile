@@ -3,7 +3,7 @@
 .PHONY: help install build test check fmt lint clean run fix audit ci
 .PHONY: test-ci
 .PHONY: build-garage test-garage shell-garage push-garage scan-garage clean-images
-.PHONY: build-bike test-bike
+.PHONY: build-bike test-bike push-bike
 .PHONY: build-club push-club build-keybox push-keybox
 .PHONY: registry-start registry-stop
 .PHONY: cosign-keygen sign-images sign-garage sign-club sign-keybox
@@ -89,11 +89,26 @@ test-bike: build-bike ## Run smoke tests on bike container
 	@echo "Running bike smoke tests..."
 	./infra/smoke-test-bike.sh
 
-build-club: ## Build moto-club container image
+push-bike: ## Push moto-bike to registry, clean up local copy
+	@if ! docker image inspect moto-bike:latest &>/dev/null; then \
+		echo "Error: moto-bike:latest not found. Run 'make build-bike' first."; \
+		exit 1; \
+	fi
+	@echo "Pushing moto-bike to $(REGISTRY)..."
+	docker tag moto-bike:latest $(REGISTRY)/moto-bike:latest
+	docker tag moto-bike:latest $(REGISTRY)/moto-bike:$(SHA)
+	docker push $(REGISTRY)/moto-bike:latest
+	docker push $(REGISTRY)/moto-bike:$(SHA)
+	@echo "Pushed $(REGISTRY)/moto-bike:latest and $(REGISTRY)/moto-bike:$(SHA)"
+	@echo "Cleaning up local Docker copies..."
+	-docker rmi moto-bike:latest $(REGISTRY)/moto-bike:latest $(REGISTRY)/moto-bike:$(SHA) 2>/dev/null
+	@echo "Local copies removed (image lives in registry)."
+
+build-club: build-bike ## Build moto-club container image
 	@echo "Building moto-club container..."
 	docker build -t moto-club:latest -f infra/docker/Dockerfile.club .
 
-build-keybox: ## Build moto-keybox container image
+build-keybox: build-bike ## Build moto-keybox container image
 	@echo "Building moto-keybox container..."
 	docker build -t moto-keybox:latest -f infra/docker/Dockerfile.keybox .
 
@@ -407,7 +422,7 @@ generate-manifests: ## Regenerate K8s manifests from bike.toml
 
 deploy: deploy-images deploy-secrets deploy-system deploy-status ## Full deploy (images + secrets + system + status)
 
-deploy-images: build-garage push-garage build-club push-club build-keybox push-keybox ## Build and push all service images
+deploy-images: build-garage push-garage build-bike push-bike build-club push-club build-keybox push-keybox ## Build and push all service images
 
 # Secret generation directory for K8s deployment
 K8S_SECRETS_DIR := .dev/k8s-secrets
