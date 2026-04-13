@@ -86,8 +86,8 @@ All tools are installed via apk (Wolfi packages) or release binaries.
 | Tool | Installation | Purpose |
 |------|--------------|---------|
 | cargo | apk (bundled with rust) | Build, run, test |
-| rustfmt | apk (rustfmt) | Code formatting |
-| clippy | apk (clippy) | Linting |
+| rustfmt | apk (bundled with rust) | Code formatting |
+| clippy | apk (bundled with rust) | Linting |
 | rust-analyzer | apk (rust-analyzer) | IDE support |
 | cargo-watch | apk (cargo-watch) | Auto-rebuild on changes |
 | cargo-nextest | apk (cargo-nextest) | Modern test runner |
