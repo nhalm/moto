@@ -12,5 +12,4 @@ Read it in full at the start of each iteration.
 
 ## nix-removal v0.2
 
-- Fix `CMD` in `infra/docker/Dockerfile.garage` from `["/bin/bash"]` to `["garage-entrypoint"]` — dev-container.md requires garage-entrypoint as the default command
 - Remove `nix-shell -p` from Makefile error messages (lines 151, 187, 199, 209, 219) — Nix is gone, replace with `brew install` only

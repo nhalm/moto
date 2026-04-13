@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-13):** Fix `CMD` in `infra/docker/Dockerfile.garage` from `["/bin/bash"]` to `["garage-entrypoint"]` — dev-container.md requires garage-entrypoint as the default command
 - **nix-removal v0.2 (2026-04-13):** Add rustfmt, clippy, and rust-analyzer to apk add in infra/docker/Dockerfile.garage — required by dev-container.md for cargo fmt, cargo clippy, and IDE support
 - **nix-removal v0.2 (2026-04-10):** Update specs with minor Nix references: `local-dev.md`, `pre-commit.md`, `garage-isolation.md`, `docs.md`
 - **nix-removal v0.2 (2026-04-10):** Update spec `project-structure.md` — replace `infra/modules/` and `infra/pkgs/` with `infra/docker/`, remove `flake.nix`/`flake.lock`
