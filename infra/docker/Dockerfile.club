@@ -36,6 +36,7 @@ COPY crates/moto-club-wg/Cargo.toml crates/moto-club-wg/
 COPY crates/moto-club-ws/Cargo.toml crates/moto-club-ws/
 COPY crates/moto-common/Cargo.toml crates/moto-common/
 COPY crates/moto-k8s/Cargo.toml crates/moto-k8s/
+COPY crates/moto-test-utils/Cargo.toml crates/moto-test-utils/
 COPY crates/moto-wgtunnel-conn/Cargo.toml crates/moto-wgtunnel-conn/
 COPY crates/moto-wgtunnel-derp/Cargo.toml crates/moto-wgtunnel-derp/
 COPY crates/moto-wgtunnel-engine/Cargo.toml crates/moto-wgtunnel-engine/
@@ -54,6 +55,7 @@ RUN mkdir -p crates/moto-club/src && echo "fn main() {}" > crates/moto-club/src/
     mkdir -p crates/moto-club-ws/src && echo "pub fn stub() {}" > crates/moto-club-ws/src/lib.rs && \
     mkdir -p crates/moto-common/src && echo "pub fn stub() {}" > crates/moto-common/src/lib.rs && \
     mkdir -p crates/moto-k8s/src && echo "pub fn stub() {}" > crates/moto-k8s/src/lib.rs && \
+    mkdir -p crates/moto-test-utils/src && echo "pub fn stub() {}" > crates/moto-test-utils/src/lib.rs && \
     mkdir -p crates/moto-wgtunnel-conn/src && echo "pub fn stub() {}" > crates/moto-wgtunnel-conn/src/lib.rs && \
     mkdir -p crates/moto-wgtunnel-derp/src && echo "pub fn stub() {}" > crates/moto-wgtunnel-derp/src/lib.rs && \
     mkdir -p crates/moto-wgtunnel-engine/src && echo "pub fn stub() {}" > crates/moto-wgtunnel-engine/src/lib.rs && \
