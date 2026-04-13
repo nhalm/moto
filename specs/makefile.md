@@ -77,7 +77,7 @@ run:            # Run the CLI
 
 ```makefile
 # Garage (dev container)
-build-garage:               # Build garage container (Docker-wrapped Nix, works on Mac and Linux)
+build-garage:               # Build garage container (Docker)
 test-garage:                # Run smoke tests on container
 shell-garage:               # Interactive shell in container
 push-garage:                # Push garage image to local registry, clean up local copy
