@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-13):** Fix `specs/dev-container.md` lines 92–93: change cargo-watch and cargo-nextest installation method from "apk" to "cargo install"
+- **nix-removal v0.2 (2026-04-13):** Fix `specs/README.md` line 52: change dev-container description from "Nix dockerTools container" to "Docker container"
 - **nix-removal v0.2 (2026-04-13):** Fix `specs/service-deploy.md` line 174: remove `mkBike` helper and "Nix build pipeline" reference, update to Docker build
 - **nix-removal v0.2 (2026-04-13):** Fix `specs/moto-bike.md` line 64: replace "Nix builds the base image" with Dockerfile reference
 - **nix-removal v0.2 (2026-04-13):** Fix `specs/makefile.md` line 80: change "Docker-wrapped Nix, works on Mac and Linux" to "Docker" in `build-garage` comment

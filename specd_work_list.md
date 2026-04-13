@@ -10,7 +10,3 @@ Read it in full at the start of each iteration.
 - Keep this file small — it should fit comfortably in context
 -->
 
-## nix-removal v0.2
-
-- Fix `specs/README.md` line 52: change dev-container description from "Nix dockerTools container" to "Docker container"
-- Fix `specs/dev-container.md` lines 92–93: change cargo-watch and cargo-nextest installation method from "apk" to "cargo install"
