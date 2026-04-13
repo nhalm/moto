@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-13):** Add rustfmt, clippy, and rust-analyzer to apk add in infra/docker/Dockerfile.garage — required by dev-container.md for cargo fmt, cargo clippy, and IDE support
 - **nix-removal v0.2 (2026-04-10):** Update specs with minor Nix references: `local-dev.md`, `pre-commit.md`, `garage-isolation.md`, `docs.md`
 - **nix-removal v0.2 (2026-04-10):** Update spec `project-structure.md` — replace `infra/modules/` and `infra/pkgs/` with `infra/docker/`, remove `flake.nix`/`flake.lock`
 - **nix-removal v0.2 (2026-04-10):** Update spec `makefile.md` — remove Nix prerequisites, update build target docs, remove `clean-nix-cache`
