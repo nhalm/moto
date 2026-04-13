@@ -22,6 +22,7 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.3 (2026-04-13):** Fix `SSL_CERT_FILE` path in `specs/dev-container.md` lines 291 and 487: change `ca-bundle.crt` to `ca-certificates.crt` to match Wolfi base image
 - **nix-removal v0.3 (2026-04-13):** Fix `SSL_CERT_FILE` path in `infra/docker/Dockerfile.garage` line 97: change `ca-bundle.crt` to `ca-certificates.crt` — Wolfi installs certs at `/etc/ssl/certs/ca-certificates.crt`, not the Red Hat `ca-bundle.crt` path
 - **nix-removal v0.3 (2026-04-13):** Fix CI Docker layer cache key in `.github/workflows/ci.yml` line 137: nested `${{ matrix.image }}` inside `hashFiles()` is not expanded by GitHub Actions — use `hashFiles(format('infra/docker/Dockerfile.{0}', matrix.image), 'Cargo.lock')` so cache invalidates correctly when Dockerfiles change
 - **nix-removal v0.3 (2026-04-13):** Update `specs/moto-bike.md` Build Pipeline section (lines 236, 252–290): replace Nix flake build commands with Docker build approach, update diagram and examples to use `docker build -f infra/docker/Dockerfile.club`

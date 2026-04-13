@@ -288,7 +288,7 @@ REDIS_URL="redis://:password@redis:6379"
 DO_NOT_TRACK="1"
 
 # TLS
-SSL_CERT_FILE="/etc/ssl/certs/ca-bundle.crt"
+SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
 ```
 
 ### Security Model
@@ -484,7 +484,7 @@ ENV HOME=/root \
     RUSTFLAGS="-C link-arg=-fuse-ld=mold" \
     RUSTC_WRAPPER=sccache \
     DO_NOT_TRACK=1 \
-    SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /workspace
 
