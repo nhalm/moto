@@ -22,6 +22,8 @@ WHAT DOES NOT GO HERE:
 
 ---
 
+- **nix-removal v0.2 (2026-04-13):** Fix `specs/service-deploy.md` line 174: remove `mkBike` helper and "Nix build pipeline" reference, update to Docker build
+- **nix-removal v0.2 (2026-04-13):** Fix `specs/moto-bike.md` line 64: replace "Nix builds the base image" with Dockerfile reference
 - **nix-removal v0.2 (2026-04-13):** Fix `specs/makefile.md` line 80: change "Docker-wrapped Nix, works on Mac and Linux" to "Docker" in `build-garage` comment
 - **nix-removal v0.2 (2026-04-13):** Verify rustfmt and clippy installation in garage container: build Dockerfile.garage and test `cargo fmt --version && cargo clippy --version` inside. If they fail, add `rust-rustfmt` and `rust-clippy` apk packages. If they succeed, update dev-container.md spec table (lines 89-90) to document they are bundled with rust.
 - **nix-removal v0.2 (2026-04-13):** Fix CI `build-images` job: club and keybox matrix jobs use `FROM moto-bike:latest` but run in parallel with the bike job on separate runners — `moto-bike:latest` is never available. Add a separate `build-bike` job and make club/keybox `needs: [build-bike]`, or build bike first and export the image as an artifact.
