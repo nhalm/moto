@@ -113,7 +113,7 @@ moto-throttle = { path = "crates/moto-throttle" }
 moto-audit-types = { path = "crates/moto-audit-types" }
 
 [profile.release]
-lto = true
+lto = "thin"
 codegen-units = 1
 strip = true
 
