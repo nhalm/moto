@@ -75,6 +75,12 @@ RUN cargo build --release --bin moto-club && \
 # the dependency build from the previous step is reused
 COPY crates/ crates/
 
+# Bump mtimes on all .rs files so cargo's incremental check sees them as
+# newer than the stub rlibs produced by the dep-cache layer. Without this,
+# Docker's COPY preserves the host's (older) mtimes and cargo skips the
+# rebuild, leaving moto-club-* crates linked against stub artifacts.
+RUN find crates -name '*.rs' -exec touch {} +
+
 # Build the moto-club binary in release mode
 # Strip and LTO settings from workspace Cargo.toml produce a minimal binary
 RUN cargo build --release --bin moto-club
