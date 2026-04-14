@@ -65,7 +65,7 @@ Specs are **steering documents** - they define WHAT to build and WHY, not HOW to
 | Spec | Status | Description |
 |------|--------|-------------|
 | [docs](docs.md) | Ripping | Project README, docs/ folder, wiki publishing |
-| [nix-removal](nix-removal.md) | Ready to Rip | Remove Nix, replace with standard Dockerfiles |
+| [nix-removal](nix-removal.md) | Ripping | Remove Nix, replace with standard Dockerfiles |
 
 ## Phase 2: Future
 
